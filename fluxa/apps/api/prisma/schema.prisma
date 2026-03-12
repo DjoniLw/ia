@@ -1,0 +1,303 @@
+// Prisma schema — Fluxa
+// Etapa 2 — Schema completo
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum CompanyPlan {
+  free
+  starter
+  pro
+}
+
+enum CompanyStatus {
+  active
+  suspended
+  deleted
+}
+
+enum InvoiceStatus {
+  draft
+  pending
+  paid
+  overdue
+  cancelled
+  expired
+}
+
+enum PaymentGateway {
+  stripe
+  mercadopago
+}
+
+enum PaymentMethod {
+  pix
+  boleto
+  card
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  expired
+  refunded
+  disputed
+}
+
+enum LedgerEntryType {
+  credit
+  debit
+}
+
+enum NotificationType {
+  email
+  webhook
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+}
+
+// ─── Company ──────────────────────────────────────────────────────────────────
+
+model Company {
+  id             String        @id @default(uuid())
+  name           String
+  email          String        @unique
+  document       String        @unique           // CNPJ
+  plan           CompanyPlan   @default(free)
+  status         CompanyStatus @default(active)
+  emailVerified  Boolean       @default(false)   @map("email_verified")
+  deletedAt      DateTime?                        @map("deleted_at")
+  updatedAt      DateTime      @updatedAt         @map("updated_at")
+  createdAt      DateTime      @default(now())    @map("created_at")
+
+  // Relations
+  auth              CompanyAuth?
+  apiKeys           ApiKey[]
+  webhookEndpoints  WebhookEndpoint[]
+  customers         Customer[]
+  invoices          Invoice[]
+  payments          Payment[]
+  ledgerEntries     LedgerEntry[]
+  notificationLogs  NotificationLog[]
+
+  @@map("companies")
+}
+
+// ─── Company Auth ─────────────────────────────────────────────────────────────
+
+model CompanyAuth {
+  id             String    @id @default(uuid())
+  companyId      String    @unique               @map("company_id")
+  passwordHash   String                           @map("password_hash")
+  failedAttempts Int       @default(0)            @map("failed_attempts")
+  lockedUntil    DateTime?                        @map("locked_until")
+  updatedAt      DateTime  @updatedAt             @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("company_auth")
+}
+
+// ─── API Key ──────────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  companyId   String                           @map("company_id")
+  name        String?
+  keyHash     String                           @map("key_hash")
+  keyPrefix   String                           @map("key_prefix")   // first 8 chars shown in UI
+  expiresAt   DateTime?                        @map("expires_at")
+  lastUsedAt  DateTime?                        @map("last_used_at")
+  createdAt   DateTime  @default(now())        @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("api_keys")
+}
+
+// ─── Webhook Endpoint ─────────────────────────────────────────────────────────
+
+model WebhookEndpoint {
+  id        String   @id @default(uuid())
+  companyId String                        @map("company_id")
+  url       String
+  secret    String                        // HMAC-SHA256 signing secret
+  events    String[]                      // subscribed event types
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())      @map("created_at")
+
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  notificationLogs  NotificationLog[]
+
+  @@index([companyId])
+  @@map("webhook_endpoints")
+}
+
+// ─── Customer ─────────────────────────────────────────────────────────────────
+
+model Customer {
+  id          String    @id @default(uuid())
+  companyId   String                           @map("company_id")
+  externalId  String?                          @map("external_id")
+  name        String
+  email       String?
+  document    String?                          // CPF or CNPJ
+  phone       String?
+  address     Json?
+  metadata    Json?
+  deletedAt   DateTime?                        @map("deleted_at")
+  updatedAt   DateTime  @updatedAt             @map("updated_at")
+  createdAt   DateTime  @default(now())        @map("created_at")
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invoices         Invoice[]
+  payments         Payment[]
+  ledgerEntries    LedgerEntry[]
+  notificationLogs NotificationLog[]
+
+  @@unique([companyId, email])
+  @@unique([companyId, document])
+  @@unique([companyId, externalId])
+  @@index([companyId])
+  @@map("customers")
+}
+
+// ─── Invoice ──────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id              String        @id @default(uuid())
+  companyId       String                             @map("company_id")
+  customerId      String                             @map("customer_id")
+  amount          Int                                // BRL cents
+  description     String?
+  dueDate         DateTime                           @map("due_date")   @db.Date
+  status          InvoiceStatus @default(draft)
+  paymentMethods  String[]                           @map("payment_methods")
+  paymentLink     String?                            @map("payment_link")
+  paymentToken    String?       @unique              @map("payment_token")
+  idempotencyKey  String?                            @map("idempotency_key")
+  metadata        Json?
+  notify          Boolean       @default(true)
+  paidAt          DateTime?                          @map("paid_at")
+  cancelledAt     DateTime?                          @map("cancelled_at")
+  expiredAt       DateTime?                          @map("expired_at")
+  updatedAt       DateTime      @updatedAt           @map("updated_at")
+  createdAt       DateTime      @default(now())      @map("created_at")
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  payments         Payment[]
+  ledgerEntries    LedgerEntry[]
+  notificationLogs NotificationLog[]
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, customerId])
+  @@index([dueDate, status])           // for cron jobs (overdue/expired)
+  @@map("invoices")
+}
+
+// ─── Payment ──────────────────────────────────────────────────────────────────
+
+model Payment {
+  id               String         @id @default(uuid())
+  companyId        String                              @map("company_id")
+  invoiceId        String                              @map("invoice_id")
+  customerId       String                              @map("customer_id")
+  gateway          PaymentGateway
+  method           PaymentMethod
+  status           PaymentStatus  @default(pending)
+  amount           Int                                 // BRL cents
+  gatewayPaymentId String?        @unique              @map("gateway_payment_id")
+  gatewayEventId   String?                             @map("gateway_event_id")  // idempotency key for webhooks
+  paymentUrl       String?                             @map("payment_url")
+  pixQrCode        String?                             @map("pix_qr_code")
+  paidAt           DateTime?                           @map("paid_at")
+  expiresAt        DateTime?                           @map("expires_at")
+  metadata         Json?
+  updatedAt        DateTime       @updatedAt           @map("updated_at")
+  createdAt        DateTime       @default(now())      @map("created_at")
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  ledgerEntry  LedgerEntry?
+
+  @@index([companyId])
+  @@index([invoiceId])
+  @@index([gatewayEventId])            // fast idempotency check on webhooks
+  @@map("payments")
+}
+
+// ─── Ledger Entry ─────────────────────────────────────────────────────────────
+
+model LedgerEntry {
+  id          String          @id @default(uuid())
+  companyId   String                               @map("company_id")
+  type        LedgerEntryType
+  amount      Int                                  // BRL cents, always positive
+  currency    String          @default("BRL")
+  referenceId String                               @map("reference_id") // FK → Payment
+  invoiceId   String                               @map("invoice_id")
+  customerId  String                               @map("customer_id")
+  description String?
+  metadata    Json?
+  createdAt   DateTime        @default(now())      @map("created_at")
+  // No updatedAt — entries are immutable (append-only)
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  payment   Payment  @relation(fields: [referenceId], references: [id], onDelete: Restrict)
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@unique([referenceId])              // one ledger entry per payment
+  @@index([companyId, createdAt])
+  @@index([companyId, invoiceId])
+  @@index([companyId, customerId])
+  @@map("ledger_entries")
+}
+
+// ─── Notification Log ─────────────────────────────────────────────────────────
+
+model NotificationLog {
+  id                String             @id @default(uuid())
+  companyId         String                                  @map("company_id")
+  type              NotificationType
+  channel           String                                  // email address or webhook URL
+  event             String                                  // e.g. 'invoice.paid'
+  status            NotificationStatus @default(pending)
+  attempts          Int                @default(0)
+  lastAttemptAt     DateTime?                               @map("last_attempt_at")
+  error             String?
+  payload           Json
+  invoiceId         String?                                 @map("invoice_id")
+  customerId        String?                                 @map("customer_id")
+  webhookEndpointId String?                                 @map("webhook_endpoint_id")
+  createdAt         DateTime           @default(now())      @map("created_at")
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice         Invoice?         @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  customer        Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  webhookEndpoint WebhookEndpoint? @relation(fields: [webhookEndpointId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([companyId, status])
+  @@index([invoiceId])
+  @@map("notification_logs")
+}
+

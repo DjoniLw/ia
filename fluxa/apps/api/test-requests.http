@@ -1,0 +1,311 @@
+### Fluxa API — Test Requests
+### Use with REST Client (VS Code extension)
+### Or copy individual requests to run with cURL
+
+@baseUrl = http://localhost:3000
+@contentType = application/json
+
+# ============================================================================
+# AUTH — Register & Login
+# ============================================================================
+
+### 1. Register Company
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "name": "Acme Corp",
+  "email": "admin@acme.test",
+  "document": "12.345.678/0001-90",
+  "password": "SecurePass123!"
+}
+
+@token = 
+
+### 2. Login (use valid email/password from previous request)
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@acme.test",
+  "password": "SecurePass123!"
+}
+
+@token = 
+
+### 3. Refresh Token
+POST {{baseUrl}}/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{token}}"
+}
+
+### 4. Logout
+POST {{baseUrl}}/auth/logout
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{}
+
+# ============================================================================
+# CUSTOMERS — CRUD Operations
+# ============================================================================
+
+### 5. Create Customer
+POST {{baseUrl}}/customers
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "name": "João Silva",
+  "email": "joao@example.com",
+  "document": "123.456.789-00",
+  "phone": "+55 11 98765-4321",
+  "address": {
+    "street": "Rua Augusta",
+    "number": "123",
+    "city": "São Paulo",
+    "state": "SP"
+  },
+  "metadata": {
+    "source": "web",
+    "campaign": "black_friday"
+  }
+}
+
+@customerId = 
+
+### 6. List Customers (paginated)
+GET {{baseUrl}}/customers?page=1&limit=5&sort=name&order=asc
+Authorization: Bearer {{token}}
+
+### 7. Search Customers
+GET {{baseUrl}}/customers/search?q=joao
+Authorization: Bearer {{token}}
+
+### 8. Get Customer by ID
+GET {{baseUrl}}/customers/{{customerId}}
+Authorization: Bearer {{token}}
+
+### 9. Update Customer
+PATCH {{baseUrl}}/customers/{{customerId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "phone": "+55 11 99999-8888",
+  "metadata": {
+    "vip": true
+  }
+}
+
+### 10. Delete Customer (soft delete)
+DELETE {{baseUrl}}/customers/{{customerId}}
+Authorization: Bearer {{token}}
+
+# ============================================================================
+# INVOICES — State Machine
+# ============================================================================
+
+### 11. Create Invoice (Status: draft)
+POST {{baseUrl}}/invoices
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "customerId": "{{customerId}}",
+  "amount": 25000,
+  "description": "Consulting Services - March",
+  "dueDate": "2026-04-10T23:59:59Z",
+  "paymentMethods": ["pix", "boleto"],
+  "notify": true,
+  "metadata": {
+    "contract_id": "CTR-2026-001"
+  }
+}
+
+@invoiceId = 
+
+### 12. List Invoices (paginated, with filters)
+GET {{baseUrl}}/invoices?page=1&limit=10&status=draft&sort=createdAt&order=desc
+Authorization: Bearer {{token}}
+
+### 13. List Invoices - Pending Only
+GET {{baseUrl}}/invoices?status=pending
+Authorization: Bearer {{token}}
+
+### 14. Get Invoice by ID
+GET {{baseUrl}}/invoices/{{invoiceId}}
+Authorization: Bearer {{token}}
+
+### 15. Send Invoice to Payment (draft → pending)
+POST {{baseUrl}}/invoices/{{invoiceId}}/send-to-payment
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{}
+
+### 16. Cancel Invoice
+POST {{baseUrl}}/invoices/{{invoiceId}}/cancel
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "reason": "Customer requested cancellation"
+}
+
+### 17. Mark Invoice as Paid
+POST {{baseUrl}}/invoices/{{invoiceId}}/mark-as-paid
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{
+  "paymentId": "{{paymentId}}"
+}
+
+# ============================================================================
+# PAYMENTS — Gateway Integration
+# ============================================================================
+
+### 18. List Payments
+GET {{baseUrl}}/payments?page=1&limit=10
+Authorization: Bearer {{token}}
+
+### 19. List Payments - Pending Only
+GET {{baseUrl}}/payments?status=pending
+Authorization: Bearer {{token}}
+
+### 20. List Payments by Invoice
+GET {{baseUrl}}/payments?invoiceId={{invoiceId}}
+Authorization: Bearer {{token}}
+
+### 21. Get Payment Details
+GET {{baseUrl}}/payments/{{paymentId}}
+Authorization: Bearer {{token}}
+
+### 22. Stripe Webhook — Payment Succeeded
+POST {{baseUrl}}/payments/webhooks/stripe
+Content-Type: {{contentType}}
+stripe-signature: test_signature_stripe_12345
+
+{
+  "id": "evt_stripe_12345",
+  "type": "payment_intent.succeeded",
+  "data": {
+    "object": {
+      "id": "pi_stripe_test_123",
+      "status": "succeeded",
+      "metadata": {
+        "invoice_id": "{{invoiceId}}"
+      }
+    }
+  }
+}
+
+### 23. Stripe Webhook — Payment Failed
+POST {{baseUrl}}/payments/webhooks/stripe
+Content-Type: {{contentType}}
+stripe-signature: test_signature_stripe_failed
+
+{
+  "id": "evt_stripe_failed_123",
+  "type": "payment_intent.payment_failed",
+  "data": {
+    "object": {
+      "id": "pi_stripe_failed_456",
+      "status": "requires_payment_method",
+      "metadata": {
+        "invoice_id": "{{invoiceId}}"
+      }
+    }
+  }
+}
+
+### 24. MercadoPago Webhook — Payment Approved
+POST {{baseUrl}}/payments/webhooks/mercadopago
+Content-Type: {{contentType}}
+x-signature: test_signature_mp_12345
+
+{
+  "id": "evt_mp_12345",
+  "type": "payment.updated",
+  "data": {
+    "id": 9876543210,
+    "status": "approved",
+    "external_reference": "{{invoiceId}}"
+  }
+}
+
+### 25. MercadoPago Webhook — Payment Rejected
+POST {{baseUrl}}/payments/webhooks/mercadopago
+Content-Type: {{contentType}}
+x-signature: test_signature_mp_rejected
+
+{
+  "id": "evt_mp_rejected_123",
+  "type": "payment.updated",
+  "data": {
+    "id": 9876543211,
+    "status": "rejected",
+    "external_reference": "{{invoiceId}}"
+  }
+}
+
+# ============================================================================
+# NOTIFICATIONS — Event-Driven Logs
+# ============================================================================
+
+### 26. List Notification Logs
+GET {{baseUrl}}/notifications/logs?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### 27. List Email Notifications Only
+GET {{baseUrl}}/notifications/logs?type=email
+Authorization: Bearer {{token}}
+
+### 28. List Webhook Notifications Only
+GET {{baseUrl}}/notifications/logs?type=webhook
+Authorization: Bearer {{token}}
+
+### 29. List Failed Notifications
+GET {{baseUrl}}/notifications/logs?status=failed
+Authorization: Bearer {{token}}
+
+### 30. Get Notification Log Details
+GET {{baseUrl}}/notifications/logs/{{notificationLogId}}
+Authorization: Bearer {{token}}
+
+### 31. Retry Failed Notification
+POST {{baseUrl}}/notifications/logs/{{notificationLogId}}/retry
+Content-Type: {{contentType}}
+Authorization: Bearer {{token}}
+
+{}
+
+# ============================================================================
+# HEALTH CHECK
+# ============================================================================
+
+### 32. Health Check
+GET {{baseUrl}}/health
+
+# ============================================================================
+# IMPORTANT INSTRUCTIONS
+# ============================================================================
+#
+# 1. Replace {{token}} with actual accessToken from login response (request 2)
+# 2. Replace {{customerId}} with actual customer ID from create response (request 5)
+# 3. Replace {{invoiceId}} with actual invoice ID from create response (request 11)
+# 4. Replace {{paymentId}} with actual payment ID from list response (request 18)
+# 5. Replace {{notificationLogId}} with actual log ID from notifications list (request 26)
+#
+# WORKFLOW TO TEST:
+# 1. Register (request 1) → get token
+# 2. Create Customer (request 5) → get customerId
+# 3. Create Invoice (request 11) → get invoiceId
+# 4. Send to Payment (request 15) → status: draft → pending
+# 5. Simulate Webhook (request 22 or 24) → updates payment → triggers notifications
+# 6. Check Notification Logs (request 26) → see emails + webhooks created
+# 7. Retry if needed (request 31)
+#
