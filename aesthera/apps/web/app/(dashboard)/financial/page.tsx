@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Loader2, TrendingUp, TrendingDown, DollarSign, BarChart3 } from 'lucide-react'
-import { useLedger, useLedgerSummary } from '@/lib/hooks/use-financial'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { useLedger, useLedgerChart, useLedgerSummary } from '@/lib/hooks/use-financial'
+import type { LedgerEntry } from '@/lib/hooks/use-financial'
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
@@ -10,6 +12,36 @@ function formatCurrency(cents: number) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function buildChartData(items: LedgerEntry[], from: string, to: string) {
+  const diffDays = Math.ceil(
+    (new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24),
+  )
+  const byWeek = diffDays > 45
+  const map = new Map<string, { label: string; receita: number; despesa: number }>()
+
+  items.forEach((item) => {
+    const d = new Date(item.createdAt)
+    let key: string
+    let label: string
+    if (byWeek) {
+      const dow = d.getDay() || 7
+      const monday = new Date(d)
+      monday.setDate(d.getDate() - dow + 1)
+      key = monday.toISOString().slice(0, 10)
+      label = monday.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    } else {
+      key = d.toISOString().slice(0, 10)
+      label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    }
+    if (!map.has(key)) map.set(key, { label, receita: 0, despesa: 0 })
+    const entry = map.get(key)!
+    if (item.type === 'credit') entry.receita += item.amount / 100
+    else entry.despesa += item.amount / 100
+  })
+
+  return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v)
 }
 
 export default function FinancialPage() {
@@ -28,6 +60,15 @@ export default function FinancialPage() {
 
   const { data, isLoading } = useLedger(params)
   const { data: summary, isLoading: summaryLoading } = useLedgerSummary({ from, to })
+  const { data: chartRaw } = useLedgerChart({ from, to })
+
+  const diffDays = Math.ceil(
+    (new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24),
+  )
+  const chartData = useMemo(
+    () => buildChartData(chartRaw?.items ?? [], from, to),
+    [chartRaw, from, to],
+  )
 
   const summaryCards = [
     {
@@ -78,6 +119,41 @@ export default function FinancialPage() {
           </div>
         ))}
       </div>
+
+      {/* Revenue chart */}
+      {chartData.length > 0 && (
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Receita vs Despesas</h3>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {diffDays > 45 ? 'por semana' : 'por dia'}
+            </span>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v: number) => `R$${v}`}
+              />
+              <Tooltip
+                formatter={(value: unknown) => [formatCurrency((value as number) * 100), '']}
+                contentStyle={{
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  fontSize: 12,
+                }}
+              />
+              <Bar dataKey="receita" name="Receitas" fill="#16a34a" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="despesa" name="Despesas" fill="#dc2626" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">

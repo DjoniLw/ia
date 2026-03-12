@@ -76,8 +76,7 @@ function CreateAppointmentForm({
   onSave: (data: CreateFormData) => Promise<void>
   isPending: boolean
 }) {
-  const { data: profData } = useProfessionals()
-  const { data: svcData } = useServices()
+  const { data: profData } = useProfessionals({ includeServices: 'true' })
   const { data: custData } = useCustomers()
 
   const {
@@ -93,6 +92,10 @@ function CreateAppointmentForm({
   const professionalId = watch('professionalId')
   const serviceId = watch('serviceId')
   const date = watch('date')
+
+  // Only show services assigned to the selected professional
+  const selectedProf = profData?.items.find((p) => p.id === professionalId)
+  const assignedServices = selectedProf?.services?.map((ps) => ps.service) ?? []
 
   const { data: avail } = useAvailability(
     professionalId && serviceId && date
@@ -137,7 +140,10 @@ function CreateAppointmentForm({
             {...register('serviceId')}
           >
             <option value="">Selecione…</option>
-            {svcData?.items.map((s) => (
+            {assignedServices.length === 0 && professionalId && (
+              <option disabled value="">Nenhum serviço atribuído a este profissional</option>
+            )}
+            {assignedServices.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>

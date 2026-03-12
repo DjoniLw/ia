@@ -84,6 +84,13 @@ export function useLedgerSummary(params?: { from?: string; to?: string }) {
   })
 }
 
+export function useLedgerChart(params: { from: string; to: string }) {
+  return useQuery<LedgerPage>({
+    queryKey: ['ledger-chart', params],
+    queryFn: () => api.get('/ledger', { params: { ...params, limit: 500 } }).then((r) => r.data),
+  })
+}
+
 // ──── Notifications hooks ──────────────────────────────────────────────────────
 
 export function useNotifications(params?: Record<string, string | number>) {

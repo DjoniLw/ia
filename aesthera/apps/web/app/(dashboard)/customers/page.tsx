@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Search } from 'lucide-react'
+import { Bot, Loader2, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -17,6 +17,7 @@ import {
   useDeleteCustomer,
   useUpdateCustomer,
 } from '@/lib/hooks/use-resources'
+import { api } from '@/lib/api'
 
 // ──── Schema ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,43 @@ function CustomerForm({
   )
 }
 
+// ──── AI Summary Dialog ────────────────────────────────────────────────────────
+
+function AiSummaryDialog({ customer, onClose }: { customer: Customer; onClose: () => void }) {
+  const [summary, setSummary] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useState(() => {
+    api
+      .post<{ summary: string }>(`/ai/summary/customer/${customer.id}`)
+      .then((r) => setSummary(r.data.summary))
+      .catch(() => setSummary('Não foi possível gerar o resumo. Verifique se a chave GEMINI_API_KEY está configurada.'))
+      .finally(() => setLoading(false))
+  })
+
+  return (
+    <Dialog open onClose={onClose}>
+      <DialogTitle className="flex items-center gap-2">
+        <Bot className="h-4 w-4 text-violet-600" />
+        Resumo IA — {customer.name}
+      </DialogTitle>
+      <div className="mt-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-violet-500" />
+            <span className="ml-2 text-sm text-muted-foreground">Gerando resumo com IA...</span>
+          </div>
+        ) : (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{summary}</p>
+        )}
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button variant="ghost" size="sm" onClick={onClose}>Fechar</Button>
+      </div>
+    </Dialog>
+  )
+}
+
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CustomersPage() {
@@ -111,6 +149,7 @@ export default function CustomersPage() {
 
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
+  const [aiSummary, setAiSummary] = useState<Customer | null>(null)
 
   const updateCustomer = useUpdateCustomer(editing?.id ?? '')
 
@@ -131,8 +170,9 @@ export default function CustomersPage() {
       })
       toast.success('Cliente criado')
       setCreating(false)
-    } catch {
-      toast.error('Erro ao criar cliente')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao criar cliente')
     }
   }
 
@@ -148,8 +188,9 @@ export default function CustomersPage() {
       })
       toast.success('Cliente atualizado')
       setEditing(null)
-    } catch {
-      toast.error('Erro ao atualizar cliente')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao atualizar cliente')
     }
   }
 
@@ -221,6 +262,14 @@ export default function CustomersPage() {
                 <td className="px-2 py-3 text-muted-foreground">{formatDate(c.createdAt)}</td>
                 <td className="px-2 py-3">
                   <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-violet-600 hover:text-violet-700"
+                      onClick={() => setAiSummary(c)}
+                    >
+                      <Bot className="mr-1 h-3.5 w-3.5" /> Resumo IA
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>
                       Editar
                     </Button>
@@ -249,6 +298,9 @@ export default function CustomersPage() {
           </div>
         </Dialog>
       )}
+
+      {/* AI Summary dialog */}
+      {aiSummary && <AiSummaryDialog customer={aiSummary} onClose={() => setAiSummary(null)} />}
 
       {/* Edit dialog */}
       {editing && (

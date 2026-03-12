@@ -1,14 +1,29 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageSquare, X, Send, Loader2, Bot, User } from 'lucide-react'
-import { api } from '@/lib/api'
+import { MessageSquare, X, Send, Loader2, Bot, User, Wrench } from 'lucide-react'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  toolCall?: string // tool being called (interim state)
 }
+
+const TOOL_LABELS: Record<string, string> = {
+  get_appointments_today: 'Consultando agendamentos...',
+  get_overdue_billing: 'Verificando cobranças...',
+  get_financial_summary: 'Carregando resumo financeiro...',
+  search_customers: 'Buscando clientes...',
+  get_customer_history: 'Carregando histórico do cliente...',
+}
+
+const SUGGESTED_PROMPTS = [
+  'Quais agendamentos temos hoje?',
+  'Existem cobranças vencidas esta semana?',
+  'Qual o saldo financeiro do mês?',
+  'Busca o cliente Maria',
+]
 
 function genId() {
   return Math.random().toString(36).slice(2)
@@ -16,6 +31,24 @@ function genId() {
 
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === 'user'
+
+  // Tool call indicator (assistant bubble with no content yet)
+  if (!isUser && msg.toolCall && !msg.content) {
+    return (
+      <div className="flex gap-2.5">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+          <Bot className="h-3.5 w-3.5" />
+        </div>
+        <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted px-3.5 py-2.5">
+          <Wrench className="h-3.5 w-3.5 animate-pulse text-violet-500" />
+          <span className="text-xs text-muted-foreground">
+            {TOOL_LABELS[msg.toolCall] ?? 'Consultando dados...'}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       <div
@@ -53,32 +86,32 @@ export function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Scroll to bottom when messages change
+  const isFirstOpen = messages.length === 1 && !streaming
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Focus input when panel opens
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }, [open])
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim()
-    if (!text || streaming) return
+  const sendMessage = useCallback(async (text?: string) => {
+    const content = (text ?? input).trim()
+    if (!content || streaming) return
 
     setInput('')
     setMessages((prev) => [
       ...prev,
-      { id: genId(), role: 'user', content: text },
+      { id: genId(), role: 'user', content },
     ])
 
     const assistantId = genId()
     setMessages((prev) => [
       ...prev,
-      { id: assistantId, role: 'assistant', content: '' },
+      { id: assistantId, role: 'assistant', content: '', toolCall: undefined },
     ])
     setStreaming(true)
 
@@ -94,7 +127,7 @@ export function ChatPanel() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(slug ? { 'X-Clinic-Slug': slug } : {}),
         },
-        body: JSON.stringify({ message: text, sessionId }),
+        body: JSON.stringify({ message: content, sessionId }),
       })
 
       if (!res.ok || !res.body) {
@@ -119,12 +152,21 @@ export function ChatPanel() {
           if (raw === '[DONE]') break
 
           try {
-            const event = JSON.parse(raw) as { chunk?: string; error?: string }
+            const event = JSON.parse(raw) as { chunk?: string; toolCall?: string; error?: string }
             if (event.error) throw new Error(event.error)
+            if (event.toolCall) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, toolCall: event.toolCall, content: '' } : m,
+                ),
+              )
+            }
             if (event.chunk) {
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantId ? { ...m, content: m.content + event.chunk } : m,
+                  m.id === assistantId
+                    ? { ...m, content: m.content + event.chunk, toolCall: undefined }
+                    : m,
                 ),
               )
             }
@@ -138,7 +180,7 @@ export function ChatPanel() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: `⚠️ ${msg}. Verifique se a chave GEMINI_API_KEY está configurada.` }
+            ? { ...m, content: `⚠️ ${msg}. Verifique se a chave GEMINI_API_KEY está configurada.`, toolCall: undefined }
             : m,
         ),
       )
@@ -196,7 +238,11 @@ export function ChatPanel() {
           {messages.map((msg) => (
             <MessageBubble key={msg.id} msg={msg} />
           ))}
-          {streaming && messages[messages.length - 1]?.content === '' && (
+
+          {/* Spinner when streaming but no content yet and no tool call either */}
+          {streaming &&
+            !messages[messages.length - 1]?.toolCall &&
+            messages[messages.length - 1]?.content === '' && (
             <div className="flex gap-2.5">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/40">
                 <Bot className="h-3.5 w-3.5" />
@@ -206,11 +252,32 @@ export function ChatPanel() {
               </div>
             </div>
           )}
+
           <div ref={bottomRef} />
         </div>
 
+        {/* Suggested prompts — only on first open */}
+        {isFirstOpen && open && (
+          <div className="shrink-0 border-t px-4 py-3">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              Sugestões
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {SUGGESTED_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  onClick={() => void sendMessage(prompt)}
+                  className="rounded-lg border bg-muted/40 px-3 py-1.5 text-left text-xs text-foreground hover:bg-muted/80 transition-colors"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Input */}
-        <div className="border-t p-3">
+        <div className="shrink-0 border-t p-3">
           <div className="flex items-center gap-2 rounded-xl border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-primary">
             <input
               ref={inputRef}

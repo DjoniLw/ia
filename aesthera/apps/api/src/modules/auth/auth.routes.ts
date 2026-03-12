@@ -6,7 +6,6 @@ import {
   RefreshTokenDto,
   ProfessionalLoginDto,
 } from './auth.dto'
-import { tenantMiddleware } from '../../shared/middleware/tenant.middleware'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -22,7 +21,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // ── POST /auth/login ────────────────────────────────────────────────────────
   // Requires X-Clinic-Slug header (sent by frontend from subdomain).
-  app.post('/auth/login', { preHandler: [tenantMiddleware] }, async (request, reply) => {
+  app.post('/auth/login', { preHandler: [] }, async (request, reply) => {
     const body = LoginDto.parse(request.body)
     const result = await authService.login(request.clinicId, body)
     reply.status(200).send(result)
@@ -53,7 +52,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // POST /auth/professional/login — requires X-Clinic-Slug
   app.post(
     '/auth/professional/login',
-    { preHandler: [tenantMiddleware] },
+    { preHandler: [] },
     async (request, reply) => {
       const body = ProfessionalLoginDto.parse(request.body)
       const result = await authService.professionalLogin(request.clinicId, body)

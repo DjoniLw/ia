@@ -62,7 +62,7 @@ export function useServices(params?: Record<string, string>) {
 export function useCreateService() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: Omit<Service, 'id' | 'active' | 'createdAt'>) =>
+    mutationFn: (data: { name: string; description: string | null; category: string | null; durationMinutes: number; price: number }) =>
       api.post('/services', data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['services'] }),
   })

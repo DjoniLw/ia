@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit'
 import { appConfig } from './config/app.config'
 import { errorHandler } from './shared/errors/error-handler'
 import { registerRequestId } from './shared/middleware/request-id'
+import { tenantMiddleware } from './shared/middleware/tenant.middleware'
 import { authRoutes } from './modules/auth/auth.routes'
 import { clinicsRoutes } from './modules/clinics/clinics.routes'
 import { customersRoutes } from './modules/customers/customers.routes'
@@ -55,6 +56,18 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // ── Hooks ─────────────────────────────────────────────────────────────────────
   registerRequestId(app)
+
+  // Apply tenant middleware globally, skipping routes that truly don't need a clinic context
+  const PUBLIC_ROUTES = new Set([
+    '/health',
+    '/auth/register',
+    '/auth/refresh',
+  ])
+
+  app.addHook('preHandler', async (request, reply) => {
+    if (PUBLIC_ROUTES.has(request.routeOptions.url ?? '')) return
+    await tenantMiddleware(request, reply)
+  })
 
   // ── Error handler ─────────────────────────────────────────────────────────────
   app.setErrorHandler(errorHandler)

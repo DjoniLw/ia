@@ -16,7 +16,7 @@ import { api } from '@/lib/api'
 import { setTokens } from '@/lib/auth'
 
 const loginSchema = z.object({
-  clinicSlug: z.string().min(1, 'Slug da clínica é obrigatório'),
+  clinicSlug: z.string().min(1, 'Slug da clínica é obrigatório').trim(),
   email: z.string().email('E-mail inválido'),
   password: z.string().min(1, 'Senha é obrigatória'),
 })
@@ -35,11 +35,13 @@ export default function LoginPage() {
 
   async function onSubmit(data: LoginData) {
     setLoading(true)
+    const slug = data.clinicSlug.trim().toLowerCase()
     try {
-      localStorage.setItem('clinic-slug', data.clinicSlug)
+      localStorage.setItem('clinic-slug', slug)
       const response = await api.post<{ accessToken: string; refreshToken: string }>(
         '/auth/login',
         { email: data.email, password: data.password },
+        { headers: { 'X-Clinic-Slug': slug } },
       )
       setTokens(response.data.accessToken, response.data.refreshToken)
       toast.success('Login realizado com sucesso!')
@@ -63,13 +65,19 @@ export default function LoginPage() {
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="clinicSlug">Slug da clínica</Label>
+            <Label htmlFor="clinicSlug">Identificador da clínica</Label>
             <Input
               id="clinicSlug"
-              placeholder="clinica-bella-vita"
+              placeholder="ex: bella"
               autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
               {...register('clinicSlug')}
             />
+            <p className="text-xs text-muted-foreground">
+              É gerado no cadastro a partir do nome da clínica — letras minúsculas, sem espaços.<br />
+              Ex: &quot;Clínica Bella&quot; → <span className="font-mono font-medium">clinica-bella</span>
+            </p>
             {errors.clinicSlug && (
               <p className="text-sm text-destructive">{errors.clinicSlug.message}</p>
             )}
@@ -103,14 +111,14 @@ export default function LoginPage() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Entrando...' : 'Entrar'}
           </Button>
-        </form>
 
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          Não tem conta?{' '}
-          <Link href="/register" className="font-medium text-primary hover:underline">
-            Cadastrar clínica
-          </Link>
-        </p>
+          <p className="text-center text-sm text-muted-foreground">
+            Não tem conta?{' '}
+            <Link href="/register" className="font-medium text-primary hover:underline">
+              Cadastre sua clínica
+            </Link>
+          </p>
+        </form>
       </CardContent>
     </Card>
   )

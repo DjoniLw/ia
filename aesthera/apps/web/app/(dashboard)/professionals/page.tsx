@@ -172,8 +172,9 @@ export default function ProfessionalsPage() {
       })
       toast.success('Profissional criado')
       setCreating(false)
-    } catch {
-      toast.error('Erro ao criar profissional')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao criar profissional')
     }
   }
 
@@ -186,8 +187,9 @@ export default function ProfessionalsPage() {
       })
       toast.success('Profissional atualizado')
       setEditing(null)
-    } catch {
-      toast.error('Erro ao atualizar profissional')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao atualizar profissional')
     }
   }
 

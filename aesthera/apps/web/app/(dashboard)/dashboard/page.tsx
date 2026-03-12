@@ -1,8 +1,10 @@
 'use client'
 
-import { CalendarDays, TrendingUp, AlertCircle, CheckCircle, Clock, Loader2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { CalendarDays, TrendingUp, AlertCircle, CheckCircle, Clock, Loader2, Sparkles, Users, Bot, RefreshCw } from 'lucide-react'
 import { useLedgerSummary, useTodayAppointments } from '@/lib/hooks/use-financial'
 import { useBilling } from '@/lib/hooks/use-appointments'
+import { api } from '@/lib/api'
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
@@ -42,7 +44,44 @@ export default function DashboardPage() {
   const { from, to } = monthRange()
   const summary = useLedgerSummary({ from, to })
   const todayAppts = useTodayAppointments()
-  const overdueBilling = useBilling({ status: 'overdue', limit: 5 })
+  const overdueBilling = useBilling({ status: 'overdue', limit: '5' })
+
+  const [briefing, setBriefing] = useState<string | null>(null)
+  const [briefingLoading, setBriefingLoading] = useState(false)
+
+  async function loadBriefing() {
+    setBriefingLoading(true)
+    try {
+      const res = await api.post<{ briefing: string }>('/ai/briefing')
+      setBriefing(res.data.briefing)
+    } catch {
+      setBriefing('Não foi possível gerar o briefing. Verifique se a chave GEMINI_API_KEY está configurada.')
+    } finally {
+      setBriefingLoading(false)
+    }
+  }
+
+  const todayStats = useMemo(() => {
+    const appts = todayAppts.data ?? []
+    return {
+      total: appts.length,
+      completed: appts.filter((a) => a.status === 'completed').length,
+      inProgress: appts.filter((a) => a.status === 'in_progress').length,
+      pending: appts.filter((a) => ['draft', 'confirmed'].includes(a.status)).length,
+    }
+  }, [todayAppts.data])
+
+  const byProfessional = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; total: number; completed: number }>()
+    for (const a of todayAppts.data ?? []) {
+      const p = a.professional
+      if (!map.has(p.id)) map.set(p.id, { id: p.id, name: p.name, total: 0, completed: 0 })
+      const entry = map.get(p.id)!
+      entry.total++
+      if (a.status === 'completed') entry.completed++
+    }
+    return [...map.values()].sort((a, b) => b.total - a.total)
+  }, [todayAppts.data])
 
   const stats = [
     {
@@ -100,7 +139,110 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+      {/* Briefing IA */}
+      <div className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="rounded-lg bg-violet-50 p-2 dark:bg-violet-950/20">
+            <Bot className="h-4 w-4 text-violet-600" />
+          </div>
+          <h3 className="text-sm font-semibold text-foreground">Briefing IA</h3>
+          <button
+            onClick={() => void loadBriefing()}
+            disabled={briefingLoading}
+            className="ml-auto flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${briefingLoading ? 'animate-spin' : ''}`} />
+            {briefing ? 'Atualizar' : 'Gerar briefing'}
+          </button>
+        </div>
+        {briefingLoading && (
+          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+            Gerando briefing com IA...
+          </div>
+        )}
+        {!briefingLoading && briefing && (
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{briefing}</p>
+        )}
+        {!briefingLoading && !briefing && (
+          <p className="mt-4 text-sm text-muted-foreground">Clique em "Gerar briefing" para ver um resumo inteligente do seu dia.</p>
+        )}
+      </div>
 
+      {/* Briefing + Ocupação row */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Hoje em resumo */}
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <div className="rounded-lg bg-violet-50 p-2 dark:bg-violet-950/20">
+              <Sparkles className="h-4 w-4 text-violet-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Hoje em resumo</h3>
+          </div>
+          {todayAppts.isLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{todayStats.total}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Agendamentos</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-green-600">{todayStats.completed}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Concluídos</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-yellow-600">{todayStats.pending}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Pendentes</p>
+                </div>
+              </div>
+              {todayStats.inProgress > 0 && (
+                <p className="mt-4 rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-950/20 dark:text-yellow-400">
+                  ⚡ {todayStats.inProgress} atendimento(s) em andamento agora
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Ocupação por profissional */}
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+          <div className="flex items-center gap-2 border-b px-5 py-4">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold text-foreground">Ocupação por profissional</h3>
+          </div>
+          {todayAppts.isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : byProfessional.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Sem agendamentos hoje</div>
+          ) : (
+            <div className="divide-y">
+              {byProfessional.map(({ id, name, total, completed }) => (
+                <div key={id} className="flex items-center gap-4 px-5 py-3">
+                  <p className="flex-1 truncate text-sm font-medium text-foreground">{name}</p>
+                  <p className="text-sm text-muted-foreground">{total} atend.</p>
+                  <div className="w-20">
+                    <div className="h-1.5 rounded-full bg-muted">
+                      <div
+                        className="h-1.5 rounded-full bg-green-500"
+                        style={{ width: `${total > 0 ? Math.round((completed / total) * 100) : 0}%` }}
+                      />
+                    </div>
+                    <p className="mt-0.5 text-right text-xs text-muted-foreground">
+                      {total > 0 ? Math.round((completed / total) * 100) : 0}%
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
       {/* Today's schedule */}
       <div className="rounded-xl border bg-card shadow-sm">
         <div className="flex items-center justify-between border-b px-5 py-4">

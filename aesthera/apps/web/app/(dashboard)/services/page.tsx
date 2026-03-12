@@ -17,12 +17,21 @@ import {
   useUpdateService,
 } from '@/lib/hooks/use-resources'
 
+function parseBRL(value: string): number {
+  // Accept "150,00" or "150.00" or "150" → returns cents
+  const normalized = value.replace(/\./g, '').replace(',', '.')
+  return Math.round(parseFloat(normalized) * 100)
+}
+
 const serviceSchema = z.object({
   name: z.string().min(2),
   description: z.string().optional(),
   category: z.string().optional(),
   durationMinutes: z.coerce.number().int().positive().refine((v) => v % 15 === 0, 'Múltiplo de 15'),
-  price: z.coerce.number().int().min(0),
+  priceDisplay: z.string().min(1, 'Informe o preço').refine((v) => {
+    const n = parseBRL(v)
+    return !isNaN(n) && n >= 0
+  }, 'Preço inválido'),
 })
 type ServiceFormData = z.infer<typeof serviceSchema>
 
@@ -31,13 +40,21 @@ function ServiceForm({
   onSave,
   isPending,
 }: {
-  defaultValues?: Partial<ServiceFormData>
+  defaultValues?: Partial<ServiceFormData & { price: number }>
   onSave: (data: ServiceFormData) => Promise<void>
   isPending: boolean
 }) {
   const { register, handleSubmit, formState: { errors } } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
-    defaultValues,
+    defaultValues: defaultValues
+      ? {
+          ...defaultValues,
+          // Convert cents to display string (e.g. 15000 → "150,00")
+          priceDisplay: defaultValues.price != null
+            ? (defaultValues.price / 100).toFixed(2).replace('.', ',')
+            : '',
+        }
+      : undefined,
   })
 
   return (
@@ -65,9 +82,17 @@ function ServiceForm({
         </div>
       </div>
       <div className="space-y-2">
-        <Label>Preço (centavos)</Label>
-        <Input type="number" {...register('price')} placeholder="35000 = R$350,00" />
-        {errors.price && <p className="text-xs text-destructive">{errors.price.message}</p>}
+        <Label>Preço (R$)</Label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+          <Input
+            {...register('priceDisplay')}
+            placeholder="150,00"
+            className="pl-9"
+            inputMode="decimal"
+          />
+        </div>
+        {errors.priceDisplay && <p className="text-xs text-destructive">{errors.priceDisplay.message}</p>}
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={isPending}>
@@ -94,28 +119,34 @@ export default function ServicesPage() {
   async function handleCreate(data: ServiceFormData) {
     try {
       await create({
-        ...data,
+        name: data.name,
         description: data.description ?? null,
         category: data.category ?? null,
+        durationMinutes: data.durationMinutes,
+        price: parseBRL(data.priceDisplay),
       })
       toast.success('Serviço criado')
       setShowCreate(false)
-    } catch {
-      toast.error('Erro ao criar serviço')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao criar serviço')
     }
   }
 
   async function handleUpdate(data: ServiceFormData) {
     try {
       await update({
-        ...data,
+        name: data.name,
         description: data.description ?? null,
         category: data.category ?? null,
+        durationMinutes: data.durationMinutes,
+        price: parseBRL(data.priceDisplay),
       })
       toast.success('Serviço atualizado')
       setEditing(null)
-    } catch {
-      toast.error('Erro ao atualizar serviço')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao atualizar serviço')
     }
   }
 

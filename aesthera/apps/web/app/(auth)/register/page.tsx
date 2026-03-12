@@ -44,7 +44,11 @@ export default function RegisterPage() {
   async function onSubmit(data: RegisterData) {
     setLoading(true)
     try {
-      const response = await api.post<{ accessToken: string; refreshToken: string; slug: string }>(
+      const response = await api.post<{
+        accessToken: string
+        refreshToken: string
+        clinic: { slug: string; name: string; id: string }
+      }>(
         '/auth/register',
         {
           clinicName: data.clinicName,
@@ -54,15 +58,11 @@ export default function RegisterPage() {
           phone: data.phone,
         },
       )
+      const slug = response.data.clinic.slug
+      localStorage.setItem('clinic-slug', slug)
       setTokens(response.data.accessToken, response.data.refreshToken)
-      toast.success('Clínica cadastrada com sucesso!')
-      // Redirect to the clinic subdomain dashboard
-      const slug = response.data.slug
-      const hostname = window.location.hostname
-      const port = window.location.port ? `:${window.location.port}` : ''
-      // e.g. minha-clinica.localhost:3000/dashboard
-      const baseDomain = hostname.split('.').slice(-1)[0] // "localhost" or "aesthera.com"
-      window.location.href = `http://${slug}.${baseDomain}${port}/dashboard`
+      toast.success(`Clínica cadastrada! Seu slug é: ${slug}`)
+      router.push('/dashboard')
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??

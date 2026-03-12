@@ -42,6 +42,7 @@ export class AiService {
     userMessage: string,
     sessionId: string,
     onChunk: (chunk: string) => void,
+    onToolCall?: (toolName: string) => void,
   ): Promise<void> {
     const history = await getHistory(clinicId, sessionId)
     const model = this.getModel()
@@ -98,9 +99,13 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
     })
 
     let fullResponse = ''
-    for await (const delta of result.textStream) {
-      fullResponse += delta
-      onChunk(delta)
+    for await (const event of result.fullStream) {
+      if (event.type === 'text-delta') {
+        fullResponse += event.textDelta
+        onChunk(event.textDelta)
+      } else if (event.type === 'tool-call' && onToolCall) {
+        onToolCall(event.toolName)
+      }
     }
 
     const updated: Message[] = [
