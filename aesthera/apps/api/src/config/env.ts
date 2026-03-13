@@ -44,6 +44,11 @@ const envSchema = z.object({
   ZAPI_CLIENT_TOKEN: z.string().optional(),
 
   GEMINI_API_KEY: z.string().optional(),
+
+  // Allowed origin(s) for CORS. Comma-separated list, or '*' for all origins.
+  // Example: https://app.aesthera.com,https://aesthera-web.up.railway.app
+  // Defaults to '*' so the web frontend can reach the API out of the box.
+  CORS_ORIGIN: z.string().default('*'),
 })
 
 export type Env = z.infer<typeof envSchema>

@@ -41,7 +41,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // ── Plugins ──────────────────────────────────────────────────────────────────
   await app.register(cors, {
-    origin: appConfig.isProduction ? false : true,
+    origin: appConfig.cors.origin,
     credentials: true,
   })
 
@@ -62,6 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     '/health',
     '/auth/register',
     '/auth/refresh',
+    '/auth/logout',
   ])
 
   app.addHook('preHandler', async (request, reply) => {

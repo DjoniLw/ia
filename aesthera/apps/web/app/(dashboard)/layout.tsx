@@ -5,7 +5,8 @@ import { CalendarDays, CreditCard, Home, LayoutDashboard, LogOut, Scissors, Sett
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { clearTokens } from '@/lib/auth'
+import { clearTokens, getRefreshToken } from '@/lib/auth'
+import { api } from '@/lib/api'
 import { ChatPanel } from '@/components/chat-panel'
 
 const navItems = [
@@ -30,7 +31,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [router])
 
-  function handleLogout() {
+  async function handleLogout() {
+    const refreshToken = getRefreshToken()
+    // Attempt server-side revocation with a 2 s timeout so the user is never
+    // blocked on a slow/unavailable network while still revoking in most cases.
+    if (refreshToken) {
+      await Promise.race([
+        api.post('/auth/logout', { refreshToken }).catch(() => undefined),
+        new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+      ])
+    }
     clearTokens()
     router.push('/login')
   }

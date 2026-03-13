@@ -17,6 +17,8 @@
 #                     tokens are invalidated on every restart without it)
 #   JWT_REFRESH_SECRET — same as above, for refresh tokens
 #   PORT           — 3000
+#   CORS_ORIGIN    — comma-separated allowed origins, or '*' for all (default).
+#                    Example: https://yourweb.up.railway.app,https://app.yoursite.com
 #   (Stripe, MercadoPago, Resend, Z-API, Gemini keys are optional)
 #
 # Docs: https://docs.railway.com/reference/config-as-code

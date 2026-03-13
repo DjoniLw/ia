@@ -6,7 +6,6 @@ import {
   RefreshTokenDto,
   ProfessionalLoginDto,
 } from './auth.dto'
-import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   const authService = new AuthService(app)
@@ -36,16 +35,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // ── POST /auth/logout ───────────────────────────────────────────────────────
-  // Revokes refresh token from Redis.
-  app.post(
-    '/auth/logout',
-    { preHandler: [jwtClinicGuard] },
-    async (request, reply) => {
-      const body = RefreshTokenDto.parse(request.body)
-      await authService.logout(body.refreshToken)
-      reply.status(200).send({ message: 'Logged out successfully' })
-    },
-  )
+  // Revokes refresh token from Redis. PUBLIC — no tenant, no JWT check needed;
+  // the refresh token itself is the credential that gets revoked.
+  app.post('/auth/logout', async (request, reply) => {
+    const body = RefreshTokenDto.parse(request.body)
+    await authService.logout(body.refreshToken)
+    reply.status(200).send({ message: 'Logged out successfully' })
+  })
 
   // ── Professional auth ───────────────────────────────────────────────────────
 
