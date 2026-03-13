@@ -25,9 +25,9 @@ Cole o conteúdo deste arquivo + `context/stack.md` + `context/architecture.md` 
 
 | O quê | Caminho |
 |-------|---------|
-| 📁 Documentação (este repo) | `c:\Disco_D\Desenvolvimento\IA\ai-engineering\projects\aesthera\` |
-| 💻 Código Backend (API) | `c:\Disco_D\Desenvolvimento\IA\aesthera\apps\api` |
-| 🌐 Código Frontend (Web) | `c:\Disco_D\Desenvolvimento\IA\aesthera\apps\web` *(a criar — Fase 1 frontend)* |
+| 📁 Documentação (este repo) | `ai-engineering/projects/aesthera/` |
+| 💻 Código Backend (API) | `aesthera/apps/api` |
+| 🌐 Código Frontend (Web) | `aesthera/apps/web` |
 
 ---
 

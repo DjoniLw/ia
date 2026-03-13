@@ -7,7 +7,7 @@ Fluxa
 Provide a simple payment and billing infrastructure for companies to charge customers, receive payments, and automate collections through APIs and notifications.
 
 ## Stage
-[x] Idea  [ ] MVP  [ ] Beta  [ ] Production
+[x] Idea  [x] MVP  [ ] Beta  [ ] Production
 
 ## Key Constraints
 - Budget: low

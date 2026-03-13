@@ -11,10 +11,24 @@ fluxa/
 └── README.md
 ```
 
-## Documentação e contexto do projeto
-```
-c:\Disco_D\Desenvolvimento\IA\ai-engineering\
-```
+## Como iniciar
 
-## Como iniciar o desenvolvimento
-Ver `START.md` em `ai-engineering/`.
+### API (Backend)
+```bash
+cd apps/api
+docker-compose up -d
+npm run dev
+```
+Ver [`apps/api/QUICKSTART.md`](apps/api/QUICKSTART.md) para instruções detalhadas.
+
+### Web (Frontend)
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+A aplicação estará disponível em `http://localhost:3003`.
+
+## Documentação e contexto do projeto
+
+Ver [`ai-engineering/projects/fluxa/START.md`](../ai-engineering/projects/fluxa/START.md) para instruções de desenvolvimento com IA.
