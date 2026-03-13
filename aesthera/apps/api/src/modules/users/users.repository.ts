@@ -57,7 +57,8 @@ export class UsersRepository {
     inviteToken: string
     inviteExpiresAt: Date
   }) {
-    return prisma.user.create({ data })
+    // Invited users start as inactive; they become active after accepting the invite.
+    return prisma.user.create({ data: { ...data, active: false } })
   }
 
   async acceptInvite(userId: string, passwordHash: string) {

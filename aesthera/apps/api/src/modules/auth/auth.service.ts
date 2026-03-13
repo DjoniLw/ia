@@ -88,6 +88,7 @@ export class AuthService {
       slug,
       name: dto.clinicName,
       email: dto.email,
+      phone: dto.phone,
       document: dto.clinicDocument,
       adminId,
       adminName: dto.adminName,

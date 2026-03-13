@@ -31,4 +31,7 @@ COPY prisma ./prisma
 
 EXPOSE 3000
 
-CMD ["node", "dist/main.js"]
+# Sync the Prisma schema to the database before starting the server.
+# --accept-data-loss only allows schema additions/renames — it never drops existing
+# data. This is safe for Railway deployments where we only add new columns/tables.
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main.js"]

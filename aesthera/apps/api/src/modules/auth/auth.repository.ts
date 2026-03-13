@@ -51,6 +51,7 @@ export class AuthRepository {
     slug: string
     name: string
     email: string
+    phone?: string
     document?: string
     adminId: string
     adminName: string
@@ -63,6 +64,7 @@ export class AuthRepository {
         slug: data.slug,
         name: data.name,
         email: data.email,
+        phone: data.phone,
         document: data.document,
         emailVerified: true, // Phase 1: skip email verification flow
         users: {

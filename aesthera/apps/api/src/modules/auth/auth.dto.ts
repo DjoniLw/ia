@@ -15,6 +15,7 @@ export const RegisterClinicDto = z.object({
   adminName: z.string().min(2).max(100),
   email: z.string().email(),
   password: passwordSchema,
+  phone: z.string().optional(),
 })
 
 export const LoginDto = z.object({
