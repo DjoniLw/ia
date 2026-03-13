@@ -2,6 +2,53 @@
 
 Workspace centralizado para projetos desenvolvidos com assistência de IA (GitHub Copilot, ChatGPT, Claude).
 
+> **Quer rodar sem clonar?** Use o Railway — veja a seção [Deploy online (Railway)](#deploy-online-railway) abaixo.
+
+---
+
+## Deploy online (Railway)
+
+Não precisa instalar nada no PC. Siga os passos:
+
+### Serviço 1 — API (backend)
+
+1. Acesse [railway.com](https://railway.com) e crie uma conta gratuita
+2. Clique em **New Project → Deploy from GitHub repo** → selecione `DjoniLw/ia`
+3. Railway vai encontrar o `railway.toml` na raiz e usar `Dockerfile.api` automaticamente
+4. No painel do projeto, clique em **+ New** → **Database → PostgreSQL**
+5. Clique em **+ New** → **Database → Redis**
+6. No serviço `ia` (a API), abra a aba **Variables** e adicione:
+
+   | Variável | Valor |
+   |----------|-------|
+   | `DATABASE_URL` | (copie da aba *Connect* do serviço PostgreSQL no Railway) |
+   | `REDIS_URL` | (copie da aba *Connect* do serviço Redis no Railway) |
+   | `JWT_SECRET` | qualquer string longa ≥ 32 chars |
+   | `JWT_REFRESH_SECRET` | outra string longa ≥ 32 chars |
+   | `PORT` | `3000` |
+
+7. Clique em **Deploy** — a API ficará disponível na URL gerada
+
+> **Gerar JWT_SECRET rapidamente (rode no terminal ou em [replit.com](https://replit.com)):**
+> ```bash
+> node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+> ```
+
+### Serviço 2 — Web (frontend)
+
+1. No mesmo projeto Railway, clique em **+ New → GitHub Repo** → `DjoniLw/ia` novamente
+2. Clique no novo serviço → aba **Settings → Build**
+3. Em **Dockerfile Path**, insira: `Dockerfile.web`
+4. Na aba **Variables**, adicione:
+
+   | Variável | Valor |
+   |----------|-------|
+   | `NEXT_PUBLIC_API_URL` | URL pública da API (ex: `https://ia-production.up.railway.app`) |
+
+5. Clique em **Deploy**
+
+Pronto! Acesse a URL do serviço web no browser.
+
 ---
 
 ## Estrutura do Repositório

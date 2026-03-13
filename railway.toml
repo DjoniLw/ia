@@ -1,0 +1,31 @@
+# Railway — Aesthera full stack
+# ─────────────────────────────────────────────────────────────────────────────
+# This file configures the FIRST Railway service (API / backend).
+# Railway reads railway.toml from the repository root automatically.
+#
+# ── Web (frontend) service ────────────────────────────────────────────────────
+# Create a SECOND service in the same Railway project:
+#   1. New → GitHub Repo → DjoniLw/ia
+#   2. Settings → Build → Dockerfile Path: Dockerfile.web
+#   3. Variables → NEXT_PUBLIC_API_URL: <public URL of this API service>
+#
+# ── Required environment variables for this (API) service ────────────────────
+#   DATABASE_URL   — from the Railway PostgreSQL service (New → Database)
+#   REDIS_URL      — from the Railway Redis service     (New → Database)
+#   JWT_SECRET     — any random string ≥ 32 characters
+#   JWT_REFRESH_SECRET — any random string ≥ 32 characters
+#   PORT           — 3000
+#
+# Docs: https://docs.railway.com/reference/config-as-code
+# ─────────────────────────────────────────────────────────────────────────────
+
+[build]
+builder        = "DOCKERFILE"
+dockerfilePath = "Dockerfile.api"
+
+[deploy]
+healthcheckPath        = "/health"
+healthcheckTimeout     = 30
+restartPolicyType      = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+

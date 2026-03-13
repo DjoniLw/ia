@@ -1,0 +1,36 @@
+# Dockerfile.api — Aesthera API (used by Railway, build context = repo root)
+# For local Docker Compose use apps/api/Dockerfile instead.
+
+# ── Stage 1: build ────────────────────────────────────────────────────────────
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Paths are relative to the REPO ROOT (Railway build context)
+COPY aesthera/apps/api/package*.json ./
+RUN npm ci
+
+COPY aesthera/apps/api/prisma ./prisma
+RUN npx prisma generate
+
+COPY aesthera/apps/api/tsconfig.json ./
+COPY aesthera/apps/api/src ./src
+RUN npm run build
+
+# ── Stage 2: run ──────────────────────────────────────────────────────────────
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY aesthera/apps/api/package*.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/dist ./dist
+COPY aesthera/apps/api/prisma ./prisma
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]

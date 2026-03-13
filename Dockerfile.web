@@ -1,12 +1,16 @@
+# Dockerfile.web — Aesthera Web (used by Railway, build context = repo root)
+# For local Docker Compose use apps/web/Dockerfile instead.
+
 # ── Stage 1: build ────────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+# Paths are relative to the REPO ROOT (Railway build context)
+COPY aesthera/apps/web/package*.json ./
 RUN npm ci
 
-COPY . .
+COPY aesthera/apps/web .
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:3000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
@@ -20,7 +24,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Use Next.js standalone output (set in next.config.mjs)
+# Use Next.js standalone output (configured in next.config.mjs)
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
