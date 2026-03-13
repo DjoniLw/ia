@@ -4,16 +4,17 @@
 # Railway reads railway.toml from the repository root automatically.
 #
 # ── Web (frontend) service ────────────────────────────────────────────────────
-# Create a SECOND service in the same Railway project:
+# Create a SECOND service in the same Railway project.
+# IMPORTANT: set "Root Directory" to aesthera/apps/web  so Railway picks up
+# the web-specific railway.toml in that folder instead of this one.
+#
 #   1. New → GitHub Repo → DjoniLw/ia
-#   2. Settings → Build → Dockerfile Path: Dockerfile.web
+#   2. Settings → General → Root Directory: aesthera/apps/web
+#      (this is what stops Railway from reading this file and using Dockerfile.api)
 #   3. Variables:
-#        NEXT_PUBLIC_API_URL  → public URL of the API service above
-#        NEXT_PUBLIC_BASE_DOMAIN (optional) → your custom root domain if you set
-#                              up wildcard DNS (e.g. aesthera.com.br).
-#                              Leave unset for Railway's *.up.railway.app URLs —
-#                              the clinic slug is then read from localStorage,
-#                              which is set automatically at login / register.
+#        NEXT_PUBLIC_API_URL  → public URL of the API service below
+#        NEXT_PUBLIC_BASE_DOMAIN (optional) → custom wildcard domain root
+#                              Leave unset for Railway *.up.railway.app URLs.
 #
 # ── Required environment variables for this (API) service ────────────────────
 #   DATABASE_URL   — from the Railway PostgreSQL service (New → Database)

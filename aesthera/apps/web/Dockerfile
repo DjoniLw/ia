@@ -11,6 +11,12 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL=http://localhost:3000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
+# Optional: custom root domain for subdomain-based tenant routing.
+# e.g. --build-arg NEXT_PUBLIC_BASE_DOMAIN=aesthera.com.br
+# Leave unset for flat-URL deployments (Railway, Vercel) — slug comes from localStorage.
+ARG NEXT_PUBLIC_BASE_DOMAIN=""
+ENV NEXT_PUBLIC_BASE_DOMAIN=${NEXT_PUBLIC_BASE_DOMAIN}
+
 RUN npm run build
 
 # ── Stage 2: run ──────────────────────────────────────────────────────────────
