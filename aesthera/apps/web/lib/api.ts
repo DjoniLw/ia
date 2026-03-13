@@ -4,12 +4,23 @@ import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './auth'
 function getClinicSlug(): string {
   if (typeof window === 'undefined') return ''
   const hostname = window.location.hostname
-  // e.g. "minha-clinica.localhost" or "minha-clinica.aesthera.com"
-  const parts = hostname.split('.')
-  if (parts.length >= 2 && parts[0] !== 'www' && parts[0] !== 'app' && parts[0] !== 'localhost') {
-    return parts[0]
+
+  // Production: only extract subdomain when on the configured custom domain
+  // e.g. NEXT_PUBLIC_BASE_DOMAIN=aesthera.com.br → "clinica.aesthera.com.br" → "clinica"
+  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN
+  if (baseDomain && hostname !== baseDomain && hostname.endsWith(`.${baseDomain}`)) {
+    const subdomain = hostname.slice(0, hostname.length - baseDomain.length - 1)
+    if (subdomain && subdomain !== 'www' && subdomain !== 'app') return subdomain
   }
-  // Fallback for local development: read from localStorage
+
+  // Local dev: extract from *.localhost (e.g. clinica.localhost:3002 → "clinica")
+  if (hostname.endsWith('.localhost')) {
+    const subdomain = hostname.slice(0, hostname.lastIndexOf('.localhost'))
+    if (subdomain && subdomain !== 'www' && subdomain !== 'app') return subdomain
+  }
+
+  // Fallback: slug stored in localStorage at login/register.
+  // Used for flat Railway/Vercel URLs (no clinic subdomain in the hostname).
   return localStorage.getItem('clinic-slug') ?? ''
 }
 
