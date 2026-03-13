@@ -15,12 +15,19 @@ import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
 import { setTokens } from '@/lib/auth'
 
+const passwordSchema = z
+  .string()
+  .min(8, 'Senha deve ter ao menos 8 caracteres')
+  .regex(/[A-Z]/, 'Senha deve conter ao menos uma letra maiúscula')
+  .regex(/[0-9]/, 'Senha deve conter ao menos um número')
+  .regex(/[^A-Za-z0-9]/, 'Senha deve conter ao menos um caractere especial')
+
 const registerSchema = z
   .object({
     clinicName: z.string().min(2, 'Nome da clínica deve ter ao menos 2 caracteres'),
     adminName: z.string().min(2, 'Seu nome deve ter ao menos 2 caracteres'),
     email: z.string().email('E-mail inválido'),
-    password: z.string().min(8, 'Senha deve ter ao menos 8 caracteres'),
+    password: passwordSchema,
     confirmPassword: z.string(),
     phone: z.string().optional(),
   })
@@ -122,6 +129,9 @@ export default function RegisterPage() {
               autoComplete="new-password"
               {...register('password')}
             />
+            <p className="text-xs text-muted-foreground">
+              Mínimo 8 caracteres, com letra maiúscula, número e caractere especial.
+            </p>
             {errors.password && (
               <p className="text-sm text-destructive">{errors.password.message}</p>
             )}

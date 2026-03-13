@@ -23,7 +23,8 @@ const registerSchema = z.object({
     .string()
     .min(8, 'Senha deve ter pelo menos 8 caracteres')
     .regex(/[A-Z]/, 'Deve conter pelo menos uma letra maiúscula')
-    .regex(/[0-9]/, 'Deve conter pelo menos um número'),
+    .regex(/[0-9]/, 'Deve conter pelo menos um número')
+    .regex(/[^A-Za-z0-9]/, 'Deve conter pelo menos um caractere especial'),
 })
 
 type RegisterData = z.infer<typeof registerSchema>
@@ -110,6 +111,9 @@ export default function RegisterPage() {
               autoComplete="new-password"
               {...register('password')}
             />
+            <p className="text-xs text-muted-foreground">
+              Mínimo 8 caracteres, com letra maiúscula, número e caractere especial.
+            </p>
             {errors.password && (
               <p className="text-sm text-destructive">{errors.password.message}</p>
             )}

@@ -101,8 +101,8 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
     let fullResponse = ''
     for await (const event of result.fullStream) {
       if (event.type === 'text-delta') {
-        fullResponse += event.textDelta
-        onChunk(event.textDelta)
+        fullResponse += event.text
+        onChunk(event.text)
       } else if (event.type === 'tool-call' && onToolCall) {
         onToolCall(event.toolName)
       }
