@@ -27,6 +27,95 @@ ia/
 
 ---
 
+## Pré-requisitos
+
+- **Node.js 22+** → https://nodejs.org
+- **Docker Desktop** → https://www.docker.com/products/docker-desktop (para PostgreSQL + Redis)
+- **Git** → https://git-scm.com
+
+---
+
+## Setup após clonar o repositório
+
+### 1. Clonar
+
+```bash
+git clone https://github.com/DjoniLw/ia.git
+cd ia
+```
+
+### 2. Fluxa — API (Backend)
+
+```bash
+cd fluxa/apps/api
+
+# Copiar variáveis de ambiente
+cp .env.example .env
+# Edite .env e preencha as chaves do Stripe, MercadoPago, Resend etc.
+
+# Subir banco de dados e Redis
+docker-compose up -d
+
+# Instalar dependências
+npm install
+
+# Rodar migrations e iniciar servidor
+npm run db:migrate
+npm run dev
+# → API disponível em http://localhost:3000
+```
+
+### 3. Fluxa — Web (Frontend)
+
+```bash
+cd fluxa/apps/web
+
+# Copiar variáveis de ambiente
+cp .env.example .env.local
+# Por padrão NEXT_PUBLIC_API_URL=http://localhost:3000 já funciona para dev
+
+# Instalar dependências e iniciar
+npm install
+npm run dev
+# → Frontend disponível em http://localhost:3003
+```
+
+### 4. Aesthera — API (Backend)
+
+```bash
+cd aesthera/apps/api
+
+# Copiar variáveis de ambiente (na raiz de aesthera/)
+cp ../../aesthera/.env.example .env
+# Edite .env e preencha as chaves necessárias
+
+# Subir banco de dados e Redis (porta 5433 para não conflitar com Fluxa)
+cd ../..
+docker-compose up -d
+
+# Instalar dependências
+cd apps/api
+npm install
+
+# Rodar migrations e iniciar servidor
+npm run db:migrate
+npm run dev
+# → API disponível em http://localhost:3001
+```
+
+### 5. Aesthera — Web (Frontend)
+
+```bash
+cd aesthera/apps/web
+
+# Instalar dependências e iniciar
+npm install
+npm run dev
+# → Frontend disponível em http://localhost:3002
+```
+
+---
+
 ## Projetos
 
 ### 🏥 Aesthera

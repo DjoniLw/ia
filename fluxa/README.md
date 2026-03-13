@@ -16,7 +16,10 @@ fluxa/
 ### API (Backend)
 ```bash
 cd apps/api
+cp .env.example .env    # preencha as chaves no .env
 docker-compose up -d
+npm install
+npm run db:migrate
 npm run dev
 ```
 Ver [`apps/api/QUICKSTART.md`](apps/api/QUICKSTART.md) para instruções detalhadas.
@@ -24,6 +27,7 @@ Ver [`apps/api/QUICKSTART.md`](apps/api/QUICKSTART.md) para instruções detalha
 ### Web (Frontend)
 ```bash
 cd apps/web
+cp .env.example .env.local   # por padrão já funciona para dev local
 npm install
 npm run dev
 ```
