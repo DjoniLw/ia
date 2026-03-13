@@ -12,9 +12,12 @@
 # ── Required environment variables for this (API) service ────────────────────
 #   DATABASE_URL   — from the Railway PostgreSQL service (New → Database)
 #   REDIS_URL      — from the Railway Redis service     (New → Database)
-#   JWT_SECRET     — any random string ≥ 32 characters
-#   JWT_REFRESH_SECRET — any random string ≥ 32 characters
+#   JWT_SECRET     — strongly recommended: any random string ≥ 32 characters
+#                    (auto-generated ephemeral secret is used when not set;
+#                     tokens are invalidated on every restart without it)
+#   JWT_REFRESH_SECRET — same as above, for refresh tokens
 #   PORT           — 3000
+#   (Stripe, MercadoPago, Resend, Z-API, Gemini keys are optional)
 #
 # Docs: https://docs.railway.com/reference/config-as-code
 # ─────────────────────────────────────────────────────────────────────────────
@@ -25,7 +28,7 @@ dockerfilePath = "Dockerfile.api"
 
 [deploy]
 healthcheckPath        = "/health"
-healthcheckTimeout     = 30
+healthcheckTimeout     = 60
 restartPolicyType      = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
