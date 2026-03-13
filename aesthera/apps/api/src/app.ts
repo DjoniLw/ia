@@ -59,6 +59,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Apply tenant middleware globally, skipping routes that truly don't need a clinic context
   const PUBLIC_ROUTES = new Set([
+    '/',
     '/health',
     '/auth/register',
     '/auth/refresh',
@@ -66,7 +67,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   ])
 
   app.addHook('preHandler', async (request, reply) => {
-    if (PUBLIC_ROUTES.has(request.routeOptions.url ?? '')) return
+    // routeOptions.url is an empty string when no route was matched (Fastify
+    // still runs preHandler hooks for its built-in not-found handler).
+    // Bail out in that case so Fastify returns a normal 404 instead of
+    // MISSING_TENANT.
+    const url = request.routeOptions.url
+    if (!url || PUBLIC_ROUTES.has(url)) return
     await tenantMiddleware(request, reply)
   })
 
@@ -79,6 +85,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     timestamp: new Date().toISOString(),
     service: 'aesthera-api',
     env: appConfig.env,
+  }))
+
+  // ── Root (PUBLIC — returns API info so the Railway URL is human-friendly) ─────
+  app.get('/', async () => ({
+    name: 'aesthera-api',
+    status: 'ok',
+    version: '1.0.0',
+    docs: '/health',
   }))
 
   // ── Module routes ─────────────────────────────────────────────────────────────
