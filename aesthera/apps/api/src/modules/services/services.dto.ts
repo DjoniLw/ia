@@ -2,8 +2,8 @@ import { z } from 'zod'
 
 export const CreateServiceDto = z.object({
   name: z.string().min(2).max(100),
-  description: z.string().optional(),
-  category: z.string().optional(),
+  description: z.string().nullish(),
+  category: z.string().nullish(),
   durationMinutes: z
     .number()
     .int()

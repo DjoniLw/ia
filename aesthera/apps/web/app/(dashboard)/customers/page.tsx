@@ -19,21 +19,27 @@ import {
 } from '@/lib/hooks/use-resources'
 import { api } from '@/lib/api'
 
+// ──── CPF mask ─────────────────────────────────────────────────────────────────
+
+function applyCpfMask(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  if (digits.length <= 3) return digits
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`
+  if (digits.length <= 9)
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`
+}
+
 // ──── Schema ───────────────────────────────────────────────────────────────────
 
-const customerSchema = z
-  .object({
-    name: z.string().min(2, 'Nome obrigatório'),
-    email: z.string().email('E-mail inválido').optional().or(z.literal('')),
-    phone: z.string().optional(),
-    document: z.string().optional(),
-    birthDate: z.string().optional(),
-    notes: z.string().optional(),
-  })
-  .refine((d) => d.email || d.phone, {
-    message: 'Informe e-mail ou telefone',
-    path: ['email'],
-  })
+const customerSchema = z.object({
+  name: z.string().min(2, 'Nome obrigatório'),
+  email: z.string().email('E-mail inválido').optional().or(z.literal('')),
+  phone: z.string().optional(),
+  document: z.string().optional(),
+  birthDate: z.string().optional(),
+  notes: z.string().optional(),
+})
 
 type CustomerFormData = z.infer<typeof customerSchema>
 
@@ -51,6 +57,7 @@ function CustomerForm({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
@@ -73,14 +80,23 @@ function CustomerForm({
         </div>
         <div className="space-y-2">
           <Label>Telefone</Label>
-          <Input {...register('phone')} placeholder="+55 11 99999-9999" />
+          <Input {...register('phone')} placeholder="(11) 99999-9999" />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
-          <Label>CPF / Documento</Label>
-          <Input {...register('document')} placeholder="000.000.000-00" />
+          <Label>CPF</Label>
+          <Input
+            placeholder="000.000.000-00"
+            inputMode="numeric"
+            {...register('document')}
+            onChange={(e) => {
+              const masked = applyCpfMask(e.target.value)
+              e.target.value = masked
+              setValue('document', masked)
+            }}
+          />
         </div>
         <div className="space-y-2">
           <Label>Data de nascimento</Label>

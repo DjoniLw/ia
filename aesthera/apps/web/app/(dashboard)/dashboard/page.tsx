@@ -161,7 +161,16 @@ export default function DashboardPage() {
             Gerando briefing com IA...
           </div>
         )}
-        {!briefingLoading && briefing && (
+        {!briefingLoading && briefing && briefing.includes('GEMINI_API_KEY') && (
+          <p className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+            ⚙️ A chave GEMINI_API_KEY não está configurada.{' '}
+            <a href="/settings" className="font-medium underline underline-offset-2">
+              Veja as instruções em Configurações → Integrações IA
+            </a>
+            .
+          </p>
+        )}
+        {!briefingLoading && briefing && !briefing.includes('GEMINI_API_KEY') && (
           <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{briefing}</p>
         )}
         {!briefingLoading && !briefing && (

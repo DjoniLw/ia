@@ -3,8 +3,8 @@ import { z } from 'zod'
 export const CreateProfessionalDto = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
-  phone: z.string().optional(),
-  speciality: z.string().optional(),
+  phone: z.string().nullish(),
+  speciality: z.string().nullish(),
 })
 export type CreateProfessionalDto = z.infer<typeof CreateProfessionalDto>
 
@@ -26,7 +26,7 @@ export const SetWorkingHoursDto = z.object({
 export type SetWorkingHoursDto = z.infer<typeof SetWorkingHoursDto>
 
 export const AssignServicesDto = z.object({
-  serviceIds: z.array(z.string().uuid()).min(1),
+  serviceIds: z.array(z.string().uuid()),
 })
 export type AssignServicesDto = z.infer<typeof AssignServicesDto>
 
