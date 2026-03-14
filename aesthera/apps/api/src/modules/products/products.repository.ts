@@ -71,6 +71,7 @@ export class ProductsRepository {
           unitPrice,
           totalPrice,
           discount: data.discount ?? 0,
+          paymentMethod: data.paymentMethod,
           notes: data.notes,
         },
         include: {

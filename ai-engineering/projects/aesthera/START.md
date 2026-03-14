@@ -64,6 +64,8 @@ Cole o conteúdo deste arquivo + `context/stack.md` + `context/architecture.md` 
 | `features/notifications.md` | WhatsApp + Email via BullMQ |
 | `features/ledger.md` | Registro financeiro imutável (append-only) |
 | `features/ai-assistant.md` | IA embutida — chat, resumos, briefing, function calling |
+| `features/products.md` | Catálogo de produtos + vendas com rastreamento de pagamento |
+| `features/reports.md` | Relatórios: clientes, produtos vendidos, estoque |
 | `agents/system-architect.md` | Persona do agente com regras Aesthera |
 
 ## Prompts Específicos

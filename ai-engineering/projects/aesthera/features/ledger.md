@@ -84,5 +84,28 @@ LedgerEntry {
 - Appointments module (appointment reference)
 - Customers module (customer reference)
 
+## Schema Changes
+
+### paymentId nullable (2026-03)
+`paymentId` was made optional on `LedgerEntry` to support manual cash entries
+and product-sale credits that do not go through a payment gateway.
+
+## Additional Credit Sources (implemented)
+
+| Source | When | Code |
+|--------|------|------|
+| `payment.succeeded` (webhook) | Gateway confirms payment | `domain-event-handlers.ts` |
+| `billing.markPaid` (manual) | Admin marks billing paid | `billing.service.ts` |
+| `products.sell` (product sale) | Product sold to customer | `products.service.ts` |
+
 ## Status
-[ ] Planned  [ ] In Progress  [ ] Done
+[ ] Planned  [ ] In Progress  [x] Done
+
+## Changelog
+| Date | Change |
+|------|--------|
+| 2026-03 | Initial implementation |
+| 2026-03 | Made `paymentId` nullable to support manual entries |
+| 2026-03 | `billing.markPaid` now creates credit LedgerEntry |
+| 2026-03 | `products.sell` now creates credit LedgerEntry |
+| 2026-03 | Added `createDebitEntry()` helper in LedgerService |

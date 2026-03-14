@@ -10,11 +10,11 @@ The assistant appears as a floating chat panel accessible from any page.
 ---
 
 ## AI Provider
-- **Model**: Google Gemini 2.0 Flash
-- **Why**: generous free tier (1.500 req/day, 1M tokens/min), excellent quality
-  for structured data tasks, native function calling, fast responses
+- **Model**: `gemini-1.5-flash` (free tier: 1,500 req/day, 1M tokens/min)
+- **Why changed from gemini-2.0-flash**: gemini-2.0-flash has `generate_content_free_tier_requests` quota = 0;
+  switching to gemini-1.5-flash restores full free-tier access without billing.
 - **Upgrade path**: Gemini 1.5 Pro or GPT-4o if more reasoning depth is needed
-- **Integration**: Vercel AI SDK (streaming, tool calls, React hooks — native Next.js)
+- **Integration**: `@ai-sdk/google` + Vercel AI SDK (streaming, tool calls, React hooks — native Next.js)
 
 ---
 
@@ -189,4 +189,14 @@ See `PLAN.md` Phase 8 — added after core system is stable.
 Can be partially introduced in Phase 7 (dashboard briefing widget only).
 
 ## Status
-[ ] Planned  [ ] In Progress  [ ] Done
+[ ] Planned  [ ] In Progress  [x] Done
+
+---
+
+## Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-03 | Initial implementation: chat SSE, customer summary, daily briefing, rate limiting, Redis history |
+| 2026-03 | Error surfacing: `getModel()` throws `AppError(503)` instead of generic `Error` — real API errors reach the frontend |
+| 2026-03 | Model switched from `gemini-2.0-flash` to `gemini-1.5-flash` — gemini-2.0-flash free tier quota = 0 |

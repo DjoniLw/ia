@@ -62,5 +62,39 @@ Customer {
 - Billing module (billing history)
 - Notifications module (WhatsApp + email recipient)
 
+## Additional Endpoints (implemented)
+
+```
+GET /customers/birthdays?days=7
+  → Returns customers whose birthday falls within the next N days (default 7)
+  → Response: { items: BirthdayCustomer[], total: number }
+  → BirthdayCustomer includes: id, name, phone, email, birthDate, age, isToday
+  → Pre-computes MMDD target set for O(days) efficiency
+
+GET /customers/:id/history
+  → Returns all appointments + product purchases for a customer
+  → Response: { appointments: [...], sales: [...] }
+  → Used by the "Histórico" tab in the customer detail panel
+```
+
+## Frontend — Customer Detail Panel (tabbed)
+```
+"Dados & Saúde" tab  → basic info + address + anamnesis
+"Histórico" tab      → appointments timeline + product purchases
+```
+
+## Frontend — Birthday Widget (Dashboard)
+- Shows on dashboard if any birthdays in next 7 days
+- Today's birthdays shown with 🎂 icon + highlight
+- One-click WhatsApp greeting link per customer
+
 ## Status
-[ ] Planned  [ ] In Progress  [ ] Done
+[ ] Planned  [ ] In Progress  [x] Done
+
+## Changelog
+| Date | Change |
+|------|--------|
+| 2026-03 | Initial CRUD with address + anamnesis (multi-tab form) |
+| 2026-03 | Added `GET /customers/birthdays` endpoint + dashboard widget |
+| 2026-03 | Added `GET /customers/:id/history` endpoint + "Histórico" tab in detail panel |
+| 2026-03 | Route reordering: static routes (`/birthdays`, `/:id/history`) before `/:id` |

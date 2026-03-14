@@ -557,9 +557,10 @@ model ProductSale {
   quantity   Int
   unitPrice  Int                              @map("unit_price")
   totalPrice Int                              @map("total_price")
-  discount   Int       @default(0)
-  notes      String?
-  soldAt     DateTime  @default(now())        @map("sold_at")
+  discount      Int       @default(0)
+  paymentMethod String?                          @map("payment_method") // cash, pix, card, transfer
+  notes         String?
+  soldAt        DateTime  @default(now())        @map("sold_at")
   createdAt  DateTime  @default(now())        @map("created_at")
 
   clinic   Clinic    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
