@@ -1,7 +1,19 @@
 'use client'
 
 import { isAuthenticated } from '@/lib/auth'
-import { CalendarDays, CreditCard, Home, LayoutDashboard, LogOut, Scissors, Settings, UserCheck, Users, BarChart3, Bell } from 'lucide-react'
+import {
+  BarChart3,
+  Bell,
+  CalendarDays,
+  CreditCard,
+  Home,
+  LogOut,
+  Package,
+  Scissors,
+  Settings,
+  UserCheck,
+  Users,
+} from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
@@ -15,6 +27,7 @@ const navItems = [
   { href: '/services', label: 'Serviços', icon: Scissors },
   { href: '/professionals', label: 'Profissionais', icon: UserCheck },
   { href: '/customers', label: 'Clientes', icon: Users },
+  { href: '/products', label: 'Produtos', icon: Package },
   { href: '/billing', label: 'Cobranças', icon: CreditCard },
   { href: '/financial', label: 'Financeiro', icon: BarChart3 },
   { href: '/notifications', label: 'Notificações', icon: Bell },
@@ -33,8 +46,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   async function handleLogout() {
     const refreshToken = getRefreshToken()
-    // Attempt server-side revocation with a 2 s timeout so the user is never
-    // blocked on a slow/unavailable network while still revoking in most cases.
     if (refreshToken) {
       await Promise.race([
         api.post('/auth/logout', { refreshToken }).catch(() => undefined),
@@ -45,53 +56,64 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/login')
   }
 
+  const currentPage = navItems.find((n) => n.href === pathname)
+
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      <aside className="flex w-64 flex-col border-r bg-card">
-        <div className="flex h-16 items-center border-b px-6">
-          <LayoutDashboard className="mr-2.5 h-4 w-4 text-primary" />
-          <span className="font-serif text-lg font-medium tracking-wide text-foreground">Aesthera</span>
+      <aside className="flex w-60 flex-col border-r bg-card shadow-sm">
+        {/* Brand */}
+        <div className="flex h-14 items-center gap-2.5 border-b px-5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+            <Scissors className="h-3.5 w-3.5 text-primary-foreground" />
+          </div>
+          <span className="text-base font-semibold tracking-tight text-foreground">Aesthera</span>
         </div>
 
-        <nav className="flex-1 space-y-1 p-4">
+        {/* Nav */}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
           {navItems.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href
+            const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
             return (
               <Link
                 key={href}
                 href={href}
                 className={[
-                  'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all',
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    : 'text-neutral-600 hover:bg-accent hover:text-accent-foreground',
                 ].join(' ')}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? '' : 'opacity-70'}`} />
                 {label}
               </Link>
             )
           })}
         </nav>
 
-        <div className="border-t p-4">
+        {/* Footer */}
+        <div className="border-t p-3">
           <button
             onClick={handleLogout}
-            className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive"
+            className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-neutral-500 transition-all hover:bg-red-50 hover:text-red-600"
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-4 w-4 opacity-70" />
             Sair
           </button>
         </div>
       </aside>
 
-      {/* Main */}
+      {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 items-center border-b bg-card px-6">
-          <h1 className="text-sm font-medium text-muted-foreground">
-            {navItems.find((n) => n.href === pathname)?.label ?? 'Painel'}
-          </h1>
+        {/* Top bar */}
+        <header className="flex h-14 items-center border-b bg-card px-6 shadow-sm">
+          <div className="flex items-center gap-2">
+            {currentPage && <currentPage.icon className="h-4 w-4 text-muted-foreground" />}
+            <span className="text-sm font-medium text-foreground">
+              {currentPage?.label ?? 'Painel'}
+            </span>
+          </div>
         </header>
 
         <main className="flex-1 overflow-auto p-6">{children}</main>

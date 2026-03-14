@@ -35,7 +35,7 @@ export class AiService {
       throw new Error('GEMINI_API_KEY not configured')
     }
     const google = createGoogleGenerativeAI({ apiKey: appConfig.ai.geminiApiKey })
-    return google('gemini-2.0-flash-exp')
+    return google('gemini-2.0-flash')
   }
 
   async streamChat(

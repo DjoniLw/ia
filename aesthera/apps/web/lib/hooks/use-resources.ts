@@ -32,6 +32,38 @@ export interface WorkingHour {
   isAvailable: boolean
 }
 
+export interface CustomerAddress {
+  street?: string
+  number?: string
+  complement?: string
+  neighborhood?: string
+  city?: string
+  state?: string
+  zip?: string
+  country?: string
+}
+
+export interface CustomerAnamnesis {
+  skinType?: string
+  allergies?: string
+  medications?: string
+  conditions?: string
+  previousTreatments?: string
+  currentTreatments?: string
+  observations?: string
+  consentSigned?: boolean
+  consentDate?: string
+}
+
+export interface CustomerMeta {
+  phone2?: string | null
+  rg?: string | null
+  gender?: string | null
+  occupation?: string | null
+  howFound?: string | null
+  anamnesis?: CustomerAnamnesis | null
+}
+
 export interface Customer {
   id: string
   name: string
@@ -40,6 +72,8 @@ export interface Customer {
   document: string | null
   birthDate: string | null
   notes: string | null
+  address: CustomerAddress | null
+  metadata: CustomerMeta | null
   createdAt: string
 }
 
@@ -142,7 +176,18 @@ export function useCreateCustomer() {
   return useMutation({
     mutationFn: (data: Omit<Customer, 'id' | 'createdAt'>) =>
       api.post('/customers', data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customers'] })
+      qc.invalidateQueries({ queryKey: ['customer'] })
+    },
+  })
+}
+
+export function useGetCustomer(id: string) {
+  return useQuery<Customer>({
+    queryKey: ['customer', id],
+    queryFn: () => api.get(`/customers/${id}`).then((r) => r.data),
+    enabled: !!id,
   })
 }
 
@@ -160,5 +205,88 @@ export function useDeleteCustomer() {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/customers/${id}`).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] }),
+  })
+}
+
+// ──── Products ────────────────────────────────────────────────────────────────
+
+export interface Product {
+  id: string
+  name: string
+  description: string | null
+  category: string | null
+  brand: string | null
+  sku: string | null
+  barcode: string | null
+  price: number
+  costPrice: number | null
+  stock: number
+  minStock: number
+  unit: string
+  active: boolean
+  imageUrl: string | null
+  createdAt: string
+}
+
+export interface ProductSale {
+  id: string
+  quantity: number
+  unitPrice: number
+  totalPrice: number
+  discount: number
+  notes: string | null
+  soldAt: string
+  product: { id: string; name: string; unit: string }
+  customer: { id: string; name: string } | null
+}
+
+export function useProducts(params?: Record<string, string>) {
+  return useQuery<Paginated<Product>>({
+    queryKey: ['products', params],
+    queryFn: () => api.get('/products', { params }).then((r) => r.data),
+  })
+}
+
+export function useCreateProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Omit<Product, 'id' | 'createdAt' | 'active'>) =>
+      api.post('/products', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['products'] }),
+  })
+}
+
+export function useUpdateProduct(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Partial<Product>) => api.patch(`/products/${id}`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['products'] }),
+  })
+}
+
+export function useDeleteProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/products/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['products'] }),
+  })
+}
+
+export function useSellProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { productId: string; customerId?: string | null; quantity: number; discount?: number; notes?: string | null }) =>
+      api.post('/products/sell', data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products'] })
+      qc.invalidateQueries({ queryKey: ['product-sales'] })
+    },
+  })
+}
+
+export function useProductSales(params?: Record<string, string>) {
+  return useQuery<Paginated<ProductSale>>({
+    queryKey: ['product-sales', params],
+    queryFn: () => api.get('/products/sales', { params }).then((r) => r.data),
   })
 }

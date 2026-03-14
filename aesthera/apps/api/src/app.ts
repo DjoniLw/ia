@@ -19,6 +19,7 @@ import { paymentsRoutes } from './modules/payments/payments.routes'
 import { ledgerRoutes } from './modules/ledger/ledger.routes'
 import { notificationsRoutes } from './modules/notifications/notifications.routes'
 import { aiRoutes } from './modules/ai/ai.routes'
+import { productsRoutes } from './modules/products/products.routes'
 import './domain-event-handlers'
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -112,6 +113,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await ledgerRoutes(app)
   await notificationsRoutes(app)
   await aiRoutes(app)
+  await productsRoutes(app)
 
   return app
 }
