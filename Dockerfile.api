@@ -39,4 +39,10 @@ EXPOSE 3000
 # Sync the Prisma schema to the database before starting the server.
 # --accept-data-loss only allows schema additions/renames — it never drops existing
 # data. This is safe for Railway deployments where we only add new columns/tables.
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/main.js"]
+#
+# Use `||` instead of `&&` so the Node server ALWAYS starts even when
+# DATABASE_URL is not yet configured or the database is temporarily unreachable.
+# A failed db push is logged as a warning; all DB queries will return 500/503
+# via the app's own error handler until connectivity is restored and the
+# container is restarted.
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss || echo '⚠️  WARNING: prisma db push failed — server starting without schema sync'; node dist/main.js"]
