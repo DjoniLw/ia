@@ -80,6 +80,19 @@ export function errorHandler(
     return
   }
 
+  // Redis / ioredis connection errors (MaxRetriesPerRequestError, AbortError)
+  // These are thrown when the Redis server is unreachable or the request is
+  // aborted after exhausting retries. name-based check avoids importing the
+  // transitive redis-errors package directly.
+  if (error.name === 'MaxRetriesPerRequestError' || error.name === 'AbortError') {
+    logger.error({ err: error }, 'Redis unavailable')
+    reply.status(503).send({
+      error: 'SERVICE_UNAVAILABLE',
+      message: 'Authentication service is temporarily unavailable. Please try again later.',
+    })
+    return
+  }
+
   // Fastify errors (e.g. 404 route not found, rate limit)
   const fastifyError = error as FastifyError
   if (fastifyError.statusCode) {

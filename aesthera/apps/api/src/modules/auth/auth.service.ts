@@ -2,7 +2,9 @@ import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { appConfig } from '../../config/app.config'
 import { redis } from '../../database/redis/client'
+import { logger } from '../../shared/logger/logger'
 import {
+  AppError,
   ConflictError,
   UnauthorizedError,
   ForbiddenError,
@@ -46,22 +48,37 @@ function lockKey(userId: string) {
 }
 
 async function checkLockout(userId: string): Promise<void> {
-  const attempts = await redis.get(lockKey(userId))
-  if (attempts && parseInt(attempts, 10) >= MAX_FAILED_ATTEMPTS) {
-    throw new ForbiddenError('Too many failed attempts. Try again in 15 minutes.')
+  try {
+    const attempts = await redis.get(lockKey(userId))
+    if (attempts && parseInt(attempts, 10) >= MAX_FAILED_ATTEMPTS) {
+      throw new ForbiddenError('Too many failed attempts. Try again in 15 minutes.')
+    }
+  } catch (err) {
+    // Re-throw business errors; warn and skip lockout when Redis is unavailable
+    // so a Redis outage does not block all login attempts.
+    if (err instanceof ForbiddenError) throw err
+    logger.warn({ err }, 'Redis unavailable — skipping lockout check')
   }
 }
 
 async function recordFailedAttempt(userId: string): Promise<void> {
-  const key = lockKey(userId)
-  const attempts = await redis.incr(key)
-  if (attempts === 1) {
-    await redis.expire(key, LOCK_TTL_SECONDS)
+  try {
+    const key = lockKey(userId)
+    const attempts = await redis.incr(key)
+    if (attempts === 1) {
+      await redis.expire(key, LOCK_TTL_SECONDS)
+    }
+  } catch {
+    // Redis unavailable — failed attempt not recorded
   }
 }
 
 async function clearLockout(userId: string): Promise<void> {
-  await redis.del(lockKey(userId))
+  try {
+    await redis.del(lockKey(userId))
+  } catch {
+    // Redis unavailable — lockout not cleared
+  }
 }
 
 // ─── AuthService ──────────────────────────────────────────────────────────────
@@ -75,6 +92,20 @@ export class AuthService {
     const existing = await authRepository.findClinicByEmail(dto.email)
     if (existing) {
       throw new ConflictError('An account with this email already exists')
+    }
+
+    // Verify Redis is reachable before writing anything to the database.
+    // If Redis is unavailable, token issuance would fail AFTER the clinic is
+    // created, leaving a half-created record the user could never log into.
+    // Failing here (before any DB write) lets the user retry cleanly.
+    try {
+      await redis.ping()
+    } catch {
+      throw new AppError(
+        'Authentication service is temporarily unavailable. Please try again later.',
+        503,
+        'SERVICE_UNAVAILABLE',
+      )
     }
 
     const baseSlug = slugify(dto.clinicName)
