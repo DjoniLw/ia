@@ -30,7 +30,11 @@ export class LedgerRepository {
     if (q.from || q.to) {
       const range: Record<string, Date> = {}
       if (q.from) range.gte = new Date(q.from)
-      if (q.to) range.lte = new Date(q.to)
+      if (q.to) {
+        const toDate = new Date(q.to)
+        toDate.setUTCHours(23, 59, 59, 999)
+        range.lte = toDate
+      }
       where.createdAt = range
     }
 
@@ -62,7 +66,11 @@ export class LedgerRepository {
     if (q.from || q.to) {
       const range: Record<string, Date> = {}
       if (q.from) range.gte = new Date(q.from)
-      if (q.to) range.lte = new Date(q.to)
+      if (q.to) {
+        const toDate = new Date(q.to)
+        toDate.setUTCHours(23, 59, 59, 999)
+        range.lte = toDate
+      }
       where.createdAt = range
     }
 

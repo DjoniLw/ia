@@ -348,7 +348,7 @@ export interface ClinicalRecord {
   professionalId: string | null
   title: string
   content: string
-  type: 'note' | 'exam' | 'procedure' | 'prescription'
+  type: 'note' | 'exam' | 'procedure' | 'prescription' | 'anamnesis'
   createdAt: string
   professional: { id: string; name: string } | null
 }
@@ -370,7 +370,7 @@ export function useCreateClinicalRecord() {
       professionalId?: string | null
       title: string
       content: string
-      type: 'note' | 'exam' | 'procedure' | 'prescription'
+      type: 'note' | 'exam' | 'procedure' | 'prescription' | 'anamnesis'
     }) => api.post('/clinical-records', data).then((r) => r.data),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['clinical-records', vars.customerId] })

@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Bot, ClipboardList, FileSignature, Loader2, Package, Plus, Scissors, Search, User } from 'lucide-react'
+import { Bot, ClipboardList, ClipboardCheck, FileSignature, Loader2, Package, Plus, Scissors, Search, User } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -21,6 +21,7 @@ import {
   useDeleteCustomer,
   useUpdateCustomer,
 } from '@/lib/hooks/use-resources'
+import { type AnamnesisQuestion, useAnamnesisTemplate } from '@/lib/hooks/use-settings'
 import { api } from '@/lib/api'
 
 // ──── Masks ────────────────────────────────────────────────────────────────────
@@ -505,15 +506,34 @@ function AiSummaryDialog({ customer, onClose }: { customer: Customer; onClose: (
 
 // ──── Customer Detail Panel ────────────────────────────────────────────────────
 
-type DetailTab = 'profile' | 'history' | 'clinical' | 'contracts'
+type DetailTab = 'profile' | 'history' | 'anamnese' | 'clinical' | 'contracts'
 
 function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onEdit: () => void; onClose: () => void }) {
   const [detailTab, setDetailTab] = useState<DetailTab>('profile')
   const history = useCustomerHistory(customer.id)
   const clinicalRecords = useClinicalRecords(customer.id)
+  const anamnesisRecords = (() => {
+    // Filter only anamnesis type from clinical records
+    return {
+      ...clinicalRecords,
+      data: clinicalRecords.data
+        ? { ...clinicalRecords.data, items: clinicalRecords.data.items.filter((r) => r.type === 'anamnesis') }
+        : undefined,
+    }
+  })()
+  const allClinicalRecords = (() => ({
+    ...clinicalRecords,
+    data: clinicalRecords.data
+      ? { ...clinicalRecords.data, items: clinicalRecords.data.items.filter((r) => r.type !== 'anamnesis') }
+      : undefined,
+  }))()
+  const { data: anamnesisTemplate, isLoading: templateLoading } = useAnamnesisTemplate()
   const createRecord = useCreateClinicalRecord()
   const [showRecordForm, setShowRecordForm] = useState(false)
   const [newRecord, setNewRecord] = useState({ title: '', content: '', type: 'note' as ClinicalRecord['type'] })
+  const [anamnesisAnswers, setAnamnesisAnswers] = useState<Record<string, string>>({})
+  const [showAnamnesisForm, setShowAnamnesisForm] = useState(false)
+  const [anamnesisSubmitting, setAnamnesisSubmitting] = useState(false)
   const addr = customer.address
   const meta = customer.metadata
   const ana = meta?.anamnesis
@@ -555,7 +575,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados & Saúde'], ['history', 'Histórico'], ['clinical', 'Clínico'], ['contracts', 'Contratos']] as const).map(([id, label]) => (
+        {([['profile', 'Dados & Saúde'], ['history', 'Histórico'], ['anamnese', 'Anamnese'], ['clinical', 'Clínico'], ['contracts', 'Contratos']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -674,6 +694,183 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         </div>
       )}
 
+      {detailTab === 'anamnese' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Anamnese</p>
+            </div>
+            {!showAnamnesisForm && (
+              <button
+                onClick={() => { setAnamnesisAnswers({}); setShowAnamnesisForm(true) }}
+                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+              >
+                <Plus className="h-3 w-3" />
+                Nova anamnese
+              </button>
+            )}
+          </div>
+
+          {showAnamnesisForm && (
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <p className="text-xs font-semibold text-foreground">Preencha o questionário</p>
+              {templateLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(anamnesisTemplate ?? []).map((q: AnamnesisQuestion) => (
+                    <div key={q.id} className="space-y-1">
+                      <label className="text-xs font-medium text-foreground">
+                        {q.text}
+                        {q.required && <span className="ml-1 text-red-500">*</span>}
+                      </label>
+                      {q.type === 'text' && (
+                        <textarea
+                          value={anamnesisAnswers[q.id] ?? ''}
+                          onChange={(e) => setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: e.target.value })}
+                          rows={2}
+                          className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                          placeholder="Escreva aqui…"
+                        />
+                      )}
+                      {q.type === 'yesno' && (
+                        <div className="flex gap-3">
+                          {(['Sim', 'Não'] as const).map((opt) => (
+                            <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`anamnesis-${q.id}`}
+                                value={opt}
+                                checked={anamnesisAnswers[q.id] === opt}
+                                onChange={() => setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: opt })}
+                              />
+                              {opt}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      {q.type === 'numeric' && (
+                        <input
+                          type="number"
+                          value={anamnesisAnswers[q.id] ?? ''}
+                          onChange={(e) => setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: e.target.value })}
+                          className="w-32 rounded-md border bg-background px-2 py-1 text-xs"
+                        />
+                      )}
+                      {q.type === 'date' && (
+                        <input
+                          type="date"
+                          value={anamnesisAnswers[q.id] ?? ''}
+                          onChange={(e) => setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: e.target.value })}
+                          className="rounded-md border bg-background px-2 py-1 text-xs"
+                        />
+                      )}
+                      {q.type === 'multiple' && q.options?.map((opt) => (
+                        <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(anamnesisAnswers[q.id] ?? '').split(',').includes(opt)}
+                            onChange={(e) => {
+                              const current = (anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
+                              const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
+                              setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: updated.join(',') })
+                            }}
+                          />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={async () => {
+                        const questions = anamnesisTemplate ?? []
+                        const missing = questions.filter((q: AnamnesisQuestion) => q.required && !anamnesisAnswers[q.id]?.trim())
+                        if (missing.length > 0) {
+                          alert(`Preencha os campos obrigatórios: ${missing.map((q: AnamnesisQuestion) => q.text).join(', ')}`)
+                          return
+                        }
+                        setAnamnesisSubmitting(true)
+                        try {
+                          const entries = questions.map((q: AnamnesisQuestion) => ({
+                            question: q.text,
+                            answer: anamnesisAnswers[q.id] ?? '',
+                            type: q.type,
+                          }))
+                          await createRecord.mutateAsync({
+                            customerId: customer.id,
+                            title: 'Anamnese',
+                            content: JSON.stringify(entries),
+                            type: 'anamnesis',
+                          })
+                          setAnamnesisAnswers({})
+                          setShowAnamnesisForm(false)
+                        } finally {
+                          setAnamnesisSubmitting(false)
+                        }
+                      }}
+                      disabled={anamnesisSubmitting}
+                      className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      {anamnesisSubmitting ? 'Salvando…' : 'Salvar anamnese'}
+                    </button>
+                    <button
+                      onClick={() => { setShowAnamnesisForm(false); setAnamnesisAnswers({}) }}
+                      className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* History of anamnesis entries */}
+          {anamnesisRecords.isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : !anamnesisRecords.data?.items.length ? (
+            <p className="rounded-lg border bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
+              Nenhuma anamnese registrada. Clique em "Nova anamnese" para iniciar.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {anamnesisRecords.data.items.map((r) => {
+                let entries: Array<{ question: string; answer: string; type: string }> = []
+                try { entries = JSON.parse(r.content) } catch { entries = [] }
+                return (
+                  <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-foreground">Anamnese</p>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70">
+                        <span>{new Date(r.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        {r.professional && <span>· {r.professional.name}</span>}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      {entries.filter((e) => e.answer?.trim()).map((e, i) => (
+                        <div key={i} className="flex gap-2 text-xs">
+                          <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
+                          <span className="font-medium text-foreground text-right max-w-[50%]">{e.answer}</span>
+                        </div>
+                      ))}
+                      {entries.filter((e) => e.answer?.trim()).length === 0 && (
+                        <p className="text-xs text-muted-foreground italic">Sem respostas registradas.</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {detailTab === 'clinical' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -746,17 +943,17 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             </div>
           )}
 
-          {clinicalRecords.isLoading ? (
+          {allClinicalRecords.isLoading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
-          ) : !clinicalRecords.data?.items.length ? (
+          ) : !allClinicalRecords.data?.items.length ? (
             <p className="rounded-lg border bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
               Nenhum registro clínico. Clique em "Novo registro" para adicionar.
             </p>
           ) : (
             <div className="space-y-2">
-              {clinicalRecords.data.items.map((r) => {
+              {allClinicalRecords.data!.items.map((r) => {
                 const TYPE_LABEL: Record<string, string> = { note: 'Observação', procedure: 'Procedimento', exam: 'Exame', prescription: 'Prescrição' }
                 const TYPE_COLOR: Record<string, string> = { note: 'bg-blue-100 text-blue-700', procedure: 'bg-purple-100 text-purple-700', exam: 'bg-amber-100 text-amber-700', prescription: 'bg-green-100 text-green-700' }
                 return (

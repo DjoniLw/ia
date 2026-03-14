@@ -1,40 +1,29 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Loader2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { type AnamnesisQuestion, DEFAULT_ANAMNESIS_QUESTIONS, useAnamnesisTemplate, useSaveAnamnesisTemplate } from '@/lib/hooks/use-settings'
 import { BusinessHoursTab } from './_components/business-hours-tab'
 import { ClinicTab } from './_components/clinic-tab'
 import { UsersTab } from './_components/users-tab'
 
 function AnamnesisConfigTab() {
-  type QuestionType = 'text' | 'yesno' | 'multiple' | 'numeric' | 'date'
-  interface Question {
-    id: string
-    text: string
-    type: QuestionType
-    options?: string[]
-    required: boolean
-  }
+  type QuestionType = AnamnesisQuestion['type']
 
-  const DEFAULT_QUESTIONS: Question[] = [
-    { id: '1', text: 'Tipo de pele (seca, oleosa, mista, sensível)', type: 'text', required: false },
-    { id: '2', text: 'Possui alergias conhecidas?', type: 'yesno', required: true },
-    { id: '3', text: 'Quais alergias?', type: 'text', required: false },
-    { id: '4', text: 'Faz uso de medicamentos?', type: 'yesno', required: true },
-    { id: '5', text: 'Quais medicamentos?', type: 'text', required: false },
-    { id: '6', text: 'Tem histórico de doenças de pele?', type: 'yesno', required: false },
-    { id: '7', text: 'Já realizou tratamentos estéticos anteriormente?', type: 'yesno', required: false },
-    { id: '8', text: 'Está grávida ou amamentando?', type: 'yesno', required: false },
-  ]
+  const { data: savedQuestions, isLoading } = useAnamnesisTemplate()
+  const save = useSaveAnamnesisTemplate()
 
-  const [questions, setQuestions] = useState<Question[]>(DEFAULT_QUESTIONS)
+  const [questions, setQuestions] = useState<AnamnesisQuestion[] | null>(null)
   const [adding, setAdding] = useState(false)
   const [newQ, setNewQ] = useState({ text: '', type: 'text' as QuestionType, required: false })
   const [saved, setSaved] = useState(false)
+
+  // Initialize from server data when loaded
+  const effectiveQuestions = questions ?? savedQuestions ?? DEFAULT_ANAMNESIS_QUESTIONS
 
   const TYPE_LABEL: Record<QuestionType, string> = {
     text: 'Texto livre',
@@ -46,20 +35,21 @@ function AnamnesisConfigTab() {
 
   function addQuestion() {
     if (!newQ.text.trim()) return
-    setQuestions([...questions, { id: Date.now().toString(), ...newQ }])
+    setQuestions([...effectiveQuestions, { id: Date.now().toString(), ...newQ }])
     setNewQ({ text: '', type: 'text', required: false })
     setAdding(false)
   }
 
   function removeQuestion(id: string) {
-    setQuestions(questions.filter((q) => q.id !== id))
+    setQuestions(effectiveQuestions.filter((q) => q.id !== id))
   }
 
   function toggleRequired(id: string) {
-    setQuestions(questions.map((q) => q.id === id ? { ...q, required: !q.required } : q))
+    setQuestions(effectiveQuestions.map((q) => q.id === id ? { ...q, required: !q.required } : q))
   }
 
-  function handleSave() {
+  async function handleSave() {
+    await save.mutateAsync(effectiveQuestions)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -74,11 +64,16 @@ function AnamnesisConfigTab() {
               Configure as perguntas exibidas ao cadastrar ou atualizar um cliente.
             </p>
           </div>
-          <Button size="sm" onClick={handleSave}>{saved ? '✓ Salvo!' : 'Salvar'}</Button>
+          <Button size="sm" onClick={() => void handleSave()} disabled={save.isPending}>
+            {save.isPending ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Salvando…</> : saved ? '✓ Salvo!' : 'Salvar'}
+          </Button>
         </div>
 
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+        ) : (
         <div className="mt-4 space-y-2">
-          {questions.map((q, i) => (
+          {effectiveQuestions.map((q, i) => (
             <div key={q.id} className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                 {i + 1}
@@ -102,6 +97,7 @@ function AnamnesisConfigTab() {
             </div>
           ))}
         </div>
+        )}
 
         {!adding ? (
           <button
