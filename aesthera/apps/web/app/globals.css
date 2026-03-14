@@ -1,51 +1,99 @@
 @import "tailwindcss";
 
 @theme {
-  /* Aesthera brand tokens */
-  --color-brand-50: oklch(97% 0.012 172);
-  --color-brand-100: oklch(93% 0.04 172);
-  --color-brand-200: oklch(86% 0.08 172);
-  --color-brand-300: oklch(78% 0.12 172);
-  --color-brand-400: oklch(68% 0.15 172);
-  --color-brand-500: oklch(58% 0.17 172);
-  --color-brand-600: oklch(50% 0.16 172);
-  --color-brand-700: oklch(43% 0.14 172);
-  --color-brand-800: oklch(36% 0.11 172);
-  --color-brand-900: oklch(28% 0.08 172);
+  /* ── Aesthera — Soft Elegance palette (Beauty/Spa) ─────────────────────────
+   * Design system generated with ui-ux-pro-max-skill (Soft UI Evolution style)
+   * Primary brand mood: calming, premium, organic.
+   * Colors: Soft Pink · Sage Green · Gold CTA · Warm White · Charcoal
+   * Typography: Cormorant Garamond (headings) · Montserrat (body)
+   * ───────────────────────────────────────────────────────────────────────── */
 
-  /* Semantic design tokens (shadcn-compatible) */
-  --color-background: oklch(100% 0 0);
-  --color-foreground: oklch(9% 0.01 260);
-  --color-card: oklch(100% 0 0);
-  --color-card-foreground: oklch(9% 0.01 260);
-  --color-popover: oklch(100% 0 0);
-  --color-popover-foreground: oklch(9% 0.01 260);
-  --color-primary: oklch(50% 0.16 172);
-  --color-primary-foreground: oklch(100% 0 0);
-  --color-secondary: oklch(96% 0.01 260);
-  --color-secondary-foreground: oklch(9% 0.01 260);
-  --color-muted: oklch(96% 0.01 260);
-  --color-muted-foreground: oklch(45% 0.01 260);
-  --color-accent: oklch(96% 0.01 260);
-  --color-accent-foreground: oklch(9% 0.01 260);
-  --color-destructive: oklch(58% 0.22 27);
-  --color-destructive-foreground: oklch(100% 0 0);
-  --color-border: oklch(91% 0.01 260);
-  --color-input: oklch(91% 0.01 260);
-  --color-ring: oklch(50% 0.16 172);
+  /* Soft Rose / Pink family */
+  --color-brand-50:  #FFF5F5;
+  --color-brand-100: #FDEAEA;
+  --color-brand-200: #F9D4D6;
+  --color-brand-300: #F2B8BC;
+  --color-brand-400: #E8B4B8;
+  --color-brand-500: #D4909A;
+  --color-brand-600: #BE6E7A;
+  --color-brand-700: #9E4E5A;
+  --color-brand-800: #7E3040;
+  --color-brand-900: #5E1828;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --radius: 0.5rem;
+  /* Gold accent family */
+  --color-gold-300: #F0DC9A;
+  --color-gold-400: #E0C260;
+  --color-gold-500: #D4AF37;
+  --color-gold-600: #B8960A;
+  --color-gold-700: #9A7A00;
+
+  /* Sage Green family */
+  --color-sage-300: #D0EDD9;
+  --color-sage-400: #B8E0C5;
+  --color-sage-500: #A8D5BA;
+  --color-sage-600: #82BC9B;
+
+  /* ── Semantic design tokens (shadcn-compatible) ─────────────────────────── */
+  --color-background:           #FFF5F5;
+  --color-foreground:           #2D3436;
+  --color-card:                 #FFFFFF;
+  --color-card-foreground:      #2D3436;
+  --color-popover:              #FFFFFF;
+  --color-popover-foreground:   #2D3436;
+
+  /* Primary = Gold for CTAs & active states */
+  --color-primary:              #D4AF37;
+  --color-primary-foreground:   #1A1400;
+
+  /* Secondary = pale rose */
+  --color-secondary:            #FDE8EA;
+  --color-secondary-foreground: #7E3040;
+
+  /* Muted = warm off-white */
+  --color-muted:                #FDF0F0;
+  --color-muted-foreground:     #8A7070;
+
+  /* Accent = soft pink for hover highlights */
+  --color-accent:               #F2D6D8;
+  --color-accent-foreground:    #5E1828;
+
+  --color-destructive:          #C0392B;
+  --color-destructive-foreground: #FFFFFF;
+
+  --color-border:               #F0D8D8;
+  --color-input:                #F0D8D8;
+  --color-ring:                 #D4AF37;
+
+  /* ── Typography ─────────────────────────────────────────────────────────── */
+  /* Loaded via Google Fonts <link> in RootLayout. */
+  --font-sans:  'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+
+  /* ── Shape & spacing ─────────────────────────────────────────────────────── */
+  /* Slightly larger base radius for organic, premium feel */
+  --radius: 0.875rem;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
   }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Elegant serif headings — Cormorant Garamond */
+  h1, h2, h3 {
+    font-family: var(--font-serif);
+  }
+
+  /* Smooth transitions on all interactive elements (Soft UI principle) */
+  a, button {
+    transition-duration: 200ms;
+    transition-timing-function: ease-out;
   }
 }

@@ -50,8 +50,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar */}
       <aside className="flex w-64 flex-col border-r bg-card">
         <div className="flex h-16 items-center border-b px-6">
-          <LayoutDashboard className="mr-2 h-5 w-5 text-primary" />
-          <span className="font-semibold text-foreground">Aesthera</span>
+          <LayoutDashboard className="mr-2.5 h-4 w-4 text-primary" />
+          <span className="font-serif text-lg font-medium tracking-wide text-foreground">Aesthera</span>
         </div>
 
         <nav className="flex-1 space-y-1 p-4">
@@ -62,9 +62,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 key={href}
                 href={href}
                 className={[
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                 ].join(' ')}
               >
@@ -78,7 +78,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="border-t p-4">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive"
           >
             <LogOut className="h-4 w-4" />
             Sair
