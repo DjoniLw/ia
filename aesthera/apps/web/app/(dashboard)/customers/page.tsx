@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Bot, ClipboardList, ClipboardCheck, FileSignature, Loader2, Package, Plus, Scissors, Search, User } from 'lucide-react'
+import { Bot, ClipboardList, FileSignature, Loader2, Package, Plus, Scissors, Search, User } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -506,34 +506,99 @@ function AiSummaryDialog({ customer, onClose }: { customer: Customer; onClose: (
 
 // ──── Customer Detail Panel ────────────────────────────────────────────────────
 
-type DetailTab = 'profile' | 'history' | 'anamnese' | 'clinical' | 'contracts'
+type DetailTab = 'profile' | 'history' | 'prontuario' | 'contracts'
+
+// Types for the new-entry form
+type EntryType = ClinicalRecord['type']
+
+const ENTRY_TYPES: { value: EntryType; label: string }[] = [
+  { value: 'anamnesis', label: 'Anamnese' },
+  { value: 'exam',      label: 'Exame' },
+  { value: 'note',      label: 'Observação' },
+  { value: 'procedure', label: 'Procedimento' },
+  { value: 'prescription', label: 'Prescrição' },
+]
+
+const TYPE_LABEL: Record<string, string> = {
+  anamnesis:    'Anamnese',
+  exam:         'Exame',
+  note:         'Observação',
+  procedure:    'Procedimento',
+  prescription: 'Prescrição',
+}
+const TYPE_COLOR: Record<string, string> = {
+  anamnesis:    'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
+  exam:         'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  note:         'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  procedure:    'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+  prescription: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+}
 
 function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onEdit: () => void; onClose: () => void }) {
   const [detailTab, setDetailTab] = useState<DetailTab>('profile')
-  const history = useCustomerHistory(customer.id)
+
+  // ── clinical / prontuário ──────────────────────────────────────────────
   const clinicalRecords = useClinicalRecords(customer.id)
-  const anamnesisRecords = (() => {
-    // Filter only anamnesis type from clinical records
-    return {
-      ...clinicalRecords,
-      data: clinicalRecords.data
-        ? { ...clinicalRecords.data, items: clinicalRecords.data.items.filter((r) => r.type === 'anamnesis') }
-        : undefined,
-    }
-  })()
-  const allClinicalRecords = (() => ({
-    ...clinicalRecords,
-    data: clinicalRecords.data
-      ? { ...clinicalRecords.data, items: clinicalRecords.data.items.filter((r) => r.type !== 'anamnesis') }
-      : undefined,
-  }))()
   const { data: anamnesisTemplate, isLoading: templateLoading } = useAnamnesisTemplate()
   const createRecord = useCreateClinicalRecord()
-  const [showRecordForm, setShowRecordForm] = useState(false)
-  const [newRecord, setNewRecord] = useState({ title: '', content: '', type: 'note' as ClinicalRecord['type'] })
+
+  // new-entry form
+  const [showEntryForm, setShowEntryForm] = useState(false)
+  const [entryType, setEntryType] = useState<EntryType>('anamnesis')
+  // for non-anamnesis types
+  const [simpleRecord, setSimpleRecord] = useState({ title: '', content: '' })
+  // for anamnesis type
   const [anamnesisAnswers, setAnamnesisAnswers] = useState<Record<string, string>>({})
-  const [showAnamnesisForm, setShowAnamnesisForm] = useState(false)
-  const [anamnesisSubmitting, setAnamnesisSubmitting] = useState(false)
+  const [entrySubmitting, setEntrySubmitting] = useState(false)
+
+  function openEntryForm() {
+    setEntryType('anamnesis')
+    setSimpleRecord({ title: '', content: '' })
+    setAnamnesisAnswers({})
+    setShowEntryForm(true)
+  }
+
+  async function submitEntry() {
+    setEntrySubmitting(true)
+    try {
+      if (entryType === 'anamnesis') {
+        const questions = anamnesisTemplate ?? []
+        const missing = questions.filter((q: AnamnesisQuestion) => q.required && !anamnesisAnswers[q.id]?.trim())
+        if (missing.length > 0) {
+          toast.error(`Preencha os campos obrigatórios: ${missing.map((q: AnamnesisQuestion) => q.text).join(', ')}`)
+          setEntrySubmitting(false)
+          return
+        }
+        const entries = questions.map((q: AnamnesisQuestion) => ({
+          question: q.text,
+          answer: anamnesisAnswers[q.id] ?? '',
+          type: q.type,
+        }))
+        await createRecord.mutateAsync({
+          customerId: customer.id,
+          title: 'Anamnese',
+          content: JSON.stringify(entries),
+          type: 'anamnesis',
+        })
+      } else {
+        if (!simpleRecord.title.trim() || !simpleRecord.content.trim()) return
+        await createRecord.mutateAsync({
+          customerId: customer.id,
+          title: simpleRecord.title,
+          content: simpleRecord.content,
+          type: entryType,
+        })
+      }
+      setShowEntryForm(false)
+      setAnamnesisAnswers({})
+      setSimpleRecord({ title: '', content: '' })
+    } finally {
+      setEntrySubmitting(false)
+    }
+  }
+
+  // ── misc ──────────────────────────────────────────────────────────────
+  const history = useCustomerHistory(customer.id)
   const addr = customer.address
   const meta = customer.metadata
   const ana = meta?.anamnesis
@@ -575,7 +640,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados & Saúde'], ['history', 'Histórico'], ['anamnese', 'Anamnese'], ['clinical', 'Clínico'], ['contracts', 'Contratos']] as const).map(([id, label]) => (
+        {([['profile', 'Dados'], ['history', 'Histórico'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -590,6 +655,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         ))}
       </div>
 
+      {/* ── Dados ─────────────────────────────────────────────────────── */}
       {detailTab === 'profile' && (
         <>
           <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
@@ -598,375 +664,313 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             <Row label="Telefone 2" value={meta?.phone2 as string} />
             <Row label="CPF" value={customer.document} />
             <Row label="RG" value={meta?.rg as string} />
+            <Row label="Data de Nascimento" value={customer.birthDate ? new Date(customer.birthDate).toLocaleDateString('pt-BR') : null} />
             <Row label="Gênero" value={meta?.gender as string} />
-            <Row label="Nascimento" value={customer.birthDate ? new Date(customer.birthDate).toLocaleDateString('pt-BR') : null} />
             <Row label="Profissão" value={meta?.occupation as string} />
-            <Row label="Como nos encontrou" value={meta?.howFound as string} />
-            {customer.notes && <Row label="Observações" value={customer.notes} />}
+            <Row label="Como nos conheceu" value={meta?.howFound as string} />
+            {!customer.phone && !customer.document && !meta?.rg && (
+              <p className="text-xs text-muted-foreground italic">Nenhuma informação adicional cadastrada.</p>
+            )}
           </div>
 
           {hasAddress && (
             <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Endereço</p>
-              <Row label="Logradouro" value={[addr.street, addr.number].filter(Boolean).join(', ')} />
-              <Row label="Complemento" value={addr.complement} />
-              <Row label="Bairro" value={addr.neighborhood} />
-              <Row label="Cidade/UF" value={[addr.city, addr.state].filter(Boolean).join(' - ')} />
-              <Row label="CEP" value={addr.zip} />
+              <Row label="Rua" value={addr?.street} />
+              <Row label="Número" value={addr?.number as string} />
+              <Row label="Complemento" value={addr?.complement as string} />
+              <Row label="Bairro" value={addr?.neighborhood as string} />
+              <Row label="Cidade" value={addr?.city} />
+              <Row label="Estado" value={addr?.state} />
+              <Row label="CEP" value={addr?.zip} />
             </div>
           )}
 
           {hasAna && (
             <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Saúde & Anamnese</p>
-              <Row label="Tipo de pele" value={ana.skinType} />
-              <Row label="Alergias" value={ana.allergies} />
-              <Row label="Medicamentos" value={ana.medications} />
-              <Row label="Condições" value={ana.conditions} />
-              <Row label="Tratamentos anteriores" value={ana.previousTreatments} />
-              <Row label="Tratamentos atuais" value={ana.currentTreatments} />
-              <Row label="Observações clínicas" value={ana.observations} />
-              {ana.consentSigned && (
-                <p className="text-xs text-green-700 font-medium mt-1">✓ Termo de consentimento assinado</p>
-              )}
+              {Object.entries(ana as Record<string, unknown>).map(([k, v]) => (
+                <Row key={k} label={k} value={String(v ?? '')} />
+              ))}
             </div>
           )}
         </>
       )}
 
+      {/* ── Histórico de atendimentos ─────────────────────────────────── */}
       {detailTab === 'history' && (
-        <div className="space-y-4">
-          {/* Services/appointments */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Scissors className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Serviços realizados</p>
-            </div>
-            {history.isLoading ? (
-              <p className="text-xs text-muted-foreground py-2">Carregando…</p>
-            ) : !history.data?.appointments.length ? (
-              <p className="text-xs text-muted-foreground py-2">Nenhum serviço registrado.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {history.data.appointments.map((a) => (
-                  <div key={a.id} className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs">
-                    <span className="text-muted-foreground min-w-[80px]">
-                      {new Date(a.scheduledAt).toLocaleDateString('pt-BR')}
-                    </span>
-                    <span className="flex-1 font-medium">{a.service.name}</span>
-                    <span className="text-muted-foreground">{a.professional.name}</span>
-                    <span className={`rounded-full px-1.5 py-0.5 font-medium ${STATUS_COLOR[a.status] ?? 'bg-muted text-muted-foreground'}`}>
-                      {STATUS_LABEL[a.status] ?? a.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Product sales */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Package className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Produtos comprados</p>
-            </div>
-            {history.isLoading ? (
-              <p className="text-xs text-muted-foreground py-2">Carregando…</p>
-            ) : !history.data?.sales.length ? (
-              <p className="text-xs text-muted-foreground py-2">Nenhum produto comprado.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {history.data.sales.map((s) => (
-                  <div key={s.id} className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs">
-                    <span className="text-muted-foreground min-w-[80px]">
-                      {new Date(s.soldAt).toLocaleDateString('pt-BR')}
-                    </span>
-                    <span className="flex-1 font-medium">{s.product.name}</span>
-                    <span className="text-muted-foreground">{s.quantity}x {s.product.unit}</span>
-                    <span className="font-medium">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.totalPrice / 100)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {detailTab === 'anamnese' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ClipboardCheck className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Anamnese</p>
-            </div>
-            {!showAnamnesisForm && (
-              <button
-                onClick={() => { setAnamnesisAnswers({}); setShowAnamnesisForm(true) }}
-                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
-              >
-                <Plus className="h-3 w-3" />
-                Nova anamnese
-              </button>
-            )}
+          <div className="flex items-center gap-2">
+            <Scissors className="h-3.5 w-3.5 text-muted-foreground" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Atendimentos & Compras</p>
           </div>
 
-          {showAnamnesisForm && (
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
-              <p className="text-xs font-semibold text-foreground">Preencha o questionário</p>
-              {templateLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {(anamnesisTemplate ?? []).map((q: AnamnesisQuestion) => (
-                    <div key={q.id} className="space-y-1">
-                      <label className="text-xs font-medium text-foreground">
-                        {q.text}
-                        {q.required && <span className="ml-1 text-red-500">*</span>}
-                      </label>
-                      {q.type === 'text' && (
-                        <textarea
-                          value={anamnesisAnswers[q.id] ?? ''}
-                          onChange={(e) => setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: e.target.value })}
-                          rows={2}
-                          className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
-                          placeholder="Escreva aqui…"
-                        />
-                      )}
-                      {q.type === 'yesno' && (
-                        <div className="flex gap-3">
-                          {(['Sim', 'Não'] as const).map((opt) => (
-                            <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`anamnesis-${q.id}`}
-                                value={opt}
-                                checked={anamnesisAnswers[q.id] === opt}
-                                onChange={() => setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: opt })}
-                              />
-                              {opt}
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                      {q.type === 'numeric' && (
-                        <input
-                          type="number"
-                          value={anamnesisAnswers[q.id] ?? ''}
-                          onChange={(e) => setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: e.target.value })}
-                          className="w-32 rounded-md border bg-background px-2 py-1 text-xs"
-                        />
-                      )}
-                      {q.type === 'date' && (
-                        <input
-                          type="date"
-                          value={anamnesisAnswers[q.id] ?? ''}
-                          onChange={(e) => setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: e.target.value })}
-                          className="rounded-md border bg-background px-2 py-1 text-xs"
-                        />
-                      )}
-                      {q.type === 'multiple' && q.options?.map((opt) => (
-                        <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={(anamnesisAnswers[q.id] ?? '').split(',').includes(opt)}
-                            onChange={(e) => {
-                              const current = (anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
-                              const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
-                              setAnamnesisAnswers({ ...anamnesisAnswers, [q.id]: updated.join(',') })
-                            }}
-                          />
-                          {opt}
-                        </label>
-                      ))}
-                    </div>
-                  ))}
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={async () => {
-                        const questions = anamnesisTemplate ?? []
-                        const missing = questions.filter((q: AnamnesisQuestion) => q.required && !anamnesisAnswers[q.id]?.trim())
-                        if (missing.length > 0) {
-                          alert(`Preencha os campos obrigatórios: ${missing.map((q: AnamnesisQuestion) => q.text).join(', ')}`)
-                          return
-                        }
-                        setAnamnesisSubmitting(true)
-                        try {
-                          const entries = questions.map((q: AnamnesisQuestion) => ({
-                            question: q.text,
-                            answer: anamnesisAnswers[q.id] ?? '',
-                            type: q.type,
-                          }))
-                          await createRecord.mutateAsync({
-                            customerId: customer.id,
-                            title: 'Anamnese',
-                            content: JSON.stringify(entries),
-                            type: 'anamnesis',
-                          })
-                          setAnamnesisAnswers({})
-                          setShowAnamnesisForm(false)
-                        } finally {
-                          setAnamnesisSubmitting(false)
-                        }
-                      }}
-                      disabled={anamnesisSubmitting}
-                      className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
-                    >
-                      {anamnesisSubmitting ? 'Salvando…' : 'Salvar anamnese'}
-                    </button>
-                    <button
-                      onClick={() => { setShowAnamnesisForm(false); setAnamnesisAnswers({}) }}
-                      className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* History of anamnesis entries */}
-          {anamnesisRecords.isLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            </div>
-          ) : !anamnesisRecords.data?.items.length ? (
+          {history.isLoading ? (
+            <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+          ) : !history.data?.appointments.length && !history.data?.sales.length ? (
             <p className="rounded-lg border bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
-              Nenhuma anamnese registrada. Clique em "Nova anamnese" para iniciar.
+              Nenhum atendimento ou compra registrada.
             </p>
           ) : (
-            <div className="space-y-3">
-              {anamnesisRecords.data.items.map((r) => {
-                let entries: Array<{ question: string; answer: string; type: string }> = []
-                try { entries = JSON.parse(r.content) } catch { entries = [] }
-                return (
-                  <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-foreground">Anamnese</p>
-                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70">
-                        <span>{new Date(r.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                        {r.professional && <span>· {r.professional.name}</span>}
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      {entries.filter((e) => e.answer?.trim()).map((e, i) => (
-                        <div key={i} className="flex gap-2 text-xs">
-                          <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
-                          <span className="font-medium text-foreground text-right max-w-[50%]">{e.answer}</span>
-                        </div>
-                      ))}
-                      {entries.filter((e) => e.answer?.trim()).length === 0 && (
-                        <p className="text-xs text-muted-foreground italic">Sem respostas registradas.</p>
-                      )}
-                    </div>
+            <div className="space-y-2">
+              {(history.data?.appointments ?? []).map((appt) => (
+                <div key={appt.id} className="rounded-lg border bg-muted/10 p-3 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-foreground">{appt.service.name}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLOR[appt.status] ?? 'bg-muted text-muted-foreground'}`}>
+                      {STATUS_LABEL[appt.status] ?? appt.status}
+                    </span>
                   </div>
-                )
-              })}
+                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
+                    <span>{new Date(appt.scheduledAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    {appt.professional && <span>· {appt.professional.name}</span>}
+                    {appt.billing && <span>· R$ {Number(appt.billing.amount).toFixed(2)}</span>}
+                  </div>
+                </div>
+              ))}
+              {(history.data?.sales ?? []).map((sale) => (
+                <div key={sale.id} className="rounded-lg border bg-muted/10 p-3 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-foreground">{sale.product.name} ×{sale.quantity}</p>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                      Compra
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
+                    <span>{new Date(sale.soldAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>· R$ {Number(sale.totalPrice).toFixed(2)}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       )}
 
-      {detailTab === 'clinical' && (
+      {/* ── Prontuário (anamnese + exames + observações…) ─────────────── */}
+      {detailTab === 'prontuario' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Histórico Clínico</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prontuário</p>
             </div>
-            <button
-              onClick={() => setShowRecordForm(!showRecordForm)}
-              className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
-            >
-              <Plus className="h-3 w-3" />
-              Novo registro
-            </button>
+            {!showEntryForm && (
+              <button
+                onClick={openEntryForm}
+                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+              >
+                <Plus className="h-3 w-3" />
+                Novo lançamento
+              </button>
+            )}
           </div>
 
-          {showRecordForm && (
-            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+          {/* ── New-entry form ── */}
+          {showEntryForm && (
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              {/* Type selector */}
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Tipo</label>
-                <select
-                  value={newRecord.type}
-                  onChange={(e) => setNewRecord({ ...newRecord, type: e.target.value as ClinicalRecord['type'] })}
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
-                >
-                  <option value="note">Observação</option>
-                  <option value="procedure">Procedimento</option>
-                  <option value="exam">Exame</option>
-                  <option value="prescription">Prescrição</option>
-                </select>
+                <label className="text-xs font-medium text-muted-foreground">Tipo de lançamento</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {ENTRY_TYPES.map((et) => (
+                    <button
+                      key={et.value}
+                      type="button"
+                      onClick={() => setEntryType(et.value)}
+                      className={[
+                        'rounded-full px-3 py-1 text-xs font-medium transition-colors border',
+                        entryType === et.value
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-muted-foreground hover:bg-muted/50',
+                      ].join(' ')}
+                    >
+                      {et.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Título</label>
-                <input
-                  value={newRecord.title}
-                  onChange={(e) => setNewRecord({ ...newRecord, title: e.target.value })}
-                  placeholder="Ex: Consulta inicial, Botox…"
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Conteúdo</label>
-                <textarea
-                  value={newRecord.content}
-                  onChange={(e) => setNewRecord({ ...newRecord, content: e.target.value })}
-                  rows={3}
-                  placeholder="Descreva o procedimento, observações clínicas…"
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
-                />
-              </div>
-              <div className="flex gap-2">
+
+              {/* Anamnese form — uses configured template */}
+              {entryType === 'anamnesis' && (
+                <div className="space-y-3">
+                  {templateLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (anamnesisTemplate ?? []).length === 0 ? (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/10 dark:text-amber-300">
+                      Nenhuma pergunta configurada. Configure as perguntas em{' '}
+                      <strong>Configurações → Anamnese</strong>.
+                    </p>
+                  ) : (
+                    (anamnesisTemplate ?? []).map((q: AnamnesisQuestion) => (
+                      <div key={q.id} className="space-y-1">
+                        <label className="text-xs font-medium text-foreground">
+                          {q.text}
+                          {q.required && <span className="ml-1 text-red-500">*</span>}
+                        </label>
+                        {q.type === 'text' && (
+                          <textarea
+                            value={anamnesisAnswers[q.id] ?? ''}
+                            onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                            rows={2}
+                            className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                            placeholder="Escreva aqui…"
+                          />
+                        )}
+                        {q.type === 'yesno' && (
+                          <div className="flex gap-4">
+                            {(['Sim', 'Não'] as const).map((opt) => (
+                              <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`anamnesis-${q.id}`}
+                                  value={opt}
+                                  checked={anamnesisAnswers[q.id] === opt}
+                                  onChange={() => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: opt }))}
+                                />
+                                {opt}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        {q.type === 'numeric' && (
+                          <input
+                            type="number"
+                            value={anamnesisAnswers[q.id] ?? ''}
+                            onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                            className="w-32 rounded-md border bg-background px-2 py-1 text-xs"
+                          />
+                        )}
+                        {q.type === 'date' && (
+                          <input
+                            type="date"
+                            value={anamnesisAnswers[q.id] ?? ''}
+                            onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                            className="rounded-md border bg-background px-2 py-1 text-xs"
+                          />
+                        )}
+                        {q.type === 'multiple' && (q.options ?? []).map((opt) => (
+                          <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean).includes(opt)}
+                              onChange={(e) => {
+                                const current = (anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
+                                const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
+                                setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
+                              }}
+                            />
+                            {opt}
+                          </label>
+                        ))}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* Generic form for other types */}
+              {entryType !== 'anamnesis' && (
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Título</label>
+                    <input
+                      value={simpleRecord.title}
+                      onChange={(e) => setSimpleRecord((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder={
+                        entryType === 'exam' ? 'Ex: Exame de sangue, Dermatoscopia…' :
+                        entryType === 'procedure' ? 'Ex: Botox, Limpeza de pele…' :
+                        entryType === 'prescription' ? 'Ex: Prescrição de ácido…' :
+                        'Ex: Observação pós-atendimento…'
+                      }
+                      className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Conteúdo / Descrição</label>
+                    <textarea
+                      value={simpleRecord.content}
+                      onChange={(e) => setSimpleRecord((prev) => ({ ...prev, content: e.target.value }))}
+                      rows={3}
+                      placeholder="Descreva o resultado, observações clínicas, dosagens…"
+                      className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex gap-2 pt-1">
                 <button
-                  onClick={async () => {
-                    if (!newRecord.title || !newRecord.content) return
-                    try {
-                      await createRecord.mutateAsync({ customerId: customer.id, ...newRecord })
-                      setNewRecord({ title: '', content: '', type: 'note' })
-                      setShowRecordForm(false)
-                    } catch { /* toast handled by query */ }
-                  }}
-                  disabled={createRecord.isPending || !newRecord.title || !newRecord.content}
+                  onClick={() => void submitEntry()}
+                  disabled={entrySubmitting || (entryType !== 'anamnesis' && (!simpleRecord.title.trim() || !simpleRecord.content.trim()))}
                   className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
                 >
-                  {createRecord.isPending ? 'Salvando…' : 'Salvar registro'}
+                  {entrySubmitting ? 'Salvando…' : 'Salvar lançamento'}
                 </button>
-                <button onClick={() => setShowRecordForm(false)} className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+                <button
+                  onClick={() => setShowEntryForm(false)}
+                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                >
                   Cancelar
                 </button>
               </div>
             </div>
           )}
 
-          {allClinicalRecords.isLoading ? (
+          {/* ── Chronological history ── */}
+          {clinicalRecords.isLoading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
-          ) : !allClinicalRecords.data?.items.length ? (
+          ) : !clinicalRecords.data?.items.length ? (
             <p className="rounded-lg border bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
-              Nenhum registro clínico. Clique em "Novo registro" para adicionar.
+              Nenhum lançamento. Clique em "Novo lançamento" para iniciar.
             </p>
           ) : (
             <div className="space-y-2">
-              {allClinicalRecords.data!.items.map((r) => {
-                const TYPE_LABEL: Record<string, string> = { note: 'Observação', procedure: 'Procedimento', exam: 'Exame', prescription: 'Prescrição' }
-                const TYPE_COLOR: Record<string, string> = { note: 'bg-blue-100 text-blue-700', procedure: 'bg-purple-100 text-purple-700', exam: 'bg-amber-100 text-amber-700', prescription: 'bg-green-100 text-green-700' }
+              {clinicalRecords.data.items.map((r) => {
+                // For anamnesis, parse JSON entries; for others show content as text
+                let anamnesisEntries: Array<{ question: string; answer: string }> = []
+                if (r.type === 'anamnesis') {
+                  try { anamnesisEntries = JSON.parse(r.content) } catch { anamnesisEntries = [] }
+                }
                 return (
-                  <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-1">
+                  <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-foreground">{r.title}</p>
+                      <p className="text-xs font-semibold text-foreground">
+                        {r.type === 'anamnesis' ? 'Anamnese' : r.title}
+                      </p>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
                         {TYPE_LABEL[r.type] ?? r.type}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{r.content}</p>
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70 pt-1">
-                      <span>{new Date(r.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+
+                    {r.type === 'anamnesis' ? (
+                      <div className="space-y-1">
+                        {anamnesisEntries.filter((e) => e.answer?.trim()).map((e, i) => (
+                          <div key={i} className="flex gap-2 text-xs">
+                            <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
+                            <span className="font-medium text-foreground text-right max-w-[55%]">{e.answer}</span>
+                          </div>
+                        ))}
+                        {anamnesisEntries.filter((e) => e.answer?.trim()).length === 0 && (
+                          <p className="text-xs text-muted-foreground italic">Sem respostas registradas.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{r.content}</p>
+                    )}
+
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 pt-0.5">
+                      <span>
+                        {new Date(r.createdAt).toLocaleString('pt-BR', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </span>
                       {r.professional && <span>· {r.professional.name}</span>}
                     </div>
                   </div>
@@ -977,6 +981,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         </div>
       )}
 
+      {/* ── Contratos ─────────────────────────────────────────────────── */}
       {detailTab === 'contracts' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
