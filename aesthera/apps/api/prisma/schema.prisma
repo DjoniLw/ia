@@ -129,6 +129,7 @@ model Clinic {
   notificationLogs NotificationLog[]
   products         Product[]
   productSales     ProductSale[]
+  clinicalRecords  ClinicalRecord[]
 
   @@map("clinics")
 }
@@ -222,10 +223,11 @@ model Professional {
 
   clinic       Clinic                    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   auth         ProfessionalAuth?
-  workingHours ProfessionalWorkingHour[]
-  services     ProfessionalService[]
-  appointments Appointment[]
-  blockedSlots BlockedSlot[]
+  workingHours    ProfessionalWorkingHour[]
+  services        ProfessionalService[]
+  appointments    Appointment[]
+  blockedSlots    BlockedSlot[]
+  clinicalRecords ClinicalRecord[]
 
   @@unique([clinicId, email])
   @@index([clinicId])
@@ -330,6 +332,7 @@ model Customer {
   ledgerEntries    LedgerEntry[]
   notificationLogs NotificationLog[]
   productSales     ProductSale[]
+  clinicalRecords  ClinicalRecord[]
 
   @@unique([clinicId, email])
   @@unique([clinicId, document])
@@ -570,4 +573,24 @@ model ProductSale {
   @@index([clinicId])
   @@index([clinicId, productId])
   @@map("product_sales")
+}
+
+// ─── Clinical Record ──────────────────────────────────────────────────────────
+
+model ClinicalRecord {
+  id             String    @id @default(uuid())
+  clinicId       String                           @map("clinic_id")
+  customerId     String                           @map("customer_id")
+  professionalId String?                          @map("professional_id")
+  title          String
+  content        String                           // clinical notes — append-only
+  type           String    @default("note")       // note | exam | procedure | prescription
+  createdAt      DateTime  @default(now())        @map("created_at")
+
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  professional Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, customerId])
+  @@map("clinical_records")
 }

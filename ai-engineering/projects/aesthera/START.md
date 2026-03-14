@@ -65,7 +65,9 @@ Cole o conteúdo deste arquivo + `context/stack.md` + `context/architecture.md` 
 | `features/ledger.md` | Registro financeiro imutável (append-only) |
 | `features/ai-assistant.md` | IA embutida — chat, resumos, briefing, function calling |
 | `features/products.md` | Catálogo de produtos + vendas com rastreamento de pagamento |
-| `features/reports.md` | Relatórios: clientes, produtos vendidos, estoque |
+| `features/reports.md` | Relatórios: clientes, produtos vendidos, serviços, estoque |
+| `features/clinical-records.md` | Histórico clínico append-only por cliente |
+| `features/contracts.md` | Contratos digitais com assinatura eletrônica (scaffold) |
 | `agents/system-architect.md` | Persona do agente com regras Aesthera |
 
 ## Prompts Específicos

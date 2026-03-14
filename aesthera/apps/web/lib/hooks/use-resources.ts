@@ -339,3 +339,41 @@ export function useCustomerHistory(customerId: string) {
     enabled: !!customerId,
   })
 }
+
+// ──── Clinical Records ────────────────────────────────────────────────────────
+
+export interface ClinicalRecord {
+  id: string
+  customerId: string
+  professionalId: string | null
+  title: string
+  content: string
+  type: 'note' | 'exam' | 'procedure' | 'prescription'
+  createdAt: string
+  professional: { id: string; name: string } | null
+}
+
+export function useClinicalRecords(customerId: string) {
+  return useQuery<Paginated<ClinicalRecord>>({
+    queryKey: ['clinical-records', customerId],
+    queryFn: () =>
+      api.get('/clinical-records', { params: { customerId, limit: 100 } }).then((r) => r.data),
+    enabled: !!customerId,
+  })
+}
+
+export function useCreateClinicalRecord() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: {
+      customerId: string
+      professionalId?: string | null
+      title: string
+      content: string
+      type: 'note' | 'exam' | 'procedure' | 'prescription'
+    }) => api.post('/clinical-records', data).then((r) => r.data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['clinical-records', vars.customerId] })
+    },
+  })
+}

@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CalendarDays, Cake, TrendingUp, AlertCircle, CheckCircle, Clock, Loader2, Sparkles, Users, Bot, RefreshCw } from 'lucide-react'
+import { CalendarDays, Cake, TrendingUp, AlertCircle, CheckCircle, Clock, Loader2, Sparkles, Users, Bot, RefreshCw, ShoppingCart, DollarSign, TrendingDown } from 'lucide-react'
 import { useLedgerSummary, useTodayAppointments } from '@/lib/hooks/use-financial'
-import { useCustomerBirthdays } from '@/lib/hooks/use-resources'
+import { useCustomerBirthdays, useProductSales } from '@/lib/hooks/use-resources'
 import { useBilling } from '@/lib/hooks/use-appointments'
 import { api } from '@/lib/api'
 
@@ -43,9 +43,13 @@ function monthRange() {
 
 export default function DashboardPage() {
   const { from, to } = monthRange()
+  const today = new Date().toISOString().slice(0, 10)
   const summary = useLedgerSummary({ from, to })
+  const todaySummary = useLedgerSummary({ from: today, to: today })
   const todayAppts = useTodayAppointments()
+  const pendingBilling = useBilling({ status: 'pending', limit: '1' })
   const overdueBilling = useBilling({ status: 'overdue', limit: '5' })
+  const monthSales = useProductSales({ from, to, limit: '1' })
 
   const [briefing, setBriefing] = useState<string | null>(null)
   const [briefingLoading, setBriefingLoading] = useState(false)
@@ -89,13 +93,25 @@ export default function DashboardPage() {
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [todayAppts.data])
 
+  const todayServicesCompleted = useMemo(
+    () => (todayAppts.data ?? []).filter((a) => a.status === 'completed').length,
+    [todayAppts.data],
+  )
+
   const stats = [
+    {
+      label: 'Receita Hoje',
+      value: todaySummary.isLoading ? '...' : formatCurrency(todaySummary.data?.totalCredits ?? 0),
+      icon: DollarSign,
+      color: 'text-green-600',
+      bg: 'bg-green-50 dark:bg-green-950/20',
+    },
     {
       label: 'Receita do Mês',
       value: summary.isLoading ? '...' : formatCurrency(summary.data?.totalCredits ?? 0),
       icon: TrendingUp,
-      color: 'text-green-600',
-      bg: 'bg-green-50 dark:bg-green-950/20',
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50 dark:bg-emerald-950/20',
     },
     {
       label: 'Agendamentos Hoje',
@@ -105,20 +121,25 @@ export default function DashboardPage() {
       bg: 'bg-blue-50 dark:bg-blue-950/20',
     },
     {
-      label: 'Cobranças Vencidas',
-      value: overdueBilling.isLoading ? '...' : String(overdueBilling.data?.total ?? 0),
-      icon: AlertCircle,
-      color: 'text-red-600',
-      bg: 'bg-red-50 dark:bg-red-950/20',
-    },
-    {
-      label: 'Saldo Líquido',
-      value: summary.isLoading
-        ? '...'
-        : formatCurrency((summary.data?.totalCredits ?? 0) - (summary.data?.totalDebits ?? 0)),
+      label: 'Serviços Concluídos',
+      value: todayAppts.isLoading ? '...' : String(todayServicesCompleted),
       icon: CheckCircle,
       color: 'text-violet-600',
       bg: 'bg-violet-50 dark:bg-violet-950/20',
+    },
+    {
+      label: 'Vendas (Mês)',
+      value: monthSales.isLoading ? '...' : String(monthSales.data?.total ?? 0),
+      icon: ShoppingCart,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50 dark:bg-amber-950/20',
+    },
+    {
+      label: 'A Receber',
+      value: pendingBilling.isLoading ? '...' : String(pendingBilling.data?.total ?? 0),
+      icon: TrendingDown,
+      color: 'text-red-600',
+      bg: 'bg-red-50 dark:bg-red-950/20',
     },
   ]
 
@@ -132,7 +153,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between">

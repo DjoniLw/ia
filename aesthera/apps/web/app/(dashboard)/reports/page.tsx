@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import { Loader2, Users, Package, ShoppingCart, TrendingDown, TrendingUp, BarChart3 } from 'lucide-react'
+import { Loader2, Users, Package, ShoppingCart, TrendingDown, TrendingUp, BarChart3, Scissors } from 'lucide-react'
 import { useCustomers, useProducts, useProductSales } from '@/lib/hooks/use-resources'
+import { useAppointments } from '@/lib/hooks/use-appointments'
 import { useLedgerSummary } from '@/lib/hooks/use-financial'
 
 function formatCurrency(cents: number) {
@@ -24,7 +25,7 @@ function monthRange() {
 
 const PIE_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899']
 
-type ReportTab = 'clients' | 'products' | 'stock'
+type ReportTab = 'clients' | 'products' | 'services' | 'stock'
 
 export default function ReportsPage() {
   const [tab, setTab] = useState<ReportTab>('clients')
@@ -38,6 +39,7 @@ export default function ReportsPage() {
   const { data: customersData, isLoading: customersLoading } = useCustomers({ limit: '200' })
   const { data: productsData, isLoading: productsLoading } = useProducts({ limit: '200' })
   const { data: salesData, isLoading: salesLoading } = useProductSales({ from, to, limit: '500' })
+  const { data: apptData, isLoading: apptLoading } = useAppointments({ dateFrom: from, dateTo: to, limit: '500', status: 'completed' })
   const { data: summary } = useLedgerSummary({ from, to })
 
   // ── Clients stats ────────────────────────────────────────────────────────────
@@ -87,6 +89,33 @@ export default function ReportsPage() {
     return { sorted, paymentChart, totalRevenue, totalItems, totalSales: sales.length }
   }, [salesData])
 
+  // ── Service stats ────────────────────────────────────────────────────────────
+  const serviceStats = useMemo(() => {
+    const appts = apptData?.items ?? []
+    const byService = new Map<string, { name: string; count: number; revenue: number; category: string | null }>()
+    appts.forEach((a) => {
+      const s = a.service
+      const existing = byService.get(s.id) ?? { name: s.name, count: 0, revenue: 0, category: s.category ?? null }
+      existing.count++
+      existing.revenue += a.price
+      byService.set(s.id, existing)
+    })
+    const sorted = [...byService.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 10)
+
+    const byProfessional = new Map<string, { name: string; count: number; revenue: number }>()
+    appts.forEach((a) => {
+      const p = a.professional
+      const existing = byProfessional.get(p.id) ?? { name: p.name, count: 0, revenue: 0 }
+      existing.count++
+      existing.revenue += a.price
+      byProfessional.set(p.id, existing)
+    })
+    const byProfSorted = [...byProfessional.values()].sort((a, b) => b.count - a.count)
+
+    const totalRevenue = appts.reduce((sum, a) => sum + a.price, 0)
+    return { sorted, byProfSorted, totalRevenue, totalAppts: appts.length }
+  }, [apptData])
+
   // ── Stock stats ──────────────────────────────────────────────────────────────
   const stockStats = useMemo(() => {
     const products = productsData?.items ?? []
@@ -106,6 +135,7 @@ export default function ReportsPage() {
   const tabs: { id: ReportTab; label: string; icon: typeof Users }[] = [
     { id: 'clients', label: 'Clientes', icon: Users },
     { id: 'products', label: 'Vendas', icon: ShoppingCart },
+    { id: 'services', label: 'Serviços', icon: Scissors },
     { id: 'stock', label: 'Estoque', icon: Package },
   ]
 
@@ -133,8 +163,8 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Date range (only for sales tab) */}
-      {tab === 'products' && (
+      {/* Date range (for sales and services tabs) */}
+      {(tab === 'products' || tab === 'services') && (
         <div className="flex flex-wrap gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">De</label>
@@ -297,7 +327,18 @@ export default function ReportsPage() {
                     <h3 className="mb-4 text-sm font-semibold text-foreground">Formas de pagamento</h3>
                     <ResponsiveContainer width="100%" height={200}>
                       <PieChart>
-                        <Pie data={productSaleStats.paymentChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={(p: { name?: string; percent?: number }) => formatPieLabel(p.name, `${((p.percent ?? 0) * 100).toFixed(0)}%`)} labelLine={false}>
+                        <Pie
+                          data={productSaleStats.paymentChart}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={70}
+                          label={(p: { name?: string; percent?: number }) =>
+                            formatPieLabel(p.name, `${((p.percent ?? 0) * 100).toFixed(0)}%`)
+                          }
+                          labelLine={false}
+                        >
                           {productSaleStats.paymentChart.map((_, i) => (
                             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
@@ -333,6 +374,107 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Services Tab ──────────────────────────────────────────────────── */}
+      {tab === 'services' && (
+        <div className="space-y-4">
+          {apptLoading ? (
+            <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="rounded-xl border bg-card p-5 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-green-500" />
+                    <p className="text-sm text-muted-foreground">Receita de serviços</p>
+                  </div>
+                  <p className="mt-2 text-2xl font-bold text-green-600">{formatCurrency(serviceStats.totalRevenue)}</p>
+                </div>
+                <div className="rounded-xl border bg-card p-5 shadow-sm">
+                  <p className="text-sm text-muted-foreground">Atendimentos concluídos</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">{serviceStats.totalAppts}</p>
+                </div>
+                <div className="rounded-xl border bg-card p-5 shadow-sm">
+                  <p className="text-sm text-muted-foreground">Serviços distintos</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">{serviceStats.sorted.length}</p>
+                </div>
+              </div>
+
+              {serviceStats.sorted.length > 0 && (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {/* Top services by revenue */}
+                  <div className="rounded-xl border bg-card p-5 shadow-sm">
+                    <h3 className="mb-4 text-sm font-semibold text-foreground">Serviços mais rentáveis</h3>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={serviceStats.sorted} layout="vertical" margin={{ left: 8, right: 16 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => `R$${(v/100).toFixed(0)}`} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={130} />
+                        <Tooltip formatter={(v: unknown) => [formatCurrency(v as number), 'Receita']} contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }} />
+                        <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Revenue by professional */}
+                  {serviceStats.byProfSorted.length > 0 && (
+                    <div className="rounded-xl border bg-card p-5 shadow-sm">
+                      <h3 className="mb-4 text-sm font-semibold text-foreground">Atendimentos por profissional</h3>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={serviceStats.byProfSorted.slice(0, 8)} layout="vertical" margin={{ left: 8, right: 16 }}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                          <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={120} />
+                          <Tooltip formatter={(v: unknown) => [`${v} atend.`, 'Total']} contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }} />
+                          <Bar dataKey="count" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Services table */}
+              {serviceStats.sorted.length > 0 && (
+                <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+                  <div className="border-b px-5 py-4">
+                    <h3 className="text-sm font-semibold text-foreground">Detalhamento por serviço</h3>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        <th className="px-5 py-3">Serviço</th>
+                        <th className="px-5 py-3">Categoria</th>
+                        <th className="px-5 py-3 text-right">Qtd</th>
+                        <th className="px-5 py-3 text-right">Receita</th>
+                        <th className="px-5 py-3 text-right">Ticket Médio</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {serviceStats.sorted.map((s, i) => (
+                        <tr key={i} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-5 py-3 font-medium text-foreground">{s.name}</td>
+                          <td className="px-5 py-3 text-muted-foreground">{s.category ?? '—'}</td>
+                          <td className="px-5 py-3 text-right text-muted-foreground">{s.count}</td>
+                          <td className="px-5 py-3 text-right font-semibold text-green-600">{formatCurrency(s.revenue)}</td>
+                          <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(s.count > 0 ? Math.round(s.revenue / s.count) : 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {serviceStats.sorted.length === 0 && (
+                <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-16 text-center">
+                  <Scissors className="h-8 w-8 text-muted-foreground/30" />
+                  <p className="text-sm text-muted-foreground">Nenhum serviço concluído no período</p>
                 </div>
               )}
             </>

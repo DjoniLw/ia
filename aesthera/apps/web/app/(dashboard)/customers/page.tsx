@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Bot, Loader2, Package, Scissors, Search, User } from 'lucide-react'
+import { Bot, ClipboardList, FileSignature, Loader2, Package, Plus, Scissors, Search, User } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -12,7 +12,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   type Customer,
+  type ClinicalRecord,
+  useCreateClinicalRecord,
   useCreateCustomer,
+  useClinicalRecords,
   useCustomerHistory,
   useCustomers,
   useDeleteCustomer,
@@ -502,11 +505,15 @@ function AiSummaryDialog({ customer, onClose }: { customer: Customer; onClose: (
 
 // ──── Customer Detail Panel ────────────────────────────────────────────────────
 
-type DetailTab = 'profile' | 'history'
+type DetailTab = 'profile' | 'history' | 'clinical' | 'contracts'
 
 function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onEdit: () => void; onClose: () => void }) {
   const [detailTab, setDetailTab] = useState<DetailTab>('profile')
   const history = useCustomerHistory(customer.id)
+  const clinicalRecords = useClinicalRecords(customer.id)
+  const createRecord = useCreateClinicalRecord()
+  const [showRecordForm, setShowRecordForm] = useState(false)
+  const [newRecord, setNewRecord] = useState({ title: '', content: '', type: 'note' as ClinicalRecord['type'] })
   const addr = customer.address
   const meta = customer.metadata
   const ana = meta?.anamnesis
@@ -548,7 +555,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados & Saúde'], ['history', 'Histórico']] as const).map(([id, label]) => (
+        {([['profile', 'Dados & Saúde'], ['history', 'Histórico'], ['clinical', 'Clínico'], ['contracts', 'Contratos']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -664,6 +671,147 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {detailTab === 'clinical' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Histórico Clínico</p>
+            </div>
+            <button
+              onClick={() => setShowRecordForm(!showRecordForm)}
+              className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+            >
+              <Plus className="h-3 w-3" />
+              Novo registro
+            </button>
+          </div>
+
+          {showRecordForm && (
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Tipo</label>
+                <select
+                  value={newRecord.type}
+                  onChange={(e) => setNewRecord({ ...newRecord, type: e.target.value as ClinicalRecord['type'] })}
+                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                >
+                  <option value="note">Observação</option>
+                  <option value="procedure">Procedimento</option>
+                  <option value="exam">Exame</option>
+                  <option value="prescription">Prescrição</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Título</label>
+                <input
+                  value={newRecord.title}
+                  onChange={(e) => setNewRecord({ ...newRecord, title: e.target.value })}
+                  placeholder="Ex: Consulta inicial, Botox…"
+                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Conteúdo</label>
+                <textarea
+                  value={newRecord.content}
+                  onChange={(e) => setNewRecord({ ...newRecord, content: e.target.value })}
+                  rows={3}
+                  placeholder="Descreva o procedimento, observações clínicas…"
+                  className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    if (!newRecord.title || !newRecord.content) return
+                    try {
+                      await createRecord.mutateAsync({ customerId: customer.id, ...newRecord })
+                      setNewRecord({ title: '', content: '', type: 'note' })
+                      setShowRecordForm(false)
+                    } catch { /* toast handled by query */ }
+                  }}
+                  disabled={createRecord.isPending || !newRecord.title || !newRecord.content}
+                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {createRecord.isPending ? 'Salvando…' : 'Salvar registro'}
+                </button>
+                <button onClick={() => setShowRecordForm(false)} className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {clinicalRecords.isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : !clinicalRecords.data?.items.length ? (
+            <p className="rounded-lg border bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
+              Nenhum registro clínico. Clique em "Novo registro" para adicionar.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {clinicalRecords.data.items.map((r) => {
+                const TYPE_LABEL: Record<string, string> = { note: 'Observação', procedure: 'Procedimento', exam: 'Exame', prescription: 'Prescrição' }
+                const TYPE_COLOR: Record<string, string> = { note: 'bg-blue-100 text-blue-700', procedure: 'bg-purple-100 text-purple-700', exam: 'bg-amber-100 text-amber-700', prescription: 'bg-green-100 text-green-700' }
+                return (
+                  <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-foreground">{r.title}</p>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
+                        {TYPE_LABEL[r.type] ?? r.type}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{r.content}</p>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70 pt-1">
+                      <span>{new Date(r.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      {r.professional && <span>· {r.professional.name}</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {detailTab === 'contracts' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileSignature className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contratos Digitais</p>
+            </div>
+          </div>
+
+          {/* Contract type templates */}
+          <div className="space-y-2">
+            {[
+              { name: 'Autorização de uso de imagem', desc: 'Permite o uso de fotos para fins clínicos' },
+              { name: 'Termo de consentimento de tratamento', desc: 'Consentimento informado para procedimentos' },
+              { name: 'Contrato de prestação de serviços', desc: 'Acordo de prestação de serviços estéticos' },
+            ].map((tpl) => (
+              <div key={tpl.name} className="flex items-center justify-between rounded-lg border bg-muted/10 px-3 py-2.5">
+                <div>
+                  <p className="text-xs font-medium text-foreground">{tpl.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{tpl.desc}</p>
+                </div>
+                <button className="rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+                  Gerar link
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-900/30 dark:bg-blue-950/10 dark:text-blue-300">
+            💡 A geração e assinatura de contratos digitais estará disponível em breve.
+            Os contratos serão enviados via WhatsApp com link único para assinatura online.
+          </p>
         </div>
       )}
 

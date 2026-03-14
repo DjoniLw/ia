@@ -1,0 +1,21 @@
+import type { FastifyInstance } from 'fastify'
+import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
+import { CreateClinicalRecordDto, ListClinicalRecordsQuery } from './clinical.dto'
+import { ClinicalRepository } from './clinical.repository'
+
+const repo = new ClinicalRepository()
+
+export async function clinicalRoutes(app: FastifyInstance) {
+  // List clinical records
+  app.get('/clinical-records', { preHandler: [jwtClinicGuard] }, async (req, _reply) => {
+    const q = ListClinicalRecordsQuery.parse(req.query)
+    return repo.findAll(req.clinicId, q)
+  })
+
+  // Create clinical record (append-only — no update/delete)
+  app.post('/clinical-records', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const dto = CreateClinicalRecordDto.parse(req.body)
+    const record = await repo.create(req.clinicId, dto)
+    return reply.code(201).send(record)
+  })
+}
