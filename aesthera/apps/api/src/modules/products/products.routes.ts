@@ -7,21 +7,34 @@ import { ProductsService } from './products.service'
 export async function productsRoutes(app: FastifyInstance) {
   const svc = new ProductsService()
 
-  // ── Products CRUD ─────────────────────────────────────────────────────────
+  // ── Static routes FIRST (before :id param routes) ─────────────────────────
 
   app.get('/products', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const q = ListProductsQuery.parse(req.query)
     return reply.send(await svc.list(req.clinicId, q))
   })
 
-  app.get('/products/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
-    const { id } = req.params as { id: string }
-    return reply.send(await svc.get(req.clinicId, id))
-  })
-
   app.post('/products', { preHandler: [jwtClinicGuard, roleGuard(['admin'])] }, async (req, reply) => {
     const dto = CreateProductDto.parse(req.body)
     return reply.status(201).send(await svc.create(req.clinicId, dto))
+  })
+
+  // Must be registered BEFORE /products/:id to avoid Fastify matching "sales"/"sell" as :id
+  app.get('/products/sales', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const q = ListSalesQuery.parse(req.query)
+    return reply.send(await svc.listSales(req.clinicId, q))
+  })
+
+  app.post('/products/sell', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const dto = CreateSaleDto.parse(req.body)
+    return reply.status(201).send(await svc.sell(req.clinicId, dto))
+  })
+
+  // ── Parameterized routes AFTER static ones ────────────────────────────────
+
+  app.get('/products/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    return reply.send(await svc.get(req.clinicId, id))
   })
 
   app.patch('/products/:id', { preHandler: [jwtClinicGuard, roleGuard(['admin'])] }, async (req, reply) => {
@@ -33,17 +46,5 @@ export async function productsRoutes(app: FastifyInstance) {
   app.delete('/products/:id', { preHandler: [jwtClinicGuard, roleGuard(['admin'])] }, async (req, reply) => {
     const { id } = req.params as { id: string }
     return reply.send(await svc.delete(req.clinicId, id))
-  })
-
-  // ── Product Sales ─────────────────────────────────────────────────────────
-
-  app.post('/products/sell', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
-    const dto = CreateSaleDto.parse(req.body)
-    return reply.status(201).send(await svc.sell(req.clinicId, dto))
-  })
-
-  app.get('/products/sales', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
-    const q = ListSalesQuery.parse(req.query)
-    return reply.send(await svc.listSales(req.clinicId, q))
   })
 }

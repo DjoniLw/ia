@@ -1,6 +1,9 @@
 import { AppError, NotFoundError } from '../../shared/errors/app-error'
 import type { CancelBillingDto, ListBillingQuery } from './billing.dto'
 import { BillingRepository } from './billing.repository'
+import { LedgerService } from '../ledger/ledger.service'
+
+const ledger = new LedgerService()
 
 export class BillingService {
   private repo = new BillingRepository()
@@ -28,7 +31,20 @@ export class BillingService {
     if (!['pending', 'overdue'].includes(billing.status)) {
       throw new AppError('Only pending or overdue billing can be marked as paid', 400, 'INVALID_STATUS')
     }
-    return this.repo.updateStatus(clinicId, id, 'paid', { paidAt: new Date() })
+    const updated = await this.repo.updateStatus(clinicId, id, 'paid', { paidAt: new Date() })
+
+    // Create a ledger credit entry for the manual payment
+    await ledger.createCreditEntry({
+      clinicId,
+      amount: billing.amount,
+      billingId: billing.id,
+      appointmentId: billing.appointmentId ?? undefined,
+      customerId: billing.customerId ?? undefined,
+      description: `Cobrança recebida${billing.appointment?.service?.name ? ` — ${billing.appointment.service.name}` : ''}`,
+      metadata: { source: 'manual_mark_paid' },
+    })
+
+    return updated
   }
 
   async getPaymentLink(clinicId: string, id: string) {

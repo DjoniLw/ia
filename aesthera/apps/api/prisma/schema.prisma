@@ -468,7 +468,7 @@ model LedgerEntry {
   type          LedgerEntryType
   amount        Int                                  // BRL cents, always positive
   currency      String          @default("BRL")
-  paymentId     String                               @map("payment_id")   // FK → Payment (source of truth)
+  paymentId     String?                              @map("payment_id")   // FK → Payment (null for manual entries)
   billingId     String?                              @map("billing_id")
   appointmentId String?                              @map("appointment_id")
   customerId    String?                              @map("customer_id")
@@ -477,7 +477,7 @@ model LedgerEntry {
   createdAt     DateTime        @default(now())      @map("created_at")   // immutable
 
   clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  payment     Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  payment     Payment?     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   billing     Billing?     @relation(fields: [billingId], references: [id], onDelete: Restrict)
   appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
   customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: Restrict)

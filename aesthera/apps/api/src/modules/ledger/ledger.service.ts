@@ -25,16 +25,30 @@ export class LedgerService {
    */
   async createCreditEntry(data: {
     clinicId: string
-    paymentId: string
+    paymentId?: string | null
     amount: number
-    billingId?: string
-    appointmentId?: string
-    customerId?: string
+    billingId?: string | null
+    appointmentId?: string | null
+    customerId?: string | null
     description?: string
+    metadata?: Record<string, unknown>
   }) {
     return this.repo.create({
       type: 'credit',
       description: data.description ?? 'Pagamento recebido',
+      ...data,
+    })
+  }
+
+  async createDebitEntry(data: {
+    clinicId: string
+    amount: number
+    description: string
+    customerId?: string | null
+    metadata?: Record<string, unknown>
+  }) {
+    return this.repo.create({
+      type: 'debit',
       ...data,
     })
   }

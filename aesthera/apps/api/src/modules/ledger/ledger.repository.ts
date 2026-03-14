@@ -95,12 +95,19 @@ export class LedgerRepository {
     clinicId: string
     type: 'credit' | 'debit'
     amount: number
-    paymentId: string
-    billingId?: string
-    appointmentId?: string
-    customerId?: string
+    paymentId?: string | null
+    billingId?: string | null
+    appointmentId?: string | null
+    customerId?: string | null
     description?: string
+    metadata?: Record<string, unknown>
   }) {
-    return prisma.ledgerEntry.create({ data })
+    const { metadata, ...rest } = data
+    return prisma.ledgerEntry.create({
+      data: {
+        ...rest,
+        ...(metadata !== undefined && { metadata: metadata as object }),
+      },
+    })
   }
 }

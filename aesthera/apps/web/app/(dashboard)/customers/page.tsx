@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Bot, ChevronDown, Loader2, Search, User } from 'lucide-react'
+import { Bot, Loader2, Package, Scissors, Search, User } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import {
   type Customer,
   useCreateCustomer,
+  useCustomerHistory,
   useCustomers,
   useDeleteCustomer,
   useUpdateCustomer,
@@ -469,7 +470,10 @@ function AiSummaryDialog({ customer, onClose }: { customer: Customer; onClose: (
     api
       .post<{ summary: string }>(`/ai/summary/customer/${customer.id}`)
       .then((r) => setSummary(r.data.summary))
-      .catch(() => setSummary('Não foi possível gerar o resumo.'))
+      .catch((err: unknown) => {
+        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        setSummary('Não foi possível gerar o resumo. ' + (msg ?? 'Verifique se GEMINI_API_KEY está configurada.'))
+      })
       .finally(() => setLoading(false))
   })
 
@@ -498,7 +502,11 @@ function AiSummaryDialog({ customer, onClose }: { customer: Customer; onClose: (
 
 // ──── Customer Detail Panel ────────────────────────────────────────────────────
 
+type DetailTab = 'profile' | 'history'
+
 function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onEdit: () => void; onClose: () => void }) {
+  const [detailTab, setDetailTab] = useState<DetailTab>('profile')
+  const history = useCustomerHistory(customer.id)
   const addr = customer.address
   const meta = customer.metadata
   const ana = meta?.anamnesis
@@ -516,6 +524,16 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const hasAddress = addr && Object.values(addr).some(Boolean)
   const hasAna = ana && Object.values(ana).some(Boolean)
 
+  const STATUS_LABEL: Record<string, string> = {
+    draft: 'Rascunho', confirmed: 'Confirmado', in_progress: 'Em andamento',
+    completed: 'Concluído', cancelled: 'Cancelado', no_show: 'Não compareceu',
+  }
+  const STATUS_COLOR: Record<string, string> = {
+    draft: 'bg-gray-100 text-gray-700', confirmed: 'bg-blue-100 text-blue-800',
+    in_progress: 'bg-amber-100 text-amber-900', completed: 'bg-green-100 text-green-800',
+    cancelled: 'bg-muted text-muted-foreground', no_show: 'bg-red-100 text-red-800',
+  }
+
   return (
     <div className="space-y-4 text-sm">
       <div className="flex items-center gap-3">
@@ -528,43 +546,124 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         </div>
       </div>
 
-      <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Dados Básicos</p>
-        <Row label="Telefone" value={customer.phone} />
-        <Row label="Telefone 2" value={meta?.phone2 as string} />
-        <Row label="CPF" value={customer.document} />
-        <Row label="RG" value={meta?.rg as string} />
-        <Row label="Gênero" value={meta?.gender as string} />
-        <Row label="Nascimento" value={customer.birthDate ? new Date(customer.birthDate).toLocaleDateString('pt-BR') : null} />
-        <Row label="Profissão" value={meta?.occupation as string} />
-        <Row label="Como nos encontrou" value={meta?.howFound as string} />
-        {customer.notes && <Row label="Observações" value={customer.notes} />}
+      {/* Detail tabs */}
+      <div className="flex rounded-lg border overflow-hidden">
+        {([['profile', 'Dados & Saúde'], ['history', 'Histórico']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setDetailTab(id as DetailTab)}
+            className={[
+              'flex-1 py-2 text-sm font-medium transition-colors',
+              detailTab === id ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {hasAddress && (
-        <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Endereço</p>
-          <Row label="Logradouro" value={[addr.street, addr.number].filter(Boolean).join(', ')} />
-          <Row label="Complemento" value={addr.complement} />
-          <Row label="Bairro" value={addr.neighborhood} />
-          <Row label="Cidade/UF" value={[addr.city, addr.state].filter(Boolean).join(' - ')} />
-          <Row label="CEP" value={addr.zip} />
-        </div>
+      {detailTab === 'profile' && (
+        <>
+          <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Dados Básicos</p>
+            <Row label="Telefone" value={customer.phone} />
+            <Row label="Telefone 2" value={meta?.phone2 as string} />
+            <Row label="CPF" value={customer.document} />
+            <Row label="RG" value={meta?.rg as string} />
+            <Row label="Gênero" value={meta?.gender as string} />
+            <Row label="Nascimento" value={customer.birthDate ? new Date(customer.birthDate).toLocaleDateString('pt-BR') : null} />
+            <Row label="Profissão" value={meta?.occupation as string} />
+            <Row label="Como nos encontrou" value={meta?.howFound as string} />
+            {customer.notes && <Row label="Observações" value={customer.notes} />}
+          </div>
+
+          {hasAddress && (
+            <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Endereço</p>
+              <Row label="Logradouro" value={[addr.street, addr.number].filter(Boolean).join(', ')} />
+              <Row label="Complemento" value={addr.complement} />
+              <Row label="Bairro" value={addr.neighborhood} />
+              <Row label="Cidade/UF" value={[addr.city, addr.state].filter(Boolean).join(' - ')} />
+              <Row label="CEP" value={addr.zip} />
+            </div>
+          )}
+
+          {hasAna && (
+            <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Saúde & Anamnese</p>
+              <Row label="Tipo de pele" value={ana.skinType} />
+              <Row label="Alergias" value={ana.allergies} />
+              <Row label="Medicamentos" value={ana.medications} />
+              <Row label="Condições" value={ana.conditions} />
+              <Row label="Tratamentos anteriores" value={ana.previousTreatments} />
+              <Row label="Tratamentos atuais" value={ana.currentTreatments} />
+              <Row label="Observações clínicas" value={ana.observations} />
+              {ana.consentSigned && (
+                <p className="text-xs text-green-700 font-medium mt-1">✓ Termo de consentimento assinado</p>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {hasAna && (
-        <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Saúde & Anamnese</p>
-          <Row label="Tipo de pele" value={ana.skinType} />
-          <Row label="Alergias" value={ana.allergies} />
-          <Row label="Medicamentos" value={ana.medications} />
-          <Row label="Condições" value={ana.conditions} />
-          <Row label="Tratamentos anteriores" value={ana.previousTreatments} />
-          <Row label="Tratamentos atuais" value={ana.currentTreatments} />
-          <Row label="Observações clínicas" value={ana.observations} />
-          {ana.consentSigned && (
-            <p className="text-xs text-green-700 font-medium mt-1">✓ Termo de consentimento assinado</p>
-          )}
+      {detailTab === 'history' && (
+        <div className="space-y-4">
+          {/* Services/appointments */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Scissors className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Serviços realizados</p>
+            </div>
+            {history.isLoading ? (
+              <p className="text-xs text-muted-foreground py-2">Carregando…</p>
+            ) : !history.data?.appointments.length ? (
+              <p className="text-xs text-muted-foreground py-2">Nenhum serviço registrado.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {history.data.appointments.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground min-w-[80px]">
+                      {new Date(a.scheduledAt).toLocaleDateString('pt-BR')}
+                    </span>
+                    <span className="flex-1 font-medium">{a.service.name}</span>
+                    <span className="text-muted-foreground">{a.professional.name}</span>
+                    <span className={`rounded-full px-1.5 py-0.5 font-medium ${STATUS_COLOR[a.status] ?? 'bg-muted text-muted-foreground'}`}>
+                      {STATUS_LABEL[a.status] ?? a.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Product sales */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Package className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Produtos comprados</p>
+            </div>
+            {history.isLoading ? (
+              <p className="text-xs text-muted-foreground py-2">Carregando…</p>
+            ) : !history.data?.sales.length ? (
+              <p className="text-xs text-muted-foreground py-2">Nenhum produto comprado.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {history.data.sales.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground min-w-[80px]">
+                      {new Date(s.soldAt).toLocaleDateString('pt-BR')}
+                    </span>
+                    <span className="flex-1 font-medium">{s.product.name}</span>
+                    <span className="text-muted-foreground">{s.quantity}x {s.product.unit}</span>
+                    <span className="font-medium">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.totalPrice / 100)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

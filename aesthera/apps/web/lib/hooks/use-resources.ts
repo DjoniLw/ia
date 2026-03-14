@@ -290,3 +290,51 @@ export function useProductSales(params?: Record<string, string>) {
     queryFn: () => api.get('/products/sales', { params }).then((r) => r.data),
   })
 }
+
+// ──── Birthdays ───────────────────────────────────────────────────────────────
+
+export interface BirthdayCustomer {
+  id: string
+  name: string
+  phone: string | null
+  email: string | null
+  birthDate: string | null
+  age: number
+  isToday: boolean
+}
+
+export function useCustomerBirthdays(days = 7) {
+  return useQuery<{ items: BirthdayCustomer[]; total: number }>({
+    queryKey: ['customer-birthdays', days],
+    queryFn: () => api.get('/customers/birthdays', { params: { days } }).then((r) => r.data),
+  })
+}
+
+// ──── Customer History ────────────────────────────────────────────────────────
+
+export function useCustomerHistory(customerId: string) {
+  return useQuery<{
+    appointments: Array<{
+      id: string
+      scheduledAt: string
+      status: string
+      durationMinutes: number
+      service: { id: string; name: string; price: number }
+      professional: { id: string; name: string }
+      billing: { id: string; status: string; amount: number } | null
+    }>
+    sales: Array<{
+      id: string
+      quantity: number
+      unitPrice: number
+      totalPrice: number
+      discount: number
+      soldAt: string
+      product: { id: string; name: string; unit: string; category: string | null }
+    }>
+  }>({
+    queryKey: ['customer-history', customerId],
+    queryFn: () => api.get(`/customers/${customerId}/history`).then((r) => r.data),
+    enabled: !!customerId,
+  })
+}

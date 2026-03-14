@@ -1,6 +1,9 @@
 import { AppError, NotFoundError } from '../../shared/errors/app-error'
 import type { CreateProductDto, CreateSaleDto, ListProductsQuery, ListSalesQuery, UpdateProductDto } from './products.dto'
 import { ProductsRepository } from './products.repository'
+import { LedgerService } from '../ledger/ledger.service'
+
+const ledger = new LedgerService()
 
 export class ProductsService {
   private repo = new ProductsRepository()
@@ -37,7 +40,18 @@ export class ProductsService {
     if (product.stock < dto.quantity) {
       throw new AppError(`Estoque insuficiente. Disponível: ${product.stock} ${product.unit}`, 400, 'INSUFFICIENT_STOCK')
     }
-    return this.repo.createSale(clinicId, dto, unitPrice)
+    const sale = await this.repo.createSale(clinicId, dto, unitPrice)
+
+    // Record in ledger so financial reports reflect product sales
+    await ledger.createCreditEntry({
+      clinicId,
+      amount: sale.totalPrice,
+      customerId: dto.customerId ?? undefined,
+      description: `Venda — ${product.name} (${dto.quantity}x)`,
+      metadata: { source: 'product_sale', productSaleId: sale.id, productId: product.id },
+    })
+
+    return sale
   }
 
   async listSales(clinicId: string, q: ListSalesQuery) {
