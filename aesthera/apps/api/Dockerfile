@@ -7,7 +7,10 @@ COPY package*.json ./
 RUN npm ci
 
 COPY prisma ./prisma
-RUN npx prisma generate
+# prisma generate only reads the schema to emit the client — it never connects
+# to the database. Prisma 6+ WASM-based getConfig still validates that the env
+# var is *set*, so we supply a throwaway value just for this RUN step.
+RUN DATABASE_URL="postgresql://build:build@localhost/build" npx prisma generate
 
 COPY tsconfig.json ./
 COPY src ./src
