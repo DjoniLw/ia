@@ -15,12 +15,12 @@ function formatTime(iso: string) {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-600',
-  confirmed: 'bg-blue-100 text-blue-700',
-  in_progress: 'bg-yellow-100 text-yellow-700',
-  completed: 'bg-green-100 text-green-700',
+  draft: 'bg-gray-100 text-gray-700',
+  confirmed: 'bg-blue-100 text-blue-800',
+  in_progress: 'bg-amber-100 text-amber-900',
+  completed: 'bg-green-100 text-green-800',
   cancelled: 'bg-muted text-muted-foreground',
-  no_show: 'bg-red-100 text-red-700',
+  no_show: 'bg-red-100 text-red-800',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -54,8 +54,12 @@ export default function DashboardPage() {
     try {
       const res = await api.post<{ briefing: string }>('/ai/briefing')
       setBriefing(res.data.briefing)
-    } catch {
-      setBriefing('Não foi possível gerar o briefing. Verifique se a chave GEMINI_API_KEY está configurada.')
+    } catch (err) {
+      const errMsg = (err as { response?: { data?: { message?: string; error?: string } } })
+        ?.response?.data?.message ??
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        (err instanceof Error ? err.message : null)
+      setBriefing('Não foi possível gerar o briefing. ' + (errMsg ? `Erro: ${errMsg}` : 'Verifique se a chave GEMINI_API_KEY está configurada.'))
     } finally {
       setBriefingLoading(false)
     }

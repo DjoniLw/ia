@@ -23,6 +23,14 @@ export class BillingService {
     return this.repo.updateStatus(clinicId, id, 'cancelled', { cancelledAt: new Date() })
   }
 
+  async markPaid(clinicId: string, id: string) {
+    const billing = await this.get(clinicId, id)
+    if (!['pending', 'overdue'].includes(billing.status)) {
+      throw new AppError('Only pending or overdue billing can be marked as paid', 400, 'INVALID_STATUS')
+    }
+    return this.repo.updateStatus(clinicId, id, 'paid', { paidAt: new Date() })
+  }
+
   async getPaymentLink(clinicId: string, id: string) {
     const billing = await this.get(clinicId, id)
     return {

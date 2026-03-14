@@ -207,3 +207,11 @@ export function useCancelBilling(id: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
   })
 }
+
+export function useMarkBillingPaid(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post(`/billing/${id}/mark-paid`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
+  })
+}

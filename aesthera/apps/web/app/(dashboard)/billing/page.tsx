@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { type BillingStatus, useBilling, useCancelBilling } from '@/lib/hooks/use-appointments'
+import { type BillingStatus, useBilling, useCancelBilling, useMarkBillingPaid } from '@/lib/hooks/use-appointments'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,16 +24,18 @@ const STATUS_LABEL: Record<BillingStatus, string> = {
 }
 
 const STATUS_COLOR: Record<BillingStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
-  paid: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  overdue: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200',
+  paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  overdue: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   cancelled: 'bg-muted text-muted-foreground',
 }
 
 // ──── Cancel Button ────────────────────────────────────────────────────────────
 
-function CancelButton({ id }: { id: string }) {
+function BillingActions({ id, status }: { id: string; status: BillingStatus }) {
   const cancel = useCancelBilling(id)
+  const markPaid = useMarkBillingPaid(id)
+
   async function handleCancel() {
     if (!confirm('Cancelar esta cobrança?')) return
     try {
@@ -43,16 +45,40 @@ function CancelButton({ id }: { id: string }) {
       toast.error('Erro ao cancelar cobrança')
     }
   }
+
+  async function handleMarkPaid() {
+    if (!confirm('Confirmar pagamento desta cobrança?')) return
+    try {
+      await markPaid.mutateAsync()
+      toast.success('Cobrança marcada como paga')
+    } catch {
+      toast.error('Erro ao registrar pagamento')
+    }
+  }
+
+  if (status !== 'pending' && status !== 'overdue') return null
+
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="text-destructive hover:text-destructive"
-      onClick={handleCancel}
-      disabled={cancel.isPending}
-    >
-      Cancelar
-    </Button>
+    <div className="flex justify-end gap-1">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-green-700 hover:text-green-800 hover:bg-green-50 dark:text-green-400"
+        onClick={handleMarkPaid}
+        disabled={markPaid.isPending}
+      >
+        Recebido
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:text-destructive"
+        onClick={handleCancel}
+        disabled={cancel.isPending}
+      >
+        Cancelar
+      </Button>
+    </div>
   )
 }
 
@@ -159,9 +185,7 @@ export default function BillingPage() {
                         Link
                       </a>
                     )}
-                    {(b.status === 'pending' || b.status === 'overdue') && (
-                      <CancelButton id={b.id} />
-                    )}
+                    <BillingActions id={b.id} status={b.status} />
                   </div>
                 </td>
               </tr>
