@@ -43,6 +43,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: appConfig.cors.origin,
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Clinic-Slug', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id', 'X-Session-Id'],
+    maxAge: 86400,
   })
 
   await app.register(jwt, {

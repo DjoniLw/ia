@@ -1,4 +1,4 @@
-import { google } from '@ai-sdk/google'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { generateText, stepCountIs, streamText, tool } from 'ai'
 import { z } from 'zod/v4'
 import { prisma } from '../../database/prisma/client'
@@ -34,6 +34,7 @@ export class AiService {
     if (!appConfig.ai.geminiApiKey) {
       throw new Error('GEMINI_API_KEY not configured')
     }
+    const google = createGoogleGenerativeAI({ apiKey: appConfig.ai.geminiApiKey })
     return google('gemini-2.0-flash-exp')
   }
 
