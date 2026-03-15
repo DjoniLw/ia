@@ -211,11 +211,26 @@ function CreateAppointmentForm({
   )
   const searchResults = custSearchData?.items ?? []
 
-  // Available slots: driven by service + date only (no professional pre-filter —
-  // in the new UX the user picks a time first, then sees filtered professionals)
-  const { data: slotsData, isFetching: slotsFetching } = useAvailableSlots(
-    serviceId && date ? { serviceId, date } : null,
-  )
+  // Available slots: driven by service + date.
+  // When a professional or equipment is pre-selected BEFORE a time is chosen,
+  // pass those as filters so only compatible slots are shown.
+  const slotsParams = useMemo(() => {
+    if (!serviceId || !date) return null
+    return {
+      serviceId,
+      date,
+      // Only forward pre-filters when no time is selected yet;
+      // once a time is selected the slot grid is irrelevant.
+      professionalId: !selectedTime && professionalFilter ? professionalFilter : undefined,
+      // Only pass the FIRST selected equipment (most common case — equipment is usually
+      // selected one at a time when pre-filtering; multi-equipment pre-filtering is not
+      // supported by the backend since it would require multiple query params).
+      equipmentId:
+        !selectedTime && selectedEquipmentIds.length === 1 ? selectedEquipmentIds[0] : undefined,
+    }
+  }, [serviceId, date, selectedTime, professionalFilter, selectedEquipmentIds])
+
+  const { data: slotsData, isFetching: slotsFetching } = useAvailableSlots(slotsParams)
 
   // Available professionals: filtered by service + date, and further filtered when a time is chosen
   const { data: availProfsData, isFetching: profsFetching } = useAvailableProfessionals(
@@ -265,6 +280,23 @@ function CreateAppointmentForm({
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profListFromApi, serviceFilteredProfs, serviceId, date, selectedTime])
+
+  // Human-readable hint when slots are pre-filtered by professional and/or equipment
+  const slotFilterHint = useMemo(() => {
+    if (selectedTime) return null
+    const parts: string[] = []
+    if (professionalFilter) {
+      const prof = profList.find((p) => p.id === professionalFilter)
+      if (prof) parts.push(`profissional "${prof.name}"`)
+    }
+    if (selectedEquipmentIds.length === 1) {
+      const eq = (displayEquipment as Array<{ id: string; name: string }>).find(
+        (e) => e.id === selectedEquipmentIds[0],
+      )
+      if (eq) parts.push(`equipamento "${eq.name}"`)
+    }
+    return parts.length > 0 ? `Horários filtrados por: ${parts.join(' e ')}` : null
+  }, [selectedTime, professionalFilter, selectedEquipmentIds, profList, displayEquipment])
 
   // After a time is selected, the finalProfessionalId must come from profList (filtered to available)
   const availableProfIds = new Set(profList.filter((p) => p.available).map((p) => p.id))
@@ -395,6 +427,10 @@ function CreateAppointmentForm({
       {serviceId && date && (
         <div className="space-y-2">
           <Label>Horários disponíveis *</Label>
+
+          {slotFilterHint && (
+            <p className="text-xs text-muted-foreground">{slotFilterHint}</p>
+          )}
 
           {slotsFetching && (
             <p className="text-xs text-muted-foreground">Buscando horários disponíveis…</p>

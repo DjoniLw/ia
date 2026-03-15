@@ -32,15 +32,16 @@ export async function appointmentsRoutes(app: FastifyInstance) {
   })
 
   // ── Available slots for a service on a date ───────────────────────────────────
-  // GET /appointments/available-slots?serviceId=UUID&date=YYYY-MM-DD[&professionalId=UUID]
+  // GET /appointments/available-slots?serviceId=UUID&date=YYYY-MM-DD[&professionalId=UUID][&equipmentId=UUID]
   app.get('/appointments/available-slots', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const q = z.object({
       serviceId: z.string().uuid(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       professionalId: z.string().uuid().optional(),
+      equipmentId: z.string().uuid().optional(),
     }).parse(req.query)
     return reply.send(
-      await availability.getAvailableSlots(req.clinicId, q.serviceId, q.date, q.professionalId),
+      await availability.getAvailableSlots(req.clinicId, q.serviceId, q.date, q.professionalId, q.equipmentId),
     )
   })
 

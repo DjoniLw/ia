@@ -47,6 +47,11 @@ export interface AvailableSlotsResult {
   professionals: { id: string; name: string; slots: string[] }[]
 }
 
+/** ISO datetime for the start of a date at UTC noon (avoids DST off-by-one) */
+function dateNoon(date: string): Date {
+  return new Date(date + 'T12:00:00Z')
+}
+
 // ── Service ──────────────────────────────────────────────────────────────────
 
 export class ScheduleAvailabilityService {
@@ -59,6 +64,9 @@ export class ScheduleAvailabilityService {
    * considered. Otherwise, the union of slots across ALL professionals that can
    * perform the service is returned.
    *
+   * If `equipmentId` is provided, slots where that equipment is already
+   * booked in another appointment are additionally excluded.
+   *
    * The `professionals` array in the result lets the UI show per-professional
    * availability so it can filter the professional dropdown based on the chosen
    * time slot.
@@ -68,6 +76,7 @@ export class ScheduleAvailabilityService {
     serviceId: string,
     date: string,
     professionalId?: string,
+    equipmentId?: string,
   ): Promise<AvailableSlotsResult> {
     const service = await prisma.service.findFirst({
       where: { id: serviceId, clinicId, active: true, deletedAt: null },
@@ -124,6 +133,49 @@ export class ScheduleAvailabilityService {
     }
 
     const sortedSlots = [...allSlots].sort()
+
+    // ── Equipment pre-filter ─────────────────────────────────────────────────
+    // If a specific equipment was pre-selected, remove slots where that equipment
+    // is already booked in another active appointment.
+    if (equipmentId) {
+      const dayStart = dateNoon(date)
+      dayStart.setUTCHours(0, 0, 0, 0)
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
+
+      const busyLinks = await prisma.appointmentEquipment.findMany({
+        where: {
+          equipmentId,
+          appointment: {
+            clinicId,
+            status: { notIn: ['cancelled', 'no_show'] },
+            scheduledAt: { gte: dayStart, lt: dayEnd },
+          },
+        },
+        include: { appointment: { select: { scheduledAt: true, durationMinutes: true } } },
+      })
+
+      // Build occupied windows for the equipment (in minutes from midnight UTC)
+      const equipOccupied = busyLinks.map((l) => ({
+        start: dateToMinutes(l.appointment.scheduledAt),
+        end: dateToMinutes(l.appointment.scheduledAt) + l.appointment.durationMinutes,
+      }))
+
+      const filteredSlots = sortedSlots.filter((slot) => {
+        const slotMin = timeToMinutes(slot)
+        const slotEnd = slotMin + dur
+        return !equipOccupied.some((o) => slotMin < o.end && slotEnd > o.start)
+      })
+
+      // Also restrict profSlots to the equipment-filtered set
+      const filteredSet = new Set(filteredSlots)
+      const filteredProfSlots = profSlots.map((p) => ({
+        ...p,
+        slots: p.slots.filter((s) => filteredSet.has(s)),
+      }))
+
+      return { date, slots: filteredSlots, professionals: filteredProfSlots }
+    }
+
     return { date, slots: sortedSlots, professionals: profSlots }
   }
 

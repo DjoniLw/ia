@@ -153,9 +153,9 @@ export interface AvailableSlotsResult {
   professionals: { id: string; name: string; slots: string[] }[]
 }
 
-/** Available time slots for a service on a date (optionally filtered to one professional) */
+/** Available time slots for a service on a date (optionally filtered to one professional and/or one equipment) */
 export function useAvailableSlots(
-  params: { serviceId: string; date: string; professionalId?: string } | null,
+  params: { serviceId: string; date: string; professionalId?: string; equipmentId?: string } | null,
 ) {
   return useQuery<AvailableSlotsResult>({
     queryKey: ['appointments-available-slots', params],
