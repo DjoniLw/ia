@@ -45,7 +45,7 @@ export const ListProductsQuery = z.object({
   active: z.coerce.boolean().optional(),
   lowStock: z.coerce.boolean().optional(),
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(500).default(20),
 })
 export type ListProductsQuery = z.infer<typeof ListProductsQuery>
 
@@ -66,6 +66,6 @@ export const ListSalesQuery = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(500).default(20),
 })
 export type ListSalesQuery = z.infer<typeof ListSalesQuery>

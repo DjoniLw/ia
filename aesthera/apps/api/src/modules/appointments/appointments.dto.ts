@@ -33,7 +33,7 @@ export const ListAppointmentsQuery = z.object({
   dateFrom: z.string().optional(),    // YYYY-MM-DD
   dateTo: z.string().optional(),      // YYYY-MM-DD
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(100).default(20),
+  limit: z.coerce.number().int().positive().max(500).default(20),
 })
 export type ListAppointmentsQuery = z.infer<typeof ListAppointmentsQuery>
 

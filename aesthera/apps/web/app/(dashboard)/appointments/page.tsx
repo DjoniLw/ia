@@ -199,10 +199,10 @@ function CreateAppointmentForm({
   const [submitted, setSubmitted] = useState(false)
 
   // ── API data ──────────────────────────────────────────────────────────────────
-  const { data: allServices, isLoading: servicesLoading } = useServices({ active: 'true', limit: '200' })
+  const { data: allServices, isLoading: servicesLoading } = useServices({ active: 'true', limit: '100' })
 
   // All active professionals — used as a fallback when the availability API returns empty
-  const { data: allProfsData } = useProfessionals({ active: 'true', limit: '200' })
+  const { data: allProfsData } = useProfessionals({ active: 'true', limit: '100' })
 
   const { data: custSearchData } = useCustomers(
     customerSearchDebounced.trim().length >= 1
