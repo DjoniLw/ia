@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageSquare, X, Send, Loader2, Bot, User, Wrench } from 'lucide-react'
-import { apiBaseUrl } from '@/lib/api'
+import { apiBaseUrl, getClinicSlug } from '@/lib/api'
+import { getAccessToken } from '@/lib/auth'
 
 interface Message {
   id: string
@@ -118,8 +119,8 @@ export function ChatPanel() {
 
     try {
       const base = apiBaseUrl
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access-token') : null
-      const slug = typeof window !== 'undefined' ? localStorage.getItem('clinic-slug') : null
+      const token = getAccessToken()
+      const slug = getClinicSlug()
 
       const res = await fetch(`${base}/ai/chat`, {
         method: 'POST',
@@ -232,7 +233,7 @@ export function ChatPanel() {
           </div>
           <div>
             <p className="text-sm font-semibold text-white">Aes — Assistente IA</p>
-            <p className="text-xs text-violet-200">Gemini 2.0 Flash</p>
+            <p className="text-xs text-violet-200">Gemini 2.5 Flash</p>
           </div>
           <button
             onClick={() => setOpen(false)}

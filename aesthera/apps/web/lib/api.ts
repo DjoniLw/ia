@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './auth'
 
-function getClinicSlug(): string {
+export function getClinicSlug(): string {
   if (typeof window === 'undefined') return ''
   const hostname = window.location.hostname
 

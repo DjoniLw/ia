@@ -156,7 +156,7 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
         model,
         maxRetries: 0,
         prompt: `Gere um resumo clínico executivo do cliente a seguir em português, destacando frequência de visitas, serviços preferidos e status financeiro:\n\n${context}`,
-        maxOutputTokens: 500,
+        maxTokens: 500,
       })
       text = result.text
     } catch (err) {
@@ -219,7 +219,7 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
         model,
         maxRetries: 0,
         prompt: `Gere um briefing diário executivo da clínica no seguinte contexto (em português):\n\n${JSON.stringify(context, null, 2)}\n\nSeja conciso e use marcadores.`,
-        maxOutputTokens: 600,
+        maxTokens: 600,
       })
       text = result.text
     } catch (err) {
