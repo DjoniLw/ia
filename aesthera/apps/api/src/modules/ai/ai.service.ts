@@ -40,7 +40,7 @@ export class AiService {
       )
     }
     const google = createGoogleGenerativeAI({ apiKey: appConfig.ai.geminiApiKey })
-    return google('gemini-2.0-flash')
+    return google(appConfig.ai.geminiModel)
   }
 
   async streamChat(

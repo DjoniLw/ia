@@ -44,6 +44,7 @@ export const appConfig = {
 
   ai: {
     geminiApiKey: env.GEMINI_API_KEY,
+    geminiModel: env.GEMINI_MODEL,
   },
 
   cors: {

@@ -131,7 +131,14 @@ export function ChatPanel() {
       })
 
       if (!res.ok || !res.body) {
-        throw new Error('AI request failed')
+        let errMsg = 'AI request failed'
+        try {
+          const data = await res.json() as { message?: string; error?: string }
+          errMsg = data.message ?? data.error ?? errMsg
+        } catch {
+          // Response body is not JSON (e.g. network proxy error) — keep generic message
+        }
+        throw new Error(errMsg)
       }
 
       const reader = res.body.getReader()
@@ -151,27 +158,28 @@ export function ChatPanel() {
           const raw = line.slice(6).trim()
           if (raw === '[DONE]') break
 
+          let event: { chunk?: string; toolCall?: string; error?: string }
           try {
-            const event = JSON.parse(raw) as { chunk?: string; toolCall?: string; error?: string }
-            if (event.error) throw new Error(event.error)
-            if (event.toolCall) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, toolCall: event.toolCall, content: '' } : m,
-                ),
-              )
-            }
-            if (event.chunk) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: m.content + event.chunk, toolCall: undefined }
-                    : m,
-                ),
-              )
-            }
+            event = JSON.parse(raw) as typeof event
           } catch {
-            // ignore parse errors mid-stream
+            continue // skip malformed JSON frames
+          }
+          if (event.error) throw new Error(event.error)
+          if (event.toolCall) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId ? { ...m, toolCall: event.toolCall, content: '' } : m,
+              ),
+            )
+          }
+          if (event.chunk) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: m.content + event.chunk, toolCall: undefined }
+                  : m,
+              ),
+            )
           }
         }
       }
@@ -180,7 +188,7 @@ export function ChatPanel() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: `⚠️ ${msg}. Verifique se a chave GEMINI_API_KEY está configurada.`, toolCall: undefined }
+            ? { ...m, content: `⚠️ ${msg}`, toolCall: undefined }
             : m,
         ),
       )
