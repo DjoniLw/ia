@@ -211,9 +211,10 @@ function CreateAppointmentForm({
   )
   const searchResults = custSearchData?.items ?? []
 
-  // Available slots: driven by service + date + optional professional pre-filter
+  // Available slots: driven by service + date only (no professional pre-filter —
+  // in the new UX the user picks a time first, then sees filtered professionals)
   const { data: slotsData, isFetching: slotsFetching } = useAvailableSlots(
-    serviceId && date ? { serviceId, date, professionalId: professionalFilter || undefined } : null,
+    serviceId && date ? { serviceId, date } : null,
   )
 
   // Available professionals: filtered by service + date, and further filtered when a time is chosen
@@ -279,8 +280,8 @@ function CreateAppointmentForm({
   function handleProfessionalChange(profId: string) {
     setProfessionalFilter(profId)
     setFinalProfessionalId(profId)
-    // Reset selected time when professional changes so slots are recalculated
-    setSelectedTime('')
+    // Do NOT reset selectedTime — in the new flow the user picks a time first,
+    // then chooses from professionals available at that time.
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -379,47 +380,10 @@ function CreateAppointmentForm({
         {submitted && !date && <p className="text-xs text-destructive">Selecione uma data</p>}
       </div>
 
-      {/* 4. Profissional — visible only after service AND date are both selected */}
+      {/* 4. Horários disponíveis — appears once service + date are both set */}
       {serviceId && date && (
         <div className="space-y-2">
-          <Label>Profissional</Label>
-          {profsFetching && profList.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Buscando profissionais disponíveis…</p>
-          ) : (
-            <select
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={finalProfessionalId}
-              onChange={(e) => handleProfessionalChange(e.target.value)}
-            >
-              <option value="">{selectedTime ? 'Selecione um profissional…' : 'Qualquer profissional disponível'}</option>
-              {profList.map((p) => (
-                <option key={p.id} value={p.id} disabled={!p.available}>
-                  {p.name}{!p.available ? ' (ocupado neste horário)' : ''}
-                </option>
-              ))}
-            </select>
-          )}
-          {profList.length === 0 && !profsFetching && (
-            <p className="text-xs text-muted-foreground">Nenhum profissional disponível para este serviço nesta data</p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            {selectedTime
-              ? 'Profissionais disponíveis neste horário'
-              : 'Profissionais disponíveis nesta data (opcional — filtra os horários)'}
-          </p>
-          {submitted && !finalProfessionalId && <p className="text-xs text-destructive">Selecione um profissional</p>}
-        </div>
-      )}
-
-      {/* 5. Horários disponíveis */}
-      {serviceId && date && (
-        <div className="space-y-2">
-          <Label>
-            Horário *
-            {finalProfessionalId && profList.find((p) => p.id === finalProfessionalId)?.name
-              ? ` — ${profList.find((p) => p.id === finalProfessionalId)!.name}`
-              : ' — todos os profissionais disponíveis'}
-          </Label>
+          <Label>Horários disponíveis *</Label>
 
           {slotsFetching && (
             <p className="text-xs text-muted-foreground">Buscando horários disponíveis…</p>
@@ -428,7 +392,6 @@ function CreateAppointmentForm({
           {!slotsFetching && slots.length === 0 && (
             <p className="text-xs text-muted-foreground rounded-md border border-dashed p-3 text-center">
               Nenhum horário disponível para esta data
-              {professionalFilter ? ' com este profissional' : ''}
             </p>
           )}
 
@@ -458,6 +421,34 @@ function CreateAppointmentForm({
           {submitted && !selectedTime && (
             <p className="text-xs text-destructive">Selecione um horário</p>
           )}
+        </div>
+      )}
+
+      {/* 5. Profissional — visible only after a time slot is selected; list is pre-filtered to that time */}
+      {serviceId && date && selectedTime && (
+        <div className="space-y-2">
+          <Label>Profissional *</Label>
+          {profsFetching && profList.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Buscando profissionais disponíveis…</p>
+          ) : (
+            <select
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={finalProfessionalId}
+              onChange={(e) => handleProfessionalChange(e.target.value)}
+            >
+              <option value="">Selecione um profissional…</option>
+              {profList.map((p) => (
+                <option key={p.id} value={p.id} disabled={!p.available}>
+                  {p.name}{!p.available ? ' (ocupado neste horário)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          {profList.length === 0 && !profsFetching && (
+            <p className="text-xs text-muted-foreground">Nenhum profissional disponível neste horário</p>
+          )}
+          <p className="text-xs text-muted-foreground">Profissionais disponíveis no horário {selectedTime}</p>
+          {submitted && !finalProfessionalId && <p className="text-xs text-destructive">Selecione um profissional</p>}
         </div>
       )}
 
