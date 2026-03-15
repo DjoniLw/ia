@@ -194,7 +194,7 @@ function CustomerForm({
             type="button"
             onClick={() => setTab(t.id)}
             className={[
-              'flex-1 py-2 text-sm font-medium transition-colors',
+              'flex-1 py-1.5 px-1 text-xs sm:text-sm font-medium transition-colors',
               tab === t.id
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-card text-muted-foreground hover:bg-accent',
@@ -214,7 +214,7 @@ function CustomerForm({
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>E-mail</Label>
               <Input {...register('email')} type="email" placeholder="maria@email.com" />
@@ -232,7 +232,7 @@ function CustomerForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Telefone principal</Label>
               <Input
@@ -253,7 +253,7 @@ function CustomerForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>CPF</Label>
               <Input
@@ -269,7 +269,7 @@ function CustomerForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Data de nascimento</Label>
               <Input {...register('birthDate')} type="date" />
@@ -309,8 +309,8 @@ function CustomerForm({
       {/* Address tab */}
       {tab === 'address' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2 space-y-2">
               <Label>Logradouro</Label>
               <Input {...register('addr_street')} placeholder="Rua das Flores" />
             </div>
@@ -320,7 +320,7 @@ function CustomerForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Complemento</Label>
               <Input {...register('addr_complement')} placeholder="Apto 4B" />
@@ -331,8 +331,8 @@ function CustomerForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2 space-y-2">
               <Label>Cidade</Label>
               <Input {...register('addr_city')} placeholder="São Paulo" />
             </div>
@@ -403,7 +403,7 @@ function CustomerForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Tratamentos anteriores</Label>
               <textarea
@@ -646,7 +646,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             type="button"
             onClick={() => setDetailTab(id as DetailTab)}
             className={[
-              'flex-1 py-2 text-sm font-medium transition-colors',
+              'flex-1 py-1.5 px-1 text-xs font-medium transition-colors',
               detailTab === id ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-accent',
             ].join(' ')}
           >
@@ -1136,6 +1136,7 @@ export default function CustomersPage() {
                     <Button variant="ghost" size="sm" className="text-violet-600 hover:text-violet-700" onClick={() => setAiSummary(c)}>
                       <Bot className="h-3.5 w-3.5" />
                     </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setViewing(c)}>Ver ficha</Button>
                     <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>Editar</Button>
                     <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(c.id)}>Excluir</Button>
                   </div>
@@ -1172,7 +1173,7 @@ export default function CustomersPage() {
 
       {/* Detail view */}
       {viewing && !editing && (
-        <Dialog open onClose={() => setViewing(null)}>
+        <Dialog open onClose={() => setViewing(null)} className="max-w-2xl">
           <DialogTitle>Ficha do Cliente</DialogTitle>
           <div className="mt-4">
             <CustomerDetail
