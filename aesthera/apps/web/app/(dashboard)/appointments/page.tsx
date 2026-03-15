@@ -566,7 +566,7 @@ function CreateAppointmentForm({
 }
 
 // ──── Advanced Schedule Dialog ────────────────────────────────────────────────
-// A weekly timeline view where clicking a free slot opens quick scheduling.
+// A timeline view (day or week) where clicking a free slot opens quick scheduling.
 
 function AdvancedScheduleDialog({
   onClose,
@@ -576,13 +576,25 @@ function AdvancedScheduleDialog({
   onCreateAppointment: (date: string, time: string, professionalId: string) => void
 }) {
   const todayStr = toDateStr(new Date())
-  const [weekStart, setWeekStart] = useState(() => toDateStr(startOfWeek(new Date(todayStr + 'T12:00:00Z'))))
-  const { data: calendar, isLoading } = useCalendar({ date: weekStart, view: 'week' })
+  // calendarMode: which view the user is in
+  const [calendarMode, setCalendarMode] = useState<'day' | 'week'>('week')
+  // currentDate: anchor for both views
+  //   - day view  → the selected day
+  //   - week view → the Sunday that starts the visible week
+  const [currentDate, setCurrentDate] = useState(() =>
+    calendarMode === 'week'
+      ? toDateStr(startOfWeek(new Date(todayStr + 'T12:00:00Z')))
+      : todayStr,
+  )
 
+  const { data: calendar, isLoading } = useCalendar({ date: currentDate, view: calendarMode })
+
+  // Days shown in the grid
   const days = useMemo(() => {
-    const ws = new Date(weekStart + 'T12:00:00Z')
+    if (calendarMode === 'day') return [currentDate]
+    const ws = new Date(currentDate + 'T12:00:00Z')
     return Array.from({ length: 7 }, (_, i) => toDateStr(addDays(ws, i)))
-  }, [weekStart])
+  }, [calendarMode, currentDate])
 
   const hours = Array.from({ length: GRID_END - GRID_START }, (_, i) => GRID_START + i)
 
@@ -606,25 +618,87 @@ function AdvancedScheduleDialog({
     return map
   }, [professionals])
 
+  // ── Navigation helpers ───────────────────────────────────────────────────────
+  function navigate(delta: number) {
+    const step = calendarMode === 'day' ? delta : delta * 7
+    setCurrentDate(toDateStr(addDays(new Date(currentDate + 'T12:00:00Z'), step)))
+  }
+
+  function switchMode(mode: 'day' | 'week') {
+    if (mode === calendarMode) return
+    if (mode === 'week') {
+      // snap to the Sunday of the current day
+      setCurrentDate(toDateStr(startOfWeek(new Date(currentDate + 'T12:00:00Z'))))
+    }
+    // for day mode keep currentDate as-is (already a single day)
+    setCalendarMode(mode)
+  }
+
+  // ── Header label ──────────────────────────────────────────────────────────────
+  const headerLabel = useMemo(() => {
+    if (calendarMode === 'day') {
+      return new Date(currentDate + 'T12:00:00Z').toLocaleDateString('pt-BR', {
+        weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+      })
+    }
+    return (
+      new Date(currentDate + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' – ' +
+      new Date(days[6] + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+    )
+  }, [calendarMode, currentDate, days])
+
+  // ── Column definitions (week view: outer=day, inner=professional) ─────────────
+  // Each column is a {day, prof} pair. In day view there is only one day.
+  const columns = useMemo(() => {
+    const cols: { day: string; prof: { id: string; name: string; slots: CalendarSlot[] } }[] = []
+    for (const day of days) {
+      for (const prof of professionals) {
+        cols.push({ day, prof })
+      }
+    }
+    return cols
+  }, [days, professionals])
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Week navigation */}
-      <div className="flex items-center justify-between">
-        <Button
-          variant="ghost" size="sm"
-          onClick={() => setWeekStart(toDateStr(addDays(new Date(weekStart + 'T12:00:00Z'), -7)))}
-        >
+      {/* Navigation + view toggle */}
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-sm font-medium">
-          {new Date(weekStart + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-          {' – '}
-          {new Date(days[6] + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-        </span>
-        <Button
-          variant="ghost" size="sm"
-          onClick={() => setWeekStart(toDateStr(addDays(new Date(weekStart + 'T12:00:00Z'), 7)))}
-        >
+
+        <div className="flex items-center gap-3">
+          {/* Day / Week toggle */}
+          <div className="flex rounded-md border overflow-hidden text-xs">
+            <button
+              type="button"
+              onClick={() => switchMode('day')}
+              className={`px-3 py-1 transition-colors ${
+                calendarMode === 'day'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-accent'
+              }`}
+            >
+              Dia
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('week')}
+              className={`px-3 py-1 border-l transition-colors ${
+                calendarMode === 'week'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-accent'
+              }`}
+            >
+              Semana
+            </button>
+          </div>
+
+          <span className="text-sm font-medium capitalize">{headerLabel}</span>
+        </div>
+
+        <Button variant="ghost" size="sm" onClick={() => navigate(1)}>
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
@@ -632,7 +706,9 @@ function AdvancedScheduleDialog({
       {isLoading && <p className="text-sm text-muted-foreground text-center py-8">Carregando…</p>}
 
       {!isLoading && professionals.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-8">Nenhum agendamento nesta semana</p>
+        <p className="text-sm text-muted-foreground text-center py-8">
+          {calendarMode === 'day' ? 'Nenhum agendamento neste dia' : 'Nenhum agendamento nesta semana'}
+        </p>
       )}
 
       {!isLoading && professionals.length > 0 && (
@@ -640,20 +716,22 @@ function AdvancedScheduleDialog({
           <table className="min-w-full text-xs border-separate border-spacing-0">
             <thead>
               <tr>
-                <th className="sticky left-0 z-10 bg-background border-b border-r px-2 py-1 text-left font-medium text-muted-foreground w-20">Horário</th>
-                {professionals.map((prof) =>
-                  days.map((day) => (
-                    <th
-                      key={`${prof.id}-${day}`}
-                      className="border-b border-r px-2 py-1 text-center font-medium whitespace-nowrap min-w-[80px]"
-                    >
-                      <div>{prof.name.split(' ')[0]}</div>
+                <th className="sticky left-0 z-10 bg-background border-b border-r px-2 py-1 text-left font-medium text-muted-foreground w-20">
+                  Horário
+                </th>
+                {columns.map(({ day, prof }) => (
+                  <th
+                    key={`${day}-${prof.id}`}
+                    className="border-b border-r px-2 py-1 text-center font-medium whitespace-nowrap min-w-[80px]"
+                  >
+                    {calendarMode === 'week' && (
                       <div className="text-muted-foreground font-normal">
                         {new Date(day + 'T12:00:00Z').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' })}
                       </div>
-                    </th>
-                  )),
-                )}
+                    )}
+                    <div>{prof.name.split(' ')[0]}</div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -662,34 +740,32 @@ function AdvancedScheduleDialog({
                   <td className="sticky left-0 z-10 bg-background border-b border-r px-2 py-0.5 text-muted-foreground align-top w-20">
                     {String(hour).padStart(2, '0')}:00
                   </td>
-                  {professionals.map((prof) =>
-                    days.map((day) => {
-                      const timeStr = `${String(hour).padStart(2, '0')}:00`
-                      const slot = apptMap.get(prof.id)?.get(day)?.get(timeStr)
-                      return (
-                        <td
-                          key={`${prof.id}-${day}-${hour}`}
-                          className={`border-b border-r px-1 py-0.5 align-top min-h-[32px] ${
-                            slot ? '' : 'cursor-pointer hover:bg-accent/50'
-                          }`}
-                          onClick={() => {
-                            if (!slot) {
-                              onCreateAppointment(day, timeStr, prof.id)
-                            }
-                          }}
-                          title={slot ? `${slot.customer} — ${slot.service}` : `Agendar ${prof.name} às ${timeStr}`}
-                        >
-                          {slot ? (
-                            <div className={`rounded px-1 py-0.5 text-[10px] font-medium truncate ${EVENT_COLOR[slot.status!]}`}>
-                              {slot.customer}
-                            </div>
-                          ) : (
-                            <div className="h-5 w-full rounded border border-dashed border-muted-foreground/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          )}
-                        </td>
-                      )
-                    }),
-                  )}
+                  {columns.map(({ day, prof }) => {
+                    const timeStr = `${String(hour).padStart(2, '0')}:00`
+                    const slot = apptMap.get(prof.id)?.get(day)?.get(timeStr)
+                    return (
+                      <td
+                        key={`${day}-${prof.id}-${hour}`}
+                        className={`border-b border-r px-1 py-0.5 align-top min-h-[32px] ${
+                          slot ? '' : 'cursor-pointer hover:bg-accent/50'
+                        }`}
+                        onClick={() => {
+                          if (!slot) {
+                            onCreateAppointment(day, timeStr, prof.id)
+                          }
+                        }}
+                        title={slot ? `${slot.customer} — ${slot.service}` : `Agendar ${prof.name} às ${timeStr}`}
+                      >
+                        {slot ? (
+                          <div className={`rounded px-1 py-0.5 text-[10px] font-medium truncate ${EVENT_COLOR[slot.status!]}`}>
+                            {slot.customer}
+                          </div>
+                        ) : (
+                          <div className="h-5 w-full rounded border border-dashed border-muted-foreground/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
             </tbody>
