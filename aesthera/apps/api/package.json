@@ -23,6 +23,7 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/jwt": "^10.0.0",
     "@fastify/rate-limit": "^10.3.0",
+    "@prisma/client": "^6.19.2",
     "ai": "^6.0.116",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.0.0",
@@ -34,7 +35,6 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@prisma/client": "^6.19.2",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.0.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
