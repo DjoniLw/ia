@@ -462,6 +462,8 @@ export interface ServiceSupply {
   serviceId: string
   supplyId: string
   quantity: number
+  usageUnit: string | null
+  conversionFactor: number
   supply: Supply
 }
 
@@ -508,7 +510,7 @@ export function useServiceSupplies(serviceId: string) {
 export function useAssignServiceSupplies(serviceId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (supplies: Array<{ supplyId: string; quantity: number }>) =>
+    mutationFn: (supplies: Array<{ supplyId: string; quantity: number; usageUnit?: string | null; conversionFactor?: number }>) =>
       api.put(`/services/${serviceId}/supplies`, { supplies }).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['service-supplies', serviceId] })

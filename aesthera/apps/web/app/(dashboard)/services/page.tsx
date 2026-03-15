@@ -134,21 +134,34 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
   const { data: assigned, isLoading: loadingAssigned } = useServiceSupplies(service.id)
   const assignMutation = useAssignServiceSupplies(service.id)
 
+  type Item = { supplyId: string; quantity: number; usageUnit: string; conversionFactor: number }
+
   // Build local editable list from current assigned
-  const [items, setItems] = useState<Array<{ supplyId: string; quantity: number }>>(() =>
-    assigned?.map((ss) => ({ supplyId: ss.supplyId, quantity: ss.quantity })) ?? []
+  const [items, setItems] = useState<Item[]>(() =>
+    assigned?.map((ss) => ({
+      supplyId: ss.supplyId,
+      quantity: ss.quantity,
+      usageUnit: ss.usageUnit ?? ss.supply.unit,
+      conversionFactor: ss.conversionFactor ?? 1,
+    })) ?? []
   )
 
   // Sync from server when data loads
   const [initialised, setInitialised] = useState(false)
   if (!initialised && assigned) {
-    setItems(assigned.map((ss) => ({ supplyId: ss.supplyId, quantity: ss.quantity })))
+    setItems(assigned.map((ss) => ({
+      supplyId: ss.supplyId,
+      quantity: ss.quantity,
+      usageUnit: ss.usageUnit ?? ss.supply.unit,
+      conversionFactor: ss.conversionFactor ?? 1,
+    })))
     setInitialised(true)
   }
 
   function addSupply(supplyId: string) {
     if (items.some((i) => i.supplyId === supplyId)) return
-    setItems((prev) => [...prev, { supplyId, quantity: 1 }])
+    const supply = suppliesData?.items.find((s) => s.id === supplyId)
+    setItems((prev) => [...prev, { supplyId, quantity: 1, usageUnit: supply?.unit ?? 'un', conversionFactor: 1 }])
   }
 
   function removeSupply(supplyId: string) {
@@ -159,11 +172,26 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
     setItems((prev) => prev.map((i) => i.supplyId === supplyId ? { ...i, quantity: qty } : i))
   }
 
+  function setUsageUnit(supplyId: string, unit: string) {
+    setItems((prev) => prev.map((i) => i.supplyId === supplyId ? { ...i, usageUnit: unit } : i))
+  }
+
+  function setConversionFactor(supplyId: string, factor: number) {
+    setItems((prev) => prev.map((i) => i.supplyId === supplyId ? { ...i, conversionFactor: factor } : i))
+  }
+
   const unassigned = suppliesData?.items.filter((s) => !items.some((i) => i.supplyId === s.id)) ?? []
 
   async function handleSave() {
     try {
-      await assignMutation.mutateAsync(items)
+      await assignMutation.mutateAsync(
+        items.map((i) => ({
+          supplyId: i.supplyId,
+          quantity: i.quantity,
+          usageUnit: i.usageUnit || null,
+          conversionFactor: i.conversionFactor,
+        })),
+      )
       toast.success('Insumos atualizados')
       onClose()
     } catch {
@@ -171,23 +199,36 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
     }
   }
 
-  // Compute total cost
+  // Compute total cost — cost = (costPrice * quantity) / conversionFactor
   const totalCost = items.reduce((sum, item) => {
     const supply = suppliesData?.items.find((s) => s.id === item.supplyId)
-    return sum + (supply?.costPrice ?? 0) * item.quantity
+    return sum + (supply?.costPrice ?? 0) * item.quantity / (item.conversionFactor || 1)
   }, 0)
 
   return (
-    <Dialog open onClose={onClose} className="max-w-lg">
+    <Dialog open onClose={onClose} className="max-w-2xl">
       <DialogTitle>Insumos de: {service.name}</DialogTitle>
       <p className="text-xs text-muted-foreground mb-3">
-        Defina os insumos e quantidades usados por execução deste serviço.
+        Defina os insumos, quantidades e unidades usadas por execução deste serviço.
+        Use o fator de conversão quando a unidade de uso for diferente da unidade de compra.
       </p>
 
       {loadingAssigned ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : (
         <div className="space-y-3">
+          {/* Column headers */}
+          {items.length > 0 && (
+            <div className="grid grid-cols-[1fr_80px_80px_90px_70px_24px] gap-2 px-3 text-xs text-muted-foreground font-medium">
+              <span>Insumo</span>
+              <span className="text-center">Qtd</span>
+              <span className="text-center">Un. uso</span>
+              <span className="text-center">Fator conv.</span>
+              <span className="text-right">Custo</span>
+              <span />
+            </div>
+          )}
+
           {/* Assigned supplies list */}
           {items.length === 0 && (
             <p className="text-sm text-muted-foreground italic">Nenhum insumo atribuído.</p>
@@ -195,29 +236,57 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
           {items.map((item) => {
             const supply = suppliesData?.items.find((s) => s.id === item.supplyId)
             if (!supply) return null
-            const lineCost = (supply.costPrice ?? 0) * item.quantity
+            const lineCost = (supply.costPrice ?? 0) * item.quantity / (item.conversionFactor || 1)
+            const stockConsumed = item.quantity / (item.conversionFactor || 1)
+            const showConversion = item.conversionFactor !== 1 || item.usageUnit !== supply.unit
             return (
-              <div key={item.supplyId} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
-                <span className="flex-1 text-sm font-medium">{supply.name}</span>
-                <span className="text-xs text-muted-foreground">{supply.unit}</span>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={item.quantity}
-                  onChange={(e) => setQty(item.supplyId, parseFloat(e.target.value) || 0)}
-                  className="w-20 text-center"
-                />
-                <span className="text-xs text-muted-foreground w-20 text-right">
-                  {lineCost > 0 ? `R$ ${(lineCost / 100).toFixed(2)}` : '—'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeSupply(item.supplyId)}
-                  className="text-destructive hover:text-destructive/80 text-sm font-medium ml-1"
-                >
-                  ✕
-                </button>
+              <div key={item.supplyId} className="rounded-lg border bg-card px-3 py-2 space-y-1">
+                <div className="grid grid-cols-[1fr_80px_80px_90px_70px_24px] gap-2 items-center">
+                  <div>
+                    <span className="text-sm font-medium">{supply.name}</span>
+                    <span className="ml-1 text-xs text-muted-foreground">({supply.unit})</span>
+                  </div>
+                  <Input
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    value={item.quantity}
+                    onChange={(e) => setQty(item.supplyId, parseFloat(e.target.value) || 0)}
+                    className="w-full text-center text-sm"
+                  />
+                  <Input
+                    type="text"
+                    value={item.usageUnit}
+                    onChange={(e) => setUsageUnit(item.supplyId, e.target.value)}
+                    placeholder={supply.unit}
+                    className="w-full text-center text-sm"
+                  />
+                  <Input
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    value={item.conversionFactor}
+                    onChange={(e) => setConversionFactor(item.supplyId, parseFloat(e.target.value) || 1)}
+                    className="w-full text-center text-sm"
+                    title={`1 ${supply.unit} = ${item.conversionFactor} ${item.usageUnit}`}
+                  />
+                  <span className="text-xs text-muted-foreground text-right">
+                    {lineCost > 0 ? `R$ ${(lineCost / 100).toFixed(2)}` : '—'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeSupply(item.supplyId)}
+                    className="text-destructive hover:text-destructive/80 text-sm font-medium"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {showConversion && (
+                  <p className="text-[10px] text-muted-foreground pl-1">
+                    1 {supply.unit} = {item.conversionFactor} {item.usageUnit}
+                    {' · '}consumo por exec.: {stockConsumed.toFixed(3)} {supply.unit}
+                  </p>
+                )}
               </div>
             )
           })}
@@ -253,6 +322,13 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
               Cadastre insumos na página "Insumos" antes de atribuir ao serviço.
             </p>
           )}
+
+          {/* Legend */}
+          <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground space-y-0.5">
+            <p><strong>Qtd:</strong> quantidade usada por execução (na unidade de uso)</p>
+            <p><strong>Un. uso:</strong> unidade em que o insumo é aplicado no serviço (ex: ml, g)</p>
+            <p><strong>Fator conv.:</strong> quantas unidades de uso equivalem a 1 unidade de compra (ex: 1 un = 200 ml → fator 200)</p>
+          </div>
         </div>
       )}
 

@@ -66,6 +66,8 @@ export class SuppliesService {
           supplyId: s.supplyId,
           clinicId,
           quantity: s.quantity,
+          usageUnit: s.usageUnit ?? null,
+          conversionFactor: s.conversionFactor ?? 1,
         })),
         skipDuplicates: true,
       }),

@@ -632,10 +632,12 @@ model Supply {
 // ─── Service ↔ Supply (many-to-many) ─────────────────────────────────────────
 
 model ServiceSupply {
-  serviceId  String @map("service_id")
-  supplyId   String @map("supply_id")
-  clinicId   String @map("clinic_id")
-  quantity   Float  @default(1)               // quantity of supply used per service execution
+  serviceId        String  @map("service_id")
+  supplyId         String  @map("supply_id")
+  clinicId         String  @map("clinic_id")
+  quantity         Float   @default(1)         // quantity of usageUnit used per service execution
+  usageUnit        String? @map("usage_unit")  // unit used in service (if different from supply.unit)
+  conversionFactor Float   @default(1)         @map("conversion_factor") // how many usageUnit = 1 supply.unit
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   supply  Supply  @relation(fields: [supplyId], references: [id], onDelete: Cascade)

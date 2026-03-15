@@ -38,6 +38,8 @@ export const AssignSuppliesDto = z.object({
     z.object({
       supplyId: z.string().uuid(),
       quantity: z.number().positive(),
+      usageUnit: z.string().optional().nullable(),
+      conversionFactor: z.number().positive().default(1),
     }),
   ),
 })
