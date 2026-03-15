@@ -30,13 +30,14 @@ export class EquipmentService {
   }
 
   async create(clinicId: string, dto: CreateEquipmentDto) {
+    const name = dto.name.trim()
     const exists = await prisma.equipment.findFirst({
-      where: { clinicId, name: { equals: dto.name, mode: 'insensitive' } },
+      where: { clinicId, name: { equals: name, mode: 'insensitive' } },
     })
     if (exists) throw new AppError('Equipamento com esse nome já existe', 409, 'EQUIPMENT_EXISTS')
 
     return prisma.equipment.create({
-      data: { clinicId, name: dto.name, description: dto.description },
+      data: { clinicId, name, description: dto.description },
     })
   }
 

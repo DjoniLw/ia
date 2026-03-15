@@ -31,6 +31,7 @@ const SLOT_PX    = 16   // pixels per 15-min slot
 const HOUR_PX    = SLOT_PX * 4  // 64px per hour
 const GRID_H     = (GRID_END - GRID_START) * HOUR_PX  // total grid height
 
+// All scheduledAt values from the API are UTC ISO strings; use UTC accessors throughout
 function timeToGridTop(isoOrMinutes: string | number): number {
   let minutes: number
   if (typeof isoOrMinutes === 'number') {
