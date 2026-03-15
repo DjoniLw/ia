@@ -147,14 +147,33 @@ export interface AvailableProfessional {
   available: boolean
 }
 
+export interface AvailableSlotsResult {
+  date: string
+  slots: string[]
+  professionals: { id: string; name: string; slots: string[] }[]
+}
+
+/** Available time slots for a service on a date (optionally filtered to one professional) */
+export function useAvailableSlots(
+  params: { serviceId: string; date: string; professionalId?: string } | null,
+) {
+  return useQuery<AvailableSlotsResult>({
+    queryKey: ['appointments-available-slots', params],
+    queryFn: () =>
+      api.get('/appointments/available-slots', { params: params! }).then((r) => r.data),
+    enabled: !!params?.serviceId && !!params?.date,
+  })
+}
+
+/** Professionals that can perform a service on a date, optionally filtered to a specific time */
 export function useAvailableProfessionals(
-  params: { date: string; time: string } | null,
+  params: { serviceId: string; date: string; time?: string } | null,
 ) {
   return useQuery<{ professionals: AvailableProfessional[] }>({
     queryKey: ['appointments-available-professionals', params],
     queryFn: () =>
       api.get('/appointments/available-professionals', { params: params! }).then((r) => r.data),
-    enabled: !!params?.date && !!params?.time,
+    enabled: !!params?.serviceId && !!params?.date,
   })
 }
 

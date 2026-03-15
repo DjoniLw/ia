@@ -13,9 +13,11 @@ import {
   UpdateAppointmentDto,
 } from './appointments.dto'
 import { AppointmentsService } from './appointments.service'
+import { ScheduleAvailabilityService } from './scheduleAvailability.service'
 
 export async function appointmentsRoutes(app: FastifyInstance) {
   const svc = new AppointmentsService()
+  const availability = new ScheduleAvailabilityService()
 
   // ── Availability & Calendar (before /:id to avoid conflict) ──────────────────
 
@@ -29,14 +31,37 @@ export async function appointmentsRoutes(app: FastifyInstance) {
     return reply.send(await svc.getCalendar(req.clinicId, q))
   })
 
-  // ── Available professionals for a given date + time ──────────────────────────
-  // GET /appointments/available-professionals?date=YYYY-MM-DD&time=HH:MM
+  // ── Available slots for a service on a date ───────────────────────────────────
+  // GET /appointments/available-slots?serviceId=UUID&date=YYYY-MM-DD[&professionalId=UUID]
+  app.get('/appointments/available-slots', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const q = z.object({
+      serviceId: z.string().uuid(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      professionalId: z.string().uuid().optional(),
+    }).parse(req.query)
+    return reply.send(
+      await availability.getAvailableSlots(req.clinicId, q.serviceId, q.date, q.professionalId),
+    )
+  })
+
+  // ── Available professionals for a service on a date ───────────────────────────
+  // GET /appointments/available-professionals?serviceId=UUID&date=YYYY-MM-DD[&time=HH:MM]
+  // (Supersedes the previous ?date=&time= version)
   app.get('/appointments/available-professionals', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const q = z.object({
+      serviceId: z.string().uuid().optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      time: z.string().regex(/^\d{2}:\d{2}$/),
+      time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
     }).parse(req.query)
-    return reply.send(await svc.getAvailableProfessionals(req.clinicId, q.date, q.time))
+
+    if (q.serviceId) {
+      return reply.send(
+        await availability.getAvailableProfessionals(req.clinicId, q.serviceId, q.date, q.time),
+      )
+    }
+
+    // Fallback: original behaviour (no service filter) — kept for compatibility
+    return reply.send(await svc.getAvailableProfessionals(req.clinicId, q.date, q.time ?? ''))
   })
 
   // ── Available equipment for a given time slot (Feature 9) ────────────────────
@@ -182,3 +207,4 @@ export async function appointmentsRoutes(app: FastifyInstance) {
     },
   )
 }
+

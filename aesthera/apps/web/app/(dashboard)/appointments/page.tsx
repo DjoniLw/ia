@@ -1,11 +1,8 @@
 'use client'
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays } from 'lucide-react'
+import { useCallback, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -15,10 +12,11 @@ import {
   type CalendarSlot,
   useAppointmentTransition,
   useAvailableProfessionals,
+  useAvailableSlots,
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
-import { useCustomers, useProfessionals, useEquipment, useAvailableEquipment, useServices } from '@/lib/hooks/use-resources'
+import { useCustomers, useAvailableEquipment, useServices } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -155,119 +153,140 @@ function GridLines() {
 
 // ──── Create Appointment Form ─────────────────────────────────────────────────
 
-const createSchema = z.object({
-  customerId: z.string().uuid('Selecione um cliente'),
-  professionalId: z.string().uuid('Selecione um profissional'),
-  serviceId: z.string().uuid('Selecione um serviço'),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().regex(/^\d{2}:\d{2}$/),
-  notes: z.string().optional(),
-})
-type CreateFormData = z.infer<typeof createSchema>
+interface CreateFormValues {
+  customerId: string
+  serviceId: string
+  date: string
+  time: string
+  professionalId: string
+  notes: string
+  equipmentIds: string[]
+}
 
 function CreateAppointmentForm({
   defaultDate,
   onSave,
   isPending,
+  prefillTime,
+  prefillProfessionalId,
 }: {
   defaultDate: string
-  onSave: (data: CreateFormData, equipmentIds: string[]) => Promise<void>
+  onSave: (data: Omit<CreateFormValues, 'equipmentIds'>, equipmentIds: string[]) => Promise<void>
   isPending: boolean
+  prefillTime?: string
+  prefillProfessionalId?: string
 }) {
-  const { data: profData } = useProfessionals({ includeServices: 'true' })
-  // Fix #2: fetch all clinic services to use when professional has allServices=true
-  const { data: allServicesData } = useServices({ active: 'true', limit: '200' })
-  const { data: equipmentData } = useEquipment()
-  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
+  // ── Step state ────────────────────────────────────────────────────────────────
+  const [customerId, setCustomerId] = useState('')
+  const [customerName, setCustomerName] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [customerSearchDebounced, setCustomerSearchDebounced] = useState('')
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
-  const [customerName, setCustomerName] = useState<string>('')
-  const [showDropdown, setShowDropdown] = useState(false)
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
   const debounceRef = useMemo(() => ({ timer: undefined as ReturnType<typeof setTimeout> | undefined }), [])
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<Omit<CreateFormData, 'customerId'> & { customerId: string }>({
-    resolver: zodResolver(createSchema),
-    defaultValues: { date: defaultDate, customerId: '' },
-  })
+  const [serviceId, setServiceId] = useState('')
+  const [date, setDate] = useState(defaultDate)
+  // professionalFilter: user optionally pre-selects a professional to filter slots
+  const [professionalFilter, setProfessionalFilter] = useState(prefillProfessionalId ?? '')
+  // selectedTime: user picks a slot from the grid
+  const [selectedTime, setSelectedTime] = useState(prefillTime ?? '')
+  // finalProfessionalId: the professional confirmed for submission
+  const [finalProfessionalId, setFinalProfessionalId] = useState(prefillProfessionalId ?? '')
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
+  const [notes, setNotes] = useState('')
 
-  function handleCustomerInput(value: string) {
-    setCustomerSearch(value)
-    setShowDropdown(true)
-    if (!value) {
-      setSelectedCustomerId('')
-      setCustomerName('')
-      // Fix #1: keep form state in sync when customer is cleared
-      setValue('customerId', '', { shouldValidate: false })
-    }
-    clearTimeout(debounceRef.timer)
-    debounceRef.timer = setTimeout(() => setCustomerSearchDebounced(value), 250)
-  }
+  // ── Validation error state ─────────────────────────────────────────────────
+  const [submitted, setSubmitted] = useState(false)
+
+  // ── API data ──────────────────────────────────────────────────────────────────
+  const { data: allServices } = useServices({ active: 'true', limit: '200' })
 
   const { data: custSearchData } = useCustomers(
     customerSearchDebounced.trim().length >= 1
       ? { name: customerSearchDebounced.trim(), limit: '20' }
       : undefined,
   )
-
   const searchResults = custSearchData?.items ?? []
 
-  const professionalId = watch('professionalId')
-  const serviceId = watch('serviceId')
-  const date = watch('date')
-  const time = watch('time')
-
-  // Fix #3: fetch available professionals based on selected date+time
-  const { data: availProfsData } = useAvailableProfessionals(
-    date && time ? { date, time } : null,
+  // Available slots: driven by service + date + optional professional pre-filter
+  const { data: slotsData, isFetching: slotsFetching } = useAvailableSlots(
+    serviceId && date ? { serviceId, date, professionalId: professionalFilter || undefined } : null,
   )
 
-  const selectedProf = profData?.items.find((p) => p.id === professionalId)
-  // Fix #2: when allServices=true use ALL clinic services (including newly added ones)
-  const assignedServices = selectedProf?.allServices
-    ? (allServicesData?.items ?? [])
-    : (selectedProf?.services?.map((ps) => ps.service) ?? [])
+  // Available professionals: filtered by service + date, and further filtered when a time is chosen
+  const { data: availProfsData } = useAvailableProfessionals(
+    serviceId && date ? { serviceId, date, time: selectedTime || undefined } : null,
+  )
 
-  // Compute scheduledAt for equipment availability query
-  const scheduledAt = date && time ? `${date}T${time}:00.000Z` : ''
-  const selectedService = assignedServices.find((s) => s.id === serviceId)
-  const serviceDuration = selectedService?.durationMinutes ?? 0
+  // Equipment availability for selected slot
+  const selectedServiceObj = (allServices?.items ?? []).find((s) => s.id === serviceId)
+  const serviceDuration = selectedServiceObj?.durationMinutes ?? 0
+  const scheduledAt = date && selectedTime ? `${date}T${selectedTime}:00.000Z` : ''
   const { data: availableEquipment } = useAvailableEquipment(scheduledAt, serviceDuration)
 
-  function toggleEquipment(id: string) {
-    setSelectedEquipmentIds((prev) =>
-      prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id],
+  // ── Derived ───────────────────────────────────────────────────────────────────
+  const slots = slotsData?.slots ?? []
+
+  // The professional list to show is from availProfsData (filtered by service+date+time)
+  // When user has a professionalFilter set AND no time selected yet, show availability without time filter
+  const profList = availProfsData?.professionals ?? []
+
+  // After a time is selected, the finalProfessionalId must come from profList (filtered to available)
+  const availableProfIds = new Set(profList.filter((p) => p.available).map((p) => p.id))
+
+  const canSubmit = !!(customerId && serviceId && date && selectedTime && finalProfessionalId)
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  function handleCustomerInput(value: string) {
+    setCustomerSearch(value)
+    setShowCustomerDropdown(true)
+    if (!value) { setCustomerId(''); setCustomerName('') }
+    clearTimeout(debounceRef.timer)
+    debounceRef.timer = setTimeout(() => setCustomerSearchDebounced(value), 250)
+  }
+
+  function handleTimeSelect(time: string) {
+    setSelectedTime(time)
+    // If the pre-selected professional is unavailable at this time, clear it
+    if (finalProfessionalId && !availableProfIds.has(finalProfessionalId)) {
+      setFinalProfessionalId('')
+    }
+  }
+
+  function handleProfessionalChange(profId: string) {
+    setProfessionalFilter(profId)
+    setFinalProfessionalId(profId)
+    // Reset selected time when professional changes so slots are recalculated
+    setSelectedTime('')
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setSubmitted(true)
+    if (!canSubmit) return
+    await onSave(
+      { customerId, serviceId, date, time: selectedTime, professionalId: finalProfessionalId, notes },
+      selectedEquipmentIds,
     )
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <form
-      onSubmit={handleSubmit((data) =>
-        onSave({ ...data, customerId: selectedCustomerId }, selectedEquipmentIds)
-      )}
-      className="space-y-4"
-    >
-      {/* Customer searchable selector */}
+    <form onSubmit={handleSubmit} className="space-y-4">
+
+      {/* 1. Cliente */}
       <div className="space-y-2">
         <Label>Cliente *</Label>
         <div className="relative">
           <Input
-            placeholder="Buscar cliente por nome, telefone ou CPF…"
+            placeholder="Buscar por nome, telefone ou CPF…"
             value={customerSearch || customerName}
-            onChange={(e) => {
-              handleCustomerInput(e.target.value)
-            }}
-            onFocus={() => { setCustomerSearch(''); setShowDropdown(true) }}
-            onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+            onChange={(e) => handleCustomerInput(e.target.value)}
+            onFocus={() => { setCustomerSearch(''); setShowCustomerDropdown(true) }}
+            onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 150)}
             autoComplete="off"
           />
-          {showDropdown && customerSearch.trim().length >= 1 && searchResults.length > 0 && (
+          {showCustomerDropdown && customerSearch.trim().length >= 1 && searchResults.length > 0 && (
             <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-40 overflow-auto">
               {searchResults.map((c) => (
                 <button
@@ -276,12 +295,10 @@ function CreateAppointmentForm({
                   className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    setSelectedCustomerId(c.id)
+                    setCustomerId(c.id)
                     setCustomerName(c.name)
-                    // Fix #1: sync customerId into form state so Zod validation passes
-                    setValue('customerId', c.id, { shouldValidate: true })
                     setCustomerSearch('')
-                    setShowDropdown(false)
+                    setShowCustomerDropdown(false)
                   }}
                 >
                   <span className="font-medium">{c.name}</span>
@@ -290,100 +307,182 @@ function CreateAppointmentForm({
               ))}
             </div>
           )}
-          {showDropdown && customerSearch.trim().length >= 1 && searchResults.length === 0 && (
+          {showCustomerDropdown && customerSearch.trim().length >= 1 && searchResults.length === 0 && (
             <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg p-3">
               <p className="text-sm text-muted-foreground">Nenhum cliente encontrado</p>
             </div>
           )}
         </div>
-        {/* Hidden input to register customerId with react-hook-form */}
-        <input type="hidden" {...register('customerId')} />
-        {!selectedCustomerId && <p className="text-xs text-muted-foreground">Digite para buscar clientes</p>}
-        {selectedCustomerId && <p className="text-xs text-green-600">✓ {customerName}</p>}
-        {errors.customerId && <p className="text-xs text-destructive">{errors.customerId.message}</p>}
+        {customerId
+          ? <p className="text-xs text-green-600">✓ {customerName}</p>
+          : <p className="text-xs text-muted-foreground">Digite para buscar clientes</p>}
+        {submitted && !customerId && <p className="text-xs text-destructive">Selecione um cliente</p>}
       </div>
 
-      {/* Fix #3: Date & Time now comes BEFORE Professional & Service */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label>Data *</Label>
-          <Input type="date" {...register('date')} />
-        </div>
-        <div className="space-y-2">
-          <Label>Horário *</Label>
-          <Input type="time" step={900} {...register('time')} />
-          {errors.time && <p className="text-xs text-destructive">{errors.time.message}</p>}
-        </div>
+      {/* 2. Serviço */}
+      <div className="space-y-2">
+        <Label>Serviço *</Label>
+        <select
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={serviceId}
+          onChange={(e) => {
+            setServiceId(e.target.value)
+            setSelectedTime('')
+            setFinalProfessionalId('')
+            setProfessionalFilter('')
+          }}
+        >
+          <option value="">Selecione um serviço…</option>
+          {(allServices?.items ?? []).map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        {submitted && !serviceId && <p className="text-xs text-destructive">Selecione um serviço</p>}
       </div>
 
-      {/* Fix #3: Professional & Service now comes AFTER Date & Time */}
-      {/* Professional list shows availability indicator when date+time are selected */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* 3. Data */}
+      <div className="space-y-2">
+        <Label>Data *</Label>
+        <Input
+          type="date"
+          value={date}
+          onChange={(e) => {
+            setDate(e.target.value)
+            setSelectedTime('')
+            setFinalProfessionalId('')
+          }}
+        />
+        {submitted && !date && <p className="text-xs text-destructive">Selecione uma data</p>}
+      </div>
+
+      {/* 4. Profissional (optional pre-filter) */}
+      {serviceId && date && profList.length > 0 && (
         <div className="space-y-2">
-          <Label>Profissional *</Label>
-          <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('professionalId')}>
-            <option value="">Selecione…</option>
-            {(availProfsData?.professionals ?? profData?.items ?? []).map((p) => {
-              const available = 'available' in p ? (p as { available: boolean }).available : true
-              return (
-                <option key={p.id} value={p.id}>
-                  {p.name}{!available ? ' (ocupado)' : ''}
-                </option>
-              )
-            })}
+          <Label>Profissional</Label>
+          <select
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={finalProfessionalId}
+            onChange={(e) => handleProfessionalChange(e.target.value)}
+          >
+            <option value="">Todos disponíveis</option>
+            {profList.map((p) => (
+              <option key={p.id} value={p.id} disabled={!p.available}>
+                {p.name}{!p.available ? ' (ocupado)' : ''}
+              </option>
+            ))}
           </select>
-          {errors.professionalId && <p className="text-xs text-destructive">{errors.professionalId.message}</p>}
-        </div>
-        <div className="space-y-2">
-          <Label>Serviço *</Label>
-          <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('serviceId')}>
-            <option value="">Selecione…</option>
-            {assignedServices.length === 0 && professionalId && (
-              <option disabled value="">Nenhum serviço atribuído</option>
-            )}
-            {assignedServices.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          {errors.serviceId && <p className="text-xs text-destructive">{errors.serviceId.message}</p>}
-        </div>
-      </div>
-
-      {/* Equipment multi-select – shows availability based on selected date/time */}
-      {((availableEquipment && availableEquipment.length > 0) || (equipmentData && equipmentData.filter((e) => e.active).length > 0)) && (
-        <div className="space-y-2">
-          <Label>Equipamentos {scheduledAt && serviceDuration > 0 && <span className="text-xs text-muted-foreground">(✓ = disponível nesse horário)</span>}</Label>
-          <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
-            {(availableEquipment ?? equipmentData?.filter((e) => e.active) ?? []).map((eq) => {
-              const available = 'available' in eq ? eq.available : true
-              const selected = selectedEquipmentIds.includes(eq.id)
-              return (
-                <button
-                  key={eq.id}
-                  type="button"
-                  disabled={!available && !selected}
-                  onClick={() => { if (available || selected) toggleEquipment(eq.id) }}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    selected
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : !available
-                      ? 'border-border bg-muted/50 text-muted-foreground/50 line-through cursor-not-allowed'
-                      : 'border-border bg-card text-muted-foreground hover:border-primary/50'
-                  }`}
-                >
-                  {eq.name}
-                  {!available && ' (ocupado)'}
-                </button>
-              )
-            })}
-          </div>
           <p className="text-xs text-muted-foreground">
-            Selecione os equipamentos que serão usados neste atendimento.
+            {selectedTime
+              ? 'Profissionais disponíveis neste horário'
+              : 'Selecione um profissional para filtrar os horários (opcional)'}
           </p>
+          {submitted && !finalProfessionalId && <p className="text-xs text-destructive">Selecione um profissional</p>}
         </div>
       )}
 
+      {/* 5. Horários disponíveis */}
+      {serviceId && date && (
+        <div className="space-y-2">
+          <Label>
+            Horário *
+            {professionalFilter && profList.find((p) => p.id === professionalFilter)?.name
+              ? ` — ${profList.find((p) => p.id === professionalFilter)!.name}`
+              : ' — todos os profissionais disponíveis'}
+          </Label>
+
+          {slotsFetching && (
+            <p className="text-xs text-muted-foreground">Buscando horários disponíveis…</p>
+          )}
+
+          {!slotsFetching && slots.length === 0 && (
+            <p className="text-xs text-muted-foreground rounded-md border border-dashed p-3 text-center">
+              Nenhum horário disponível para esta data
+              {professionalFilter ? ' com este profissional' : ''}
+            </p>
+          )}
+
+          {slots.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {slots.map((slot) => {
+                const isSelected = selectedTime === slot
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => handleTimeSelect(slot)}
+                    className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+                      isSelected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-card text-foreground hover:border-primary/50 hover:bg-accent'
+                    }`}
+                  >
+                    {isSelected && <CheckCircle2 className="inline-block h-3 w-3 mr-1" />}
+                    {slot}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {submitted && !selectedTime && (
+            <p className="text-xs text-destructive">Selecione um horário</p>
+          )}
+        </div>
+      )}
+
+      {/* 6. Equipamentos */}
+      {selectedTime && (
+        <div className="space-y-2">
+          <Label>
+            Equipamentos
+            {scheduledAt && serviceDuration > 0 && (
+              <span className="ml-1 text-xs text-muted-foreground">(✓ = disponível nesse horário)</span>
+            )}
+          </Label>
+          {(availableEquipment && availableEquipment.length > 0) ? (
+            <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
+              {availableEquipment.map((eq) => {
+                const available = 'available' in eq ? eq.available : true
+                const selected = selectedEquipmentIds.includes(eq.id)
+                return (
+                  <button
+                    key={eq.id}
+                    type="button"
+                    disabled={!available && !selected}
+                    onClick={() => {
+                      if (available || selected) {
+                        setSelectedEquipmentIds((prev) =>
+                          prev.includes(eq.id) ? prev.filter((e) => e !== eq.id) : [...prev, eq.id],
+                        )
+                      }
+                    }}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : !available
+                        ? 'border-border bg-muted/50 text-muted-foreground/50 line-through cursor-not-allowed'
+                        : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                    }`}
+                  >
+                    {eq.name}{!available && ' (ocupado)'}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Nenhum equipamento cadastrado</p>
+          )}
+        </div>
+      )}
+
+      {/* 7. Observações */}
       <div className="space-y-2">
         <Label>Observações</Label>
-        <Input {...register('notes')} placeholder="Informações adicionais…" />
+        <Input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Informações adicionais…"
+        />
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
@@ -392,6 +491,145 @@ function CreateAppointmentForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+// ──── Advanced Schedule Dialog ────────────────────────────────────────────────
+// A weekly timeline view where clicking a free slot opens quick scheduling.
+
+function AdvancedScheduleDialog({
+  onClose,
+  onCreateAppointment,
+}: {
+  onClose: () => void
+  onCreateAppointment: (date: string, time: string, professionalId: string) => void
+}) {
+  const todayStr = toDateStr(new Date())
+  const [weekStart, setWeekStart] = useState(() => toDateStr(startOfWeek(new Date(todayStr + 'T12:00:00Z'))))
+  const { data: calendar, isLoading } = useCalendar({ date: weekStart, view: 'week' })
+
+  const days = useMemo(() => {
+    const ws = new Date(weekStart + 'T12:00:00Z')
+    return Array.from({ length: 7 }, (_, i) => toDateStr(addDays(ws, i)))
+  }, [weekStart])
+
+  const hours = Array.from({ length: GRID_END - GRID_START }, (_, i) => GRID_START + i)
+
+  const professionals = calendar?.professionals ?? []
+
+  // Build a lookup: profId → Map<dateStr, Map<HH:MM start, slot>>
+  const apptMap = useMemo(() => {
+    const map = new Map<string, Map<string, Map<string, CalendarSlot>>>()
+    for (const prof of professionals) {
+      const byDate = new Map<string, Map<string, CalendarSlot>>()
+      for (const slot of prof.slots) {
+        if (slot.type !== 'appointment' || !slot.start) continue
+        const d = slot.start.slice(0, 10)
+        const time = new Date(slot.start)
+          .toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+        if (!byDate.has(d)) byDate.set(d, new Map())
+        byDate.get(d)!.set(time, slot)
+      }
+      map.set(prof.id, byDate)
+    }
+    return map
+  }, [professionals])
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Week navigation */}
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost" size="sm"
+          onClick={() => setWeekStart(toDateStr(addDays(new Date(weekStart + 'T12:00:00Z'), -7)))}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="text-sm font-medium">
+          {new Date(weekStart + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+          {' – '}
+          {new Date(days[6] + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+        </span>
+        <Button
+          variant="ghost" size="sm"
+          onClick={() => setWeekStart(toDateStr(addDays(new Date(weekStart + 'T12:00:00Z'), 7)))}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {isLoading && <p className="text-sm text-muted-foreground text-center py-8">Carregando…</p>}
+
+      {!isLoading && professionals.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-8">Nenhum agendamento nesta semana</p>
+      )}
+
+      {!isLoading && professionals.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-xs border-separate border-spacing-0">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 bg-background border-b border-r px-2 py-1 text-left font-medium text-muted-foreground w-20">Horário</th>
+                {professionals.map((prof) =>
+                  days.map((day) => (
+                    <th
+                      key={`${prof.id}-${day}`}
+                      className="border-b border-r px-2 py-1 text-center font-medium whitespace-nowrap min-w-[80px]"
+                    >
+                      <div>{prof.name.split(' ')[0]}</div>
+                      <div className="text-muted-foreground font-normal">
+                        {new Date(day + 'T12:00:00Z').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' })}
+                      </div>
+                    </th>
+                  )),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {hours.map((hour) => (
+                <tr key={hour} className="group">
+                  <td className="sticky left-0 z-10 bg-background border-b border-r px-2 py-0.5 text-muted-foreground align-top w-20">
+                    {String(hour).padStart(2, '0')}:00
+                  </td>
+                  {professionals.map((prof) =>
+                    days.map((day) => {
+                      const timeStr = `${String(hour).padStart(2, '0')}:00`
+                      const slot = apptMap.get(prof.id)?.get(day)?.get(timeStr)
+                      return (
+                        <td
+                          key={`${prof.id}-${day}-${hour}`}
+                          className={`border-b border-r px-1 py-0.5 align-top min-h-[32px] ${
+                            slot ? '' : 'cursor-pointer hover:bg-accent/50'
+                          }`}
+                          onClick={() => {
+                            if (!slot) {
+                              onCreateAppointment(day, timeStr, prof.id)
+                            }
+                          }}
+                          title={slot ? `${slot.customer} — ${slot.service}` : `Agendar ${prof.name} às ${timeStr}`}
+                        >
+                          {slot ? (
+                            <div className={`rounded px-1 py-0.5 text-[10px] font-medium truncate ${EVENT_COLOR[slot.status!]}`}>
+                              {slot.customer}
+                            </div>
+                          ) : (
+                            <div className="h-5 w-full rounded border border-dashed border-muted-foreground/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </td>
+                      )
+                    }),
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+      </div>
+    </div>
   )
 }
 
@@ -821,6 +1059,8 @@ export default function AppointmentsPage() {
   const [currentDate, setCurrentDate] = useState(todayStr)
   const [view, setView] = useState<'day' | 'week' | 'month'>('day')
   const [creating, setCreating] = useState(false)
+  const [createPrefill, setCreatePrefill] = useState<{ date: string; time: string; professionalId: string } | null>(null)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<CalendarSlot | null>(null)
 
   const queryView = view === 'month' ? 'week' : view
@@ -840,7 +1080,11 @@ export default function AppointmentsPage() {
     setView('day')
   }
 
-  async function handleCreate(formData: CreateFormData, equipmentIds: string[]) {
+  /** Called from both the regular form and the advanced schedule click-to-create */
+  async function handleCreate(
+    formData: Omit<CreateFormValues, 'equipmentIds'>,
+    equipmentIds: string[],
+  ) {
     const scheduledAt = new Date(`${formData.date}T${formData.time}:00.000Z`).toISOString()
     try {
       await createAppointment.mutateAsync({
@@ -853,10 +1097,18 @@ export default function AppointmentsPage() {
       })
       toast.success('Agendamento criado')
       setCreating(false)
+      setCreatePrefill(null)
+      setAdvancedOpen(false)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao criar agendamento')
     }
+  }
+
+  function handleAdvancedCreateClick(date: string, time: string, professionalId: string) {
+    setAdvancedOpen(false)
+    setCreatePrefill({ date, time, professionalId })
+    setCreating(true)
   }
 
   const currentDateObj = new Date(currentDate + 'T12:00:00Z')
@@ -915,7 +1167,12 @@ export default function AppointmentsPage() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <Button onClick={() => setCreating(true)}>+ Novo Agendamento</Button>
+          {/* Agenda Avançada button */}
+          <Button variant="outline" onClick={() => setAdvancedOpen(true)}>
+            <LayoutGrid className="mr-2 h-4 w-4" />
+            Agenda Avançada
+          </Button>
+          <Button onClick={() => { setCreatePrefill(null); setCreating(true) }}>+ Novo Agendamento</Button>
         </div>
       </div>
 
@@ -956,13 +1213,28 @@ export default function AppointmentsPage() {
         </Dialog>
       )}
 
+      {/* Advanced schedule dialog */}
+      {advancedOpen && (
+        <Dialog open onClose={() => setAdvancedOpen(false)}>
+          <DialogTitle>Agenda Avançada</DialogTitle>
+          <div className="mt-4 max-h-[70vh] overflow-y-auto">
+            <AdvancedScheduleDialog
+              onClose={() => setAdvancedOpen(false)}
+              onCreateAppointment={handleAdvancedCreateClick}
+            />
+          </div>
+        </Dialog>
+      )}
+
       {/* Create dialog */}
       {creating && (
-        <Dialog open onClose={() => setCreating(false)}>
+        <Dialog open onClose={() => { setCreating(false); setCreatePrefill(null) }}>
           <DialogTitle>Novo Agendamento</DialogTitle>
           <div className="mt-4">
             <CreateAppointmentForm
-              defaultDate={currentDate}
+              defaultDate={createPrefill?.date ?? currentDate}
+              prefillTime={createPrefill?.time}
+              prefillProfessionalId={createPrefill?.professionalId}
               onSave={handleCreate}
               isPending={createAppointment.isPending}
             />
