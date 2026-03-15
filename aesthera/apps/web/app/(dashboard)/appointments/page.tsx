@@ -364,10 +364,25 @@ function CreateAppointmentForm({
         {submitted && !serviceId && <p className="text-xs text-destructive">Selecione um serviço</p>}
       </div>
 
-      {/* 3. Profissional — visible as soon as a service is selected */}
-      {serviceId && (
+      {/* 3. Data */}
+      <div className="space-y-2">
+        <Label>Data *</Label>
+        <Input
+          type="date"
+          value={date}
+          onChange={(e) => {
+            setDate(e.target.value)
+            // Reset time selection when date changes
+            setSelectedTime('')
+          }}
+        />
+        {submitted && !date && <p className="text-xs text-destructive">Selecione uma data</p>}
+      </div>
+
+      {/* 4. Profissional — visible only after service AND date are both selected */}
+      {serviceId && date && (
         <div className="space-y-2">
-          <Label>Profissional *</Label>
+          <Label>Profissional</Label>
           {profsFetching && profList.length === 0 ? (
             <p className="text-xs text-muted-foreground">Buscando profissionais disponíveis…</p>
           ) : (
@@ -376,7 +391,7 @@ function CreateAppointmentForm({
               value={finalProfessionalId}
               onChange={(e) => handleProfessionalChange(e.target.value)}
             >
-              <option value="">Selecione um profissional…</option>
+              <option value="">{selectedTime ? 'Selecione um profissional…' : 'Qualquer profissional disponível'}</option>
               {profList.map((p) => (
                 <option key={p.id} value={p.id} disabled={!p.available}>
                   {p.name}{!p.available ? ' (ocupado neste horário)' : ''}
@@ -385,33 +400,16 @@ function CreateAppointmentForm({
             </select>
           )}
           {profList.length === 0 && !profsFetching && (
-            <p className="text-xs text-muted-foreground">Nenhum profissional realiza este serviço</p>
+            <p className="text-xs text-muted-foreground">Nenhum profissional disponível para este serviço nesta data</p>
           )}
           <p className="text-xs text-muted-foreground">
             {selectedTime
               ? 'Profissionais disponíveis neste horário'
-              : date
-              ? 'Profissionais disponíveis para esta data'
-              : 'Profissionais que realizam este serviço'}
+              : 'Profissionais disponíveis nesta data (opcional — filtra os horários)'}
           </p>
           {submitted && !finalProfessionalId && <p className="text-xs text-destructive">Selecione um profissional</p>}
         </div>
       )}
-
-      {/* 4. Data */}
-      <div className="space-y-2">
-        <Label>Data *</Label>
-        <Input
-          type="date"
-          value={date}
-          onChange={(e) => {
-            setDate(e.target.value)
-            // Reset time but keep the professional — the user may have already chosen one
-            setSelectedTime('')
-          }}
-        />
-        {submitted && !date && <p className="text-xs text-destructive">Selecione uma data</p>}
-      </div>
 
       {/* 5. Horários disponíveis */}
       {serviceId && date && (
