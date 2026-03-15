@@ -11,9 +11,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   type Service,
+  useAssignServiceSupplies,
   useCreateService,
   useDeleteService,
+  useServiceSupplies,
   useServices,
+  useSupplies,
   useUpdateService,
 } from '@/lib/hooks/use-resources'
 
@@ -124,6 +127,145 @@ function priceDisplay(cents: number) {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
+// ──── ServiceSuppliesDialog ────────────────────────────────────────────────────
+
+function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose: () => void }) {
+  const { data: suppliesData } = useSupplies({ active: 'true', limit: '100' })
+  const { data: assigned, isLoading: loadingAssigned } = useServiceSupplies(service.id)
+  const assignMutation = useAssignServiceSupplies(service.id)
+
+  // Build local editable list from current assigned
+  const [items, setItems] = useState<Array<{ supplyId: string; quantity: number }>>(() =>
+    assigned?.map((ss) => ({ supplyId: ss.supplyId, quantity: ss.quantity })) ?? []
+  )
+
+  // Sync from server when data loads
+  const [initialised, setInitialised] = useState(false)
+  if (!initialised && assigned) {
+    setItems(assigned.map((ss) => ({ supplyId: ss.supplyId, quantity: ss.quantity })))
+    setInitialised(true)
+  }
+
+  function addSupply(supplyId: string) {
+    if (items.some((i) => i.supplyId === supplyId)) return
+    setItems((prev) => [...prev, { supplyId, quantity: 1 }])
+  }
+
+  function removeSupply(supplyId: string) {
+    setItems((prev) => prev.filter((i) => i.supplyId !== supplyId))
+  }
+
+  function setQty(supplyId: string, qty: number) {
+    setItems((prev) => prev.map((i) => i.supplyId === supplyId ? { ...i, quantity: qty } : i))
+  }
+
+  const unassigned = suppliesData?.items.filter((s) => !items.some((i) => i.supplyId === s.id)) ?? []
+
+  async function handleSave() {
+    try {
+      await assignMutation.mutateAsync(items)
+      toast.success('Insumos atualizados')
+      onClose()
+    } catch {
+      toast.error('Erro ao salvar insumos')
+    }
+  }
+
+  // Compute total cost
+  const totalCost = items.reduce((sum, item) => {
+    const supply = suppliesData?.items.find((s) => s.id === item.supplyId)
+    return sum + (supply?.costPrice ?? 0) * item.quantity
+  }, 0)
+
+  return (
+    <Dialog open onClose={onClose} className="max-w-lg">
+      <DialogTitle>Insumos de: {service.name}</DialogTitle>
+      <p className="text-xs text-muted-foreground mb-3">
+        Defina os insumos e quantidades usados por execução deste serviço.
+      </p>
+
+      {loadingAssigned ? (
+        <p className="text-sm text-muted-foreground">Carregando…</p>
+      ) : (
+        <div className="space-y-3">
+          {/* Assigned supplies list */}
+          {items.length === 0 && (
+            <p className="text-sm text-muted-foreground italic">Nenhum insumo atribuído.</p>
+          )}
+          {items.map((item) => {
+            const supply = suppliesData?.items.find((s) => s.id === item.supplyId)
+            if (!supply) return null
+            const lineCost = (supply.costPrice ?? 0) * item.quantity
+            return (
+              <div key={item.supplyId} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+                <span className="flex-1 text-sm font-medium">{supply.name}</span>
+                <span className="text-xs text-muted-foreground">{supply.unit}</span>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={item.quantity}
+                  onChange={(e) => setQty(item.supplyId, parseFloat(e.target.value) || 0)}
+                  className="w-20 text-center"
+                />
+                <span className="text-xs text-muted-foreground w-20 text-right">
+                  {lineCost > 0 ? `R$ ${(lineCost / 100).toFixed(2)}` : '—'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeSupply(item.supplyId)}
+                  className="text-destructive hover:text-destructive/80 text-sm font-medium ml-1"
+                >
+                  ✕
+                </button>
+              </div>
+            )
+          })}
+
+          {/* Total cost */}
+          {items.length > 0 && (
+            <div className="flex justify-between items-center rounded-lg border border-dashed px-3 py-2 text-sm font-medium">
+              <span>Custo total em insumos:</span>
+              <span className="text-primary">R$ {(totalCost / 100).toFixed(2)}</span>
+            </div>
+          )}
+
+          {/* Add supply dropdown */}
+          {unassigned.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Adicionar insumo</Label>
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                defaultValue=""
+                onChange={(e) => { if (e.target.value) { addSupply(e.target.value); e.target.value = '' } }}
+              >
+                <option value="">Selecione um insumo…</option>
+                {unassigned.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.unit}){s.costPrice ? ` — R$ ${(s.costPrice / 100).toFixed(2)}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {unassigned.length === 0 && suppliesData?.items.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Cadastre insumos na página "Insumos" antes de atribuir ao serviço.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-4">
+        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+        <Button onClick={handleSave} disabled={assignMutation.isPending}>
+          {assignMutation.isPending ? 'Salvando…' : 'Salvar'}
+        </Button>
+      </div>
+    </Dialog>
+  )
+}
+
 export default function ServicesPage() {
   const { data, isLoading } = useServices()
   const { mutateAsync: create, isPending: creating } = useCreateService()
@@ -131,6 +273,7 @@ export default function ServicesPage() {
 
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Service | null>(null)
+  const [managingSupplies, setManagingSupplies] = useState<Service | null>(null)
   const { mutateAsync: update, isPending: updating } = useUpdateService(editing?.id ?? '')
 
   async function handleCreate(data: ServiceFormData) {
@@ -214,6 +357,7 @@ export default function ServicesPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>Editar</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setManagingSupplies(s)}>Insumos</Button>
                     <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(s.id, s.name)}>Excluir</Button>
                   </td>
                 </tr>
@@ -250,6 +394,13 @@ export default function ServicesPage() {
           />
         )}
       </Dialog>
+
+      {managingSupplies && (
+        <ServiceSuppliesDialog
+          service={managingSupplies}
+          onClose={() => setManagingSupplies(null)}
+        />
+      )}
     </div>
   )
 }

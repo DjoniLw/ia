@@ -175,12 +175,30 @@ function CreateAppointmentForm({
   isPending: boolean
 }) {
   const { data: profData } = useProfessionals({ includeServices: 'true' })
-  const { data: custData } = useCustomers({ limit: '200' })
   const { data: equipmentData } = useEquipment()
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
+  const [customerSearchDebounced, setCustomerSearchDebounced] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
   const [customerName, setCustomerName] = useState<string>('')
+  const [showDropdown, setShowDropdown] = useState(false)
+  const debounceRef = useMemo(() => ({ timer: undefined as ReturnType<typeof setTimeout> | undefined }), [])
+
+  function handleCustomerInput(value: string) {
+    setCustomerSearch(value)
+    setShowDropdown(true)
+    if (!value) { setSelectedCustomerId(''); setCustomerName('') }
+    clearTimeout(debounceRef.timer)
+    debounceRef.timer = setTimeout(() => setCustomerSearchDebounced(value), 250)
+  }
+
+  const { data: custSearchData } = useCustomers(
+    customerSearchDebounced.trim().length >= 1
+      ? { name: customerSearchDebounced.trim(), limit: '20' }
+      : undefined,
+  )
+
+  const searchResults = custSearchData?.items ?? []
 
   const {
     register,
@@ -213,12 +231,6 @@ function CreateAppointmentForm({
   const serviceDuration = selectedService?.durationMinutes ?? 0
   const { data: availableEquipment } = useAvailableEquipment(scheduledAt, serviceDuration)
 
-  const filteredCustomers = (customerSearch.trim().length > 0 && custData?.items.filter((c) =>
-    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    (c.phone && c.phone.includes(customerSearch)) ||
-    (c.document && c.document.includes(customerSearch))
-  )) || []
-
   function toggleEquipment(id: string) {
     setSelectedEquipmentIds((prev) =>
       prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id],
@@ -240,22 +252,25 @@ function CreateAppointmentForm({
             placeholder="Buscar cliente por nome, telefone ou CPF…"
             value={customerSearch || customerName}
             onChange={(e) => {
-              setCustomerSearch(e.target.value)
-              if (!e.target.value) { setSelectedCustomerId(''); setCustomerName('') }
+              handleCustomerInput(e.target.value)
             }}
-            onFocus={() => setCustomerSearch('')}
+            onFocus={() => { setCustomerSearch(''); setShowDropdown(true) }}
+            onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+            autoComplete="off"
           />
-          {customerSearch.trim().length > 0 && filteredCustomers.length > 0 && (
+          {showDropdown && customerSearch.trim().length >= 1 && searchResults.length > 0 && (
             <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-40 overflow-auto">
-              {filteredCustomers.slice(0, 20).map((c) => (
+              {searchResults.map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     setSelectedCustomerId(c.id)
                     setCustomerName(c.name)
                     setCustomerSearch('')
+                    setShowDropdown(false)
                   }}
                 >
                   <span className="font-medium">{c.name}</span>
@@ -264,11 +279,15 @@ function CreateAppointmentForm({
               ))}
             </div>
           )}
+          {showDropdown && customerSearch.trim().length >= 1 && searchResults.length === 0 && (
+            <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg p-3">
+              <p className="text-sm text-muted-foreground">Nenhum cliente encontrado</p>
+            </div>
+          )}
         </div>
+        {!selectedCustomerId && <p className="text-xs text-muted-foreground">Digite para buscar clientes</p>}
+        {selectedCustomerId && <p className="text-xs text-green-600">✓ {customerName}</p>}
         {errors.customerId && <p className="text-xs text-destructive">{errors.customerId.message}</p>}
-        {!selectedCustomerId && !errors.customerId && customerSearch.trim().length === 0 && (
-          <p className="text-xs text-muted-foreground">Digite para filtrar clientes</p>
-        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
