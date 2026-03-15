@@ -10,6 +10,7 @@ const appointmentInclude = {
   customer: { select: { id: true, name: true, email: true, phone: true } },
   professional: { select: { id: true, name: true, speciality: true } },
   service: { select: { id: true, name: true, category: true, durationMinutes: true } },
+  equipment: { include: { equipment: { select: { id: true, name: true } } } },
 } as const
 
 export class AppointmentsRepository {

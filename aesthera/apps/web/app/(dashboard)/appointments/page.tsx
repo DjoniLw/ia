@@ -18,12 +18,33 @@ import {
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
-import { useCustomers } from '@/lib/hooks/use-resources'
-import { useProfessionals } from '@/lib/hooks/use-resources'
+import { useCustomers, useProfessionals, useEquipment } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
 type SlotWithProf = CalendarSlot & { _profName: string }
+
+// ──── Time grid constants ────────────────────────────────────────────────────────
+const GRID_START = 7    // 07:00
+const GRID_END   = 21   // 21:00
+const SLOT_PX    = 16   // pixels per 15-min slot
+const HOUR_PX    = SLOT_PX * 4  // 64px per hour
+const GRID_H     = (GRID_END - GRID_START) * HOUR_PX  // total grid height
+
+function timeToGridTop(isoOrMinutes: string | number): number {
+  let minutes: number
+  if (typeof isoOrMinutes === 'number') {
+    minutes = isoOrMinutes
+  } else {
+    const d = new Date(isoOrMinutes)
+    minutes = d.getUTCHours() * 60 + d.getUTCMinutes()
+  }
+  return Math.max(0, (minutes - GRID_START * 60)) * (SLOT_PX / 15)
+}
+
+function durationToHeight(minutes: number): number {
+  return Math.max(SLOT_PX, minutes * (SLOT_PX / 15))
+}
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -66,7 +87,6 @@ const STATUS_LABEL: Record<AppointmentStatus, string> = {
   no_show: 'Não compareceu',
 }
 
-// More accessible status colors (darker text for contrast)
 const STATUS_COLOR: Record<AppointmentStatus, string> = {
   draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700',
   confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 border border-blue-200 dark:border-blue-800',
@@ -76,7 +96,6 @@ const STATUS_COLOR: Record<AppointmentStatus, string> = {
   no_show: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200 border border-orange-200 dark:border-orange-800',
 }
 
-// Calendar event colors by status (compact pill style for week/month views)
 const EVENT_COLOR: Record<AppointmentStatus, string> = {
   draft: 'bg-gray-200 text-gray-800',
   confirmed: 'bg-blue-500 text-white',
@@ -84,6 +103,53 @@ const EVENT_COLOR: Record<AppointmentStatus, string> = {
   completed: 'bg-green-500 text-white',
   cancelled: 'bg-red-200 text-red-700 line-through opacity-60',
   no_show: 'bg-orange-400 text-white',
+}
+
+// ──── Time Grid Column ─────────────────────────────────────────────────────────
+
+function TimeColumn() {
+  return (
+    <div className="relative flex-shrink-0 w-12 select-none" style={{ height: GRID_H }}>
+      {Array.from({ length: GRID_END - GRID_START }, (_, i) => (
+        <div
+          key={i}
+          className="absolute left-0 right-0 flex items-start justify-end pr-1"
+          style={{ top: i * HOUR_PX - 7 }}
+        >
+          <span className="text-[10px] leading-none text-muted-foreground">
+            {String(GRID_START + i).padStart(2, '0')}h
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ──── Time Grid Lines ─────────────────────────────────────────────────────────
+
+function GridLines() {
+  const totalSlots = (GRID_END - GRID_START) * 4
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {Array.from({ length: totalSlots }, (_, i) => {
+        const isHour = i % 4 === 0
+        const isHalf = i % 4 === 2
+        return (
+          <div
+            key={i}
+            className={`absolute left-0 right-0 ${
+              isHour
+                ? 'border-t border-border'
+                : isHalf
+                ? 'border-t border-border/40'
+                : 'border-t border-border/20'
+            }`}
+            style={{ top: i * SLOT_PX }}
+          />
+        )
+      })}
+    </div>
+  )
 }
 
 // ──── Create Appointment Form ─────────────────────────────────────────────────
@@ -104,11 +170,13 @@ function CreateAppointmentForm({
   isPending,
 }: {
   defaultDate: string
-  onSave: (data: CreateFormData) => Promise<void>
+  onSave: (data: CreateFormData, equipmentIds: string[]) => Promise<void>
   isPending: boolean
 }) {
   const { data: profData } = useProfessionals({ includeServices: 'true' })
   const { data: custData } = useCustomers()
+  const { data: equipmentData } = useEquipment()
+  const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
 
   const {
     register,
@@ -131,8 +199,14 @@ function CreateAppointmentForm({
     professionalId && serviceId && date ? { professionalId, serviceId, date } : null,
   )
 
+  function toggleEquipment(id: string) {
+    setSelectedEquipmentIds((prev) =>
+      prev.includes(id) ? prev.filter((e) => e !== id) : [...prev, id],
+    )
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSave)} className="space-y-4">
+    <form onSubmit={handleSubmit((data) => onSave(data, selectedEquipmentIds))} className="space-y-4">
       <div className="space-y-2">
         <Label>Cliente *</Label>
         <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('customerId')}>
@@ -183,6 +257,35 @@ function CreateAppointmentForm({
         </div>
       </div>
 
+      {/* Equipment multi-select */}
+      {equipmentData && equipmentData.filter((e) => e.active).length > 0 && (
+        <div className="space-y-2">
+          <Label>Equipamentos</Label>
+          <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
+            {equipmentData.filter((e) => e.active).map((eq) => {
+              const selected = selectedEquipmentIds.includes(eq.id)
+              return (
+                <button
+                  key={eq.id}
+                  type="button"
+                  onClick={() => toggleEquipment(eq.id)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    selected
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  {eq.name}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Selecione os equipamentos que serão usados neste atendimento.
+          </p>
+        </div>
+      )}
+
       <div className="space-y-2">
         <Label>Observações</Label>
         <Input {...register('notes')} placeholder="Informações adicionais…" />
@@ -226,6 +329,15 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[status]}`}>
           {STATUS_LABEL[status]}
         </span>
+        {slot.equipment && slot.equipment.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {slot.equipment.map((eq) => (
+              <span key={eq.id} className="rounded-full border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                {eq.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap gap-2 pt-1 border-t">
         {status === 'draft' && (
@@ -249,7 +361,7 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
   )
 }
 
-// ──── Day View ────────────────────────────────────────────────────────────────
+// ──── Day View (time grid) ─────────────────────────────────────────────────────
 
 function DayView({
   professionals,
@@ -258,6 +370,14 @@ function DayView({
   professionals: { id: string; name: string; slots: CalendarSlot[] }[]
   onSlotClick: (slot: CalendarSlot) => void
 }) {
+  const apptSlots = useMemo(() =>
+    professionals.flatMap((p) => p.slots.filter((s) => s.type === 'appointment' && s.start)),
+  [professionals])
+
+  const blockedSlots = useMemo(() =>
+    professionals.flatMap((p) => p.slots.filter((s) => s.type === 'blocked')),
+  [professionals])
+
   if (professionals.length === 0) {
     return (
       <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
@@ -268,48 +388,88 @@ function DayView({
   }
 
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${professionals.length}, minmax(200px, 1fr))` }}>
-      {professionals.map((prof) => (
-        <div key={prof.id} className="rounded-lg border bg-card overflow-hidden">
-          <div className="border-b bg-muted/30 px-3 py-2">
-            <p className="text-sm font-semibold">{prof.name}</p>
+    <div className="rounded-lg border bg-card overflow-hidden">
+      {/* Professional headers */}
+      <div className="flex border-b">
+        <div className="w-12 flex-shrink-0 border-r bg-muted/20" />
+        {professionals.map((prof) => (
+          <div key={prof.id} className="flex-1 border-r last:border-r-0 px-2 py-2 text-center">
+            <p className="text-xs font-semibold truncate">{prof.name}</p>
           </div>
-          <div className="space-y-2 p-3">
-            {prof.slots.length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">Sem agendamentos</p>
-            ) : (
-              prof.slots.map((slot) => {
-                if (slot.type === 'blocked') {
+        ))}
+      </div>
+
+      {/* Grid */}
+      <div className="flex overflow-auto" style={{ maxHeight: '70vh' }}>
+        <TimeColumn />
+        <div className="flex flex-1">
+          {professionals.map((prof) => {
+            const profAppts = prof.slots.filter((s) => s.type === 'appointment' && s.start)
+            const profBlocked = prof.slots.filter((s) => s.type === 'blocked')
+            return (
+              <div key={prof.id} className="relative flex-1 border-r last:border-r-0" style={{ height: GRID_H }}>
+                <GridLines />
+                {/* Blocked slots */}
+                {profBlocked.map((b) => {
+                  if (!b.startTime || !b.endTime) return null
+                  const [sh, sm] = b.startTime.split(':').map(Number)
+                  const [eh, em] = b.endTime.split(':').map(Number)
+                  const top = timeToGridTop(sh * 60 + sm)
+                  const height = durationToHeight((eh * 60 + em) - (sh * 60 + sm))
                   return (
-                    <div key={slot.id} className="rounded border border-dashed border-muted-foreground/30 bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
-                      🔒 {slot.startTime}–{slot.endTime} · {slot.reason ?? 'Bloqueado'}
+                    <div
+                      key={b.id}
+                      className="absolute left-0.5 right-0.5 rounded border border-dashed border-muted-foreground/30 bg-muted/50 overflow-hidden px-1 py-0.5"
+                      style={{ top, height }}
+                    >
+                      <p className="text-[9px] text-muted-foreground truncate">🔒 {b.reason ?? 'Bloqueado'}</p>
                     </div>
                   )
-                }
-                const status = slot.status!
-                return (
-                  <button
-                    key={slot.id}
-                    onClick={() => onSlotClick(slot)}
-                    className={`w-full rounded p-2 text-left text-xs transition-opacity hover:opacity-80 ${STATUS_COLOR[status]}`}
-                  >
-                    <div className="font-semibold">
-                      {slot.start && formatTime(slot.start)} · {slot.duration}min
-                    </div>
-                    <div className="truncate font-medium">{slot.customer}</div>
-                    <div className="truncate opacity-70">{slot.service}</div>
-                  </button>
-                )
-              })
-            )}
-          </div>
+                })}
+                {/* Appointments */}
+                {profAppts.map((slot) => {
+                  const top = timeToGridTop(slot.start!)
+                  const height = durationToHeight(slot.duration ?? 30)
+                  const status = slot.status!
+                  return (
+                    <button
+                      key={slot.id}
+                      onClick={() => onSlotClick(slot)}
+                      className={`absolute left-0.5 right-0.5 rounded p-1 text-left overflow-hidden transition-opacity hover:opacity-80 ${EVENT_COLOR[status]}`}
+                      style={{ top, height, minHeight: SLOT_PX }}
+                    >
+                      <div className="text-[10px] font-bold leading-none truncate">
+                        {formatTime(slot.start!)}
+                      </div>
+                      <div className="text-[10px] truncate leading-tight mt-0.5 font-medium">{slot.customer}</div>
+                      {height > 32 && <div className="text-[9px] truncate leading-tight opacity-80">{slot.service}</div>}
+                      {height > 48 && slot.equipment && slot.equipment.length > 0 && (
+                        <div className="text-[9px] truncate leading-tight opacity-70">
+                          🔧 {slot.equipment.map((e) => e.name).join(', ')}
+                        </div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
         </div>
-      ))}
+      </div>
+
+      {/* Blocked slots legend (outside the grid) */}
+      {blockedSlots.length > 0 && (
+        <div className="border-t bg-muted/20 px-4 py-2">
+          <p className="text-xs text-muted-foreground">
+            🔒 Horários bloqueados: {blockedSlots.map((b) => `${b.startTime}–${b.endTime}`).join(', ')}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
-// ──── Week View (Google Calendar-style) ────────────────────────────────────────
+// ──── Week View (time grid) ────────────────────────────────────────────────────
 
 function WeekView({
   professionals,
@@ -344,57 +504,69 @@ function WeekView({
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
       {/* Day headers */}
-      <div className="grid grid-cols-7 border-b">
+      <div className="flex border-b">
+        <div className="w-12 flex-shrink-0 border-r bg-muted/20" />
         {Array.from({ length: 7 }, (_, i) => {
           const d = addDays(weekStart, i)
           const dateStr = toDateStr(d)
           const isToday = dateStr === todayStr
           return (
-            <div key={i} className={`border-r last:border-r-0 px-2 py-3 text-center ${isToday ? 'bg-primary/5' : ''}`}>
+            <div key={i} className={`flex-1 border-r last:border-r-0 px-2 py-2 text-center ${isToday ? 'bg-primary/5' : ''}`}>
               <p className="text-xs font-medium text-muted-foreground">{WEEK_DAYS_SHORT[d.getUTCDay()]}</p>
-              <p className={`mt-1 text-lg font-bold leading-none ${isToday ? 'text-primary' : 'text-foreground'}`}>
+              <p className={`mt-0.5 text-base font-bold leading-none ${isToday ? 'text-primary' : 'text-foreground'}`}>
                 {d.getUTCDate()}
               </p>
             </div>
           )
         })}
       </div>
-      {/* Event rows */}
-      <div className="grid grid-cols-7 min-h-[120px]">
-        {Array.from({ length: 7 }, (_, i) => {
-          const d = addDays(weekStart, i)
-          const dateStr = toDateStr(d)
-          const isToday = dateStr === todayStr
-          const slots = dayMap.get(dateStr) ?? []
-          const apptSlots = slots.filter((s) => s.type === 'appointment' && s.status !== undefined)
-            .sort((a, b) => (a.start ?? '') < (b.start ?? '') ? -1 : 1)
 
-          return (
-            <div key={i} className={`border-r last:border-r-0 p-1.5 space-y-1 ${isToday ? 'bg-primary/5' : ''}`}>
-              {apptSlots.length === 0 ? (
-                <div className="h-full min-h-[80px]" />
-              ) : (
-                apptSlots.map((slot) => {
+      {/* Grid */}
+      <div className="flex overflow-auto" style={{ maxHeight: '70vh' }}>
+        <TimeColumn />
+        <div className="flex flex-1">
+          {Array.from({ length: 7 }, (_, i) => {
+            const d = addDays(weekStart, i)
+            const dateStr = toDateStr(d)
+            const isToday = dateStr === todayStr
+            const slots = dayMap.get(dateStr) ?? []
+
+            return (
+              <div
+                key={i}
+                className={`relative flex-1 border-r last:border-r-0 ${isToday ? 'bg-primary/5' : ''}`}
+                style={{ height: GRID_H }}
+              >
+                <GridLines />
+                {slots.map((slot) => {
+                  const top = timeToGridTop(slot.start!)
+                  const height = durationToHeight(slot.duration ?? 30)
                   const status = slot.status!
                   const profName = (slot as Partial<SlotWithProf>)._profName
                   return (
                     <button
                       key={slot.id}
                       onClick={() => onSlotClick(slot)}
-                      className={`w-full rounded px-1.5 py-1 text-left text-[11px] leading-tight transition-opacity hover:opacity-80 ${EVENT_COLOR[status]}`}
+                      className={`absolute left-0.5 right-0.5 rounded p-1 text-left overflow-hidden transition-opacity hover:opacity-80 ${EVENT_COLOR[status]}`}
+                      style={{ top, height, minHeight: SLOT_PX }}
                     >
-                      <div className="font-semibold truncate">
-                        {slot.start && formatTime(slot.start)}
+                      <div className="text-[10px] font-bold leading-none truncate">
+                        {formatTime(slot.start!)}
                       </div>
-                      <div className="truncate font-medium">{slot.customer}</div>
-                      {profName && <div className="truncate opacity-75">{profName}</div>}
+                      {height > 24 && <div className="text-[9px] truncate leading-tight mt-0.5">{slot.customer}</div>}
+                      {height > 40 && profName && <div className="text-[9px] truncate opacity-75">{profName}</div>}
+                      {height > 56 && slot.equipment && slot.equipment.length > 0 && (
+                        <div className="text-[9px] truncate opacity-70">
+                          🔧 {slot.equipment.map((e) => e.name).join(', ')}
+                        </div>
+                      )}
                     </button>
                   )
-                })
-              )}
-            </div>
-          )
-        })}
+                })}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -415,7 +587,6 @@ function MonthView({
 }) {
   const todayStr = toDateStr(new Date())
 
-  // Build day map
   const dayMap = useMemo(() => {
     const map = new Map<string, CalendarSlot[]>()
     for (const prof of professionals) {
@@ -431,10 +602,9 @@ function MonthView({
 
   const year = monthStart.getUTCFullYear()
   const month = monthStart.getUTCMonth()
-  const firstDow = monthStart.getUTCDay() // 0=Sun
+  const firstDow = monthStart.getUTCDay()
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
 
-  // Build grid: leading empty cells + all days
   const cells: Array<{ dateStr: string; dayNum: number } | null> = [
     ...Array(firstDow).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => {
@@ -442,12 +612,10 @@ function MonthView({
       return { dateStr: toDateStr(d), dayNum: i + 1 }
     }),
   ]
-  // Pad to full 6-row grid
   while (cells.length % 7 !== 0) cells.push(null)
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
-      {/* Day name headers */}
       <div className="grid grid-cols-7 border-b bg-muted/30">
         {WEEK_DAYS_SHORT.map((d) => (
           <div key={d} className="border-r last:border-r-0 py-2 text-center text-xs font-medium text-muted-foreground">
@@ -455,7 +623,6 @@ function MonthView({
           </div>
         ))}
       </div>
-      {/* Weeks */}
       {Array.from({ length: cells.length / 7 }, (_, week) => (
         <div key={week} className="grid grid-cols-7 border-b last:border-b-0">
           {cells.slice(week * 7, week * 7 + 7).map((cell, ci) => {
@@ -513,12 +680,10 @@ export default function AppointmentsPage() {
   const [creating, setCreating] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<CalendarSlot | null>(null)
 
-  // For week/month queries we always send the base date; the API handles the range
   const queryView = view === 'month' ? 'week' : view
   const { data: calendar, isLoading } = useCalendar({ date: currentDate, view: queryView })
   const createAppointment = useCreateAppointment()
 
-  // Navigate: day ±1, week ±7, month ±~30
   const navigate = useCallback(
     (delta: number) => {
       const d = addDays(new Date(currentDate + 'T12:00:00Z'), delta * (view === 'day' ? 1 : view === 'week' ? 7 : 30))
@@ -527,13 +692,12 @@ export default function AppointmentsPage() {
     [currentDate, view],
   )
 
-  // Month view: jump to specific day
   function handleDayClick(dateStr: string) {
     setCurrentDate(dateStr)
     setView('day')
   }
 
-  async function handleCreate(formData: CreateFormData) {
+  async function handleCreate(formData: CreateFormData, equipmentIds: string[]) {
     const scheduledAt = new Date(`${formData.date}T${formData.time}:00.000Z`).toISOString()
     try {
       await createAppointment.mutateAsync({
@@ -542,6 +706,7 @@ export default function AppointmentsPage() {
         serviceId: formData.serviceId,
         scheduledAt,
         notes: formData.notes,
+        equipmentIds: equipmentIds.length > 0 ? equipmentIds : undefined,
       })
       toast.success('Agendamento criado')
       setCreating(false)
@@ -551,7 +716,6 @@ export default function AppointmentsPage() {
     }
   }
 
-  // Date label
   const currentDateObj = new Date(currentDate + 'T12:00:00Z')
   const displayLabel = useMemo(() => {
     if (view === 'month') {
@@ -665,3 +829,4 @@ export default function AppointmentsPage() {
     </div>
   )
 }
+

@@ -21,6 +21,7 @@ import { notificationsRoutes } from './modules/notifications/notifications.route
 import { aiRoutes } from './modules/ai/ai.routes'
 import { productsRoutes } from './modules/products/products.routes'
 import { clinicalRoutes } from './modules/clinical/clinical.routes'
+import { equipmentRoutes } from './modules/equipment/equipment.routes'
 import './domain-event-handlers'
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -116,6 +117,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await aiRoutes(app)
   await productsRoutes(app)
   await clinicalRoutes(app)
+  await equipmentRoutes(app)
 
   return app
 }

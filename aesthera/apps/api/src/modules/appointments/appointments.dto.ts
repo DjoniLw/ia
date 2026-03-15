@@ -7,6 +7,7 @@ export const CreateAppointmentDto = z.object({
   scheduledAt: z.string().datetime(), // ISO 8601
   notes: z.string().optional(),
   price: z.number().int().min(0).optional(), // override service price if needed
+  equipmentIds: z.array(z.string().uuid()).optional(), // equipment to use for this appointment
 })
 export type CreateAppointmentDto = z.infer<typeof CreateAppointmentDto>
 
@@ -14,6 +15,7 @@ export const UpdateAppointmentDto = z.object({
   scheduledAt: z.string().datetime().optional(),
   notes: z.string().optional(),
   price: z.number().int().min(0).optional(),
+  equipmentIds: z.array(z.string().uuid()).optional(), // replaces current equipment list
 })
 export type UpdateAppointmentDto = z.infer<typeof UpdateAppointmentDto>
 

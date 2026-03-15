@@ -67,6 +67,7 @@ export interface CalendarSlot {
   reason?: string | null
   recurrence?: string
   date?: string
+  equipment?: Array<{ id: string; name: string }>
 }
 
 export interface CalendarProfessional {
@@ -148,6 +149,7 @@ export function useCreateAppointment() {
       serviceId: string
       scheduledAt: string
       notes?: string
+      equipmentIds?: string[]
     }) => api.post('/appointments', data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appointments'] })

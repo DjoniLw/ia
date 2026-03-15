@@ -130,6 +130,7 @@ model Clinic {
   products         Product[]
   productSales     ProductSale[]
   clinicalRecords  ClinicalRecord[]
+  equipment        Equipment[]
 
   @@map("clinics")
 }
@@ -390,6 +391,7 @@ model Appointment {
   billing          Billing?
   ledgerEntries    LedgerEntry[]
   notificationLogs NotificationLog[]
+  equipment        AppointmentEquipment[]
 
   @@index([clinicId])
   @@index([clinicId, professionalId])
@@ -593,4 +595,33 @@ model ClinicalRecord {
 
   @@index([clinicId, customerId])
   @@map("clinical_records")
+}
+
+// ─── Equipment ────────────────────────────────────────────────────────────────
+
+model Equipment {
+  id          String   @id @default(uuid())
+  clinicId    String                        @map("clinic_id")
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())      @map("created_at")
+  updatedAt   DateTime @updatedAt           @map("updated_at")
+
+  clinic       Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  appointments AppointmentEquipment[]
+
+  @@index([clinicId])
+  @@map("equipment")
+}
+
+model AppointmentEquipment {
+  appointmentId String @map("appointment_id")
+  equipmentId   String @map("equipment_id")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  equipment   Equipment   @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@id([appointmentId, equipmentId])
+  @@map("appointment_equipment")
 }

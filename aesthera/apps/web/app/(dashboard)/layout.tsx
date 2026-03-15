@@ -15,6 +15,7 @@ import {
   ShoppingCart,
   UserCheck,
   Users,
+  Wrench,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/services', label: 'Serviços', icon: Scissors },
   { href: '/professionals', label: 'Profissionais', icon: UserCheck },
   { href: '/customers', label: 'Clientes', icon: Users },
+  { href: '/equipment', label: 'Equipamentos', icon: Wrench },
   { href: '/products', label: 'Produtos', icon: Package },
   { href: '/sales', label: 'Vendas', icon: ShoppingCart },
   { href: '/billing', label: 'Cobranças', icon: CreditCard },

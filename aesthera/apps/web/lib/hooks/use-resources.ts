@@ -377,3 +377,46 @@ export function useCreateClinicalRecord() {
     },
   })
 }
+
+// ──── Equipment ────────────────────────────────────────────────────────────────
+
+export interface Equipment {
+  id: string
+  name: string
+  description: string | null
+  active: boolean
+  createdAt: string
+}
+
+export function useEquipment() {
+  return useQuery<Equipment[]>({
+    queryKey: ['equipment'],
+    queryFn: () => api.get('/equipment').then((r) => r.data),
+  })
+}
+
+export function useCreateEquipment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name: string; description?: string }) =>
+      api.post('/equipment', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['equipment'] }),
+  })
+}
+
+export function useUpdateEquipment(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name?: string; description?: string; active?: boolean }) =>
+      api.patch(`/equipment/${id}`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['equipment'] }),
+  })
+}
+
+export function useDeleteEquipment(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.delete(`/equipment/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['equipment'] }),
+  })
+}
