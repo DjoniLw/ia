@@ -139,6 +139,13 @@ export class AppointmentsRepository {
   }
 
   async checkProfessionalHasService(professionalId: string, serviceId: string) {
+    // If the professional has allServices=true, they perform all services
+    const professional = await prisma.professional.findFirst({
+      where: { id: professionalId },
+      select: { allServices: true },
+    })
+    if (professional?.allServices) return true
+
     const ps = await prisma.professionalService.findFirst({
       where: { professionalId, serviceId },
     })

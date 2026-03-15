@@ -13,6 +13,9 @@ export const CreateProductDto = z.object({
   minStock: z.number().int().min(0).default(0),
   unit: z.string().default('un'),
   imageUrl: z.string().url().optional().nullable(),
+  ncm: z.string().max(10).optional().nullable(),   // Nomenclatura Comum do Mercosul
+  cest: z.string().max(9).optional().nullable(),   // Código Especificador da ST
+  cfop: z.string().max(5).optional().nullable(),   // Código Fiscal de Operações
 })
 export type CreateProductDto = z.infer<typeof CreateProductDto>
 
@@ -30,6 +33,9 @@ export const UpdateProductDto = z.object({
   unit: z.string().optional(),
   active: z.boolean().optional(),
   imageUrl: z.string().url().optional().nullable(),
+  ncm: z.string().max(10).optional().nullable(),
+  cest: z.string().max(9).optional().nullable(),
+  cfop: z.string().max(5).optional().nullable(),
 })
 export type UpdateProductDto = z.infer<typeof UpdateProductDto>
 

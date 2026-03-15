@@ -14,6 +14,7 @@ import {
   type Customer,
   type ClinicalRecord,
   useCreateClinicalRecord,
+  useUpdateClinicalRecord,
   useCreateCustomer,
   useClinicalRecords,
   useCustomerHistory,
@@ -546,16 +547,50 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const [showEntryForm, setShowEntryForm] = useState(false)
   const [entryType, setEntryType] = useState<EntryType>('anamnesis')
   // for non-anamnesis types
-  const [simpleRecord, setSimpleRecord] = useState({ title: '', content: '' })
+  const [simpleRecord, setSimpleRecord] = useState({ title: '', content: '', performedAt: '' })
   // for anamnesis type
   const [anamnesisAnswers, setAnamnesisAnswers] = useState<Record<string, string>>({})
   const [entrySubmitting, setEntrySubmitting] = useState(false)
 
+  // edit record
+  const [editingRecord, setEditingRecord] = useState<ClinicalRecord | null>(null)
+  const [editValues, setEditValues] = useState({ title: '', content: '', performedAt: '' })
+  const updateRecord = useUpdateClinicalRecord(editingRecord?.id ?? '')
+  const [editSubmitting, setEditSubmitting] = useState(false)
+
   function openEntryForm() {
     setEntryType('anamnesis')
-    setSimpleRecord({ title: '', content: '' })
+    setSimpleRecord({ title: '', content: '', performedAt: '' })
     setAnamnesisAnswers({})
     setShowEntryForm(true)
+  }
+
+  function openEditRecord(r: ClinicalRecord) {
+    setEditingRecord(r)
+    setEditValues({
+      title: r.title,
+      content: r.content,
+      performedAt: r.performedAt ? r.performedAt.slice(0, 10) : '',
+    })
+  }
+
+  async function submitEdit() {
+    if (!editingRecord) return
+    setEditSubmitting(true)
+    try {
+      await updateRecord.mutateAsync({
+        customerId: customer.id,
+        title: editValues.title,
+        content: editValues.content,
+        performedAt: editValues.performedAt ? new Date(editValues.performedAt).toISOString() : null,
+      })
+      setEditingRecord(null)
+      toast.success('Lançamento atualizado')
+    } catch {
+      toast.error('Erro ao atualizar lançamento')
+    } finally {
+      setEditSubmitting(false)
+    }
   }
 
   async function submitEntry() {
@@ -587,11 +622,12 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           title: simpleRecord.title,
           content: simpleRecord.content,
           type: entryType,
+          performedAt: simpleRecord.performedAt ? new Date(simpleRecord.performedAt).toISOString() : null,
         })
       }
       setShowEntryForm(false)
       setAnamnesisAnswers({})
-      setSimpleRecord({ title: '', content: '' })
+      setSimpleRecord({ title: '', content: '', performedAt: '' })
     } finally {
       setEntrySubmitting(false)
     }
@@ -898,6 +934,15 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                       className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">Data de realização (opcional)</label>
+                    <input
+                      type="date"
+                      value={simpleRecord.performedAt}
+                      onChange={(e) => setSimpleRecord((prev) => ({ ...prev, performedAt: e.target.value }))}
+                      className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -912,6 +957,54 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                 </button>
                 <button
                   onClick={() => setShowEntryForm(false)}
+                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Edit record modal ── */}
+          {editingRecord && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <p className="text-xs font-semibold text-primary">Editar lançamento</p>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Título</label>
+                <input
+                  value={editValues.title}
+                  onChange={(e) => setEditValues((prev) => ({ ...prev, title: e.target.value }))}
+                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Conteúdo</label>
+                <textarea
+                  value={editValues.content}
+                  onChange={(e) => setEditValues((prev) => ({ ...prev, content: e.target.value }))}
+                  rows={3}
+                  className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Data de realização</label>
+                <input
+                  type="date"
+                  value={editValues.performedAt}
+                  onChange={(e) => setEditValues((prev) => ({ ...prev, performedAt: e.target.value }))}
+                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => void submitEdit()}
+                  disabled={editSubmitting}
+                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {editSubmitting ? 'Salvando…' : 'Salvar alterações'}
+                </button>
+                <button
+                  onClick={() => setEditingRecord(null)}
                   className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
                 >
                   Cancelar
@@ -943,9 +1036,19 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                       <p className="text-xs font-semibold text-foreground">
                         {r.type === 'anamnesis' ? 'Anamnese' : r.title}
                       </p>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
-                        {TYPE_LABEL[r.type] ?? r.type}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
+                          {TYPE_LABEL[r.type] ?? r.type}
+                        </span>
+                        {r.type !== 'anamnesis' && (
+                          <button
+                            onClick={() => openEditRecord(r)}
+                            className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border"
+                          >
+                            Editar
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {r.type === 'anamnesis' ? (
@@ -965,6 +1068,12 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                     )}
 
                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 pt-0.5">
+                      {r.performedAt && (
+                        <span className="font-medium text-muted-foreground/80">
+                          Realizado: {new Date(r.performedAt).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
+                      {r.performedAt && <span>·</span>}
                       <span>
                         {new Date(r.createdAt).toLocaleString('pt-BR', {
                           day: '2-digit', month: '2-digit', year: 'numeric',

@@ -18,7 +18,7 @@ import {
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
-import { useCustomers, useProfessionals, useEquipment } from '@/lib/hooks/use-resources'
+import { useCustomers, useProfessionals, useEquipment, useAvailableEquipment } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -175,30 +175,49 @@ function CreateAppointmentForm({
   isPending: boolean
 }) {
   const { data: profData } = useProfessionals({ includeServices: 'true' })
-  const { data: custData } = useCustomers()
+  const { data: custData } = useCustomers({ limit: '200' })
   const { data: equipmentData } = useEquipment()
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
+  const [customerName, setCustomerName] = useState<string>('')
 
   const {
     register,
     handleSubmit,
     watch,
     formState: { errors },
-  } = useForm<CreateFormData>({
+  } = useForm<Omit<CreateFormData, 'customerId'> & { customerId: string }>({
     resolver: zodResolver(createSchema),
-    defaultValues: { date: defaultDate },
+    defaultValues: { date: defaultDate, customerId: '' },
   })
 
   const professionalId = watch('professionalId')
   const serviceId = watch('serviceId')
   const date = watch('date')
+  const time = watch('time')
 
   const selectedProf = profData?.items.find((p) => p.id === professionalId)
-  const assignedServices = selectedProf?.services?.map((ps) => ps.service) ?? []
+  // If professional has allServices flag, show all services; otherwise show only assigned
+  const assignedServices = selectedProf?.allServices
+    ? (profData?.items.flatMap((p) => p.id === professionalId ? (p.services ?? []).map((ps) => ps.service) : []) ?? [])
+    : (selectedProf?.services?.map((ps) => ps.service) ?? [])
 
   const { data: avail } = useAvailability(
     professionalId && serviceId && date ? { professionalId, serviceId, date } : null,
   )
+
+  // Compute scheduledAt for equipment availability query
+  const scheduledAt = date && time ? `${date}T${time}:00.000Z` : ''
+  const selectedService = assignedServices.find((s) => s.id === serviceId)
+  const serviceDuration = selectedService?.durationMinutes ?? 0
+  const { data: availableEquipment } = useAvailableEquipment(scheduledAt, serviceDuration)
+
+  const filteredCustomers = (customerSearch.trim().length > 0 && custData?.items.filter((c) =>
+    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    (c.phone && c.phone.includes(customerSearch)) ||
+    (c.document && c.document.includes(customerSearch))
+  )) || []
 
   function toggleEquipment(id: string) {
     setSelectedEquipmentIds((prev) =>
@@ -207,14 +226,49 @@ function CreateAppointmentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit((data) => onSave(data, selectedEquipmentIds))} className="space-y-4">
+    <form
+      onSubmit={handleSubmit((data) =>
+        onSave({ ...data, customerId: selectedCustomerId }, selectedEquipmentIds)
+      )}
+      className="space-y-4"
+    >
+      {/* Customer searchable selector */}
       <div className="space-y-2">
         <Label>Cliente *</Label>
-        <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('customerId')}>
-          <option value="">Selecione…</option>
-          {custData?.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <div className="relative">
+          <Input
+            placeholder="Buscar cliente por nome, telefone ou CPF…"
+            value={customerSearch || customerName}
+            onChange={(e) => {
+              setCustomerSearch(e.target.value)
+              if (!e.target.value) { setSelectedCustomerId(''); setCustomerName('') }
+            }}
+            onFocus={() => setCustomerSearch('')}
+          />
+          {customerSearch.trim().length > 0 && filteredCustomers.length > 0 && (
+            <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-40 overflow-auto">
+              {filteredCustomers.slice(0, 20).map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                  onClick={() => {
+                    setSelectedCustomerId(c.id)
+                    setCustomerName(c.name)
+                    setCustomerSearch('')
+                  }}
+                >
+                  <span className="font-medium">{c.name}</span>
+                  {c.phone && <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {errors.customerId && <p className="text-xs text-destructive">{errors.customerId.message}</p>}
+        {!selectedCustomerId && !errors.customerId && customerSearch.trim().length === 0 && (
+          <p className="text-xs text-muted-foreground">Digite para filtrar clientes</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -258,25 +312,30 @@ function CreateAppointmentForm({
         </div>
       </div>
 
-      {/* Equipment multi-select */}
-      {equipmentData && equipmentData.filter((e) => e.active).length > 0 && (
+      {/* Equipment multi-select – shows availability based on selected date/time */}
+      {((availableEquipment && availableEquipment.length > 0) || (equipmentData && equipmentData.filter((e) => e.active).length > 0)) && (
         <div className="space-y-2">
-          <Label>Equipamentos</Label>
+          <Label>Equipamentos {scheduledAt && serviceDuration > 0 && <span className="text-xs text-muted-foreground">(✓ = disponível nesse horário)</span>}</Label>
           <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
-            {equipmentData.filter((e) => e.active).map((eq) => {
+            {(availableEquipment ?? equipmentData?.filter((e) => e.active) ?? []).map((eq) => {
+              const available = 'available' in eq ? eq.available : true
               const selected = selectedEquipmentIds.includes(eq.id)
               return (
                 <button
                   key={eq.id}
                   type="button"
-                  onClick={() => toggleEquipment(eq.id)}
+                  disabled={!available && !selected}
+                  onClick={() => { if (available || selected) toggleEquipment(eq.id) }}
                   className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                     selected
                       ? 'border-primary bg-primary text-primary-foreground'
+                      : !available
+                      ? 'border-border bg-muted/50 text-muted-foreground/50 line-through cursor-not-allowed'
                       : 'border-border bg-card text-muted-foreground hover:border-primary/50'
                   }`}
                 >
                   {eq.name}
+                  {!available && ' (ocupado)'}
                 </button>
               )
             })}
@@ -481,9 +540,9 @@ function WeekView({
   weekStart: Date
   onSlotClick: (slot: CalendarSlot) => void
 }) {
-  // Build map: dateStr -> slots
+  // Build map: dateStr -> slots (with professional name)
   const dayMap = useMemo(() => {
-    const map = new Map<string, CalendarSlot[]>()
+    const map = new Map<string, (CalendarSlot & { _profName?: string })[]>()
     for (let i = 0; i < 7; i++) {
       const d = toDateStr(addDays(weekStart, i))
       map.set(d, [])
@@ -493,7 +552,7 @@ function WeekView({
         if (slot.type !== 'appointment' || !slot.start) continue
         const dateStr = slot.start.slice(0, 10)
         if (map.has(dateStr)) {
-          map.get(dateStr)!.push({ ...slot, _profName: prof.name } as SlotWithProf)
+          map.get(dateStr)!.push({ ...slot, _profName: prof.name })
         }
       }
     }
@@ -532,6 +591,46 @@ function WeekView({
             const isToday = dateStr === todayStr
             const slots = dayMap.get(dateStr) ?? []
 
+            // Compute columns to avoid overlap: assign each slot a column index
+            type PositionedSlot = (typeof slots)[0] & { _col: number; _totalCols: number }
+            const positioned: PositionedSlot[] = []
+            const cols: Array<{ endMin: number }[]> = [] // each col holds list of busy intervals
+
+            function slotEndMin(s: typeof slots[0]) {
+              const [hh, mm] = s.start!.slice(11, 16).split(':').map(Number)
+              return hh * 60 + mm + (s.duration ?? 30)
+            }
+            function slotStartMin(s: typeof slots[0]) {
+              const [hh, mm] = s.start!.slice(11, 16).split(':').map(Number)
+              return hh * 60 + mm
+            }
+
+            for (const slot of slots) {
+              const startMin = slotStartMin(slot)
+              const endMin = slotEndMin(slot)
+              let assigned = -1
+              for (let c = 0; c < cols.length; c++) {
+                const busy = cols[c]
+                const overlaps = busy.some((b) => startMin < b.endMin && endMin > startMin)
+                if (!overlaps) { assigned = c; break }
+              }
+              if (assigned === -1) { assigned = cols.length; cols.push([]) }
+              cols[assigned].push({ endMin })
+              positioned.push({ ...slot, _col: assigned, _totalCols: 0 } as PositionedSlot)
+            }
+
+            // Determine totalCols: for each slot, find max columns that share any overlap
+            for (const ps of positioned) {
+              const startMin = slotStartMin(ps)
+              const endMin = slotEndMin(ps)
+              const overlapping = positioned.filter((other) => {
+                const oStart = slotStartMin(other)
+                const oEnd = slotEndMin(other)
+                return startMin < oEnd && endMin > oStart
+              })
+              ps._totalCols = Math.max(...overlapping.map((o) => o._col + 1))
+            }
+
             return (
               <div
                 key={i}
@@ -539,23 +638,31 @@ function WeekView({
                 style={{ height: GRID_H }}
               >
                 <GridLines />
-                {slots.map((slot) => {
+                {positioned.map((slot) => {
                   const top = timeToGridTop(slot.start!)
                   const height = durationToHeight(slot.duration ?? 30)
                   const status = slot.status!
-                  const profName = (slot as Partial<SlotWithProf>)._profName
+                  const totalCols = slot._totalCols
+                  const colW = totalCols > 1 ? `${(100 / totalCols).toFixed(1)}%` : undefined
+                  const leftPct = totalCols > 1 ? `${((slot._col / totalCols) * 100).toFixed(1)}%` : undefined
                   return (
                     <button
                       key={slot.id}
                       onClick={() => onSlotClick(slot)}
-                      className={`absolute left-0.5 right-0.5 rounded p-1 text-left overflow-hidden transition-opacity hover:opacity-80 ${EVENT_COLOR[status]}`}
-                      style={{ top, height, minHeight: SLOT_PX }}
+                      className={`absolute rounded p-1 text-left overflow-hidden transition-opacity hover:opacity-80 ${EVENT_COLOR[status]}`}
+                      style={{
+                        top,
+                        height,
+                        minHeight: SLOT_PX,
+                        left: leftPct ?? '2px',
+                        width: colW ?? 'calc(100% - 4px)',
+                      }}
                     >
                       <div className="text-[10px] font-bold leading-none truncate">
                         {formatTime(slot.start!)}
                       </div>
                       {height > 24 && <div className="text-[9px] truncate leading-tight mt-0.5">{slot.customer}</div>}
-                      {height > 40 && profName && <div className="text-[9px] truncate opacity-75">{profName}</div>}
+                      {height > 40 && slot._profName && <div className="text-[9px] truncate opacity-75">{slot._profName}</div>}
                       {height > 56 && slot.equipment && slot.equipment.length > 0 && (
                         <div className="text-[9px] truncate opacity-70">
                           🔧 {slot.equipment.map((e) => e.name).join(', ')}

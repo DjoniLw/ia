@@ -19,6 +19,7 @@ export interface Professional {
   phone: string | null
   speciality: string | null
   active: boolean
+  allServices: boolean
   createdAt: string
   services?: Array<{ service: Service }>
   workingHours?: WorkingHour[]
@@ -156,8 +157,8 @@ export function useDeleteProfessional() {
 export function useAssignServices(professionalId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (serviceIds: string[]) =>
-      api.put(`/professionals/${professionalId}/services`, { serviceIds }).then((r) => r.data),
+    mutationFn: (data: { serviceIds: string[]; allServices?: boolean }) =>
+      api.put(`/professionals/${professionalId}/services`, data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['professionals'] }),
   })
 }
@@ -225,6 +226,9 @@ export interface Product {
   unit: string
   active: boolean
   imageUrl: string | null
+  ncm: string | null
+  cest: string | null
+  cfop: string | null
   createdAt: string
 }
 
@@ -349,7 +353,9 @@ export interface ClinicalRecord {
   title: string
   content: string
   type: 'note' | 'exam' | 'procedure' | 'prescription' | 'anamnesis'
+  performedAt: string | null
   createdAt: string
+  updatedAt: string
   professional: { id: string; name: string } | null
 }
 
@@ -371,7 +377,24 @@ export function useCreateClinicalRecord() {
       title: string
       content: string
       type: 'note' | 'exam' | 'procedure' | 'prescription' | 'anamnesis'
+      performedAt?: string | null
     }) => api.post('/clinical-records', data).then((r) => r.data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['clinical-records', vars.customerId] })
+    },
+  })
+}
+
+export function useUpdateClinicalRecord(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: {
+      customerId: string
+      title?: string
+      content?: string
+      type?: 'note' | 'exam' | 'procedure' | 'prescription' | 'anamnesis'
+      performedAt?: string | null
+    }) => api.patch(`/clinical-records/${id}`, data).then((r) => r.data),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['clinical-records', vars.customerId] })
     },
@@ -418,5 +441,96 @@ export function useDeleteEquipment(id: string) {
   return useMutation({
     mutationFn: () => api.delete(`/equipment/${id}`).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['equipment'] }),
+  })
+}
+
+// ──── Supplies (Insumos) ──────────────────────────────────────────────────────
+
+export interface Supply {
+  id: string
+  name: string
+  description: string | null
+  unit: string
+  costPrice: number | null
+  stock: number
+  minStock: number
+  active: boolean
+  createdAt: string
+}
+
+export interface ServiceSupply {
+  serviceId: string
+  supplyId: string
+  quantity: number
+  supply: Supply
+}
+
+export function useSupplies(params?: Record<string, string>) {
+  return useQuery<{ items: Supply[]; total: number; page: number; limit: number }>({
+    queryKey: ['supplies', params],
+    queryFn: () => api.get('/supplies', { params }).then((r) => r.data),
+  })
+}
+
+export function useCreateSupply() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name: string; description?: string | null; unit?: string; costPrice?: number | null; stock?: number; minStock?: number }) =>
+      api.post('/supplies', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['supplies'] }),
+  })
+}
+
+export function useUpdateSupply(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Partial<Supply>) => api.patch(`/supplies/${id}`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['supplies'] }),
+  })
+}
+
+export function useDeleteSupply() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/supplies/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['supplies'] }),
+  })
+}
+
+export function useServiceSupplies(serviceId: string) {
+  return useQuery<ServiceSupply[]>({
+    queryKey: ['service-supplies', serviceId],
+    queryFn: () => api.get(`/services/${serviceId}/supplies`).then((r) => r.data),
+    enabled: !!serviceId,
+  })
+}
+
+export function useAssignServiceSupplies(serviceId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (supplies: Array<{ supplyId: string; quantity: number }>) =>
+      api.put(`/services/${serviceId}/supplies`, { supplies }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['service-supplies', serviceId] })
+    },
+  })
+}
+
+// ──── Available Equipment for time slot ───────────────────────────────────────
+
+export interface EquipmentAvailability extends Equipment {
+  available: boolean
+}
+
+export function useAvailableEquipment(scheduledAt: string, durationMinutes: number, excludeAppointmentId?: string) {
+  return useQuery<EquipmentAvailability[]>({
+    queryKey: ['available-equipment', scheduledAt, durationMinutes, excludeAppointmentId],
+    queryFn: () =>
+      api
+        .get('/appointments/available-equipment', {
+          params: { scheduledAt, durationMinutes, ...(excludeAppointmentId ? { excludeAppointmentId } : {}) },
+        })
+        .then((r) => r.data),
+    enabled: !!(scheduledAt && durationMinutes),
   })
 }

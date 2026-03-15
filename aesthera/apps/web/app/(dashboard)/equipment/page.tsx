@@ -22,19 +22,22 @@ function EquipmentForm({
   onSave,
   onCancel,
   isPending,
+  showActiveToggle = false,
 }: {
   initial?: Equipment
-  onSave: (data: { name: string; description: string }) => Promise<void>
+  onSave: (data: { name: string; description: string; active?: boolean }) => Promise<void>
   onCancel: () => void
   isPending: boolean
+  showActiveToggle?: boolean
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
+  const [active, setActive] = useState(initial?.active ?? true)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    await onSave({ name: name.trim(), description: description.trim() })
+    await onSave({ name: name.trim(), description: description.trim(), ...(showActiveToggle ? { active } : {}) })
   }
 
   return (
@@ -56,6 +59,20 @@ function EquipmentForm({
           placeholder="Informações adicionais sobre o equipamento"
         />
       </div>
+      {showActiveToggle && (
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="eq-active"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+            className="h-4 w-4 rounded border-input accent-primary"
+          />
+          <Label htmlFor="eq-active" className="cursor-pointer">
+            Equipamento ativo (disponível para agendamentos)
+          </Label>
+        </div>
+      )}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
@@ -216,7 +233,7 @@ export default function EquipmentPage() {
 function EditDialog({ equipment, onClose }: { equipment: Equipment; onClose: () => void }) {
   const update = useUpdateEquipment(equipment.id)
 
-  async function handleSave(data: { name: string; description: string }) {
+  async function handleSave(data: { name: string; description: string; active?: boolean }) {
     try {
       await update.mutateAsync(data)
       toast.success('Equipamento atualizado')
@@ -236,6 +253,7 @@ function EditDialog({ equipment, onClose }: { equipment: Equipment; onClose: () 
           onSave={handleSave}
           onCancel={onClose}
           isPending={update.isPending}
+          showActiveToggle
         />
       </div>
     </Dialog>

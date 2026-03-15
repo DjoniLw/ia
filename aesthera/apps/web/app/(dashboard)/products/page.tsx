@@ -45,6 +45,9 @@ const productSchema = z.object({
   stock: z.coerce.number().int().min(0).default(0),
   minStock: z.coerce.number().int().min(0).default(0),
   unit: z.string().default('un'),
+  ncm: z.string().max(10).optional(),
+  cest: z.string().max(9).optional(),
+  cfop: z.string().max(5).optional(),
 })
 type ProductFormData = z.infer<typeof productSchema>
 
@@ -136,6 +139,21 @@ function ProductForm({
         <div className="space-y-2">
           <Label>Código de barras</Label>
           <Input {...register('barcode')} placeholder="7891234567890" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-2">
+          <Label>NCM</Label>
+          <Input {...register('ncm')} placeholder="00000000" maxLength={10} />
+        </div>
+        <div className="space-y-2">
+          <Label>CEST</Label>
+          <Input {...register('cest')} placeholder="0000000" maxLength={9} />
+        </div>
+        <div className="space-y-2">
+          <Label>CFOP</Label>
+          <Input {...register('cfop')} placeholder="5102" maxLength={5} />
         </div>
       </div>
 
@@ -269,6 +287,9 @@ export default function ProductsPage() {
         minStock: formData.minStock ?? 0,
         unit: formData.unit ?? 'un',
         imageUrl: null,
+        ncm: formData.ncm ?? null,
+        cest: formData.cest ?? null,
+        cfop: formData.cfop ?? null,
       } as Parameters<typeof createProduct.mutateAsync>[0])
       toast.success('Produto criado')
       setCreating(false)
@@ -292,6 +313,9 @@ export default function ProductsPage() {
         stock: formData.stock ?? 0,
         minStock: formData.minStock ?? 0,
         unit: formData.unit ?? 'un',
+        ncm: formData.ncm ?? null,
+        cest: formData.cest ?? null,
+        cfop: formData.cfop ?? null,
       })
       toast.success('Produto atualizado')
       setEditing(null)
@@ -490,6 +514,9 @@ export default function ProductsPage() {
                 stock: editing.stock,
                 minStock: editing.minStock,
                 unit: editing.unit,
+                ncm: editing.ncm ?? '',
+                cest: editing.cest ?? '',
+                cfop: editing.cfop ?? '',
               }}
               onSave={handleUpdate}
               isPending={updateProduct.isPending}

@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+import { prisma } from '../../database/prisma/client'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
 import {
@@ -25,6 +27,53 @@ export async function appointmentsRoutes(app: FastifyInstance) {
   app.get('/appointments/calendar', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const q = CalendarQuery.parse(req.query)
     return reply.send(await svc.getCalendar(req.clinicId, q))
+  })
+
+  // ── Available equipment for a given time slot (Feature 9) ────────────────────
+  // GET /appointments/available-equipment?scheduledAt=ISO&durationMinutes=N[&excludeAppointmentId=UUID]
+  app.get('/appointments/available-equipment', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const q = z.object({
+      scheduledAt: z.string().datetime(),
+      durationMinutes: z.coerce.number().int().positive(),
+      excludeAppointmentId: z.string().uuid().optional(),
+    }).parse(req.query)
+
+    const scheduledAt = new Date(q.scheduledAt)
+    const slotEnd = new Date(scheduledAt.getTime() + q.durationMinutes * 60 * 1000)
+
+    // All active equipment for this clinic
+    const allEquipment = await prisma.equipment.findMany({
+      where: { clinicId: req.clinicId, active: true },
+      orderBy: { name: 'asc' },
+    })
+
+    // Find equipment that is busy (overlapping active appointments) during the slot
+    const busyLinks = await prisma.appointmentEquipment.findMany({
+      where: {
+        appointment: {
+          clinicId: req.clinicId,
+          status: { notIn: ['cancelled', 'no_show'] },
+          ...(q.excludeAppointmentId ? { id: { not: q.excludeAppointmentId } } : {}),
+          scheduledAt: { lt: slotEnd },
+        },
+      },
+      include: {
+        appointment: { select: { scheduledAt: true, durationMinutes: true } },
+      },
+    })
+
+    const busyIds = new Set(
+      busyLinks
+        .filter((l) => {
+          const apptEnd = new Date(l.appointment.scheduledAt.getTime() + l.appointment.durationMinutes * 60_000)
+          return scheduledAt < apptEnd && slotEnd > l.appointment.scheduledAt
+        })
+        .map((l) => l.equipmentId),
+    )
+
+    return reply.send(
+      allEquipment.map((eq) => ({ ...eq, available: !busyIds.has(eq.id) })),
+    )
   })
 
   // ── Blocked Slots ─────────────────────────────────────────────────────────────

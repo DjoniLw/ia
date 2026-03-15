@@ -39,11 +39,14 @@ function ServiceForm({
   defaultValues,
   onSave,
   isPending,
+  showActiveToggle = false,
 }: {
-  defaultValues?: Partial<ServiceFormData & { price: number }>
-  onSave: (data: ServiceFormData) => Promise<void>
+  defaultValues?: Partial<ServiceFormData & { price: number; active?: boolean }>
+  onSave: (data: ServiceFormData & { active?: boolean }) => Promise<void>
   isPending: boolean
+  showActiveToggle?: boolean
 }) {
+  const [active, setActive] = useState(defaultValues?.active ?? true)
   const { register, handleSubmit, formState: { errors } } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
     defaultValues: defaultValues
@@ -58,7 +61,7 @@ function ServiceForm({
   })
 
   return (
-    <form onSubmit={handleSubmit(onSave)} className="space-y-4">
+    <form onSubmit={handleSubmit((data) => onSave({ ...data, ...(showActiveToggle ? { active } : {}) }))} className="space-y-4">
       <div className="space-y-2">
         <Label>Nome</Label>
         <Input {...register('name')} placeholder="Botox" />
@@ -94,6 +97,20 @@ function ServiceForm({
         </div>
         {errors.priceDisplay && <p className="text-xs text-destructive">{errors.priceDisplay.message}</p>}
       </div>
+      {showActiveToggle && (
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="svc-active"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+            className="h-4 w-4 rounded border-input accent-primary"
+          />
+          <Label htmlFor="svc-active" className="cursor-pointer">
+            Serviço ativo (disponível para agendamentos)
+          </Label>
+        </div>
+      )}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={isPending}>
           {isPending ? 'Salvando...' : 'Salvar'}
@@ -133,7 +150,7 @@ export default function ServicesPage() {
     }
   }
 
-  async function handleUpdate(data: ServiceFormData) {
+  async function handleUpdate(data: ServiceFormData & { active?: boolean }) {
     try {
       await update({
         name: data.name,
@@ -141,6 +158,7 @@ export default function ServicesPage() {
         category: data.category ?? null,
         durationMinutes: data.durationMinutes,
         price: parseBRL(data.priceDisplay),
+        ...(data.active !== undefined ? { active: data.active } : {}),
       })
       toast.success('Serviço atualizado')
       setEditing(null)
@@ -228,6 +246,7 @@ export default function ServicesPage() {
             }}
             onSave={handleUpdate}
             isPending={updating}
+            showActiveToggle
           />
         )}
       </Dialog>

@@ -10,6 +10,7 @@ export type CreateProfessionalDto = z.infer<typeof CreateProfessionalDto>
 
 export const UpdateProfessionalDto = CreateProfessionalDto.partial().extend({
   active: z.boolean().optional(),
+  allServices: z.boolean().optional(),
 })
 export type UpdateProfessionalDto = z.infer<typeof UpdateProfessionalDto>
 
@@ -27,6 +28,7 @@ export type SetWorkingHoursDto = z.infer<typeof SetWorkingHoursDto>
 
 export const AssignServicesDto = z.object({
   serviceIds: z.array(z.string().uuid()),
+  allServices: z.boolean().optional(), // when true, marks professional as covering all services
 })
 export type AssignServicesDto = z.infer<typeof AssignServicesDto>
 

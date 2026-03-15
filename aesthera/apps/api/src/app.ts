@@ -22,6 +22,7 @@ import { aiRoutes } from './modules/ai/ai.routes'
 import { productsRoutes } from './modules/products/products.routes'
 import { clinicalRoutes } from './modules/clinical/clinical.routes'
 import { equipmentRoutes } from './modules/equipment/equipment.routes'
+import { suppliesRoutes } from './modules/supplies/supplies.routes'
 import './domain-event-handlers'
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -118,6 +119,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await productsRoutes(app)
   await clinicalRoutes(app)
   await equipmentRoutes(app)
+  await suppliesRoutes(app)
 
   return app
 }

@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma/client'
-import type { CreateClinicalRecordDto, ListClinicalRecordsQuery } from './clinical.dto'
+import type { CreateClinicalRecordDto, ListClinicalRecordsQuery, UpdateClinicalRecordDto } from './clinical.dto'
 
 export class ClinicalRepository {
   async create(clinicId: string, data: CreateClinicalRecordDto) {
@@ -11,6 +11,7 @@ export class ClinicalRepository {
         title: data.title,
         content: data.content,
         type: data.type ?? 'note',
+        performedAt: data.performedAt ? new Date(data.performedAt) : null,
       },
       include: {
         professional: { select: { id: true, name: true } },
@@ -38,5 +39,27 @@ export class ClinicalRepository {
       prisma.clinicalRecord.count({ where }),
     ])
     return { items, total, page: q.page, limit: q.limit }
+  }
+
+  async findById(clinicId: string, id: string) {
+    return prisma.clinicalRecord.findFirst({
+      where: { id, clinicId },
+      include: { professional: { select: { id: true, name: true } } },
+    })
+  }
+
+  async update(_clinicId: string, id: string, data: UpdateClinicalRecordDto) {
+    return prisma.clinicalRecord.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.content !== undefined && { content: data.content }),
+        ...(data.type !== undefined && { type: data.type }),
+        performedAt: data.performedAt !== undefined
+          ? (data.performedAt ? new Date(data.performedAt) : null)
+          : undefined,
+      },
+      include: { professional: { select: { id: true, name: true } } },
+    })
   }
 }
