@@ -62,6 +62,7 @@ export class AiService {
 
     const result = await streamText({
       model,
+      maxRetries: 0,
       system: `Você é a Aes, assistente inteligente da clínica estética no sistema Aesthera. 
 Hoje é ${today}. Responda sempre em português do Brasil, de forma profissional e objetiva.
 Você tem acesso a ferramentas para buscar informações reais da clínica quando necessário.`,
@@ -153,6 +154,7 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
     try {
       const result = await generateText({
         model,
+        maxRetries: 0,
         prompt: `Gere um resumo clínico executivo do cliente a seguir em português, destacando frequência de visitas, serviços preferidos e status financeiro:\n\n${context}`,
         maxOutputTokens: 500,
       })
@@ -215,6 +217,7 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
     try {
       const result = await generateText({
         model,
+        maxRetries: 0,
         prompt: `Gere um briefing diário executivo da clínica no seguinte contexto (em português):\n\n${JSON.stringify(context, null, 2)}\n\nSeja conciso e use marcadores.`,
         maxOutputTokens: 600,
       })

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageSquare, X, Send, Loader2, Bot, User, Wrench } from 'lucide-react'
+import { apiBaseUrl } from '@/lib/api'
 
 interface Message {
   id: string
@@ -116,7 +117,7 @@ export function ChatPanel() {
     setStreaming(true)
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+      const base = apiBaseUrl
       const token = typeof window !== 'undefined' ? localStorage.getItem('access-token') : null
       const slug = typeof window !== 'undefined' ? localStorage.getItem('clinic-slug') : null
 

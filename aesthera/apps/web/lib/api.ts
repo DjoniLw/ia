@@ -24,8 +24,11 @@ function getClinicSlug(): string {
   return localStorage.getItem('clinic-slug') ?? ''
 }
 
+/** Returns the API base URL with no trailing slash, safe to use in template literals. */
+export const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000',
+  baseURL: apiBaseUrl,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -91,7 +94,7 @@ api.interceptors.response.use(
 
     try {
       const { data } = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'}/auth/refresh`,
+        `${apiBaseUrl}/auth/refresh`,
         { refreshToken },
       )
 
