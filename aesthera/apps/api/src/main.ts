@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { buildApp } from './app'
@@ -7,21 +7,18 @@ import { redis } from './database/redis/client'
 import { logger } from './shared/logger/logger'
 
 /**
- * Run `prisma db push` in the background AFTER the server has already
- * bound to its port.  This ensures:
- *   1. The HTTP server is always reachable (Railway health check passes).
- *   2. Schema changes are applied automatically on every deploy.
- *   3. A slow / unreachable database never blocks port binding.
+ * Run `prisma db push` synchronously BEFORE the server binds its port.
  *
- * The prisma binary lives at `<project-root>/node_modules/.bin/prisma`.
- * In the Docker image the compiled output is in `dist/` one level below
- * the project root, so `__dirname/..` resolves to the project root.
+ * Running it synchronously (blocking) ensures the database schema is fully
+ * up to date before any request is served.  A typical no-op push on an
+ * already-synced schema completes in < 2 s; a push with real changes takes
+ * < 15 s — both well within Railway's 120 s healthcheck timeout.
+ *
+ * If the push fails (bad DATABASE_URL, unreachable DB, …) the process exits
+ * with a non-zero code so Railway marks the deploy as failed rather than
+ * silently serving stale/broken endpoints.
  */
-
-// Must be shorter than Railway's healthcheckTimeout (120 s) so the
-// background process does not outlive a failed deployment attempt.
-const SCHEMA_SYNC_TIMEOUT_MS = 110_000
-function syncSchemaNonBlocking(): void {
+function syncSchemaSync(): void {
   const prismaBin = path.resolve(__dirname, '..', 'node_modules', '.bin', 'prisma')
 
   if (!existsSync(prismaBin)) {
@@ -32,28 +29,30 @@ function syncSchemaNonBlocking(): void {
     return
   }
 
-  execFile(
-    prismaBin,
-    ['db', 'push', '--accept-data-loss'],
-    { timeout: SCHEMA_SYNC_TIMEOUT_MS },
-    (error) => {
-      if (error) {
-        logger.warn(
-          { err: error },
-          '⚠️  Schema sync (prisma db push) failed — API is running but DB schema may be out of date. ' +
-          'Check DATABASE_URL and the Railway PostgreSQL service.',
-        )
-      } else {
-        logger.info('✅ Schema sync complete (prisma db push succeeded)')
-      }
-    },
-  )
+  logger.info('⏳ Running prisma db push to sync schema…')
+  try {
+    execFileSync(prismaBin, ['db', 'push', '--accept-data-loss'], {
+      timeout: 110_000,
+      stdio: 'inherit',
+    })
+    logger.info('✅ Schema sync complete (prisma db push succeeded)')
+  } catch (err) {
+    logger.error(
+      { err },
+      '❌ prisma db push failed — aborting startup to prevent serving a broken schema. ' +
+      'Check DATABASE_URL and the Railway PostgreSQL service.',
+    )
+    process.exit(1)
+  }
 }
 
 async function main(): Promise<void> {
+  // Sync schema first — before the port is bound — so every request sees a
+  // consistent, up-to-date database schema from the very first connection.
+  syncSchemaSync()
+
   const app = await buildApp()
 
-  // Bind to the port FIRST so Railway's health check always succeeds.
   try {
     await app.listen({
       port: appConfig.port,
@@ -75,9 +74,6 @@ async function main(): Promise<void> {
       'Authentication endpoints will return 503 until Redis is available.',
     )
   }
-
-  // Kick off schema sync in the background — never blocks the server.
-  syncSchemaNonBlocking()
 }
 
 main()

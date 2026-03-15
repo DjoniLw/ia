@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { PackageOpen, Plus, Pencil, Trash2 } from 'lucide-react'
+import { PackageOpen, Plus, Pencil, Trash2, ShoppingBag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,7 @@ import {
   useCreateSupply,
   useUpdateSupply,
   useDeleteSupply,
+  useCreateProduct,
 } from '@/lib/hooks/use-resources'
 
 function formatCost(cents: number | null) {
@@ -142,6 +143,7 @@ export default function SuppliesPage() {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Supply | null>(null)
   const [deleting, setDeleting] = useState<Supply | null>(null)
+  const [converting, setConverting] = useState<Supply | null>(null)
 
   async function handleCreate(d: Parameters<typeof createSupply.mutateAsync>[0]) {
     try {
@@ -210,6 +212,9 @@ export default function SuppliesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
+                    <Button variant="ghost" size="sm" title="Transformar em produto de venda" onClick={() => setConverting(s)}>
+                      <ShoppingBag className="h-3.5 w-3.5" />
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
@@ -239,6 +244,7 @@ export default function SuppliesPage() {
 
       {editing && <EditSupplyDialog supply={editing} onClose={() => setEditing(null)} />}
       {deleting && <DeleteSupplyDialog supply={deleting} onClose={() => setDeleting(null)} />}
+      {converting && <ConvertToProductDialog supply={converting} onClose={() => setConverting(null)} />}
     </div>
   )
 }
@@ -291,6 +297,93 @@ function DeleteSupplyDialog({ supply, onClose }: { supply: Supply; onClose: () =
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button variant="destructive" onClick={handleConfirm}>Remover</Button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
+// ──── ConvertToProductDialog ──────────────────────────────────────────────────
+
+function ConvertToProductDialog({ supply, onClose }: { supply: Supply; onClose: () => void }) {
+  const createProduct = useCreateProduct()
+  const [price, setPrice] = useState(
+    supply.costPrice != null ? (supply.costPrice / 100).toFixed(2).replace('.', ',') : '',
+  )
+  const [stock, setStock] = useState(String(supply.stock))
+  const [minStock, setMinStock] = useState(String(supply.minStock))
+
+  function parsePrice(v: string): number {
+    const n = parseFloat(v.replace(/\./g, '').replace(',', '.'))
+    return isNaN(n) ? 0 : Math.round(n * 100)
+  }
+
+  async function handleConfirm() {
+    try {
+      await createProduct.mutateAsync({
+        name: supply.name,
+        description: supply.description,
+        category: null,
+        brand: null,
+        sku: null,
+        barcode: null,
+        price: parsePrice(price),
+        costPrice: supply.costPrice,
+        stock: parseInt(stock) || 0,
+        minStock: parseInt(minStock) || 0,
+        unit: supply.unit,
+        imageUrl: null,
+        ncm: null,
+        cest: null,
+        cfop: null,
+      })
+      toast.success(`"${supply.name}" adicionado como produto de venda`)
+      onClose()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao criar produto')
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose}>
+      <DialogTitle>Transformar em produto de venda</DialogTitle>
+      <div className="space-y-4 mt-4">
+        <p className="text-sm text-muted-foreground">
+          Isso criará um produto de venda baseado no insumo <strong>{supply.name}</strong>.
+          O insumo original não será alterado.
+        </p>
+        <div className="space-y-2">
+          <Label>Preço de venda (R$) *</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+            <Input
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="0,00"
+              className="pl-9"
+              inputMode="decimal"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Custo unitário do insumo: {supply.costPrice != null ? `R$ ${(supply.costPrice / 100).toFixed(2)}` : '—'}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Estoque inicial</Label>
+            <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} min={0} />
+          </div>
+          <div className="space-y-2">
+            <Label>Estoque mínimo</Label>
+            <Input type="number" value={minStock} onChange={(e) => setMinStock(e.target.value)} min={0} />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleConfirm} disabled={createProduct.isPending || !price.trim()}>
+            {createProduct.isPending ? 'Criando…' : 'Criar produto'}
+          </Button>
         </div>
       </div>
     </Dialog>

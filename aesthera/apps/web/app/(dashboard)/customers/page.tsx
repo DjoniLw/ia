@@ -616,7 +616,8 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           type: 'anamnesis',
         })
       } else {
-        if (!simpleRecord.title.trim() || !simpleRecord.content.trim()) return
+        if (!simpleRecord.title.trim()) { toast.error('Preencha o título'); return }
+        if (!simpleRecord.content.trim()) { toast.error('Preencha o conteúdo'); return }
         await createRecord.mutateAsync({
           customerId: customer.id,
           title: simpleRecord.title,
@@ -628,6 +629,10 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
       setShowEntryForm(false)
       setAnamnesisAnswers({})
       setSimpleRecord({ title: '', content: '', performedAt: '' })
+      toast.success('Lançamento salvo')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao salvar lançamento')
     } finally {
       setEntrySubmitting(false)
     }
