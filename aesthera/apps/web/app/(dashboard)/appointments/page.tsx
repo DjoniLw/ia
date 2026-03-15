@@ -230,11 +230,29 @@ function CreateAppointmentForm({
   // ── Derived ───────────────────────────────────────────────────────────────────
   const slots = slotsData?.slots ?? []
 
-  // The professional list to show is from availProfsData (filtered by service+date+time).
-  // Fall back to all active professionals (all marked available) so the dropdown is never empty.
+  // Client-side filter: professionals who can perform the selected service.
+  // The API already includes `services[]` on every professional record.
+  const serviceFilteredProfs = useMemo(() => {
+    const all = allProfsData?.items ?? []
+    if (!serviceId) return all
+    return all.filter(
+      (p) => p.allServices || (p.services ?? []).some((s) => s.service.id === serviceId),
+    )
+  }, [allProfsData, serviceId])
+
+  // When service+date are both known AND the availability API returned results,
+  // use those results (they carry available/unavailable marks).
+  // Otherwise fall back to the service-filtered list (everyone marked available).
   const profListFromApi = availProfsData?.professionals ?? []
-  const profListFallback = (allProfsData?.items ?? []).map((p) => ({ ...p, available: true as const }))
-  const profList = profListFromApi.length > 0 ? profListFromApi : profListFallback
+  const profList =
+    serviceId && date && profListFromApi.length > 0
+      ? profListFromApi
+      : serviceFilteredProfs.map((p) => ({
+          id: p.id,
+          name: p.name,
+          speciality: p.speciality ?? null,
+          available: true as const,
+        }))
 
   // After a time is selected, the finalProfessionalId must come from profList (filtered to available)
   const availableProfIds = new Set(profList.filter((p) => p.available).map((p) => p.id))
@@ -346,25 +364,10 @@ function CreateAppointmentForm({
         {submitted && !serviceId && <p className="text-xs text-destructive">Selecione um serviço</p>}
       </div>
 
-      {/* 3. Data */}
-      <div className="space-y-2">
-        <Label>Data *</Label>
-        <Input
-          type="date"
-          value={date}
-          onChange={(e) => {
-            setDate(e.target.value)
-            setSelectedTime('')
-            setFinalProfessionalId('')
-          }}
-        />
-        {submitted && !date && <p className="text-xs text-destructive">Selecione uma data</p>}
-      </div>
-
-      {/* 4. Profissional (optional pre-filter) */}
-      {serviceId && date && (
+      {/* 3. Profissional — visible as soon as a service is selected */}
+      {serviceId && (
         <div className="space-y-2">
-          <Label>Profissional</Label>
+          <Label>Profissional *</Label>
           {profsFetching && profList.length === 0 ? (
             <p className="text-xs text-muted-foreground">Buscando profissionais disponíveis…</p>
           ) : (
@@ -373,30 +376,50 @@ function CreateAppointmentForm({
               value={finalProfessionalId}
               onChange={(e) => handleProfessionalChange(e.target.value)}
             >
-              <option value="">Todos disponíveis</option>
+              <option value="">Selecione um profissional…</option>
               {profList.map((p) => (
                 <option key={p.id} value={p.id} disabled={!p.available}>
-                  {p.name}{!p.available ? ' (ocupado)' : ''}
+                  {p.name}{!p.available ? ' (ocupado neste horário)' : ''}
                 </option>
               ))}
             </select>
           )}
+          {profList.length === 0 && !profsFetching && (
+            <p className="text-xs text-muted-foreground">Nenhum profissional realiza este serviço</p>
+          )}
           <p className="text-xs text-muted-foreground">
             {selectedTime
               ? 'Profissionais disponíveis neste horário'
-              : 'Selecione um profissional para filtrar os horários (opcional)'}
+              : date
+              ? 'Profissionais disponíveis para esta data'
+              : 'Profissionais que realizam este serviço'}
           </p>
           {submitted && !finalProfessionalId && <p className="text-xs text-destructive">Selecione um profissional</p>}
         </div>
       )}
+
+      {/* 4. Data */}
+      <div className="space-y-2">
+        <Label>Data *</Label>
+        <Input
+          type="date"
+          value={date}
+          onChange={(e) => {
+            setDate(e.target.value)
+            // Reset time but keep the professional — the user may have already chosen one
+            setSelectedTime('')
+          }}
+        />
+        {submitted && !date && <p className="text-xs text-destructive">Selecione uma data</p>}
+      </div>
 
       {/* 5. Horários disponíveis */}
       {serviceId && date && (
         <div className="space-y-2">
           <Label>
             Horário *
-            {professionalFilter && profList.find((p) => p.id === professionalFilter)?.name
-              ? ` — ${profList.find((p) => p.id === professionalFilter)!.name}`
+            {finalProfessionalId && profList.find((p) => p.id === finalProfessionalId)?.name
+              ? ` — ${profList.find((p) => p.id === finalProfessionalId)!.name}`
               : ' — todos os profissionais disponíveis'}
           </Label>
 
