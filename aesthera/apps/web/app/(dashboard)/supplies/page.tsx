@@ -29,6 +29,7 @@ function SupplyForm({
   onCancel,
   isPending,
   showActiveToggle = false,
+  onDirtyChange,
 }: {
   initial?: Supply
   onSave: (data: {
@@ -43,6 +44,7 @@ function SupplyForm({
   onCancel: () => void
   isPending: boolean
   showActiveToggle?: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
@@ -53,6 +55,14 @@ function SupplyForm({
   const [stock, setStock] = useState(String(initial?.stock ?? 0))
   const [minStock, setMinStock] = useState(String(initial?.minStock ?? 0))
   const [active, setActive] = useState(initial?.active ?? true)
+  const [dirty, setDirty] = useState(false)
+
+  function markDirty() {
+    if (!dirty) {
+      setDirty(true)
+      onDirtyChange?.(true)
+    }
+  }
 
   function parseCost(v: string): number | null {
     if (!v.trim()) return null
@@ -78,16 +88,16 @@ function SupplyForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label>Nome *</Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Seringa 5ml" required />
+        <Input value={name} onChange={(e) => { setName(e.target.value); markDirty() }} placeholder="Ex: Seringa 5ml" required />
       </div>
       <div className="space-y-2">
         <Label>Descrição</Label>
-        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" />
+        <Input value={description} onChange={(e) => { setDescription(e.target.value); markDirty() }} placeholder="Opcional" />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Unidade</Label>
-          <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="un, ml, g…" />
+          <Input value={unit} onChange={(e) => { setUnit(e.target.value); markDirty() }} placeholder="un, ml, g…" />
         </div>
         <div className="space-y-2">
           <Label>Custo unitário (R$)</Label>
@@ -95,7 +105,7 @@ function SupplyForm({
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
             <Input
               value={costPrice}
-              onChange={(e) => setCostPrice(e.target.value)}
+              onChange={(e) => { setCostPrice(e.target.value); markDirty() }}
               placeholder="0,00"
               className="pl-9"
               inputMode="decimal"
@@ -106,11 +116,11 @@ function SupplyForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Estoque atual</Label>
-          <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} min={0} />
+          <Input type="number" value={stock} onChange={(e) => { setStock(e.target.value); markDirty() }} min={0} />
         </div>
         <div className="space-y-2">
           <Label>Estoque mínimo</Label>
-          <Input type="number" value={minStock} onChange={(e) => setMinStock(e.target.value)} min={0} />
+          <Input type="number" value={minStock} onChange={(e) => { setMinStock(e.target.value); markDirty() }} min={0} />
         </div>
       </div>
       {showActiveToggle && (
@@ -119,7 +129,7 @@ function SupplyForm({
             type="checkbox"
             id="supply-active"
             checked={active}
-            onChange={(e) => setActive(e.target.checked)}
+            onChange={(e) => { setActive(e.target.checked); markDirty() }}
             className="h-4 w-4 rounded border-input accent-primary"
           />
           <Label htmlFor="supply-active" className="cursor-pointer">Insumo ativo</Label>
@@ -141,6 +151,7 @@ export default function SuppliesPage() {
   const { data, isLoading } = useSupplies()
   const createSupply = useCreateSupply()
   const [creating, setCreating] = useState(false)
+  const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Supply | null>(null)
   const [deleting, setDeleting] = useState<Supply | null>(null)
   const [converting, setConverting] = useState<Supply | null>(null)
@@ -230,13 +241,14 @@ export default function SuppliesPage() {
       )}
 
       {creating && (
-        <Dialog open onClose={() => setCreating(false)}>
+        <Dialog open onClose={() => setCreating(false)} isDirty={formDirty}>
           <DialogTitle>Novo Insumo</DialogTitle>
           <div className="mt-4">
             <SupplyForm
               onSave={handleCreate}
               onCancel={() => setCreating(false)}
               isPending={createSupply.isPending}
+              onDirtyChange={setFormDirty}
             />
           </div>
         </Dialog>
@@ -251,6 +263,7 @@ export default function SuppliesPage() {
 
 function EditSupplyDialog({ supply, onClose }: { supply: Supply; onClose: () => void }) {
   const update = useUpdateSupply(supply.id)
+  const [isDirty, setIsDirty] = useState(false)
 
   async function handleSave(d: Parameters<typeof update.mutateAsync>[0]) {
     try {
@@ -264,10 +277,10 @@ function EditSupplyDialog({ supply, onClose }: { supply: Supply; onClose: () => 
   }
 
   return (
-    <Dialog open onClose={onClose}>
+    <Dialog open onClose={onClose} isDirty={isDirty}>
       <DialogTitle>Editar Insumo</DialogTitle>
       <div className="mt-4">
-        <SupplyForm initial={supply} onSave={handleSave} onCancel={onClose} isPending={update.isPending} showActiveToggle />
+        <SupplyForm initial={supply} onSave={handleSave} onCancel={onClose} isPending={update.isPending} showActiveToggle onDirtyChange={setIsDirty} />
       </div>
     </Dialog>
   )

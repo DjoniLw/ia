@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { ExternalLink, GripVertical, Loader2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,6 +21,7 @@ function AnamnesisConfigTab() {
   const [adding, setAdding] = useState(false)
   const [newQ, setNewQ] = useState({ text: '', type: 'text' as QuestionType, required: false })
   const [saved, setSaved] = useState(false)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
 
   // Initialize from server data when loaded
   const effectiveQuestions = questions ?? savedQuestions ?? DEFAULT_ANAMNESIS_QUESTIONS
@@ -74,7 +75,26 @@ function AnamnesisConfigTab() {
         ) : (
         <div className="mt-4 space-y-2">
           {effectiveQuestions.map((q, i) => (
-            <div key={q.id} className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5">
+            <div
+              key={q.id}
+              draggable
+              onDragStart={() => setDragIndex(i)}
+              onDragEnd={() => setDragIndex(null)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                if (dragIndex === null || dragIndex === i) return
+                const reordered = [...effectiveQuestions]
+                const [moved] = reordered.splice(dragIndex, 1)
+                reordered.splice(i, 0, moved)
+                setQuestions(reordered)
+                setDragIndex(null)
+              }}
+              className={[
+                'flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5 transition-opacity',
+                dragIndex === i ? 'opacity-40' : '',
+              ].join(' ')}
+            >
+              <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing" />
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
                 {i + 1}
               </span>

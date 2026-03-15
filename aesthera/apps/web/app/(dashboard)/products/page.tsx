@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertCircle, Package, ShoppingCart } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -57,15 +57,19 @@ function ProductForm({
   defaultValues,
   onSave,
   isPending,
+  onDirtyChange,
 }: {
   defaultValues?: Partial<ProductFormData>
   onSave: (data: ProductFormData) => Promise<void>
   isPending: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }) {
-  const { register, handleSubmit, formState: { errors } } = useForm<ProductFormData>({
+  const { register, handleSubmit, formState: { errors, isDirty } } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues,
   })
+
+  useEffect(() => { onDirtyChange?.(isDirty) }, [isDirty, onDirtyChange])
 
   return (
     <form onSubmit={handleSubmit(onSave)} className="space-y-4">
@@ -263,6 +267,7 @@ type PageTab = 'catalog' | 'sales'
 export default function ProductsPage() {
   const [tab, setTab] = useState<PageTab>('catalog')
   const [creating, setCreating] = useState(false)
+  const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
   const [selling, setSelling] = useState<Product | null>(null)
 
@@ -488,17 +493,17 @@ export default function ProductsPage() {
 
       {/* Create dialog */}
       {creating && (
-        <Dialog open onClose={() => setCreating(false)}>
+        <Dialog open onClose={() => setCreating(false)} isDirty={formDirty}>
           <DialogTitle>Novo Produto</DialogTitle>
           <div className="mt-4">
-            <ProductForm onSave={handleCreate} isPending={createProduct.isPending} />
+            <ProductForm onSave={handleCreate} isPending={createProduct.isPending} onDirtyChange={setFormDirty} />
           </div>
         </Dialog>
       )}
 
       {/* Edit dialog */}
       {editing && (
-        <Dialog open onClose={() => setEditing(null)}>
+        <Dialog open onClose={() => setEditing(null)} isDirty={formDirty}>
           <DialogTitle>Editar Produto</DialogTitle>
           <div className="mt-4">
             <ProductForm
@@ -520,6 +525,7 @@ export default function ProductsPage() {
               }}
               onSave={handleUpdate}
               isPending={updateProduct.isPending}
+              onDirtyChange={setFormDirty}
             />
           </div>
         </Dialog>

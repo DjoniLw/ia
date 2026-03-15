@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -43,14 +43,16 @@ function ServiceForm({
   onSave,
   isPending,
   showActiveToggle = false,
+  onDirtyChange,
 }: {
   defaultValues?: Partial<ServiceFormData & { price: number; active?: boolean }>
   onSave: (data: ServiceFormData & { active?: boolean }) => Promise<void>
   isPending: boolean
   showActiveToggle?: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const [active, setActive] = useState(defaultValues?.active ?? true)
-  const { register, handleSubmit, formState: { errors } } = useForm<ServiceFormData>({
+  const { register, handleSubmit, formState: { errors, isDirty } } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
     defaultValues: defaultValues
       ? {
@@ -62,6 +64,8 @@ function ServiceForm({
         }
       : undefined,
   })
+
+  useEffect(() => { onDirtyChange?.(isDirty) }, [isDirty, onDirtyChange])
 
   return (
     <form onSubmit={handleSubmit((data) => onSave({ ...data, ...(showActiveToggle ? { active } : {}) }))} className="space-y-4">
@@ -146,6 +150,8 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
     })) ?? []
   )
 
+  const [isDirty, setIsDirty] = useState(false)
+
   // Sync from server when data loads
   const [initialised, setInitialised] = useState(false)
   if (!initialised && assigned) {
@@ -162,22 +168,27 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
     if (items.some((i) => i.supplyId === supplyId)) return
     const supply = suppliesData?.items.find((s) => s.id === supplyId)
     setItems((prev) => [...prev, { supplyId, quantity: 1, usageUnit: supply?.unit ?? 'un', conversionFactor: 1 }])
+    setIsDirty(true)
   }
 
   function removeSupply(supplyId: string) {
     setItems((prev) => prev.filter((i) => i.supplyId !== supplyId))
+    setIsDirty(true)
   }
 
   function setQty(supplyId: string, qty: number) {
     setItems((prev) => prev.map((i) => i.supplyId === supplyId ? { ...i, quantity: qty } : i))
+    setIsDirty(true)
   }
 
   function setUsageUnit(supplyId: string, unit: string) {
     setItems((prev) => prev.map((i) => i.supplyId === supplyId ? { ...i, usageUnit: unit } : i))
+    setIsDirty(true)
   }
 
   function setConversionFactor(supplyId: string, factor: number) {
     setItems((prev) => prev.map((i) => i.supplyId === supplyId ? { ...i, conversionFactor: factor } : i))
+    setIsDirty(true)
   }
 
   const unassigned = suppliesData?.items.filter((s) => !items.some((i) => i.supplyId === s.id)) ?? []
@@ -206,7 +217,7 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
   }, 0)
 
   return (
-    <Dialog open onClose={onClose} className="max-w-2xl">
+    <Dialog open onClose={onClose} className="max-w-2xl" isDirty={isDirty}>
       <DialogTitle>Insumos de: {service.name}</DialogTitle>
       <p className="text-xs text-muted-foreground mb-3">
         Defina os insumos, quantidades e unidades usadas por execução deste serviço.
@@ -348,6 +359,7 @@ export default function ServicesPage() {
   const { mutateAsync: del } = useDeleteService()
 
   const [showCreate, setShowCreate] = useState(false)
+  const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Service | null>(null)
   const [managingSupplies, setManagingSupplies] = useState<Service | null>(null)
   const { mutateAsync: update, isPending: updating } = useUpdateService(editing?.id ?? '')
@@ -450,12 +462,12 @@ export default function ServicesPage() {
         </div>
       )}
 
-      <Dialog open={showCreate} onClose={() => setShowCreate(false)}>
+      <Dialog open={showCreate} onClose={() => setShowCreate(false)} isDirty={formDirty}>
         <DialogTitle>Novo serviço</DialogTitle>
-        <ServiceForm onSave={handleCreate} isPending={creating} />
+        <ServiceForm onSave={handleCreate} isPending={creating} onDirtyChange={setFormDirty} />
       </Dialog>
 
-      <Dialog open={!!editing} onClose={() => setEditing(null)}>
+      <Dialog open={!!editing} onClose={() => setEditing(null)} isDirty={formDirty}>
         <DialogTitle>Editar serviço</DialogTitle>
         {editing && (
           <ServiceForm
@@ -467,6 +479,7 @@ export default function ServicesPage() {
             onSave={handleUpdate}
             isPending={updating}
             showActiveToggle
+            onDirtyChange={setFormDirty}
           />
         )}
       </Dialog>

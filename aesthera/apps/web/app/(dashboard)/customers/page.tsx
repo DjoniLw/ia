@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Bot, ClipboardList, FileSignature, Loader2, Package, Plus, Scissors, Search, User } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -161,10 +161,12 @@ function CustomerForm({
   defaultValues,
   onSave,
   isPending,
+  onDirtyChange,
 }: {
   defaultValues?: Partial<CustomerFormData>
   onSave: (data: CustomerFormData) => Promise<void>
   isPending: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const [tab, setTab] = useState<FormTab>('basic')
 
@@ -173,11 +175,13 @@ function CustomerForm({
     handleSubmit,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues,
   })
+
+  useEffect(() => { onDirtyChange?.(isDirty) }, [isDirty, onDirtyChange])
 
   const tabs: Array<{ id: FormTab; label: string }> = [
     { id: 'basic', label: 'Dados Básicos' },
@@ -1148,6 +1152,7 @@ export default function CustomersPage() {
   const deleteCustomer = useDeleteCustomer()
 
   const [creating, setCreating] = useState(false)
+  const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [viewing, setViewing] = useState<Customer | null>(null)
   const [aiSummary, setAiSummary] = useState<Customer | null>(null)
@@ -1263,23 +1268,24 @@ export default function CustomersPage() {
 
       {/* Create dialog */}
       {creating && (
-        <Dialog open onClose={() => setCreating(false)}>
+        <Dialog open onClose={() => setCreating(false)} isDirty={formDirty}>
           <DialogTitle>Novo Cliente</DialogTitle>
           <div className="mt-4">
-            <CustomerForm onSave={handleCreate} isPending={createCustomer.isPending} />
+            <CustomerForm onSave={handleCreate} isPending={createCustomer.isPending} onDirtyChange={setFormDirty} />
           </div>
         </Dialog>
       )}
 
       {/* Edit dialog */}
       {editing && (
-        <Dialog open onClose={() => setEditing(null)}>
+        <Dialog open onClose={() => setEditing(null)} isDirty={formDirty}>
           <DialogTitle>Editar Cliente — {editing.name}</DialogTitle>
           <div className="mt-4">
             <CustomerForm
               defaultValues={fromCustomer(editing)}
               onSave={handleUpdate}
               isPending={updateCustomer.isPending}
+              onDirtyChange={setFormDirty}
             />
           </div>
         </Dialog>
