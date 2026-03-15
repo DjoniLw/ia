@@ -82,7 +82,12 @@ export class ScheduleAvailabilityService {
     const profSlots: { id: string; name: string; slots: string[] }[] = []
 
     for (const prof of professionals) {
-      const wh = await this.repo.getProfessionalWorkingHours(prof.id, dayOfWeek)
+      const profWH = await this.repo.getProfessionalWorkingHours(prof.id, dayOfWeek)
+      // Fall back to clinic business hours when no per-professional hours are set
+      const wh: { startTime: string; endTime: string } | null = profWH ?? await (async () => {
+        const bh = await prisma.businessHour.findFirst({ where: { clinicId, dayOfWeek, isOpen: true } })
+        return bh ? { startTime: bh.openTime, endTime: bh.closeTime } : null
+      })()
       if (!wh) continue
 
       const start = timeToMinutes(wh.startTime)
@@ -147,7 +152,12 @@ export class ScheduleAvailabilityService {
 
     const result = await Promise.all(
       professionals.map(async (prof): Promise<ProfessionalAvailability> => {
-        const wh = await this.repo.getProfessionalWorkingHours(prof.id, dayOfWeek)
+        const profWH = await this.repo.getProfessionalWorkingHours(prof.id, dayOfWeek)
+        // Fall back to clinic business hours when no per-professional hours are set
+        const wh: { startTime: string; endTime: string } | null = profWH ?? await (async () => {
+          const bh = await prisma.businessHour.findFirst({ where: { clinicId, dayOfWeek, isOpen: true } })
+          return bh ? { startTime: bh.openTime, endTime: bh.closeTime } : null
+        })()
         if (!wh) return { ...prof, available: false }
 
         const startMin = timeToMinutes(wh.startTime)

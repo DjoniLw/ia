@@ -248,15 +248,23 @@ function CreateAppointmentForm({
   // use those results (they carry available/unavailable marks).
   // Otherwise fall back to the service-filtered list (everyone marked available).
   const profListFromApi = availProfsData?.professionals ?? []
-  const profList =
-    serviceId && date && profListFromApi.length > 0
-      ? profListFromApi
-      : serviceFilteredProfs.map((p) => ({
-          id: p.id,
-          name: p.name,
-          speciality: p.speciality ?? null,
-          available: true as const,
-        }))
+  const profList = useMemo(() => {
+    if (serviceId && date && profListFromApi.length > 0) {
+      return profListFromApi.map((p) => ({
+        ...p,
+        // Only mark as unavailable AFTER a time has been selected.
+        // Without a time, "occupied at this time" has no meaning.
+        available: selectedTime ? p.available : true,
+      }))
+    }
+    return serviceFilteredProfs.map((p) => ({
+      id: p.id,
+      name: p.name,
+      speciality: p.speciality ?? null,
+      available: true as const,
+    }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profListFromApi, serviceFilteredProfs, serviceId, date, selectedTime])
 
   // After a time is selected, the finalProfessionalId must come from profList (filtered to available)
   const availableProfIds = new Set(profList.filter((p) => p.available).map((p) => p.id))
