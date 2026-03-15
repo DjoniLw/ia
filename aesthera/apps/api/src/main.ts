@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { buildApp } from './app'
@@ -7,18 +7,42 @@ import { redis } from './database/redis/client'
 import { logger } from './shared/logger/logger'
 
 /**
- * Run `prisma db push` synchronously BEFORE the server binds its port.
+ * Schema-sync strategy
+ * ─────────────────────────────────────────────────────────────────────────────
+ * We need two competing goals:
  *
- * Running it synchronously (blocking) ensures the database schema is fully
- * up to date before any request is served.  A typical no-op push on an
- * already-synced schema completes in < 2 s; a push with real changes takes
- * < 15 s — both well within Railway's 120 s healthcheck timeout.
+ *   1. Railway's health-check hits `/health` within ~2 minutes of deploy.
+ *      This means the HTTP port must be bound BEFORE prisma db push finishes.
  *
- * If the push fails (bad DATABASE_URL, unreachable DB, …) the process exits
- * with a non-zero code so Railway marks the deploy as failed rather than
- * silently serving stale/broken endpoints.
+ *   2. The database schema must be fully applied before any real API request
+ *      is served (prevents P2021 / P2022 errors on new tables / columns).
+ *
+ * Solution:
+ *   • Bind the port first so `/health` is reachable immediately.
+ *   • Start `prisma db push` right after binding (non-blocking).
+ *   • Expose a `schemaSyncReady` promise that resolves/rejects when the push
+ *     finishes.
+ *   • The app's preHandler hook (added below) awaits `schemaSyncReady` for
+ *     every non-health route, so real requests queue up harmlessly until the
+ *     schema is consistent.
+ *   • If the push fails the promise rejects, the preHandler returns 503, and
+ *     Railway keeps the old replica alive while alerting on the deploy failure.
  */
-function syncSchemaSync(): void {
+
+// Resolved when schema sync is complete, rejected if it fails.
+// Exported so the Fastify preHandler hook can await it.
+let _resolveSchemaSyncReady!: () => void
+let _rejectSchemaSyncReady!: (err: unknown) => void
+export const schemaSyncReady: Promise<void> = new Promise((res, rej) => {
+  _resolveSchemaSyncReady = res
+  _rejectSchemaSyncReady = rej
+})
+
+// Must be shorter than Railway's healthcheckTimeout (120 s) so the push does
+// not outlive a failed deployment attempt.
+const SCHEMA_SYNC_TIMEOUT_MS = 110_000
+
+function startSchemaSyncBackground(): void {
   const prismaBin = path.resolve(__dirname, '..', 'node_modules', '.bin', 'prisma')
 
   if (!existsSync(prismaBin)) {
@@ -26,33 +50,54 @@ function syncSchemaSync(): void {
       'Prisma binary not found — skipping schema sync. ' +
       'This is expected in development when running outside the Docker image.',
     )
+    _resolveSchemaSyncReady()
     return
   }
 
-  logger.info('⏳ Running prisma db push to sync schema…')
-  try {
-    execFileSync(prismaBin, ['db', 'push', '--accept-data-loss'], {
-      timeout: 110_000,
-      stdio: 'inherit',
-    })
-    logger.info('✅ Schema sync complete (prisma db push succeeded)')
-  } catch (err) {
-    logger.error(
-      { err },
-      '❌ prisma db push failed — aborting startup to prevent serving a broken schema. ' +
-      'Check DATABASE_URL and the Railway PostgreSQL service.',
-    )
-    process.exit(1)
-  }
+  logger.info('⏳ Starting prisma db push (schema sync)…')
+
+  execFile(
+    prismaBin,
+    ['db', 'push', '--accept-data-loss'],
+    { timeout: SCHEMA_SYNC_TIMEOUT_MS },
+    (error) => {
+      if (error) {
+        logger.error(
+          { err: error },
+          '❌ prisma db push failed — API is serving 503 for non-health routes. ' +
+          'Check DATABASE_URL and the Railway PostgreSQL service.',
+        )
+        _rejectSchemaSyncReady(error)
+      } else {
+        logger.info('✅ Schema sync complete — API is now fully operational')
+        _resolveSchemaSyncReady()
+      }
+    },
+  )
 }
 
 async function main(): Promise<void> {
-  // Sync schema first — before the port is bound — so every request sees a
-  // consistent, up-to-date database schema from the very first connection.
-  syncSchemaSync()
-
   const app = await buildApp()
 
+  // Register a preHandler hook that gates every non-health route behind the
+  // schema-sync promise.  This hook runs AFTER the app is built so it sees
+  // the same PUBLIC_ROUTES set used by the tenant middleware.
+  const BYPASS_SYNC = new Set(['/', '/health'])
+  app.addHook('preHandler', async (request, reply) => {
+    const url = request.routeOptions.url
+    if (url && BYPASS_SYNC.has(url)) return
+
+    try {
+      await schemaSyncReady
+    } catch {
+      reply.status(503).send({
+        error: 'SERVICE_INITIALIZING',
+        message: 'API is initializing. Schema sync failed — please check deployment logs.',
+      })
+    }
+  })
+
+  // Bind the port FIRST so Railway's health check always returns 200 quickly.
   try {
     await app.listen({
       port: appConfig.port,
@@ -74,6 +119,9 @@ async function main(): Promise<void> {
       'Authentication endpoints will return 503 until Redis is available.',
     )
   }
+
+  // Kick off schema sync now that the port is bound and healthchecks can pass.
+  startSchemaSyncBackground()
 }
 
 main()
