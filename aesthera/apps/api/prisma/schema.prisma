@@ -595,7 +595,7 @@ model ClinicalRecord {
   type           String    @default("note")       // note | exam | procedure | prescription | anamnesis
   performedAt    DateTime?                        @map("performed_at") // date the exam/procedure was actually performed
   createdAt      DateTime  @default(now())        @map("created_at")
-  updatedAt      DateTime  @updatedAt             @map("updated_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
 
   clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
