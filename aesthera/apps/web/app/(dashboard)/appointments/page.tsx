@@ -16,7 +16,7 @@ import {
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
-import { useCustomers, useAvailableEquipment, useServices } from '@/lib/hooks/use-resources'
+import { useCustomers, useAvailableEquipment, useProfessionals, useServices } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -199,7 +199,10 @@ function CreateAppointmentForm({
   const [submitted, setSubmitted] = useState(false)
 
   // ── API data ──────────────────────────────────────────────────────────────────
-  const { data: allServices } = useServices({ active: 'true', limit: '200' })
+  const { data: allServices, isLoading: servicesLoading } = useServices({ active: 'true', limit: '200' })
+
+  // All active professionals — used as a fallback when the availability API returns empty
+  const { data: allProfsData } = useProfessionals({ active: 'true', limit: '200' })
 
   const { data: custSearchData } = useCustomers(
     customerSearchDebounced.trim().length >= 1
@@ -214,7 +217,7 @@ function CreateAppointmentForm({
   )
 
   // Available professionals: filtered by service + date, and further filtered when a time is chosen
-  const { data: availProfsData } = useAvailableProfessionals(
+  const { data: availProfsData, isFetching: profsFetching } = useAvailableProfessionals(
     serviceId && date ? { serviceId, date, time: selectedTime || undefined } : null,
   )
 
@@ -227,9 +230,11 @@ function CreateAppointmentForm({
   // ── Derived ───────────────────────────────────────────────────────────────────
   const slots = slotsData?.slots ?? []
 
-  // The professional list to show is from availProfsData (filtered by service+date+time)
-  // When user has a professionalFilter set AND no time selected yet, show availability without time filter
-  const profList = availProfsData?.professionals ?? []
+  // The professional list to show is from availProfsData (filtered by service+date+time).
+  // Fall back to all active professionals (all marked available) so the dropdown is never empty.
+  const profListFromApi = availProfsData?.professionals ?? []
+  const profListFallback = (allProfsData?.items ?? []).map((p) => ({ ...p, available: true as const }))
+  const profList = profListFromApi.length > 0 ? profListFromApi : profListFallback
 
   // After a time is selected, the finalProfessionalId must come from profList (filtered to available)
   const availableProfIds = new Set(profList.filter((p) => p.available).map((p) => p.id))
@@ -331,8 +336,9 @@ function CreateAppointmentForm({
             setFinalProfessionalId('')
             setProfessionalFilter('')
           }}
+          disabled={servicesLoading}
         >
-          <option value="">Selecione um serviço…</option>
+          <option value="">{servicesLoading ? 'Carregando serviços…' : 'Selecione um serviço…'}</option>
           {(allServices?.items ?? []).map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
@@ -356,21 +362,25 @@ function CreateAppointmentForm({
       </div>
 
       {/* 4. Profissional (optional pre-filter) */}
-      {serviceId && date && profList.length > 0 && (
+      {serviceId && date && (
         <div className="space-y-2">
           <Label>Profissional</Label>
-          <select
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={finalProfessionalId}
-            onChange={(e) => handleProfessionalChange(e.target.value)}
-          >
-            <option value="">Todos disponíveis</option>
-            {profList.map((p) => (
-              <option key={p.id} value={p.id} disabled={!p.available}>
-                {p.name}{!p.available ? ' (ocupado)' : ''}
-              </option>
-            ))}
-          </select>
+          {profsFetching && profList.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Buscando profissionais disponíveis…</p>
+          ) : (
+            <select
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={finalProfessionalId}
+              onChange={(e) => handleProfessionalChange(e.target.value)}
+            >
+              <option value="">Todos disponíveis</option>
+              {profList.map((p) => (
+                <option key={p.id} value={p.id} disabled={!p.available}>
+                  {p.name}{!p.available ? ' (ocupado)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
           <p className="text-xs text-muted-foreground">
             {selectedTime
               ? 'Profissionais disponíveis neste horário'
