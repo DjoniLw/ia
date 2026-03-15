@@ -310,6 +310,56 @@ export class AppointmentsService {
     return { message: 'Blocked slot deleted' }
   }
 
+  // ── Available professionals for a given date + time ───────────────────────────
+
+  async getAvailableProfessionals(clinicId: string, date: string, time: string) {
+    const timeMinutes = timeToMinutes(time)
+    const dayOfWeek = new Date(date + 'T12:00:00Z').getUTCDay()
+    const minDuration = 15 // minimum slot in minutes
+
+    const professionals = await prisma.professional.findMany({
+      where: { clinicId, active: true, deletedAt: null },
+      select: { id: true, name: true, speciality: true },
+      orderBy: { name: 'asc' },
+    })
+
+    const result = await Promise.all(
+      professionals.map(async (prof) => {
+        const wh = await this.repo.getProfessionalWorkingHours(prof.id, dayOfWeek)
+        if (!wh) return { ...prof, available: false }
+
+        const startMin = timeToMinutes(wh.startTime)
+        const endMin = timeToMinutes(wh.endTime)
+        if (timeMinutes < startMin || timeMinutes + minDuration > endMin) {
+          return { ...prof, available: false }
+        }
+
+        const [appointments, blockedSlots] = await Promise.all([
+          this.repo.getConflictingAppointments(clinicId, prof.id, date),
+          this.repo.getBlockedSlotsForDate(clinicId, prof.id, date),
+        ])
+
+        const occupied = [
+          ...appointments.map((a: { scheduledAt: Date; durationMinutes: number }) => ({
+            start: dateToMinutes(a.scheduledAt),
+            end: dateToMinutes(a.scheduledAt) + a.durationMinutes,
+          })),
+          ...blockedSlots.map((b: { startTime: string; endTime: string }) => ({
+            start: timeToMinutes(b.startTime),
+            end: timeToMinutes(b.endTime),
+          })),
+        ]
+
+        const conflict = occupied.some(
+          (o) => timeMinutes < o.end && timeMinutes + minDuration > o.start,
+        )
+        return { ...prof, available: !conflict }
+      }),
+    )
+
+    return { professionals: result }
+  }
+
   // ── Internal helpers ──────────────────────────────────────────────────────────
 
   private async assertEquipmentAvailable(

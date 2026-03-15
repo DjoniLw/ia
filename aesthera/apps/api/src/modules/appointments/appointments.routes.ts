@@ -29,6 +29,16 @@ export async function appointmentsRoutes(app: FastifyInstance) {
     return reply.send(await svc.getCalendar(req.clinicId, q))
   })
 
+  // ── Available professionals for a given date + time ──────────────────────────
+  // GET /appointments/available-professionals?date=YYYY-MM-DD&time=HH:MM
+  app.get('/appointments/available-professionals', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const q = z.object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      time: z.string().regex(/^\d{2}:\d{2}$/),
+    }).parse(req.query)
+    return reply.send(await svc.getAvailableProfessionals(req.clinicId, q.date, q.time))
+  })
+
   // ── Available equipment for a given time slot (Feature 9) ────────────────────
   // GET /appointments/available-equipment?scheduledAt=ISO&durationMinutes=N[&excludeAppointmentId=UUID]
   app.get('/appointments/available-equipment', { preHandler: [jwtClinicGuard] }, async (req, reply) => {

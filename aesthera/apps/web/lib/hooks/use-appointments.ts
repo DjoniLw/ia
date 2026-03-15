@@ -140,6 +140,24 @@ export function useAvailability(
   })
 }
 
+export interface AvailableProfessional {
+  id: string
+  name: string
+  speciality: string | null
+  available: boolean
+}
+
+export function useAvailableProfessionals(
+  params: { date: string; time: string } | null,
+) {
+  return useQuery<{ professionals: AvailableProfessional[] }>({
+    queryKey: ['appointments-available-professionals', params],
+    queryFn: () =>
+      api.get('/appointments/available-professionals', { params: params! }).then((r) => r.data),
+    enabled: !!params?.date && !!params?.time,
+  })
+}
+
 export function useCreateAppointment() {
   const qc = useQueryClient()
   return useMutation({

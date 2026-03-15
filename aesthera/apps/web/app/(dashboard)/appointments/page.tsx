@@ -14,11 +14,11 @@ import {
   type AppointmentStatus,
   type CalendarSlot,
   useAppointmentTransition,
-  useAvailability,
+  useAvailableProfessionals,
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
-import { useCustomers, useProfessionals, useEquipment, useAvailableEquipment } from '@/lib/hooks/use-resources'
+import { useCustomers, useProfessionals, useEquipment, useAvailableEquipment, useServices } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -175,6 +175,8 @@ function CreateAppointmentForm({
   isPending: boolean
 }) {
   const { data: profData } = useProfessionals({ includeServices: 'true' })
+  // Fix #2: fetch all clinic services to use when professional has allServices=true
+  const { data: allServicesData } = useServices({ active: 'true', limit: '200' })
   const { data: equipmentData } = useEquipment()
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
@@ -184,10 +186,26 @@ function CreateAppointmentForm({
   const [showDropdown, setShowDropdown] = useState(false)
   const debounceRef = useMemo(() => ({ timer: undefined as ReturnType<typeof setTimeout> | undefined }), [])
 
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<Omit<CreateFormData, 'customerId'> & { customerId: string }>({
+    resolver: zodResolver(createSchema),
+    defaultValues: { date: defaultDate, customerId: '' },
+  })
+
   function handleCustomerInput(value: string) {
     setCustomerSearch(value)
     setShowDropdown(true)
-    if (!value) { setSelectedCustomerId(''); setCustomerName('') }
+    if (!value) {
+      setSelectedCustomerId('')
+      setCustomerName('')
+      // Fix #1: keep form state in sync when customer is cleared
+      setValue('customerId', '', { shouldValidate: false })
+    }
     clearTimeout(debounceRef.timer)
     debounceRef.timer = setTimeout(() => setCustomerSearchDebounced(value), 250)
   }
@@ -200,30 +218,21 @@ function CreateAppointmentForm({
 
   const searchResults = custSearchData?.items ?? []
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors },
-  } = useForm<Omit<CreateFormData, 'customerId'> & { customerId: string }>({
-    resolver: zodResolver(createSchema),
-    defaultValues: { date: defaultDate, customerId: '' },
-  })
-
   const professionalId = watch('professionalId')
   const serviceId = watch('serviceId')
   const date = watch('date')
   const time = watch('time')
 
-  const selectedProf = profData?.items.find((p) => p.id === professionalId)
-  // If professional has allServices flag, show all services; otherwise show only assigned
-  const assignedServices = selectedProf?.allServices
-    ? (profData?.items.flatMap((p) => p.id === professionalId ? (p.services ?? []).map((ps) => ps.service) : []) ?? [])
-    : (selectedProf?.services?.map((ps) => ps.service) ?? [])
-
-  const { data: avail } = useAvailability(
-    professionalId && serviceId && date ? { professionalId, serviceId, date } : null,
+  // Fix #3: fetch available professionals based on selected date+time
+  const { data: availProfsData } = useAvailableProfessionals(
+    date && time ? { date, time } : null,
   )
+
+  const selectedProf = profData?.items.find((p) => p.id === professionalId)
+  // Fix #2: when allServices=true use ALL clinic services (including newly added ones)
+  const assignedServices = selectedProf?.allServices
+    ? (allServicesData?.items ?? [])
+    : (selectedProf?.services?.map((ps) => ps.service) ?? [])
 
   // Compute scheduledAt for equipment availability query
   const scheduledAt = date && time ? `${date}T${time}:00.000Z` : ''
@@ -269,6 +278,8 @@ function CreateAppointmentForm({
                   onClick={() => {
                     setSelectedCustomerId(c.id)
                     setCustomerName(c.name)
+                    // Fix #1: sync customerId into form state so Zod validation passes
+                    setValue('customerId', c.id, { shouldValidate: true })
                     setCustomerSearch('')
                     setShowDropdown(false)
                   }}
@@ -285,17 +296,41 @@ function CreateAppointmentForm({
             </div>
           )}
         </div>
+        {/* Hidden input to register customerId with react-hook-form */}
+        <input type="hidden" {...register('customerId')} />
         {!selectedCustomerId && <p className="text-xs text-muted-foreground">Digite para buscar clientes</p>}
         {selectedCustomerId && <p className="text-xs text-green-600">✓ {customerName}</p>}
         {errors.customerId && <p className="text-xs text-destructive">{errors.customerId.message}</p>}
       </div>
 
+      {/* Fix #3: Date & Time now comes BEFORE Professional & Service */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label>Data *</Label>
+          <Input type="date" {...register('date')} />
+        </div>
+        <div className="space-y-2">
+          <Label>Horário *</Label>
+          <Input type="time" step={900} {...register('time')} />
+          {errors.time && <p className="text-xs text-destructive">{errors.time.message}</p>}
+        </div>
+      </div>
+
+      {/* Fix #3: Professional & Service now comes AFTER Date & Time */}
+      {/* Professional list shows availability indicator when date+time are selected */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label>Profissional *</Label>
           <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('professionalId')}>
             <option value="">Selecione…</option>
-            {profData?.items.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {(availProfsData?.professionals ?? profData?.items ?? []).map((p) => {
+              const available = 'available' in p ? (p as { available: boolean }).available : true
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.name}{!available ? ' (ocupado)' : ''}
+                </option>
+              )
+            })}
           </select>
           {errors.professionalId && <p className="text-xs text-destructive">{errors.professionalId.message}</p>}
         </div>
@@ -309,25 +344,6 @@ function CreateAppointmentForm({
             {assignedServices.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           {errors.serviceId && <p className="text-xs text-destructive">{errors.serviceId.message}</p>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label>Data *</Label>
-          <Input type="date" {...register('date')} />
-        </div>
-        <div className="space-y-2">
-          <Label>Horário *</Label>
-          {avail && avail.slots.length > 0 ? (
-            <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('time')}>
-              <option value="">Selecione…</option>
-              {avail.slots.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          ) : (
-            <Input type="time" step={900} {...register('time')} />
-          )}
-          {errors.time && <p className="text-xs text-destructive">{errors.time.message}</p>}
         </div>
       </div>
 
