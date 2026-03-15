@@ -196,6 +196,10 @@ export class ScheduleAvailabilityService {
    * Returns professionals in this clinic that are qualified to perform
    * `serviceId` (either via an explicit ProfessionalService row or because
    * `allServices = true`).  Optionally restricted to a single professional.
+   *
+   * If no service-specific professionals are found, falls back to ALL active
+   * professionals in the clinic so that availability slots are never silently
+   * empty due to missing service-assignment data.
    */
   private async getQualifyingProfessionals(
     clinicId: string,
@@ -223,6 +227,17 @@ export class ScheduleAvailabilityService {
     // Deduplicate by id
     const map = new Map<string, { id: string; name: string; speciality: string | null }>()
     for (const p of [...withService, ...withAllServices]) map.set(p.id, p)
+
+    // If no professionals are explicitly linked to this service, fall back to
+    // ALL active professionals in the clinic so slots are never silently empty.
+    if (map.size === 0) {
+      const allProfs = await prisma.professional.findMany({
+        where: { clinicId, active: true, deletedAt: null, ...(specificProfessionalId ? { id: specificProfessionalId } : {}) },
+        select: { id: true, name: true, speciality: true },
+      })
+      return allProfs.sort((a, b) => a.name.localeCompare(b.name))
+    }
+
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
   }
 }

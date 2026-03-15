@@ -16,7 +16,7 @@ import {
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
-import { useCustomers, useAvailableEquipment, useProfessionals, useServices } from '@/lib/hooks/use-resources'
+import { useCustomers, useAvailableEquipment, useEquipment, useProfessionals, useServices } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -227,6 +227,9 @@ function CreateAppointmentForm({
   const serviceDuration = selectedServiceObj?.durationMinutes ?? 0
   const scheduledAt = date && selectedTime ? `${date}T${selectedTime}:00.000Z` : ''
   const { data: availableEquipment } = useAvailableEquipment(scheduledAt, serviceDuration)
+  // Fallback: when no time is selected yet, show all clinic equipment (no availability marks)
+  const { data: allEquipmentData } = useEquipment()
+  const displayEquipment = availableEquipment ?? allEquipmentData ?? []
 
   // ── Derived ───────────────────────────────────────────────────────────────────
   const slots = slotsData?.slots ?? []
@@ -424,8 +427,8 @@ function CreateAppointmentForm({
         </div>
       )}
 
-      {/* 5. Profissional — visible only after a time slot is selected; list is pre-filtered to that time */}
-      {serviceId && date && selectedTime && (
+      {/* 5. Profissional — visible whenever service + date are set */}
+      {serviceId && date && (
         <div className="space-y-2">
           <Label>Profissional *</Label>
           {profsFetching && profList.length === 0 ? (
@@ -447,13 +450,15 @@ function CreateAppointmentForm({
           {profList.length === 0 && !profsFetching && (
             <p className="text-xs text-muted-foreground">Nenhum profissional disponível neste horário</p>
           )}
-          <p className="text-xs text-muted-foreground">Profissionais disponíveis no horário {selectedTime}</p>
+          {selectedTime && (
+            <p className="text-xs text-muted-foreground">Profissionais disponíveis no horário {selectedTime}</p>
+          )}
           {submitted && !finalProfessionalId && <p className="text-xs text-destructive">Selecione um profissional</p>}
         </div>
       )}
 
-      {/* 6. Equipamentos */}
-      {selectedTime && (
+      {/* 6. Equipamentos — always visible once service + date are set */}
+      {serviceId && date && (
         <div className="space-y-2">
           <Label>
             Equipamentos
@@ -461,9 +466,9 @@ function CreateAppointmentForm({
               <span className="ml-1 text-xs text-muted-foreground">(✓ = disponível nesse horário)</span>
             )}
           </Label>
-          {(availableEquipment && availableEquipment.length > 0) ? (
+          {(displayEquipment && displayEquipment.length > 0) ? (
             <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
-              {availableEquipment.map((eq) => {
+              {displayEquipment.map((eq) => {
                 const available = 'available' in eq ? eq.available : true
                 const selected = selectedEquipmentIds.includes(eq.id)
                 return (
