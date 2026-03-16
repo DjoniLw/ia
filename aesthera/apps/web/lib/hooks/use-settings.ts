@@ -15,6 +15,22 @@ export interface AnamnesisQuestion {
   required: boolean
 }
 
+/** A visual separator / category heading inside a group */
+export interface AnamnesisQuestionSeparator {
+  id: string
+  type: 'separator'
+  text: string
+}
+
+/** Union of real questions and separators stored in a group */
+export type AnamnesisItem = AnamnesisQuestion | AnamnesisQuestionSeparator
+
+export interface AnamnesisGroup {
+  id: string
+  name: string
+  questions: AnamnesisItem[]
+}
+
 interface Clinic {
   id: string
   slug: string
@@ -33,6 +49,7 @@ interface Clinic {
   } | null
   settings?: {
     anamnesisQuestions?: AnamnesisQuestion[]
+    anamnesisGroups?: AnamnesisGroup[]
     [key: string]: unknown
   } | null
 }
@@ -62,16 +79,6 @@ export function useClinic() {
   })
 }
 
-export function useAnamnesisTemplate() {
-  return useQuery<AnamnesisQuestion[]>({
-    queryKey: ['clinic', 'anamnesis-template'],
-    queryFn: () =>
-      api
-        .get('/clinics/me')
-        .then((r) => (r.data.settings?.anamnesisQuestions as AnamnesisQuestion[]) ?? DEFAULT_ANAMNESIS_QUESTIONS),
-  })
-}
-
 const DEFAULT_ANAMNESIS_QUESTIONS: AnamnesisQuestion[] = [
   { id: 'q1', text: 'Tipo de pele (seca, oleosa, mista, sensível)', type: 'text', required: false },
   { id: 'q2', text: 'Possui alergias conhecidas?', type: 'yesno', required: true },
@@ -85,14 +92,55 @@ const DEFAULT_ANAMNESIS_QUESTIONS: AnamnesisQuestion[] = [
 
 export { DEFAULT_ANAMNESIS_QUESTIONS }
 
-export function useSaveAnamnesisTemplate() {
+const DEFAULT_ANAMNESIS_GROUP: AnamnesisGroup = {
+  id: 'default',
+  name: 'Padrão',
+  questions: DEFAULT_ANAMNESIS_QUESTIONS,
+}
+
+export { DEFAULT_ANAMNESIS_GROUP }
+
+/** Build the groups list from raw clinic settings, handling the legacy flat list */
+function parseGroups(settings: Clinic['settings']): AnamnesisGroup[] {
+  if (settings?.anamnesisGroups && settings.anamnesisGroups.length > 0) {
+    return settings.anamnesisGroups as AnamnesisGroup[]
+  }
+  // Backward compat: wrap legacy flat list in a "Padrão" group
+  const legacy = settings?.anamnesisQuestions as AnamnesisQuestion[] | undefined
+  if (legacy && legacy.length > 0) {
+    return [{ id: 'default', name: 'Padrão', questions: legacy }]
+  }
+  return [DEFAULT_ANAMNESIS_GROUP]
+}
+
+export function useAnamnesisGroups() {
+  return useQuery<AnamnesisGroup[]>({
+    queryKey: ['clinic', 'anamnesis-groups'],
+    queryFn: () =>
+      api
+        .get('/clinics/me')
+        .then((r) => parseGroups(r.data.settings as Clinic['settings'])),
+  })
+}
+
+export function useSaveAnamnesisGroups() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (questions: AnamnesisQuestion[]) =>
-      api.patch('/clinics/me', { settings: { anamnesisQuestions: questions } }).then((r) => r.data),
+    mutationFn: (groups: AnamnesisGroup[]) =>
+      api.patch('/clinics/me', { settings: { anamnesisGroups: groups } }).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clinic'] })
     },
+  })
+}
+
+export function useAnamnesisTemplate() {
+  return useQuery<AnamnesisQuestion[]>({
+    queryKey: ['clinic', 'anamnesis-template'],
+    queryFn: () =>
+      api
+        .get('/clinics/me')
+        .then((r) => (r.data.settings?.anamnesisQuestions as AnamnesisQuestion[]) ?? DEFAULT_ANAMNESIS_QUESTIONS),
   })
 }
 
