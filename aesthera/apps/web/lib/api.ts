@@ -25,7 +25,16 @@ export function getClinicSlug(): string {
 }
 
 /** Returns the API base URL with no trailing slash, safe to use in template literals. */
-export const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+function ensureAbsoluteUrl(url: string): string {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return `https://${url}`
+  }
+  return url
+}
+
+export const apiBaseUrl = ensureAbsoluteUrl(
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, ''),
+)
 
 export const api = axios.create({
   baseURL: apiBaseUrl,
