@@ -1,11 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
+export interface AnamnesisQuestionOption {
+  label: string
+  withDescription?: boolean
+}
+
 export interface AnamnesisQuestion {
   id: string
   text: string
-  type: 'text' | 'yesno' | 'multiple' | 'numeric' | 'date'
-  options?: string[]
+  type: 'text' | 'yesno' | 'multiple' | 'numeric' | 'date' | 'select'
+  options?: string[]               // for 'multiple' type
+  selectOptions?: AnamnesisQuestionOption[]  // for 'select' type
   required: boolean
 }
 

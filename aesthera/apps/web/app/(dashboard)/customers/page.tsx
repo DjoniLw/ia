@@ -559,6 +559,8 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   // edit record
   const [editingRecord, setEditingRecord] = useState<ClinicalRecord | null>(null)
   const [editValues, setEditValues] = useState({ title: '', content: '', performedAt: '' })
+  // edit anamnesis answers (used when editingRecord.type === 'anamnesis')
+  const [editAnamnesisAnswers, setEditAnamnesisAnswers] = useState<Record<string, string>>({})
   const updateRecord = useUpdateClinicalRecord(editingRecord?.id ?? '')
   const [editSubmitting, setEditSubmitting] = useState(false)
 
@@ -571,25 +573,72 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
   function openEditRecord(r: ClinicalRecord) {
     setEditingRecord(r)
-    setEditValues({
-      title: r.title,
-      content: r.content,
-      performedAt: r.performedAt ? r.performedAt.slice(0, 10) : '',
-    })
+    if (r.type === 'anamnesis') {
+      // Pre-fill anamnesis answers from stored content
+      let entries: Array<{ question: string; answer: string; type?: string }> = []
+      try { entries = JSON.parse(r.content) } catch (err) { console.warn('Failed to parse anamnesis content', err); entries = [] }
+      const answers: Record<string, string> = {}
+      for (const q of anamnesisTemplate ?? []) {
+        const entry = entries.find((e) => e.question === q.text)
+        if (entry) {
+          if (q.type === 'select') {
+            try {
+              const parsed = JSON.parse(entry.answer) as { choice?: string; description?: string }
+              answers[q.id] = parsed.choice ?? ''
+              if (parsed.description) answers[q.id + '__desc'] = parsed.description
+            } catch {
+              answers[q.id] = entry.answer
+            }
+          } else {
+            answers[q.id] = entry.answer
+          }
+        }
+      }
+      setEditAnamnesisAnswers(answers)
+    } else {
+      setEditValues({
+        title: r.title,
+        content: r.content,
+        performedAt: r.performedAt ? r.performedAt.slice(0, 10) : '',
+      })
+    }
   }
 
   async function submitEdit() {
     if (!editingRecord) return
     setEditSubmitting(true)
     try {
-      await updateRecord.mutateAsync({
-        customerId: customer.id,
-        title: editValues.title,
-        content: editValues.content,
-        performedAt: editValues.performedAt ? new Date(editValues.performedAt).toISOString() : null,
-      })
+      if (editingRecord.type === 'anamnesis') {
+        const questions = anamnesisTemplate ?? []
+        const missing = questions.filter((q: AnamnesisQuestion) => q.required && !editAnamnesisAnswers[q.id]?.trim())
+        if (missing.length > 0) {
+          toast.error(`Preencha os campos obrigatórios: ${missing.map((q: AnamnesisQuestion) => q.text).join(', ')}`)
+          setEditSubmitting(false)
+          return
+        }
+        const entries = questions.map((q: AnamnesisQuestion) => {
+          let answer = editAnamnesisAnswers[q.id] ?? ''
+          if (q.type === 'select') {
+            const desc = editAnamnesisAnswers[q.id + '__desc'] ?? ''
+            answer = JSON.stringify(desc.trim() ? { choice: answer, description: desc.trim() } : { choice: answer })
+          }
+          return { question: q.text, answer, type: q.type }
+        })
+        await updateRecord.mutateAsync({
+          customerId: customer.id,
+          content: JSON.stringify(entries),
+        })
+        toast.success('Anamnese atualizada')
+      } else {
+        await updateRecord.mutateAsync({
+          customerId: customer.id,
+          title: editValues.title,
+          content: editValues.content,
+          performedAt: editValues.performedAt ? new Date(editValues.performedAt).toISOString() : null,
+        })
+        toast.success('Lançamento atualizado')
+      }
       setEditingRecord(null)
-      toast.success('Lançamento atualizado')
     } catch {
       toast.error('Erro ao atualizar lançamento')
     } finally {
@@ -608,11 +657,14 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           setEntrySubmitting(false)
           return
         }
-        const entries = questions.map((q: AnamnesisQuestion) => ({
-          question: q.text,
-          answer: anamnesisAnswers[q.id] ?? '',
-          type: q.type,
-        }))
+        const entries = questions.map((q: AnamnesisQuestion) => {
+          let answer = anamnesisAnswers[q.id] ?? ''
+          if (q.type === 'select') {
+            const desc = anamnesisAnswers[q.id + '__desc'] ?? ''
+            answer = JSON.stringify(desc.trim() ? { choice: answer, description: desc.trim() } : { choice: answer })
+          }
+          return { question: q.text, answer, type: q.type }
+        })
         await createRecord.mutateAsync({
           customerId: customer.id,
           title: 'Anamnese',
@@ -896,20 +948,63 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                             className="rounded-md border bg-background px-2 py-1 text-xs"
                           />
                         )}
-                        {q.type === 'multiple' && (q.options ?? []).map((opt) => (
-                          <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={(anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean).includes(opt)}
-                              onChange={(e) => {
-                                const current = (anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
-                                const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
-                                setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
-                              }}
-                            />
-                            {opt}
-                          </label>
-                        ))}
+                        {q.type === 'multiple' && (
+                          <div className="space-y-1">
+                            {(q.options ?? []).map((opt) => (
+                              <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={(anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean).includes(opt)}
+                                  onChange={(e) => {
+                                    const current = (anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
+                                    const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
+                                    setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
+                                  }}
+                                />
+                                {opt}
+                              </label>
+                            ))}
+                            {(q.options ?? []).length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                            )}
+                          </div>
+                        )}
+                        {q.type === 'select' && (
+                          <div className="space-y-1.5">
+                            {(q.selectOptions ?? []).map((opt) => (
+                              <div key={opt.label} className="space-y-1">
+                                <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name={`anamnesis-select-${q.id}`}
+                                    value={opt.label}
+                                    checked={anamnesisAnswers[q.id] === opt.label}
+                                    onChange={() => {
+                                      setAnamnesisAnswers((prev) => {
+                                        const next = { ...prev, [q.id]: opt.label }
+                                        if (!opt.withDescription) delete next[q.id + '__desc']
+                                        return next
+                                      })
+                                    }}
+                                  />
+                                  {opt.label}
+                                </label>
+                                {opt.withDescription && anamnesisAnswers[q.id] === opt.label && (
+                                  <textarea
+                                    value={anamnesisAnswers[q.id + '__desc'] ?? ''}
+                                    onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id + '__desc']: e.target.value }))}
+                                    rows={2}
+                                    placeholder="Descreva…"
+                                    className="ml-5 w-[calc(100%-1.25rem)] rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                                  />
+                                )}
+                              </div>
+                            ))}
+                            {(q.selectOptions ?? []).length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
@@ -975,7 +1070,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           )}
 
           {/* ── Edit record modal ── */}
-          {editingRecord && (
+          {editingRecord && editingRecord.type !== 'anamnesis' && (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
               <p className="text-xs font-semibold text-primary">Editar lançamento</p>
               <div className="space-y-1">
@@ -1022,6 +1117,136 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             </div>
           )}
 
+          {/* ── Edit anamnesis modal ── */}
+          {editingRecord && editingRecord.type === 'anamnesis' && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+              <p className="text-xs font-semibold text-primary">Editar Anamnese</p>
+              {templateLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : (anamnesisTemplate ?? []).length === 0 ? (
+                <p className="text-xs text-amber-600">Nenhuma pergunta configurada no template.</p>
+              ) : (
+                (anamnesisTemplate ?? []).map((q: AnamnesisQuestion) => (
+                  <div key={q.id} className="space-y-1">
+                    <label className="text-xs font-medium text-foreground">
+                      {q.text}
+                      {q.required && <span className="ml-1 text-red-500">*</span>}
+                    </label>
+                    {q.type === 'text' && (
+                      <textarea
+                        value={editAnamnesisAnswers[q.id] ?? ''}
+                        onChange={(e) => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                        rows={2}
+                        className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                        placeholder="Escreva aqui…"
+                      />
+                    )}
+                    {q.type === 'yesno' && (
+                      <div className="flex gap-4">
+                        {(['Sim', 'Não'] as const).map((opt) => (
+                          <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`edit-anamnesis-${q.id}`}
+                              value={opt}
+                              checked={editAnamnesisAnswers[q.id] === opt}
+                              onChange={() => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: opt }))}
+                            />
+                            {opt}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {q.type === 'numeric' && (
+                      <input
+                        type="number"
+                        value={editAnamnesisAnswers[q.id] ?? ''}
+                        onChange={(e) => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                        className="w-32 rounded-md border bg-background px-2 py-1 text-xs"
+                      />
+                    )}
+                    {q.type === 'date' && (
+                      <input
+                        type="date"
+                        value={editAnamnesisAnswers[q.id] ?? ''}
+                        onChange={(e) => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                        className="rounded-md border bg-background px-2 py-1 text-xs"
+                      />
+                    )}
+                    {q.type === 'multiple' && (
+                      <div className="space-y-1">
+                        {(q.options ?? []).map((opt) => (
+                          <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(editAnamnesisAnswers[q.id] ?? '').split(',').filter(Boolean).includes(opt)}
+                              onChange={(e) => {
+                                const current = (editAnamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
+                                const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
+                                setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
+                              }}
+                            />
+                            {opt}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                    {q.type === 'select' && (
+                      <div className="space-y-1.5">
+                        {(q.selectOptions ?? []).map((opt) => (
+                          <div key={opt.label} className="space-y-1">
+                            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`edit-anamnesis-select-${q.id}`}
+                                value={opt.label}
+                                checked={editAnamnesisAnswers[q.id] === opt.label}
+                                onChange={() => {
+                                  setEditAnamnesisAnswers((prev) => {
+                                    const next = { ...prev, [q.id]: opt.label }
+                                    if (!opt.withDescription) delete next[q.id + '__desc']
+                                    return next
+                                  })
+                                }}
+                              />
+                              {opt.label}
+                            </label>
+                            {opt.withDescription && editAnamnesisAnswers[q.id] === opt.label && (
+                              <textarea
+                                value={editAnamnesisAnswers[q.id + '__desc'] ?? ''}
+                                onChange={(e) => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id + '__desc']: e.target.value }))}
+                                rows={2}
+                                placeholder="Descreva…"
+                                className="ml-5 w-[calc(100%-1.25rem)] rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => void submitEdit()}
+                  disabled={editSubmitting}
+                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {editSubmitting ? 'Salvando…' : 'Salvar anamnese'}
+                </button>
+                <button
+                  onClick={() => setEditingRecord(null)}
+                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── Chronological history ── */}
           {clinicalRecords.isLoading ? (
             <div className="flex items-center justify-center py-4">
@@ -1035,10 +1260,21 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             <div className="space-y-2">
               {clinicalRecords.data.items.map((r) => {
                 // For anamnesis, parse JSON entries; for others show content as text
-                let anamnesisEntries: Array<{ question: string; answer: string }> = []
+                let anamnesisEntries: Array<{ question: string; answer: string; type?: string }> = []
                 if (r.type === 'anamnesis') {
                   try { anamnesisEntries = JSON.parse(r.content) } catch { anamnesisEntries = [] }
                 }
+
+                function formatAnswer(answer: string, type?: string): string {
+                  if (type === 'select') {
+                    try {
+                      const parsed = JSON.parse(answer) as { choice?: string; description?: string }
+                      return parsed.description ? `${parsed.choice}: ${parsed.description}` : (parsed.choice ?? answer)
+                    } catch { return answer }
+                  }
+                  return answer
+                }
+
                 return (
                   <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
@@ -1049,14 +1285,12 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
                           {TYPE_LABEL[r.type] ?? r.type}
                         </span>
-                        {r.type !== 'anamnesis' && (
-                          <button
-                            onClick={() => openEditRecord(r)}
-                            className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border"
-                          >
-                            Editar
-                          </button>
-                        )}
+                        <button
+                          onClick={() => openEditRecord(r)}
+                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border"
+                        >
+                          Editar
+                        </button>
                       </div>
                     </div>
 
@@ -1065,7 +1299,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                         {anamnesisEntries.filter((e) => e.answer?.trim()).map((e, i) => (
                           <div key={i} className="flex gap-2 text-xs">
                             <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
-                            <span className="font-medium text-foreground text-right max-w-[55%]">{e.answer}</span>
+                            <span className="font-medium text-foreground text-right max-w-[55%]">{formatAnswer(e.answer, e.type)}</span>
                           </div>
                         ))}
                         {anamnesisEntries.filter((e) => e.answer?.trim()).length === 0 && (

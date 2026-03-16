@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, GripVertical, Loader2 } from 'lucide-react'
+import { ExternalLink, GripVertical, Loader2, X } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { type AnamnesisQuestion, DEFAULT_ANAMNESIS_QUESTIONS, useAnamnesisTemplate, useSaveAnamnesisTemplate } from '@/lib/hooks/use-settings'
+import { type AnamnesisQuestion, type AnamnesisQuestionOption, DEFAULT_ANAMNESIS_QUESTIONS, useAnamnesisTemplate, useSaveAnamnesisTemplate } from '@/lib/hooks/use-settings'
 import { BusinessHoursTab } from './_components/business-hours-tab'
 import { ClinicTab } from './_components/clinic-tab'
 import { UsersTab } from './_components/users-tab'
@@ -19,7 +19,15 @@ function AnamnesisConfigTab() {
 
   const [questions, setQuestions] = useState<AnamnesisQuestion[] | null>(null)
   const [adding, setAdding] = useState(false)
-  const [newQ, setNewQ] = useState({ text: '', type: 'text' as QuestionType, required: false })
+  const [newQ, setNewQ] = useState<{
+    text: string
+    type: QuestionType
+    required: boolean
+    options: string[]
+    selectOptions: AnamnesisQuestionOption[]
+  }>({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+  const [newOptionText, setNewOptionText] = useState('')
+  const [newOptionWithDesc, setNewOptionWithDesc] = useState(false)
   const [saved, setSaved] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
 
@@ -30,14 +38,47 @@ function AnamnesisConfigTab() {
     text: 'Texto livre',
     yesno: 'Sim / Não',
     multiple: 'Múltipla escolha',
+    select: 'Escolha única',
     numeric: 'Numérico',
     date: 'Data',
   }
 
+  function addOption() {
+    if (!newOptionText.trim()) return
+    if (newQ.type === 'multiple') {
+      setNewQ((prev) => ({ ...prev, options: [...prev.options, newOptionText.trim()] }))
+    } else if (newQ.type === 'select') {
+      setNewQ((prev) => ({
+        ...prev,
+        selectOptions: [...prev.selectOptions, { label: newOptionText.trim(), withDescription: newOptionWithDesc }],
+      }))
+    }
+    setNewOptionText('')
+    setNewOptionWithDesc(false)
+  }
+
+  function removeOption(idx: number) {
+    if (newQ.type === 'multiple') {
+      setNewQ((prev) => ({ ...prev, options: prev.options.filter((_, i) => i !== idx) }))
+    } else if (newQ.type === 'select') {
+      setNewQ((prev) => ({ ...prev, selectOptions: prev.selectOptions.filter((_, i) => i !== idx) }))
+    }
+  }
+
   function addQuestion() {
     if (!newQ.text.trim()) return
-    setQuestions([...effectiveQuestions, { id: Date.now().toString(), ...newQ }])
-    setNewQ({ text: '', type: 'text', required: false })
+    const q: AnamnesisQuestion = {
+      id: Date.now().toString(),
+      text: newQ.text,
+      type: newQ.type,
+      required: newQ.required,
+      ...(newQ.type === 'multiple' && { options: newQ.options }),
+      ...(newQ.type === 'select' && { selectOptions: newQ.selectOptions }),
+    }
+    setQuestions([...effectiveQuestions, q])
+    setNewQ({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+    setNewOptionText('')
+    setNewOptionWithDesc(false)
     setAdding(false)
   }
 
@@ -90,30 +131,49 @@ function AnamnesisConfigTab() {
                 setDragIndex(null)
               }}
               className={[
-                'flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2.5 transition-opacity',
+                'rounded-lg border bg-muted/20 px-3 py-2.5 transition-opacity',
                 dragIndex === i ? 'opacity-40' : '',
               ].join(' ')}
             >
-              <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing" />
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                {i + 1}
-              </span>
-              <span className="flex-1 text-sm text-foreground">{q.text}</span>
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                {TYPE_LABEL[q.type]}
-              </span>
-              <button
-                onClick={() => toggleRequired(q.id)}
-                className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-              >
-                {q.required ? 'Obrigatório' : 'Opcional'}
-              </button>
-              <button
-                onClick={() => removeQuestion(q.id)}
-                className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-3">
+                <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground/50 active:cursor-grabbing" />
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                  {i + 1}
+                </span>
+                <span className="flex-1 text-sm text-foreground">{q.text}</span>
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                  {TYPE_LABEL[q.type]}
+                </span>
+                <button
+                  onClick={() => toggleRequired(q.id)}
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                >
+                  {q.required ? 'Obrigatório' : 'Opcional'}
+                </button>
+                <button
+                  onClick={() => removeQuestion(q.id)}
+                  className="text-xs text-muted-foreground hover:text-red-500 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              {/* Show options summary for multiple / select */}
+              {q.type === 'multiple' && (q.options ?? []).length > 0 && (
+                <div className="mt-1.5 ml-14 flex flex-wrap gap-1">
+                  {(q.options ?? []).map((opt) => (
+                    <span key={opt} className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{opt}</span>
+                  ))}
+                </div>
+              )}
+              {q.type === 'select' && (q.selectOptions ?? []).length > 0 && (
+                <div className="mt-1.5 ml-14 flex flex-wrap gap-1">
+                  {(q.selectOptions ?? []).map((opt) => (
+                    <span key={opt.label} className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {opt.label}{opt.withDescription ? ' ✎' : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -127,7 +187,7 @@ function AnamnesisConfigTab() {
             + Adicionar pergunta
           </button>
         ) : (
-          <div className="mt-3 space-y-2 rounded-lg border bg-muted/20 p-3">
+          <div className="mt-3 space-y-3 rounded-lg border bg-muted/20 p-3">
             <div className="grid grid-cols-2 gap-2">
               <div className="col-span-2 space-y-1">
                 <Label className="text-xs">Pergunta</Label>
@@ -142,7 +202,7 @@ function AnamnesisConfigTab() {
                 <Label className="text-xs">Tipo de resposta</Label>
                 <select
                   value={newQ.type}
-                  onChange={(e) => setNewQ({ ...newQ, type: e.target.value as QuestionType })}
+                  onChange={(e) => setNewQ({ ...newQ, type: e.target.value as QuestionType, options: [], selectOptions: [] })}
                   className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                 >
                   {Object.entries(TYPE_LABEL).map(([v, l]) => (
@@ -162,9 +222,87 @@ function AnamnesisConfigTab() {
                 </label>
               </div>
             </div>
+
+            {/* Options editor for 'multiple' type */}
+            {newQ.type === 'multiple' && (
+              <div className="space-y-2">
+                <Label className="text-xs">Alternativas</Label>
+                {newQ.options.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {newQ.options.map((opt, idx) => (
+                      <span key={idx} className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-foreground">
+                        {opt}
+                        <button type="button" onClick={() => removeOption(idx)} className="hover:text-red-500">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Input
+                    value={newOptionText}
+                    onChange={(e) => setNewOptionText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
+                    placeholder="Nova alternativa…"
+                    className="text-sm flex-1"
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={addOption} disabled={!newOptionText.trim()}>
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Options editor for 'select' type */}
+            {newQ.type === 'select' && (
+              <div className="space-y-2">
+                <Label className="text-xs">Alternativas</Label>
+                <p className="text-xs text-muted-foreground">
+                  Marque ✎ para que a alternativa exiba um campo de descrição ao ser selecionada.
+                </p>
+                {newQ.selectOptions.length > 0 && (
+                  <div className="space-y-1">
+                    {newQ.selectOptions.map((opt, idx) => (
+                      <div key={idx} className="flex items-center gap-2 rounded bg-muted/50 px-2 py-1">
+                        <span className="flex-1 text-xs">{opt.label}</span>
+                        {opt.withDescription && (
+                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">com descrição</span>
+                        )}
+                        <button type="button" onClick={() => removeOption(idx)} className="text-muted-foreground hover:text-red-500">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={newOptionText}
+                    onChange={(e) => setNewOptionText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
+                    placeholder="Nova alternativa…"
+                    className="text-sm flex-1"
+                  />
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={newOptionWithDesc}
+                      onChange={(e) => setNewOptionWithDesc(e.target.checked)}
+                      className="rounded"
+                    />
+                    ✎ descrição
+                  </label>
+                  <Button type="button" size="sm" variant="outline" onClick={addOption} disabled={!newOptionText.trim()}>
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button size="sm" onClick={addQuestion} disabled={!newQ.text.trim()}>Adicionar</Button>
-              <Button size="sm" variant="outline" onClick={() => setAdding(false)}>Cancelar</Button>
+              <Button size="sm" variant="outline" onClick={() => { setAdding(false); setNewOptionText(''); setNewOptionWithDesc(false) }}>Cancelar</Button>
             </div>
           </div>
         )}
