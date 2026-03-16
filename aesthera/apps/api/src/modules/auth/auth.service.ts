@@ -139,18 +139,22 @@ export class AuthService {
     })
 
     // Send welcome + verification email (fire-and-forget — don't block registration)
-    void this.sendWelcomeEmail({
-      clinicId,
-      email: dto.email,
-      adminName: dto.adminName,
-      clinicName: dto.clinicName,
-      slug,
-      verificationToken,
-    })
+    const emailVerificationSent = Boolean(appConfig.email.apiKey)
+    if (emailVerificationSent) {
+      void this.sendWelcomeEmail({
+        clinicId,
+        email: dto.email,
+        adminName: dto.adminName,
+        clinicName: dto.clinicName,
+        slug,
+        verificationToken,
+      })
+    }
 
     return {
       clinic: { id: clinic.id, slug: clinic.slug, name: clinic.name },
       user: { id: adminId, name: dto.adminName, email: dto.email, role: 'admin' as const },
+      emailVerificationSent,
     }
   }
 

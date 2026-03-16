@@ -104,6 +104,24 @@ function loadEnv(): Env {
     )
   }
 
+  if (!process.env.RESEND_API_KEY) {
+    console.warn(
+      '⚠️  RESEND_API_KEY is not set — email sending is DISABLED.',
+    )
+    console.warn(
+      '   Users will NOT receive verification emails or any other notifications.',
+    )
+    console.warn(
+      '   1. Create a free account at https://resend.com',
+    )
+    console.warn(
+      '   2. Generate an API key and add RESEND_API_KEY to your Railway environment variables.',
+    )
+    console.warn(
+      '   3. Verify your sending domain (or use the sandbox address) in the Resend dashboard.',
+    )
+  }
+
   return data
 }
 

@@ -67,6 +67,7 @@ export default function RegisterPage() {
     try {
       const response = await api.post<{
         clinic: { slug: string; name: string; id: string }
+        emailVerificationSent: boolean
       }>(
         '/auth/register',
         {
@@ -78,8 +79,9 @@ export default function RegisterPage() {
         },
       )
       const slug = response.data.clinic.slug
+      const emailSent = response.data.emailVerificationSent !== false
       // Do NOT store tokens — user must confirm email first
-      router.push(`/register/success?slug=${encodeURIComponent(slug)}&email=${encodeURIComponent(data.email)}`)
+      router.push(`/register/success?slug=${encodeURIComponent(slug)}&email=${encodeURIComponent(data.email)}&emailSent=${emailSent}`)
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
