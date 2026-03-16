@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronDown, ChevronRight, Copy, ExternalLink, GripVertical, Loader2, Minus, Pencil, Plus, X } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
@@ -19,7 +20,69 @@ import { BusinessHoursTab } from './_components/business-hours-tab'
 import { ClinicTab } from './_components/clinic-tab'
 import { UsersTab } from './_components/users-tab'
 
-function AnamnesisConfigTab() {
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+interface AnamnesisActionsRef {
+  save: () => Promise<void>
+  discard: () => void
+}
+
+type PendingAction = { type: 'tab'; tab: string } | { type: 'navigate'; href: string }
+
+// ── Unsaved-changes confirmation dialog ────────────────────────────────────────
+
+function UnsavedChangesDialog({
+  isSaving,
+  onSave,
+  onDiscard,
+  onCancel,
+}: {
+  isSaving: boolean
+  onSave: () => void
+  onDiscard: () => void
+  onCancel: () => void
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div className="relative z-10 w-full max-w-sm rounded-xl border bg-card p-6 shadow-xl space-y-4">
+        <h3 className="text-base font-semibold">Alterações não salvas</h3>
+        <p className="text-sm text-muted-foreground">
+          Você tem alterações na configuração de Anamnese que ainda não foram salvas. O que deseja fazer?
+        </p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" size="sm" onClick={onCancel} disabled={isSaving}>
+            Continuar editando
+          </Button>
+          <Button variant="destructive" size="sm" onClick={onDiscard} disabled={isSaving}>
+            Descartar
+          </Button>
+          <Button size="sm" onClick={onSave} disabled={isSaving}>
+            {isSaving
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Salvando…</>
+              : 'Salvar'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Anamnesis config tab ───────────────────────────────────────────────────────
+
+function AnamnesisConfigTab({
+  actionsRef,
+  onDirtyChange,
+}: {
+  actionsRef: React.MutableRefObject<AnamnesisActionsRef>
+  onDirtyChange: (dirty: boolean) => void
+}) {
   type QuestionType = AnamnesisQuestion['type']
 
   const { data: serverGroups, isLoading } = useAnamnesisGroups()
@@ -55,6 +118,39 @@ function AnamnesisConfigTab() {
   const [dragInfo, setDragInfo] = useState<{ groupId: string; index: number } | null>(null)
 
   const effectiveGroups = groups ?? serverGroups ?? [DEFAULT_ANAMNESIS_GROUP]
+
+  // ── dirty-state detection & navigation guard ────────────────────────
+
+  const isDirty =
+    groups !== null &&
+    JSON.stringify(groups) !== JSON.stringify(serverGroups ?? [DEFAULT_ANAMNESIS_GROUP])
+
+  // Keep a stable ref to the callback so the effect doesn't re-subscribe
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  onDirtyChangeRef.current = onDirtyChange
+  useEffect(() => { onDirtyChangeRef.current(isDirty) }, [isDirty])
+
+  // Block browser close / page refresh when there are unsaved changes
+  useEffect(() => {
+    if (!isDirty) return
+    function handler(e: BeforeUnloadEvent) { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
+
+  // Expose save / discard actions to parent (updated every render; safe for refs)
+  actionsRef.current = {
+    async save() { await handleSave() },
+    discard() {
+      setGroups(null)
+      setSaved(false)
+      cancelRename()
+      setShowAddGroup(false)
+      setAddingGroupName('')
+      setGroupNameError('')
+      setAddingToGroupId(null)
+    },
+  }
 
   const TYPE_LABEL: Record<QuestionType, string> = {
     text: 'Texto livre',
@@ -234,6 +330,7 @@ function AnamnesisConfigTab() {
 
   async function handleSave() {
     await save.mutateAsync(effectiveGroups)
+    setGroups(null) // clear local override — server is now authoritative
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -754,11 +851,81 @@ function AiIntegrationsTab() {
 }
 
 export default function SettingsPage() {
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState('clinic')
+  const [anamnesisDirty, setAnamnesisDirty] = useState(false)
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  const [isSavingForNav, setIsSavingForNav] = useState(false)
+
+  const anamnesisActionsRef = useRef<AnamnesisActionsRef>({
+    save: () => Promise.resolve(),
+    discard: () => {},
+  })
+
+  // Keep a stable ref so the event listener reads the latest dirty flag
+  const anamnesisDirtyRef = useRef(false)
+  anamnesisDirtyRef.current = anamnesisDirty
+
+  // Intercept sidebar / in-app link clicks when there are unsaved changes
+  useEffect(() => {
+    function handleLinkClick(e: MouseEvent) {
+      if (!anamnesisDirtyRef.current) return
+      const link = (e.target as Element).closest('a[href]')
+      if (!link) return
+      const href = link.getAttribute('href') ?? ''
+      // Allow external links and links that stay within /settings
+      if (!href || href.startsWith('http') || href.startsWith('mailto') || href.startsWith('/settings')) return
+      e.preventDefault()
+      e.stopPropagation()
+      setPendingAction({ type: 'navigate', href })
+    }
+    // Capture phase: fires before React processes the click
+    document.addEventListener('click', handleLinkClick, true)
+    return () => document.removeEventListener('click', handleLinkClick, true)
+  }, [])
+
+  function handleTabChange(tab: string) {
+    if (anamnesisDirty) {
+      setPendingAction({ type: 'tab', tab })
+    } else {
+      setActiveTab(tab)
+    }
+  }
+
+  function proceed(action: PendingAction) {
+    if (action.type === 'tab') {
+      setActiveTab(action.tab)
+    } else {
+      router.push(action.href)
+    }
+  }
+
+  async function handleSaveAndProceed() {
+    if (!pendingAction) return
+    setIsSavingForNav(true)
+    try {
+      await anamnesisActionsRef.current.save()
+    } finally {
+      setIsSavingForNav(false)
+    }
+    const action = pendingAction
+    setPendingAction(null)
+    proceed(action)
+  }
+
+  function handleDiscardAndProceed() {
+    if (!pendingAction) return
+    anamnesisActionsRef.current.discard()
+    const action = pendingAction
+    setPendingAction(null)
+    proceed(action)
+  }
+
   return (
     <div>
       <h2 className="text-2xl font-semibold mb-6">Configurações</h2>
 
-      <Tabs defaultValue="clinic">
+      <Tabs value={activeTab} defaultValue="clinic" onValueChange={handleTabChange}>
         <TabsList>
           <TabsTrigger value="clinic">Clínica</TabsTrigger>
           <TabsTrigger value="hours">Horários</TabsTrigger>
@@ -789,9 +956,21 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="anamnesis">
-          <AnamnesisConfigTab />
+          <AnamnesisConfigTab
+            actionsRef={anamnesisActionsRef}
+            onDirtyChange={setAnamnesisDirty}
+          />
         </TabsContent>
       </Tabs>
+
+      {pendingAction && (
+        <UnsavedChangesDialog
+          isSaving={isSavingForNav}
+          onSave={() => void handleSaveAndProceed()}
+          onDiscard={handleDiscardAndProceed}
+          onCancel={() => setPendingAction(null)}
+        />
+      )}
     </div>
   )
 }
