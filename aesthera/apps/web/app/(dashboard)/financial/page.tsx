@@ -215,9 +215,9 @@ export default function FinancialPage() {
                 <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-3">Data</th>
                   <th className="px-5 py-3">Tipo</th>
-                  <th className="px-5 py-3">Descrição</th>
-                  <th className="px-5 py-3">Cliente</th>
-                  <th className="px-5 py-3">Serviço</th>
+                  <th className="hidden sm:table-cell px-5 py-3">Descrição</th>
+                  <th className="hidden sm:table-cell px-5 py-3">Cliente</th>
+                  <th className="hidden sm:table-cell px-5 py-3">Serviço</th>
                   <th className="px-5 py-3 text-right">Valor</th>
                 </tr>
               </thead>
@@ -236,9 +236,9 @@ export default function FinancialPage() {
                         {entry.type === 'credit' ? 'Crédito' : 'Débito'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-foreground">{entry.description ?? '—'}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{entry.customer?.name ?? '—'}</td>
-                    <td className="px-5 py-3 text-muted-foreground">
+                    <td className="px-5 py-3 text-foreground hidden sm:table-cell">{entry.description ?? '—'}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{entry.customer?.name ?? '—'}</td>
+                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">
                       {entry.appointment?.service.name ?? '—'}
                     </td>
                     <td

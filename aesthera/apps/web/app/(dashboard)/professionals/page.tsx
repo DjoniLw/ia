@@ -233,13 +233,13 @@ export default function ProfessionalsPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="py-3 pl-4 pr-2 text-left font-medium">Nome</th>
-              <th className="px-2 py-3 text-left font-medium">Especialidade</th>
-              <th className="px-2 py-3 text-left font-medium">E-mail</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Especialidade</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">E-mail</th>
               <th className="px-2 py-3 text-left font-medium">Status</th>
               <th className="px-2 py-3 text-right font-medium">Ações</th>
             </tr>
@@ -262,8 +262,8 @@ export default function ProfessionalsPage() {
             {data?.items.map((p) => (
               <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="py-3 pl-4 pr-2 font-medium">{p.name}</td>
-                <td className="px-2 py-3 text-muted-foreground">{p.speciality ?? '—'}</td>
-                <td className="px-2 py-3 text-muted-foreground">{p.email}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.speciality ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.email}</td>
                 <td className="px-2 py-3">
                   <span
                     className={[

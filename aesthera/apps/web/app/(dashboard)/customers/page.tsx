@@ -1218,16 +1218,16 @@ export default function CustomersPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="py-3 pl-4 pr-2 text-left font-medium">Nome</th>
-              <th className="px-2 py-3 text-left font-medium">E-mail</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">E-mail</th>
               <th className="px-2 py-3 text-left font-medium">Telefone</th>
-              <th className="px-2 py-3 text-left font-medium">CPF</th>
-              <th className="px-2 py-3 text-left font-medium">Cidade</th>
-              <th className="px-2 py-3 text-left font-medium">Cadastro</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">CPF</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Cidade</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Cadastro</th>
               <th className="px-2 py-3 text-right font-medium">Ações</th>
             </tr>
           </thead>
@@ -1245,11 +1245,11 @@ export default function CustomersPage() {
                     {c.name}
                   </button>
                 </td>
-                <td className="px-2 py-3 text-muted-foreground">{c.email ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.email ?? '—'}</td>
                 <td className="px-2 py-3 text-muted-foreground">{c.phone ?? '—'}</td>
-                <td className="px-2 py-3 text-muted-foreground">{c.document ?? '—'}</td>
-                <td className="px-2 py-3 text-muted-foreground">{c.address?.city ?? '—'}</td>
-                <td className="px-2 py-3 text-muted-foreground">{formatDate(c.createdAt)}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.document ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.address?.city ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(c.createdAt)}</td>
                 <td className="px-2 py-3">
                   <div className="flex justify-end gap-1">
                     <Button variant="ghost" size="sm" className="text-violet-600 hover:text-violet-700" onClick={() => setAiSummary(c)}>

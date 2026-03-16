@@ -191,12 +191,13 @@ export default function SuppliesPage() {
         </div>
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground">
               <tr>
                 <th className="text-left px-4 py-3 font-medium">Nome</th>
-                <th className="text-left px-4 py-3 font-medium">Unidade</th>
-                <th className="text-right px-4 py-3 font-medium">Custo unitário</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Unidade</th>
+                <th className="hidden sm:table-cell text-right px-4 py-3 font-medium">Custo unitário</th>
                 <th className="text-right px-4 py-3 font-medium">Estoque</th>
                 <th className="text-center px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3" />
@@ -209,8 +210,8 @@ export default function SuppliesPage() {
                     {s.name}
                     {s.description && <span className="block text-xs text-muted-foreground">{s.description}</span>}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{s.unit}</td>
-                  <td className="px-4 py-3 text-right">{formatCost(s.costPrice)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-muted-foreground">{s.unit}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right">{formatCost(s.costPrice)}</td>
                   <td className="px-4 py-3 text-right">
                     <span className={s.stock <= s.minStock ? 'text-orange-600 font-medium' : ''}>
                       {s.stock}
@@ -237,6 +238,7 @@ export default function SuppliesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
