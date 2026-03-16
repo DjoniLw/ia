@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Copy, ExternalLink, GripVertical, Loader2, Minus, Plus, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Copy, ExternalLink, GripVertical, Loader2, Minus, Pencil, Plus, X } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,6 +34,11 @@ function AnamnesisConfigTab() {
   const [showAddGroup, setShowAddGroup] = useState(false)
   const [addingGroupName, setAddingGroupName] = useState('')
   const [groupNameError, setGroupNameError] = useState('')
+
+  // ── rename group ────────────────────────────────────────────────────
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameError, setRenameError] = useState('')
 
   // ── add item form (per group) ───────────────────────────────────────
   const [addingToGroupId, setAddingToGroupId] = useState<string | null>(null)
@@ -99,6 +104,32 @@ function AnamnesisConfigTab() {
     if (effectiveGroups.length === 1) return // keep at least one
     setGroups(effectiveGroups.filter((g) => g.id !== id))
     if (expandedGroupId === id) setExpandedGroupId(null)
+    if (renamingGroupId === id) cancelRename()
+  }
+
+  function openRename(group: AnamnesisGroup) {
+    setRenamingGroupId(group.id)
+    setRenameValue(group.name)
+    setRenameError('')
+  }
+
+  function confirmRename(id: string) {
+    const name = renameValue.trim()
+    if (!name) { setRenameError('O nome não pode estar vazio.'); return }
+    if (effectiveGroups.some((g) => g.id !== id && g.name.toLowerCase() === name.toLowerCase())) {
+      setRenameError('Já existe um grupo com esse nome.')
+      return
+    }
+    setGroups(effectiveGroups.map((g) => g.id === id ? { ...g, name } : g))
+    setRenamingGroupId(null)
+    setRenameValue('')
+    setRenameError('')
+  }
+
+  function cancelRename() {
+    setRenamingGroupId(null)
+    setRenameValue('')
+    setRenameError('')
   }
 
   function updateGroupItems(groupId: string, items: AnamnesisItem[]) {
@@ -234,33 +265,68 @@ function AnamnesisConfigTab() {
                 <div key={group.id} className="rounded-lg border bg-muted/10">
                   {/* Group header */}
                   <div className="flex items-center gap-2 px-3 py-2.5">
-                    <button
-                      onClick={() => setExpandedGroupId(isExpanded ? null : group.id)}
-                      className="flex flex-1 items-center gap-2 text-left"
-                    >
-                      {isExpanded
-                        ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                      <span className="text-sm font-medium text-foreground">{group.name}</span>
-                      <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                        {group.questions.filter((q) => q.type !== 'separator').length} pergunta{group.questions.filter((q) => q.type !== 'separator').length !== 1 ? 's' : ''}
-                      </span>
-                    </button>
-                    <button
-                      title="Duplicar grupo"
-                      onClick={() => duplicateGroup(group.id)}
-                      className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      title="Remover grupo"
-                      onClick={() => removeGroup(group.id)}
-                      disabled={effectiveGroups.length === 1}
-                      className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-30"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    {renamingGroupId === group.id ? (
+                      /* ── inline rename form ── */
+                      <div className="flex flex-1 flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={renameValue}
+                            onChange={(e) => { setRenameValue(e.target.value); setRenameError('') }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') { e.preventDefault(); confirmRename(group.id) }
+                              if (e.key === 'Escape') cancelRename()
+                            }}
+                            autoFocus
+                            className="h-7 text-sm flex-1"
+                          />
+                          <Button size="sm" className="h-7 px-2 text-xs" onClick={() => confirmRename(group.id)} disabled={!renameValue.trim()}>
+                            Salvar
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={cancelRename}>
+                            Cancelar
+                          </Button>
+                        </div>
+                        {renameError && <p className="text-xs text-red-500">{renameError}</p>}
+                      </div>
+                    ) : (
+                      /* ── normal header ── */
+                      <>
+                        <button
+                          onClick={() => setExpandedGroupId(isExpanded ? null : group.id)}
+                          className="flex flex-1 items-center gap-2 text-left"
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                          <span className="text-sm font-medium text-foreground">{group.name}</span>
+                          <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {group.questions.filter((q) => q.type !== 'separator').length} pergunta{group.questions.filter((q) => q.type !== 'separator').length !== 1 ? 's' : ''}
+                          </span>
+                        </button>
+                        <button
+                          title="Renomear grupo"
+                          onClick={() => openRename(group)}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          title="Duplicar grupo"
+                          onClick={() => duplicateGroup(group.id)}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          title="Remover grupo"
+                          onClick={() => removeGroup(group.id)}
+                          disabled={effectiveGroups.length === 1}
+                          className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-30"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   {/* Group body (expanded) */}
