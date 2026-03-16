@@ -236,9 +236,9 @@ export default function FinancialPage() {
                         {entry.type === 'credit' ? 'Crédito' : 'Débito'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-foreground hidden sm:table-cell">{entry.description ?? '—'}</td>
-                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{entry.customer?.name ?? '—'}</td>
-                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">
+                    <td className="hidden sm:table-cell px-5 py-3 text-foreground">{entry.description ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground">{entry.customer?.name ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground">
                       {entry.appointment?.service.name ?? '—'}
                     </td>
                     <td
