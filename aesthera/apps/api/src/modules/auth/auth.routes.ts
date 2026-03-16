@@ -6,6 +6,7 @@ import {
   RefreshTokenDto,
   ProfessionalLoginDto,
   VerifyEmailDto,
+  ResendVerificationDto,
 } from './auth.dto'
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -24,6 +25,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post('/auth/verify-email', async (request, reply) => {
     const body = VerifyEmailDto.parse(request.body)
     const result = await authService.verifyEmail(body.token)
+    reply.status(200).send(result)
+  })
+
+  // ── POST /auth/resend-verification ─────────────────────────────────────────
+  // Generates a new verification token and re-sends the welcome email. PUBLIC.
+  app.post('/auth/resend-verification', async (request, reply) => {
+    const body = ResendVerificationDto.parse(request.body)
+    const result = await authService.resendVerification(body.email)
     reply.status(200).send(result)
   })
 

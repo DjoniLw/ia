@@ -49,7 +49,7 @@ export class AuthRepository {
   findClinicByEmail(email: string) {
     return prisma.clinic.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, slug: true, name: true, emailVerified: true },
     })
   }
 
@@ -120,6 +120,52 @@ export class AuthRepository {
         plan: true,
         status: true,
       },
+    })
+  }
+
+  /** Re-use an existing unverified clinic record: refresh the token and update mutable fields. */
+  async updateUnverifiedClinicForReRegistration(data: {
+    clinicId: string
+    name: string
+    phone?: string
+    document?: string
+    adminName: string
+    passwordHash: string
+    emailVerificationToken: string
+    emailVerificationExpiresAt: Date
+  }) {
+    const [clinic] = await prisma.$transaction([
+      prisma.clinic.update({
+        where: { id: data.clinicId },
+        data: {
+          name: data.name,
+          phone: data.phone,
+          document: data.document,
+          emailVerificationToken: data.emailVerificationToken,
+          emailVerificationExpiresAt: data.emailVerificationExpiresAt,
+        },
+        select: { id: true, slug: true, name: true, email: true, plan: true, status: true },
+      }),
+      prisma.user.updateMany({
+        where: { clinicId: data.clinicId, role: 'admin' },
+        data: { name: data.adminName, passwordHash: data.passwordHash },
+      }),
+    ])
+    return clinic
+  }
+
+  updateClinicVerificationToken(
+    clinicId: string,
+    token: string,
+    expiresAt: Date,
+  ) {
+    return prisma.clinic.update({
+      where: { id: clinicId },
+      data: {
+        emailVerificationToken: token,
+        emailVerificationExpiresAt: expiresAt,
+      },
+      select: { id: true, slug: true, name: true },
     })
   }
 

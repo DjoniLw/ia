@@ -95,7 +95,7 @@ export class AuthService {
 
   async registerClinic(dto: RegisterClinicDto) {
     const existing = await authRepository.findClinicByEmail(dto.email)
-    if (existing) {
+    if (existing?.emailVerified) {
       throw new ConflictError('An account with this email already exists')
     }
 
@@ -113,30 +113,54 @@ export class AuthService {
       )
     }
 
-    const baseSlug = slugify(dto.clinicName)
-    const slug = await this.uniqueSlug(baseSlug)
-    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS)
-    const clinicId = generateId()
-    const adminId = generateId()
-
     // Generate email verification token
     const verificationToken = crypto.randomBytes(32).toString('hex')
     const verificationExpiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS)
 
-    const clinic = await authRepository.createClinicWithAdmin({
-      clinicId,
-      slug,
-      name: dto.clinicName,
-      email: dto.email,
-      phone: dto.phone,
-      document: dto.clinicDocument,
-      adminId,
-      adminName: dto.adminName,
-      adminEmail: dto.email,
-      passwordHash,
-      emailVerificationToken: verificationToken,
-      emailVerificationExpiresAt: verificationExpiresAt,
-    })
+    let clinic: { id: string; slug: string; name: string }
+    let clinicId: string
+    let adminId: string
+
+    if (existing && !existing.emailVerified) {
+      // Account exists but was never verified — allow the user to "re-register":
+      // refresh the verification token and update their data.
+      const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS)
+      clinic = await authRepository.updateUnverifiedClinicForReRegistration({
+        clinicId: existing.id,
+        name: dto.clinicName,
+        phone: dto.phone,
+        document: dto.clinicDocument,
+        adminName: dto.adminName,
+        passwordHash,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiresAt: verificationExpiresAt,
+      })
+      clinicId = existing.id
+      const adminUser = await authRepository.findAdminUserByClinic(existing.id)
+      adminId = adminUser?.id ?? existing.id
+    } else {
+      // Fresh registration
+      const baseSlug = slugify(dto.clinicName)
+      const slug = await this.uniqueSlug(baseSlug)
+      const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS)
+      clinicId = generateId()
+      adminId = generateId()
+
+      clinic = await authRepository.createClinicWithAdmin({
+        clinicId,
+        slug,
+        name: dto.clinicName,
+        email: dto.email,
+        phone: dto.phone,
+        document: dto.clinicDocument,
+        adminId,
+        adminName: dto.adminName,
+        adminEmail: dto.email,
+        passwordHash,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiresAt: verificationExpiresAt,
+      })
+    }
 
     // Send welcome + verification email (fire-and-forget — don't block registration)
     const emailVerificationSent = Boolean(appConfig.email.apiKey)
@@ -146,7 +170,7 @@ export class AuthService {
         email: dto.email,
         adminName: dto.adminName,
         clinicName: dto.clinicName,
-        slug,
+        slug: clinic.slug,
         verificationToken,
       })
     }
@@ -189,6 +213,41 @@ export class AuthService {
     const tokens = await this.issueTokens(user.id, clinic.id, 'admin')
 
     return { clinic: { slug: clinic.slug }, ...tokens }
+  }
+
+  // ── Resend verification email ─────────────────────────────────────────────
+
+  async resendVerification(email: string): Promise<{ sent: boolean }> {
+    const clinic = await authRepository.findClinicByEmail(email)
+
+    // If clinic is already verified or doesn't exist, return generic response
+    // to avoid leaking account existence.
+    if (!clinic || clinic.emailVerified) {
+      return { sent: false }
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString('hex')
+    const verificationExpiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS)
+
+    await authRepository.updateClinicVerificationToken(
+      clinic.id,
+      verificationToken,
+      verificationExpiresAt,
+    )
+
+    const emailVerificationSent = Boolean(appConfig.email.apiKey)
+    if (emailVerificationSent) {
+      void this.sendWelcomeEmail({
+        clinicId: clinic.id,
+        email,
+        adminName: '',
+        clinicName: clinic.name,
+        slug: clinic.slug,
+        verificationToken,
+      })
+    }
+
+    return { sent: emailVerificationSent }
   }
 
   // ── Login ───────────────────────────────────────────────────────────────────
@@ -352,6 +411,9 @@ export class AuthService {
     verificationToken: string
   }) {
     const verifyUrl = `${appConfig.frontendUrl}/verify-email?token=${params.verificationToken}`
+    const greeting = params.adminName
+      ? `<p>Olá, <strong>${params.adminName}</strong>!</p>`
+      : '<p>Olá!</p>'
     const html = `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -361,7 +423,7 @@ export class AuthService {
     <h1 style="font-size:22px;font-weight:600;margin-bottom:4px">Bem-vindo(a) ao Aesthera! 🎉</h1>
     <p style="color:#6b7280;margin-top:0">Gestão para Clínicas de Estética</p>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0" />
-    <p>Olá, <strong>${params.adminName}</strong>!</p>
+    ${greeting}
     <p>Sua clínica <strong>${params.clinicName}</strong> foi cadastrada com sucesso.</p>
     <p style="margin-bottom:4px"><strong>Seu identificador de acesso:</strong></p>
     <code style="display:inline-block;background:#f3f4f6;border-radius:6px;padding:6px 12px;font-size:16px;font-weight:700;color:#111">${params.slug}</code>
