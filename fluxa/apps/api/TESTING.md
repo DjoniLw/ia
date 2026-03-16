@@ -15,7 +15,7 @@ docker-compose --version
 
 ### Start Databases
 ```bash
-cd c:\Disco_D\Desenvolvimento\IA\fluxa\apps\api
+cd fluxa/apps/api
 docker-compose up -d
 
 # Wait for containers to be healthy (15-20s)

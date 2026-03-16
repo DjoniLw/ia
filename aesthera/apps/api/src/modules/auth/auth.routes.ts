@@ -5,8 +5,9 @@ import {
   LoginDto,
   RefreshTokenDto,
   ProfessionalLoginDto,
+  VerifyEmailDto,
+  ResendVerificationDto,
 } from './auth.dto'
-import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   const authService = new AuthService(app)
@@ -17,6 +18,22 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const body = RegisterClinicDto.parse(request.body)
     const result = await authService.registerClinic(body)
     reply.status(201).send(result)
+  })
+
+  // ── POST /auth/verify-email ─────────────────────────────────────────────────
+  // Verifies clinic email, marks it active, and returns tokens. PUBLIC.
+  app.post('/auth/verify-email', async (request, reply) => {
+    const body = VerifyEmailDto.parse(request.body)
+    const result = await authService.verifyEmail(body.token)
+    reply.status(200).send(result)
+  })
+
+  // ── POST /auth/resend-verification ─────────────────────────────────────────
+  // Generates a new verification token and re-sends the welcome email. PUBLIC.
+  app.post('/auth/resend-verification', async (request, reply) => {
+    const body = ResendVerificationDto.parse(request.body)
+    const result = await authService.resendVerification(body.email)
+    reply.status(200).send(result)
   })
 
   // ── POST /auth/login ────────────────────────────────────────────────────────
@@ -36,16 +53,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   })
 
   // ── POST /auth/logout ───────────────────────────────────────────────────────
-  // Revokes refresh token from Redis.
-  app.post(
-    '/auth/logout',
-    { preHandler: [jwtClinicGuard] },
-    async (request, reply) => {
-      const body = RefreshTokenDto.parse(request.body)
-      await authService.logout(body.refreshToken)
-      reply.status(200).send({ message: 'Logged out successfully' })
-    },
-  )
+  // Revokes refresh token from Redis. PUBLIC — no tenant, no JWT check needed;
+  // the refresh token itself is the credential that gets revoked.
+  app.post('/auth/logout', async (request, reply) => {
+    const body = RefreshTokenDto.parse(request.body)
+    await authService.logout(body.refreshToken)
+    reply.status(200).send({ message: 'Logged out successfully' })
+  })
 
   // ── Professional auth ───────────────────────────────────────────────────────
 

@@ -107,6 +107,8 @@ model Clinic {
   plan          ClinicPlan   @default(trial)
   status        ClinicStatus @default(active)
   emailVerified Boolean      @default(false)      @map("email_verified")
+  emailVerificationToken    String?   @unique @map("email_verification_token")
+  emailVerificationExpiresAt DateTime? @map("email_verification_expires_at")
   timezone      String       @default("America/Sao_Paulo")
   address       Json?
   settings      Json?                             // notification prefs, due_date offset, etc.
@@ -127,6 +129,11 @@ model Clinic {
   payments         Payment[]
   ledgerEntries    LedgerEntry[]
   notificationLogs NotificationLog[]
+  products         Product[]
+  productSales     ProductSale[]
+  clinicalRecords  ClinicalRecord[]
+  equipment        Equipment[]
+  supplies         Supply[]
 
   @@map("clinics")
 }
@@ -206,24 +213,26 @@ model User {
 // ─── Professional ─────────────────────────────────────────────────────────────
 
 model Professional {
-  id         String    @id @default(uuid())
-  clinicId   String                         @map("clinic_id")
-  name       String
-  email      String
-  phone      String?
-  speciality String?
-  avatarUrl  String?                        @map("avatar_url")
-  active     Boolean   @default(true)
-  deletedAt  DateTime?                      @map("deleted_at")
-  createdAt  DateTime  @default(now())      @map("created_at")
-  updatedAt  DateTime  @updatedAt           @map("updated_at")
+  id          String    @id @default(uuid())
+  clinicId    String                         @map("clinic_id")
+  name        String
+  email       String
+  phone       String?
+  speciality  String?
+  avatarUrl   String?                        @map("avatar_url")
+  active      Boolean   @default(true)
+  allServices Boolean   @default(false)      @map("all_services") // when true, professional performs all services (including future ones)
+  deletedAt   DateTime?                      @map("deleted_at")
+  createdAt   DateTime  @default(now())      @map("created_at")
+  updatedAt   DateTime  @updatedAt           @map("updated_at")
 
   clinic       Clinic                    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   auth         ProfessionalAuth?
-  workingHours ProfessionalWorkingHour[]
-  services     ProfessionalService[]
-  appointments Appointment[]
-  blockedSlots BlockedSlot[]
+  workingHours    ProfessionalWorkingHour[]
+  services        ProfessionalService[]
+  appointments    Appointment[]
+  blockedSlots    BlockedSlot[]
+  clinicalRecords ClinicalRecord[]
 
   @@unique([clinicId, email])
   @@index([clinicId])
@@ -298,6 +307,7 @@ model Service {
   clinic        Clinic                @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   professionals ProfessionalService[]
   appointments  Appointment[]
+  supplies      ServiceSupply[]
 
   @@index([clinicId])
   @@map("services")
@@ -327,6 +337,8 @@ model Customer {
   payments         Payment[]
   ledgerEntries    LedgerEntry[]
   notificationLogs NotificationLog[]
+  productSales     ProductSale[]
+  clinicalRecords  ClinicalRecord[]
 
   @@unique([clinicId, email])
   @@unique([clinicId, document])
@@ -384,6 +396,7 @@ model Appointment {
   billing          Billing?
   ledgerEntries    LedgerEntry[]
   notificationLogs NotificationLog[]
+  equipment        AppointmentEquipment[]
 
   @@index([clinicId])
   @@index([clinicId, professionalId])
@@ -465,7 +478,7 @@ model LedgerEntry {
   type          LedgerEntryType
   amount        Int                                  // BRL cents, always positive
   currency      String          @default("BRL")
-  paymentId     String                               @map("payment_id")   // FK → Payment (source of truth)
+  paymentId     String?                              @map("payment_id")   // FK → Payment (null for manual entries)
   billingId     String?                              @map("billing_id")
   appointmentId String?                              @map("appointment_id")
   customerId    String?                              @map("customer_id")
@@ -474,7 +487,7 @@ model LedgerEntry {
   createdAt     DateTime        @default(now())      @map("created_at")   // immutable
 
   clinic      Clinic       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  payment     Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  payment     Payment?     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   billing     Billing?     @relation(fields: [billingId], references: [id], onDelete: Restrict)
   appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
   customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -512,4 +525,155 @@ model NotificationLog {
   @@index([clinicId])
   @@index([clinicId, status])
   @@map("notification_logs")
+}
+
+// ─── Product ──────────────────────────────────────────────────────────────────
+// Product catalog for clinic retail/sales.
+
+model Product {
+  id          String    @id @default(uuid())
+  clinicId    String                           @map("clinic_id")
+  name        String
+  description String?
+  category    String?
+  brand       String?
+  sku         String?
+  barcode     String?
+  price       Int                              // selling price in BRL cents
+  costPrice   Int?                             @map("cost_price")
+  stock       Int       @default(0)
+  minStock    Int       @default(0)            @map("min_stock")
+  unit        String    @default("un")
+  active      Boolean   @default(true)
+  imageUrl    String?                          @map("image_url")
+  ncm         String?                          // Nomenclatura Comum do Mercosul (fiscal)
+  cest        String?                          // Código Especificador da Substituição Tributária
+  cfop        String?                          // Código Fiscal de Operações e Prestações
+  deletedAt   DateTime?                        @map("deleted_at")
+  createdAt   DateTime  @default(now())        @map("created_at")
+  updatedAt   DateTime  @updatedAt             @map("updated_at")
+
+  clinic Clinic        @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  sales  ProductSale[]
+
+  @@index([clinicId])
+  @@map("products")
+}
+
+// ─── Product Sale ─────────────────────────────────────────────────────────────
+
+model ProductSale {
+  id         String    @id @default(uuid())
+  clinicId   String                           @map("clinic_id")
+  productId  String                           @map("product_id")
+  customerId String?                          @map("customer_id")
+  quantity   Int
+  unitPrice  Int                              @map("unit_price")
+  totalPrice Int                              @map("total_price")
+  discount      Int       @default(0)
+  paymentMethod String?                          @map("payment_method") // cash, pix, card, transfer
+  notes         String?
+  soldAt        DateTime  @default(now())        @map("sold_at")
+  createdAt  DateTime  @default(now())        @map("created_at")
+
+  clinic   Clinic    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId])
+  @@index([clinicId, productId])
+  @@map("product_sales")
+}
+
+// ─── Clinical Record ──────────────────────────────────────────────────────────
+
+model ClinicalRecord {
+  id             String    @id @default(uuid())
+  clinicId       String                           @map("clinic_id")
+  customerId     String                           @map("customer_id")
+  professionalId String?                          @map("professional_id")
+  title          String
+  content        String                           // clinical notes
+  type           String    @default("note")       // note | exam | procedure | prescription | anamnesis
+  performedAt    DateTime?                        @map("performed_at") // date the exam/procedure was actually performed
+  createdAt      DateTime  @default(now())        @map("created_at")
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  professional Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, customerId])
+  @@map("clinical_records")
+}
+
+// ─── Supply (Insumos) ─────────────────────────────────────────────────────────
+// Supplies are consumables used in services. They can also be sold as products.
+
+model Supply {
+  id          String    @id @default(uuid())
+  clinicId    String                           @map("clinic_id")
+  name        String
+  description String?
+  unit        String    @default("un")         // un, ml, g, kg, …
+  costPrice   Int?                             @map("cost_price")  // BRL cents
+  stock       Int       @default(0)
+  minStock    Int       @default(0)            @map("min_stock")
+  active      Boolean   @default(true)
+  deletedAt   DateTime?                        @map("deleted_at")
+  createdAt   DateTime  @default(now())        @map("created_at")
+  updatedAt   DateTime  @updatedAt             @map("updated_at")
+
+  clinic   Clinic          @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  services ServiceSupply[]
+
+  @@index([clinicId])
+  @@map("supplies")
+}
+
+// ─── Service ↔ Supply (many-to-many) ─────────────────────────────────────────
+
+model ServiceSupply {
+  serviceId        String  @map("service_id")
+  supplyId         String  @map("supply_id")
+  clinicId         String  @map("clinic_id")
+  quantity         Float   @default(1)         // quantity of usageUnit used per service execution
+  usageUnit        String? @map("usage_unit")  // unit used in service (if different from supply.unit)
+  conversionFactor Float   @default(1)         @map("conversion_factor") // how many usageUnit = 1 supply.unit
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  supply  Supply  @relation(fields: [supplyId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, supplyId])
+  @@index([clinicId])
+  @@map("service_supplies")
+}
+
+// ─── Equipment ────────────────────────────────────────────────────────────────
+
+model Equipment {
+  id          String   @id @default(uuid())
+  clinicId    String                        @map("clinic_id")
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())      @map("created_at")
+  updatedAt   DateTime @updatedAt           @map("updated_at")
+
+  clinic       Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  appointments AppointmentEquipment[]
+
+  @@index([clinicId])
+  @@map("equipment")
+}
+
+model AppointmentEquipment {
+  appointmentId String @map("appointment_id")
+  equipmentId   String @map("equipment_id")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  equipment   Equipment   @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+
+  @@id([appointmentId, equipmentId])
+  @@map("appointment_equipment")
 }

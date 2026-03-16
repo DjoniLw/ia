@@ -127,11 +127,7 @@ export function useTodayAppointments() {
     queryKey: ['appointments-today', dateStr],
     queryFn: () =>
       api
-        .get('/appointments/calendar', { params: { view: 'day', date: dateStr } })
-        .then((r) => {
-          // Calendar returns { date, professionals: [{ professional, appointments }] }
-          const data: { professionals: { appointments: AppointmentSummary[] }[] } = r.data
-          return data.professionals.flatMap((p) => p.appointments)
-        }),
+        .get<{ items: AppointmentSummary[] }>('/appointments', { params: { date: dateStr, limit: 100 } })
+        .then((r) => r.data.items),
   })
 }

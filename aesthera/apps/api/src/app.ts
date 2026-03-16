@@ -19,6 +19,10 @@ import { paymentsRoutes } from './modules/payments/payments.routes'
 import { ledgerRoutes } from './modules/ledger/ledger.routes'
 import { notificationsRoutes } from './modules/notifications/notifications.routes'
 import { aiRoutes } from './modules/ai/ai.routes'
+import { productsRoutes } from './modules/products/products.routes'
+import { clinicalRoutes } from './modules/clinical/clinical.routes'
+import { equipmentRoutes } from './modules/equipment/equipment.routes'
+import { suppliesRoutes } from './modules/supplies/supplies.routes'
 import './domain-event-handlers'
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -41,8 +45,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // ── Plugins ──────────────────────────────────────────────────────────────────
   await app.register(cors, {
-    origin: appConfig.isProduction ? false : true,
+    origin: appConfig.cors.origin,
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Clinic-Slug', 'X-Request-Id'],
+    exposedHeaders: ['X-Request-Id', 'X-Session-Id'],
+    maxAge: 86400,
   })
 
   await app.register(jwt, {
@@ -59,13 +67,21 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Apply tenant middleware globally, skipping routes that truly don't need a clinic context
   const PUBLIC_ROUTES = new Set([
+    '/',
     '/health',
     '/auth/register',
+    '/auth/verify-email',
     '/auth/refresh',
+    '/auth/logout',
   ])
 
   app.addHook('preHandler', async (request, reply) => {
-    if (PUBLIC_ROUTES.has(request.routeOptions.url ?? '')) return
+    // routeOptions.url is an empty string when no route was matched (Fastify
+    // still runs preHandler hooks for its built-in not-found handler).
+    // Bail out in that case so Fastify returns a normal 404 instead of
+    // MISSING_TENANT.
+    const url = request.routeOptions.url
+    if (!url || PUBLIC_ROUTES.has(url)) return
     await tenantMiddleware(request, reply)
   })
 
@@ -78,6 +94,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     timestamp: new Date().toISOString(),
     service: 'aesthera-api',
     env: appConfig.env,
+  }))
+
+  // ── Root (PUBLIC — returns API info so the Railway URL is human-friendly) ─────
+  app.get('/', async () => ({
+    name: 'aesthera-api',
+    status: 'ok',
+    version: '1.0.0',
+    docs: '/health',
   }))
 
   // ── Module routes ─────────────────────────────────────────────────────────────
@@ -93,6 +117,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await ledgerRoutes(app)
   await notificationsRoutes(app)
   await aiRoutes(app)
+  await productsRoutes(app)
+  await clinicalRoutes(app)
+  await equipmentRoutes(app)
+  await suppliesRoutes(app)
 
   return app
 }

@@ -67,6 +67,7 @@ export interface CalendarSlot {
   reason?: string | null
   recurrence?: string
   date?: string
+  equipment?: Array<{ id: string; name: string }>
 }
 
 export interface CalendarProfessional {
@@ -139,6 +140,43 @@ export function useAvailability(
   })
 }
 
+export interface AvailableProfessional {
+  id: string
+  name: string
+  speciality: string | null
+  available: boolean
+}
+
+export interface AvailableSlotsResult {
+  date: string
+  slots: string[]
+  professionals: { id: string; name: string; slots: string[] }[]
+}
+
+/** Available time slots for a service on a date (optionally filtered to one professional and/or one equipment) */
+export function useAvailableSlots(
+  params: { serviceId: string; date: string; professionalId?: string; equipmentId?: string } | null,
+) {
+  return useQuery<AvailableSlotsResult>({
+    queryKey: ['appointments-available-slots', params],
+    queryFn: () =>
+      api.get('/appointments/available-slots', { params: params! }).then((r) => r.data),
+    enabled: !!params?.serviceId && !!params?.date,
+  })
+}
+
+/** Professionals that can perform a service on a date, optionally filtered to a specific time */
+export function useAvailableProfessionals(
+  params: { serviceId: string; date: string; time?: string } | null,
+) {
+  return useQuery<{ professionals: AvailableProfessional[] }>({
+    queryKey: ['appointments-available-professionals', params],
+    queryFn: () =>
+      api.get('/appointments/available-professionals', { params: params! }).then((r) => r.data),
+    enabled: !!params?.serviceId && !!params?.date,
+  })
+}
+
 export function useCreateAppointment() {
   const qc = useQueryClient()
   return useMutation({
@@ -148,6 +186,7 @@ export function useCreateAppointment() {
       serviceId: string
       scheduledAt: string
       notes?: string
+      equipmentIds?: string[]
     }) => api.post('/appointments', data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appointments'] })
@@ -204,6 +243,14 @@ export function useCancelBilling(id: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api.post(`/billing/${id}/cancel`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
+  })
+}
+
+export function useMarkBillingPaid(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post(`/billing/${id}/mark-paid`).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
   })
 }

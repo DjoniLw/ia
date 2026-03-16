@@ -1,0 +1,47 @@
+# Railway — Aesthera full stack
+# ─────────────────────────────────────────────────────────────────────────────
+# This file configures the FIRST Railway service (API / backend).
+# Railway reads railway.toml from the repository root automatically.
+#
+# ── Web (frontend) service ────────────────────────────────────────────────────
+# Create a SECOND service in the same Railway project.
+# IMPORTANT: set "Root Directory" to aesthera/apps/web  so Railway picks up
+# the web-specific railway.toml in that folder instead of this one.
+#
+#   1. New → GitHub Repo → DjoniLw/ia
+#   2. Settings → General → Root Directory: aesthera/apps/web
+#      (this is what stops Railway from reading this file and using Dockerfile.api)
+#   3. Variables:
+#        NEXT_PUBLIC_API_URL  → public URL of the API service below
+#        NEXT_PUBLIC_BASE_DOMAIN (optional) → custom wildcard domain root
+#                              Leave unset for Railway *.up.railway.app URLs.
+#
+# ── Required environment variables for this (API) service ────────────────────
+#   DATABASE_URL   — from the Railway PostgreSQL service (New → Database)
+#   REDIS_URL      — from the Railway Redis service     (New → Database)
+#   JWT_SECRET     — strongly recommended: any random string ≥ 32 characters
+#                    (auto-generated ephemeral secret is used when not set;
+#                     tokens are invalidated on every restart without it)
+#   JWT_REFRESH_SECRET — same as above, for refresh tokens
+#   PORT           — 3000
+#   CORS_ORIGIN    — comma-separated allowed origins, or '*' for all (default).
+#                    Example: https://yourweb.up.railway.app,https://app.yoursite.com
+#   (Stripe, MercadoPago, Resend, Z-API, Gemini keys are optional)
+#
+# Docs: https://docs.railway.com/reference/config-as-code
+# ─────────────────────────────────────────────────────────────────────────────
+
+[build]
+builder        = "DOCKERFILE"
+dockerfilePath = "Dockerfile.api"
+
+[deploy]
+healthcheckPath        = "/health"
+# 120 s gives the Node server enough headroom to start even if
+# the Railway PostgreSQL service is slow to accept connections.
+# The schema-sync background task (prisma db push) uses 110 s so it
+# always completes (success or failure) before this window closes.
+healthcheckTimeout     = 120
+restartPolicyType      = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+

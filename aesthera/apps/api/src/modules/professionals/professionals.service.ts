@@ -55,7 +55,7 @@ export class ProfessionalsService {
 
   async assignServices(clinicId: string, id: string, dto: AssignServicesDto) {
     await this.get(clinicId, id)
-    await this.repo.assignServices(clinicId, id, dto.serviceIds)
+    await this.repo.assignServices(clinicId, id, dto.serviceIds, dto.allServices)
     return this.repo.getServices(clinicId, id)
   }
 }

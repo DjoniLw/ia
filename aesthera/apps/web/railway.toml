@@ -1,0 +1,27 @@
+# Railway — Aesthera Web (frontend) service
+# ─────────────────────────────────────────────────────────────────────────────
+# This file is picked up automatically when you set the service's
+# "Root Directory" to  aesthera/apps/web  in Railway settings.
+# That makes Railway use THIS directory as the build context, so the
+# Dockerfile path below is relative to aesthera/apps/web/ — not the repo root.
+#
+# ── Setup steps ───────────────────────────────────────────────────────────────
+#   1. New service → GitHub Repo → DjoniLw/ia
+#   2. Settings → General → Root Directory: aesthera/apps/web
+#      (Railway will read THIS railway.toml and stop overriding the Dockerfile)
+#   3. Variables:
+#        NEXT_PUBLIC_API_URL      → public URL of your Railway API service
+#                                   e.g. https://api-xyz.up.railway.app
+#        NEXT_PUBLIC_BASE_DOMAIN  → (optional) custom wildcard domain root
+#                                   e.g. aesthera.com.br
+#                                   Leave unset for *.up.railway.app URLs —
+#                                   the clinic slug comes from localStorage.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[build]
+builder        = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+restartPolicyType      = "ON_FAILURE"
+restartPolicyMaxRetries = 3

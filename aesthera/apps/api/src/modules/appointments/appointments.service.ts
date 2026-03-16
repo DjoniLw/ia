@@ -69,11 +69,26 @@ export class AppointmentsService {
 
     await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, durationMinutes, dateStr)
 
-    return this.repo.create(clinicId, {
+    // 6. Validate equipment IDs and check for conflicts
+    if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+      await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, durationMinutes)
+    }
+
+    const appointment = await this.repo.create(clinicId, {
       ...dto,
       durationMinutes,
       price: dto.price ?? service.price,
     })
+
+    // 7. Persist equipment associations
+    if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+      await prisma.appointmentEquipment.createMany({
+        data: dto.equipmentIds.map((equipmentId) => ({ appointmentId: appointment.id, equipmentId })),
+        skipDuplicates: true,
+      })
+    }
+
+    return appointment
   }
 
   async update(clinicId: string, id: string, dto: UpdateAppointmentDto) {
@@ -86,9 +101,26 @@ export class AppointmentsService {
       const scheduledDate = new Date(dto.scheduledAt)
       const dateStr = scheduledDate.toISOString().slice(0, 10)
       await this.assertSlotAvailable(clinicId, a.professionalId, scheduledDate, a.durationMinutes, dateStr, id)
+
+      if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+        await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, a.durationMinutes, id)
+      }
     }
 
-    return this.repo.update(clinicId, id, dto)
+    const updated = await this.repo.update(clinicId, id, dto)
+
+    // Update equipment associations when provided
+    if (dto.equipmentIds !== undefined) {
+      await prisma.appointmentEquipment.deleteMany({ where: { appointmentId: id } })
+      if (dto.equipmentIds.length > 0) {
+        await prisma.appointmentEquipment.createMany({
+          data: dto.equipmentIds.map((equipmentId) => ({ appointmentId: id, equipmentId })),
+          skipDuplicates: true,
+        })
+      }
+    }
+
+    return updated
   }
 
   // ── State machine ─────────────────────────────────────────────────────────────
@@ -229,6 +261,9 @@ export class AppointmentsService {
         service: a.service.name,
         price: a.price,
         notes: a.notes,
+        equipment: (a.equipment as Array<{ equipment: { id: string; name: string } }>).map(
+          (e) => e.equipment,
+        ),
       })
     }
 
@@ -275,7 +310,109 @@ export class AppointmentsService {
     return { message: 'Blocked slot deleted' }
   }
 
+  // ── Available professionals for a given date + time ───────────────────────────
+
+  async getAvailableProfessionals(clinicId: string, date: string, time: string) {
+    const timeMinutes = timeToMinutes(time)
+    const dayOfWeek = new Date(date + 'T12:00:00Z').getUTCDay()
+    const minDuration = 15 // minimum slot in minutes
+
+    const professionals = await prisma.professional.findMany({
+      where: { clinicId, active: true, deletedAt: null },
+      select: { id: true, name: true, speciality: true },
+      orderBy: { name: 'asc' },
+    })
+
+    const result = await Promise.all(
+      professionals.map(async (prof) => {
+        const wh = await this.repo.getProfessionalWorkingHours(prof.id, dayOfWeek)
+        if (!wh) return { ...prof, available: false }
+
+        const startMin = timeToMinutes(wh.startTime)
+        const endMin = timeToMinutes(wh.endTime)
+        if (timeMinutes < startMin || timeMinutes + minDuration > endMin) {
+          return { ...prof, available: false }
+        }
+
+        const [appointments, blockedSlots] = await Promise.all([
+          this.repo.getConflictingAppointments(clinicId, prof.id, date),
+          this.repo.getBlockedSlotsForDate(clinicId, prof.id, date),
+        ])
+
+        const occupied = [
+          ...appointments.map((a: { scheduledAt: Date; durationMinutes: number }) => ({
+            start: dateToMinutes(a.scheduledAt),
+            end: dateToMinutes(a.scheduledAt) + a.durationMinutes,
+          })),
+          ...blockedSlots.map((b: { startTime: string; endTime: string }) => ({
+            start: timeToMinutes(b.startTime),
+            end: timeToMinutes(b.endTime),
+          })),
+        ]
+
+        const conflict = occupied.some(
+          (o) => timeMinutes < o.end && timeMinutes + minDuration > o.start,
+        )
+        return { ...prof, available: !conflict }
+      }),
+    )
+
+    return { professionals: result }
+  }
+
   // ── Internal helpers ──────────────────────────────────────────────────────────
+
+  private async assertEquipmentAvailable(
+    clinicId: string,
+    equipmentIds: string[],
+    scheduledAt: Date,
+    durationMinutes: number,
+    excludeAppointmentId?: string,
+  ) {
+    // Verify all equipment belongs to this clinic
+    const equipment = await prisma.equipment.findMany({
+      where: { id: { in: equipmentIds }, clinicId, active: true },
+    })
+    if (equipment.length !== equipmentIds.length) {
+      throw new AppError('Um ou mais equipamentos não encontrados', 400, 'EQUIPMENT_NOT_FOUND')
+    }
+
+    // Find appointments that overlap in time and use any of these equipment items
+    const slotEnd = new Date(scheduledAt.getTime() + durationMinutes * 60 * 1000)
+
+    const conflicts = await prisma.appointmentEquipment.findMany({
+      where: {
+        equipmentId: { in: equipmentIds },
+        appointment: {
+          clinicId,
+          status: { notIn: ['cancelled', 'no_show'] },
+          id: excludeAppointmentId ? { not: excludeAppointmentId } : undefined,
+          scheduledAt: { lt: slotEnd },
+          // appointment ends after our slot starts: scheduledAt + durationMinutes > scheduledAt_new
+        },
+      },
+      include: {
+        equipment: { select: { name: true } },
+        appointment: { select: { scheduledAt: true, durationMinutes: true } },
+      },
+    })
+
+    // Filter to only overlapping appointments
+    const overlapping = conflicts.filter((c) => {
+      const apptStart = c.appointment.scheduledAt
+      const apptEnd = new Date(apptStart.getTime() + c.appointment.durationMinutes * 60 * 1000)
+      return scheduledAt < apptEnd && slotEnd > apptStart
+    })
+
+    if (overlapping.length > 0) {
+      const names = [...new Set(overlapping.map((c) => c.equipment.name))].join(', ')
+      throw new AppError(
+        `Conflito de equipamento: ${names} já está em uso neste horário`,
+        409,
+        'EQUIPMENT_CONFLICT',
+      )
+    }
+  }
 
   private async assertSlotAvailable(
     clinicId: string,

@@ -142,15 +142,16 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 **Objetivo**: visão financeira e operacional consolidada.
 
 ### Backend
-- [ ] `GET /ledger/summary` — total créditos, débitos, saldo líquido por período
-- [ ] Filtros e aggregations para o dashboard
+- [x] `GET /ledger/summary` — total créditos, débitos, saldo líquido por período
+- [x] Filtros e aggregations para o dashboard
 
 ### Frontend
-- [ ] Dashboard home: cards de resumo (agendamentos hoje, receita do mês, pendente)
-- [ ] Gráfico de receita por semana/mês
-- [ ] Taxa de ocupação por profissional
-- [ ] Filtros de período
-- [ ] Briefing widget simples (sem IA ainda — só dados)
+- [x] Dashboard home: cards de resumo (receita hoje, receita do mês, agendamentos, serviços, vendas, a receber)
+- [x] Gráfico de receita por semana/mês (página Financeiro)
+- [x] Taxa de ocupação por profissional (dashboard)
+- [x] Filtros de período (páginas Financeiro e Relatórios)
+- [x] Briefing IA widget (dashboard, usa Gemini 1.5 Flash)
+- [x] Página Relatórios: clientes, vendas, serviços, estoque com gráficos
 
 ### Resultado
 > Você abre o dashboard e vê: "12 agendamentos hoje · R$4.200 recebidos este mês · R$800 pendentes"
@@ -162,20 +163,20 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 **Objetivo**: IA embutida que conhece o sistema e responde perguntas em linguagem natural.
 
 ### Backend
-- [ ] Integração Google Gemini 2.0 Flash (`@google/generative-ai`)
-- [ ] Módulo AI: `POST /ai/chat` (streaming SSE) · `POST /ai/summary/customer/:id` · `POST /ai/briefing`
-- [ ] Function calling: tools que consultam agendamentos, clientes, cobranças, financeiro
-- [ ] Histórico de conversa no Redis (TTL 1h, janela de 20 mensagens)
-- [ ] Rate limiting: 30 req/hora por clínica
-- [ ] Cache de summaries e briefing (Redis)
+- [x] Integração Google Gemini 1.5 Flash (`@ai-sdk/google` + Vercel AI SDK)
+- [x] Módulo AI: `POST /ai/chat` (streaming SSE) · `POST /ai/summary/customer/:id` · `POST /ai/briefing`
+- [x] Function calling: tools que consultam agendamentos, clientes, cobranças, financeiro
+- [x] Histórico de conversa no Redis (TTL 1h, janela de 20 mensagens)
+- [x] Rate limiting: 30 req/hora por clínica
+- [x] Cache de summaries e briefing (Redis)
 
 ### Frontend
-- [ ] Chat panel flutuante (botão bottom-right em todas as páginas)
-- [ ] Streaming de resposta em tempo real
-- [ ] Indicador de tool call ("Consultando agendamentos...")
-- [ ] Prompts sugeridos na primeira abertura
-- [ ] Botão "Resumo IA" na ficha do cliente
-- [ ] Widget de briefing no dashboard home
+- [x] Chat panel flutuante (botão bottom-right em todas as páginas)
+- [x] Streaming de resposta em tempo real
+- [x] Indicador de tool call ("Consultando agendamentos...")
+- [x] Prompts sugeridos na primeira abertura
+- [x] Botão "Resumo IA" na ficha do cliente
+- [x] Widget de briefing no dashboard home
 
 ### Resultado
 > Você digita "Quais cobranças estão vencidas essa semana?" e a IA responde com a lista.

@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageSquare, X, Send, Loader2, Bot, User, Wrench } from 'lucide-react'
+import { apiBaseUrl, getClinicSlug } from '@/lib/api'
+import { getAccessToken } from '@/lib/auth'
 
 interface Message {
   id: string
@@ -116,9 +118,9 @@ export function ChatPanel() {
     setStreaming(true)
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access-token') : null
-      const slug = typeof window !== 'undefined' ? localStorage.getItem('clinic-slug') : null
+      const base = apiBaseUrl
+      const token = getAccessToken()
+      const slug = getClinicSlug()
 
       const res = await fetch(`${base}/ai/chat`, {
         method: 'POST',
@@ -131,7 +133,14 @@ export function ChatPanel() {
       })
 
       if (!res.ok || !res.body) {
-        throw new Error('AI request failed')
+        let errMsg = 'AI request failed'
+        try {
+          const data = await res.json() as { message?: string; error?: string }
+          errMsg = data.message ?? data.error ?? errMsg
+        } catch {
+          // Response body is not JSON (e.g. network proxy error) — keep generic message
+        }
+        throw new Error(errMsg)
       }
 
       const reader = res.body.getReader()
@@ -151,27 +160,28 @@ export function ChatPanel() {
           const raw = line.slice(6).trim()
           if (raw === '[DONE]') break
 
+          let event: { chunk?: string; toolCall?: string; error?: string }
           try {
-            const event = JSON.parse(raw) as { chunk?: string; toolCall?: string; error?: string }
-            if (event.error) throw new Error(event.error)
-            if (event.toolCall) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, toolCall: event.toolCall, content: '' } : m,
-                ),
-              )
-            }
-            if (event.chunk) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: m.content + event.chunk, toolCall: undefined }
-                    : m,
-                ),
-              )
-            }
+            event = JSON.parse(raw) as typeof event
           } catch {
-            // ignore parse errors mid-stream
+            continue // skip malformed JSON frames
+          }
+          if (event.error) throw new Error(event.error)
+          if (event.toolCall) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId ? { ...m, toolCall: event.toolCall, content: '' } : m,
+              ),
+            )
+          }
+          if (event.chunk) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: m.content + event.chunk, toolCall: undefined }
+                  : m,
+              ),
+            )
           }
         }
       }
@@ -180,7 +190,7 @@ export function ChatPanel() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
-            ? { ...m, content: `⚠️ ${msg}. Verifique se a chave GEMINI_API_KEY está configurada.`, toolCall: undefined }
+            ? { ...m, content: `⚠️ ${msg}`, toolCall: undefined }
             : m,
         ),
       )
@@ -223,7 +233,7 @@ export function ChatPanel() {
           </div>
           <div>
             <p className="text-sm font-semibold text-white">Aes — Assistente IA</p>
-            <p className="text-xs text-violet-200">Gemini 2.0 Flash</p>
+            <p className="text-xs text-violet-200">Gemini 2.5 Flash</p>
           </div>
           <button
             onClick={() => setOpen(false)}

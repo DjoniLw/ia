@@ -1,3 +1,4 @@
+import { prisma } from '../../database/prisma/client'
 import { NotFoundError } from '../../shared/errors/app-error'
 import type { CreateServiceDto, ListServicesQuery, UpdateServiceDto } from './services.dto'
 import { ServicesRepository } from './services.repository'
@@ -20,8 +21,23 @@ export class ServicesService {
   }
 
   async update(clinicId: string, id: string, dto: UpdateServiceDto) {
-    await this.get(clinicId, id)
-    return this.repo.update(clinicId, id, dto)
+    const current = await this.get(clinicId, id)
+    const updated = await this.repo.update(clinicId, id, dto)
+
+    // Feature 1: when duration changes, propagate to future pending/confirmed appointments only
+    if (dto.durationMinutes !== undefined && dto.durationMinutes !== current.durationMinutes) {
+      await prisma.appointment.updateMany({
+        where: {
+          clinicId,
+          serviceId: id,
+          status: { in: ['draft', 'confirmed'] },
+          scheduledAt: { gt: new Date() },
+        },
+        data: { durationMinutes: dto.durationMinutes },
+      })
+    }
+
+    return updated
   }
 
   async delete(clinicId: string, id: string) {

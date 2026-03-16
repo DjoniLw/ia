@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import axios from 'axios'
 import { CheckCircle, Clock, XCircle, Loader2, CreditCard } from 'lucide-react'
+import { apiBaseUrl } from '@/lib/api'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+const API_URL = apiBaseUrl
 
 interface PaymentPageData {
   id: string

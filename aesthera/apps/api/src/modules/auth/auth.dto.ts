@@ -1,5 +1,10 @@
 import { z } from 'zod'
 
+export const VerifyEmailDto = z.object({
+  token: z.string().min(1),
+})
+export type VerifyEmailDto = z.infer<typeof VerifyEmailDto>
+
 const passwordSchema = z
   .string()
   .min(8, 'Minimum 8 characters')
@@ -15,6 +20,7 @@ export const RegisterClinicDto = z.object({
   adminName: z.string().min(2).max(100),
   email: z.string().email(),
   password: passwordSchema,
+  phone: z.string().optional(),
 })
 
 export const LoginDto = z.object({
@@ -42,6 +48,10 @@ export const ProfessionalLoginDto = z.object({
   password: z.string().min(1),
 })
 
+export const ResendVerificationDto = z.object({
+  email: z.string().email(),
+})
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type RegisterClinicDto = z.infer<typeof RegisterClinicDto>
@@ -50,3 +60,4 @@ export type RefreshTokenDto = z.infer<typeof RefreshTokenDto>
 export type ForgotPasswordDto = z.infer<typeof ForgotPasswordDto>
 export type ResetPasswordDto = z.infer<typeof ResetPasswordDto>
 export type ProfessionalLoginDto = z.infer<typeof ProfessionalLoginDto>
+export type ResendVerificationDto = z.infer<typeof ResendVerificationDto>

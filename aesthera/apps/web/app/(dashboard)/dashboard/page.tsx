@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CalendarDays, TrendingUp, AlertCircle, CheckCircle, Clock, Loader2, Sparkles, Users, Bot, RefreshCw } from 'lucide-react'
+import { CalendarDays, Cake, TrendingUp, AlertCircle, CheckCircle, Clock, Loader2, Sparkles, Users, Bot, RefreshCw, ShoppingCart, DollarSign, TrendingDown } from 'lucide-react'
 import { useLedgerSummary, useTodayAppointments } from '@/lib/hooks/use-financial'
+import { useCustomerBirthdays, useProductSales } from '@/lib/hooks/use-resources'
 import { useBilling } from '@/lib/hooks/use-appointments'
 import { api } from '@/lib/api'
 
@@ -15,12 +16,12 @@ function formatTime(iso: string) {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-600',
-  confirmed: 'bg-blue-100 text-blue-700',
-  in_progress: 'bg-yellow-100 text-yellow-700',
-  completed: 'bg-green-100 text-green-700',
+  draft: 'bg-gray-100 text-gray-700',
+  confirmed: 'bg-blue-100 text-blue-800',
+  in_progress: 'bg-amber-100 text-amber-900',
+  completed: 'bg-green-100 text-green-800',
   cancelled: 'bg-muted text-muted-foreground',
-  no_show: 'bg-red-100 text-red-700',
+  no_show: 'bg-red-100 text-red-800',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -42,20 +43,29 @@ function monthRange() {
 
 export default function DashboardPage() {
   const { from, to } = monthRange()
+  const today = new Date().toISOString().slice(0, 10)
   const summary = useLedgerSummary({ from, to })
+  const todaySummary = useLedgerSummary({ from: today, to: today })
   const todayAppts = useTodayAppointments()
+  const pendingBilling = useBilling({ status: 'pending', limit: '1' })
   const overdueBilling = useBilling({ status: 'overdue', limit: '5' })
+  const monthSales = useProductSales({ from, to, limit: '1' })
 
   const [briefing, setBriefing] = useState<string | null>(null)
   const [briefingLoading, setBriefingLoading] = useState(false)
+  const birthdays = useCustomerBirthdays(7)
 
   async function loadBriefing() {
     setBriefingLoading(true)
     try {
       const res = await api.post<{ briefing: string }>('/ai/briefing')
       setBriefing(res.data.briefing)
-    } catch {
-      setBriefing('Não foi possível gerar o briefing. Verifique se a chave GEMINI_API_KEY está configurada.')
+    } catch (err) {
+      const errMsg = (err as { response?: { data?: { message?: string; error?: string } } })
+        ?.response?.data?.message ??
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        (err instanceof Error ? err.message : null)
+      setBriefing('Não foi possível gerar o briefing. ' + (errMsg ? `Erro: ${errMsg}` : 'Verifique se a chave GEMINI_API_KEY está configurada.'))
     } finally {
       setBriefingLoading(false)
     }
@@ -83,13 +93,25 @@ export default function DashboardPage() {
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [todayAppts.data])
 
+  const todayServicesCompleted = useMemo(
+    () => (todayAppts.data ?? []).filter((a) => a.status === 'completed').length,
+    [todayAppts.data],
+  )
+
   const stats = [
+    {
+      label: 'Receita Hoje',
+      value: todaySummary.isLoading ? '...' : formatCurrency(todaySummary.data?.totalCredits ?? 0),
+      icon: DollarSign,
+      color: 'text-green-600',
+      bg: 'bg-green-50 dark:bg-green-950/20',
+    },
     {
       label: 'Receita do Mês',
       value: summary.isLoading ? '...' : formatCurrency(summary.data?.totalCredits ?? 0),
       icon: TrendingUp,
-      color: 'text-green-600',
-      bg: 'bg-green-50 dark:bg-green-950/20',
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50 dark:bg-emerald-950/20',
     },
     {
       label: 'Agendamentos Hoje',
@@ -99,20 +121,25 @@ export default function DashboardPage() {
       bg: 'bg-blue-50 dark:bg-blue-950/20',
     },
     {
-      label: 'Cobranças Vencidas',
-      value: overdueBilling.isLoading ? '...' : String(overdueBilling.data?.total ?? 0),
-      icon: AlertCircle,
-      color: 'text-red-600',
-      bg: 'bg-red-50 dark:bg-red-950/20',
-    },
-    {
-      label: 'Saldo Líquido',
-      value: summary.isLoading
-        ? '...'
-        : formatCurrency((summary.data?.totalCredits ?? 0) - (summary.data?.totalDebits ?? 0)),
+      label: 'Serviços Concluídos',
+      value: todayAppts.isLoading ? '...' : String(todayServicesCompleted),
       icon: CheckCircle,
       color: 'text-violet-600',
       bg: 'bg-violet-50 dark:bg-violet-950/20',
+    },
+    {
+      label: 'Vendas (Mês)',
+      value: monthSales.isLoading ? '...' : String(monthSales.data?.total ?? 0),
+      icon: ShoppingCart,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50 dark:bg-amber-950/20',
+    },
+    {
+      label: 'A Receber',
+      value: pendingBilling.isLoading ? '...' : String(pendingBilling.data?.total ?? 0),
+      icon: TrendingDown,
+      color: 'text-red-600',
+      bg: 'bg-red-50 dark:bg-red-950/20',
     },
   ]
 
@@ -126,7 +153,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between">
@@ -161,7 +188,16 @@ export default function DashboardPage() {
             Gerando briefing com IA...
           </div>
         )}
-        {!briefingLoading && briefing && (
+        {!briefingLoading && briefing && briefing.includes('GEMINI_API_KEY') && (
+          <p className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+            ⚙️ A chave GEMINI_API_KEY não está configurada.{' '}
+            <a href="/settings" className="font-medium underline underline-offset-2">
+              Veja as instruções em Configurações → Integrações IA
+            </a>
+            .
+          </p>
+        )}
+        {!briefingLoading && briefing && !briefing.includes('GEMINI_API_KEY') && (
           <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{briefing}</p>
         )}
         {!briefingLoading && !briefing && (
@@ -243,6 +279,48 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+      {/* Birthday widget */}
+      {(birthdays.data?.items.length ?? 0) > 0 && (
+        <div className="rounded-xl border bg-card shadow-sm">
+          <div className="flex items-center gap-2 border-b px-5 py-4">
+            <div className="rounded-lg bg-pink-50 p-2">
+              <Cake className="h-4 w-4 text-pink-500" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Aniversariantes</h3>
+            <span className="ml-auto rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-700">
+              próximos 7 dias
+            </span>
+          </div>
+          <div className="divide-y">
+            {birthdays.data?.items.map((b) => (
+              <div key={b.id} className="flex items-center gap-4 px-5 py-3">
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${b.isToday ? 'bg-pink-500 text-white' : 'bg-pink-100 text-pink-700'}`}>
+                  {b.isToday ? '🎂' : b.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">{b.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {b.isToday ? '🎉 Aniversário hoje!' : `${new Date(b.birthDate!).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`}
+                    {' · '}{b.age} anos
+                    {b.phone && ` · ${b.phone}`}
+                  </p>
+                </div>
+                {b.phone && (
+                  <a
+                    href={`https://wa.me/55${b.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${b.name.split(' ')[0]}! 🎂 Feliz aniversário! A equipe da clínica deseja muitas felicidades para você! 🎉`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors"
+                  >
+                    WhatsApp
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Today's schedule */}
       <div className="rounded-xl border bg-card shadow-sm">
         <div className="flex items-center justify-between border-b px-5 py-4">

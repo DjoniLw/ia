@@ -86,14 +86,17 @@ export class ProfessionalsRepository {
     })
   }
 
-  async assignServices(clinicId: string, professionalId: string, serviceIds: string[]) {
-    // Replace all assigned services
+  async assignServices(clinicId: string, professionalId: string, serviceIds: string[], allServices?: boolean) {
+    // Replace all assigned services and optionally set allServices flag
     return prisma.$transaction([
       prisma.professionalService.deleteMany({ where: { professionalId, clinicId } }),
       prisma.professionalService.createMany({
         data: serviceIds.map((serviceId) => ({ clinicId, professionalId, serviceId })),
         skipDuplicates: true,
       }),
+      ...(allServices !== undefined
+        ? [prisma.professional.update({ where: { id: professionalId }, data: { allServices } })]
+        : []),
     ])
   }
 }

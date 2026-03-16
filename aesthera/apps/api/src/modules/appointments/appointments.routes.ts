@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+import { prisma } from '../../database/prisma/client'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
 import {
@@ -11,9 +13,11 @@ import {
   UpdateAppointmentDto,
 } from './appointments.dto'
 import { AppointmentsService } from './appointments.service'
+import { ScheduleAvailabilityService } from './scheduleAvailability.service'
 
 export async function appointmentsRoutes(app: FastifyInstance) {
   const svc = new AppointmentsService()
+  const availability = new ScheduleAvailabilityService()
 
   // ── Availability & Calendar (before /:id to avoid conflict) ──────────────────
 
@@ -25,6 +29,87 @@ export async function appointmentsRoutes(app: FastifyInstance) {
   app.get('/appointments/calendar', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const q = CalendarQuery.parse(req.query)
     return reply.send(await svc.getCalendar(req.clinicId, q))
+  })
+
+  // ── Available slots for a service on a date ───────────────────────────────────
+  // GET /appointments/available-slots?serviceId=UUID&date=YYYY-MM-DD[&professionalId=UUID][&equipmentId=UUID]
+  app.get('/appointments/available-slots', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const q = z.object({
+      serviceId: z.string().uuid(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      professionalId: z.string().uuid().optional(),
+      equipmentId: z.string().uuid().optional(),
+    }).parse(req.query)
+    return reply.send(
+      await availability.getAvailableSlots(req.clinicId, q.serviceId, q.date, q.professionalId, q.equipmentId),
+    )
+  })
+
+  // ── Available professionals for a service on a date ───────────────────────────
+  // GET /appointments/available-professionals?serviceId=UUID&date=YYYY-MM-DD[&time=HH:MM]
+  // (Supersedes the previous ?date=&time= version)
+  app.get('/appointments/available-professionals', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const q = z.object({
+      serviceId: z.string().uuid().optional(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+    }).parse(req.query)
+
+    if (q.serviceId) {
+      return reply.send(
+        await availability.getAvailableProfessionals(req.clinicId, q.serviceId, q.date, q.time),
+      )
+    }
+
+    // Fallback: original behaviour (no service filter) — kept for compatibility
+    return reply.send(await svc.getAvailableProfessionals(req.clinicId, q.date, q.time ?? ''))
+  })
+
+  // ── Available equipment for a given time slot (Feature 9) ────────────────────
+  // GET /appointments/available-equipment?scheduledAt=ISO&durationMinutes=N[&excludeAppointmentId=UUID]
+  app.get('/appointments/available-equipment', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const q = z.object({
+      scheduledAt: z.string().datetime(),
+      durationMinutes: z.coerce.number().int().positive(),
+      excludeAppointmentId: z.string().uuid().optional(),
+    }).parse(req.query)
+
+    const scheduledAt = new Date(q.scheduledAt)
+    const slotEnd = new Date(scheduledAt.getTime() + q.durationMinutes * 60 * 1000)
+
+    // All active equipment for this clinic
+    const allEquipment = await prisma.equipment.findMany({
+      where: { clinicId: req.clinicId, active: true },
+      orderBy: { name: 'asc' },
+    })
+
+    // Find equipment that is busy (overlapping active appointments) during the slot
+    const busyLinks = await prisma.appointmentEquipment.findMany({
+      where: {
+        appointment: {
+          clinicId: req.clinicId,
+          status: { notIn: ['cancelled', 'no_show'] },
+          ...(q.excludeAppointmentId ? { id: { not: q.excludeAppointmentId } } : {}),
+          scheduledAt: { lt: slotEnd },
+        },
+      },
+      include: {
+        appointment: { select: { scheduledAt: true, durationMinutes: true } },
+      },
+    })
+
+    const busyIds = new Set(
+      busyLinks
+        .filter((l) => {
+          const apptEnd = new Date(l.appointment.scheduledAt.getTime() + l.appointment.durationMinutes * 60_000)
+          return scheduledAt < apptEnd && slotEnd > l.appointment.scheduledAt
+        })
+        .map((l) => l.equipmentId),
+    )
+
+    return reply.send(
+      allEquipment.map((eq) => ({ ...eq, available: !busyIds.has(eq.id) })),
+    )
   })
 
   // ── Blocked Slots ─────────────────────────────────────────────────────────────
@@ -123,3 +208,4 @@ export async function appointmentsRoutes(app: FastifyInstance) {
     },
   )
 }
+

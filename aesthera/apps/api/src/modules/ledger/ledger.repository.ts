@@ -30,7 +30,11 @@ export class LedgerRepository {
     if (q.from || q.to) {
       const range: Record<string, Date> = {}
       if (q.from) range.gte = new Date(q.from)
-      if (q.to) range.lte = new Date(q.to)
+      if (q.to) {
+        const toDate = new Date(q.to)
+        toDate.setUTCHours(23, 59, 59, 999)
+        range.lte = toDate
+      }
       where.createdAt = range
     }
 
@@ -62,7 +66,11 @@ export class LedgerRepository {
     if (q.from || q.to) {
       const range: Record<string, Date> = {}
       if (q.from) range.gte = new Date(q.from)
-      if (q.to) range.lte = new Date(q.to)
+      if (q.to) {
+        const toDate = new Date(q.to)
+        toDate.setUTCHours(23, 59, 59, 999)
+        range.lte = toDate
+      }
       where.createdAt = range
     }
 
@@ -95,12 +103,19 @@ export class LedgerRepository {
     clinicId: string
     type: 'credit' | 'debit'
     amount: number
-    paymentId: string
-    billingId?: string
-    appointmentId?: string
-    customerId?: string
+    paymentId?: string | null
+    billingId?: string | null
+    appointmentId?: string | null
+    customerId?: string | null
     description?: string
+    metadata?: Record<string, unknown>
   }) {
-    return prisma.ledgerEntry.create({ data })
+    const { metadata, ...rest } = data
+    return prisma.ledgerEntry.create({
+      data: {
+        ...rest,
+        ...(metadata !== undefined && { metadata: metadata as object }),
+      },
+    })
   }
 }

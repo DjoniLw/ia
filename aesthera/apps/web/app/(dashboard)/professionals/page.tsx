@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -36,19 +36,23 @@ function ProfessionalForm({
   defaultValues,
   onSave,
   isPending,
+  onDirtyChange,
 }: {
   defaultValues?: Partial<ProfessionalFormData>
   onSave: (data: ProfessionalFormData) => Promise<void>
   isPending: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ProfessionalFormData>({
     resolver: zodResolver(professionalSchema),
     defaultValues,
   })
+
+  useEffect(() => { onDirtyChange?.(isDirty) }, [isDirty, onDirtyChange])
 
   return (
     <form onSubmit={handleSubmit(onSave)} className="space-y-4">
@@ -97,6 +101,7 @@ function AssignServicesDialog({
 
   const currentIds = new Set((professional.services ?? []).map((ps) => ps.service.id))
   const [selected, setSelected] = useState<Set<string>>(new Set(currentIds))
+  const [allServices, setAllServices] = useState(professional.allServices ?? false)
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -108,7 +113,7 @@ function AssignServicesDialog({
 
   async function handleSave() {
     try {
-      await assignServices.mutateAsync([...selected])
+      await assignServices.mutateAsync({ serviceIds: [...selected], allServices })
       toast.success('Serviços atualizados')
       onClose()
     } catch {
@@ -119,7 +124,20 @@ function AssignServicesDialog({
   return (
     <Dialog open onClose={onClose} className="max-w-sm">
       <DialogTitle>Serviços de {professional.name}</DialogTitle>
-      <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
+      {/* All-services toggle */}
+      <div className="mt-3 flex items-center gap-3 rounded-lg border bg-muted/50 px-3 py-2.5">
+        <input
+          type="checkbox"
+          id="all-services"
+          checked={allServices}
+          onChange={(e) => setAllServices(e.target.checked)}
+          className="h-4 w-4 rounded border-input accent-primary"
+        />
+        <label htmlFor="all-services" className="cursor-pointer text-sm font-medium">
+          Todos os serviços (incluindo futuros)
+        </label>
+      </div>
+      <div className={`mt-3 space-y-2 max-h-64 overflow-y-auto ${allServices ? 'opacity-40 pointer-events-none' : ''}`}>
         {servicesData?.items.length === 0 && (
           <p className="text-sm text-muted-foreground">Nenhum serviço cadastrado.</p>
         )}
@@ -158,6 +176,7 @@ export default function ProfessionalsPage() {
   const deleteProfessional = useDeleteProfessional()
 
   const [creating, setCreating] = useState(false)
+  const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Professional | null>(null)
   const [assigningTo, setAssigningTo] = useState<Professional | null>(null)
 
@@ -283,17 +302,17 @@ export default function ProfessionalsPage() {
 
       {/* Create dialog */}
       {creating && (
-        <Dialog open onClose={() => setCreating(false)}>
+        <Dialog open onClose={() => setCreating(false)} isDirty={formDirty}>
           <DialogTitle>Novo Profissional</DialogTitle>
           <div className="mt-4">
-            <ProfessionalForm onSave={handleCreate} isPending={createProfessional.isPending} />
+            <ProfessionalForm onSave={handleCreate} isPending={createProfessional.isPending} onDirtyChange={setFormDirty} />
           </div>
         </Dialog>
       )}
 
       {/* Edit dialog */}
       {editing && (
-        <Dialog open onClose={() => setEditing(null)}>
+        <Dialog open onClose={() => setEditing(null)} isDirty={formDirty}>
           <DialogTitle>Editar Profissional</DialogTitle>
           <div className="mt-4">
             <ProfessionalForm
@@ -304,6 +323,7 @@ export default function ProfessionalsPage() {
               }}
               onSave={handleUpdate}
               isPending={updateProfessional.isPending}
+              onDirtyChange={setFormDirty}
             />
           </div>
         </Dialog>

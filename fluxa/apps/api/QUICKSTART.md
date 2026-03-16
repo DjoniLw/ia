@@ -2,7 +2,7 @@
 
 ## 1️⃣ Start Databases
 ```bash
-cd c:\Disco_D\Desenvolvimento\IA\fluxa\apps\api
+cd fluxa/apps/api
 docker-compose up -d
 ```
 

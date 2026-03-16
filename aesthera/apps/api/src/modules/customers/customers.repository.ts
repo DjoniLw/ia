@@ -42,17 +42,41 @@ export class CustomersRepository {
         notes: data.notes,
         birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
         address: data.address as object | undefined,
+        metadata: {
+          phone2: data.phone2 ?? null,
+          rg: data.rg ?? null,
+          gender: data.gender ?? null,
+          occupation: data.occupation ?? null,
+          howFound: data.howFound ?? null,
+          anamnesis: data.anamnesis ?? null,
+        } as object,
       },
     })
   }
 
   async update(clinicId: string, id: string, data: UpdateCustomerDto) {
+    const existing = await this.findById(clinicId, id)
+    const existingMeta = (existing?.metadata as Record<string, unknown> | null) ?? {}
+
     return prisma.customer.update({
       where: { id, clinicId },
       data: {
-        ...data,
+        ...(data.name !== undefined && { name: data.name }),
+        email: data.email,
+        phone: data.phone,
+        document: data.document,
+        notes: data.notes,
         birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
         address: data.address as object | undefined,
+        metadata: {
+          ...existingMeta,
+          phone2: data.phone2 ?? existingMeta.phone2 ?? null,
+          rg: data.rg ?? existingMeta.rg ?? null,
+          gender: data.gender ?? existingMeta.gender ?? null,
+          occupation: data.occupation ?? existingMeta.occupation ?? null,
+          howFound: data.howFound ?? existingMeta.howFound ?? null,
+          anamnesis: data.anamnesis ?? existingMeta.anamnesis ?? null,
+        } as object,
       },
     })
   }

@@ -10,6 +10,7 @@ const appointmentInclude = {
   customer: { select: { id: true, name: true, email: true, phone: true } },
   professional: { select: { id: true, name: true, speciality: true } },
   service: { select: { id: true, name: true, category: true, durationMinutes: true } },
+  equipment: { include: { equipment: { select: { id: true, name: true } } } },
 } as const
 
 export class AppointmentsRepository {
@@ -138,6 +139,13 @@ export class AppointmentsRepository {
   }
 
   async checkProfessionalHasService(professionalId: string, serviceId: string) {
+    // If the professional has allServices=true, they perform all services
+    const professional = await prisma.professional.findFirst({
+      where: { id: professionalId },
+      select: { allServices: true },
+    })
+    if (professional?.allServices) return true
+
     const ps = await prisma.professionalService.findFirst({
       where: { professionalId, serviceId },
     })

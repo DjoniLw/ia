@@ -13,14 +13,31 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
-import { setTokens } from '@/lib/auth'
+
+// Mirrors the backend slugify function for live preview
+function slugifyPreview(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 60)
+}
+
+const passwordSchema = z
+  .string()
+  .min(8, 'Senha deve ter ao menos 8 caracteres')
+  .regex(/[A-Z]/, 'Senha deve conter ao menos uma letra maiúscula')
+  .regex(/[0-9]/, 'Senha deve conter ao menos um número')
+  .regex(/[^A-Za-z0-9]/, 'Senha deve conter ao menos um caractere especial')
 
 const registerSchema = z
   .object({
     clinicName: z.string().min(2, 'Nome da clínica deve ter ao menos 2 caracteres'),
     adminName: z.string().min(2, 'Seu nome deve ter ao menos 2 caracteres'),
     email: z.string().email('E-mail inválido'),
-    password: z.string().min(8, 'Senha deve ter ao menos 8 caracteres'),
+    password: passwordSchema,
     confirmPassword: z.string(),
     phone: z.string().optional(),
   })
@@ -38,16 +55,19 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegisterData>({ resolver: zodResolver(registerSchema) })
+
+  const clinicName = watch('clinicName') ?? ''
+  const slugPreview = clinicName.length >= 2 ? slugifyPreview(clinicName) : ''
 
   async function onSubmit(data: RegisterData) {
     setLoading(true)
     try {
       const response = await api.post<{
-        accessToken: string
-        refreshToken: string
         clinic: { slug: string; name: string; id: string }
+        emailVerificationSent: boolean
       }>(
         '/auth/register',
         {
@@ -59,10 +79,9 @@ export default function RegisterPage() {
         },
       )
       const slug = response.data.clinic.slug
-      localStorage.setItem('clinic-slug', slug)
-      setTokens(response.data.accessToken, response.data.refreshToken)
-      toast.success(`Clínica cadastrada! Seu slug é: ${slug}`)
-      router.push('/dashboard')
+      const emailSent = response.data.emailVerificationSent !== false
+      // Do NOT store tokens — user must confirm email first
+      router.push(`/register/success?slug=${encodeURIComponent(slug)}&email=${encodeURIComponent(data.email)}&emailSent=${emailSent}`)
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -83,7 +102,13 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="clinicName">Nome da clínica</Label>
-            <Input id="clinicName" placeholder="Clínica Bella Vita" {...register('clinicName')} />
+            <Input id="clinicName" placeholder="Clínica Estética" {...register('clinicName')} />
+            {slugPreview && (
+              <p className="text-xs text-muted-foreground">
+                Identificador gerado:{' '}
+                <span className="font-mono font-medium text-foreground">{slugPreview}</span>
+              </p>
+            )}
             {errors.clinicName && (
               <p className="text-sm text-destructive">{errors.clinicName.message}</p>
             )}
@@ -122,6 +147,9 @@ export default function RegisterPage() {
               autoComplete="new-password"
               {...register('password')}
             />
+            <p className="text-xs text-muted-foreground">
+              Mínimo 8 caracteres, com letra maiúscula, número e caractere especial.
+            </p>
             {errors.password && (
               <p className="text-sm text-destructive">{errors.password.message}</p>
             )}

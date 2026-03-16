@@ -1,0 +1,19 @@
+# Root-level .dockerignore for Railway builds (build context = repo root)
+# Prevents node_modules, build artifacts and secrets from being sent to the Docker daemon
+
+**/node_modules
+**/.next
+**/dist
+**/build
+**/out
+**/.env
+**/.env.*
+**/*.log
+**/*.tsbuildinfo
+**/coverage
+**/.nyc_output
+
+# OS / IDE
+.DS_Store
+.idea
+.vscode

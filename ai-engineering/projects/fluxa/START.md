@@ -27,9 +27,9 @@ Cole o conteúdo deste arquivo + `context/stack.md` + `context/architecture.md` 
 
 | O quê | Caminho |
 |-------|---------|
-| 📁 Documentação (este repo) | `c:\Disco_D\Desenvolvimento\IA\ai-engineering\projects\fluxa\` |
-| 💻 Código Backend (API) | `c:\Disco_D\Desenvolvimento\IA\fluxa\apps\api\` |
-| 🌐 Código Frontend (Web) | `c:\Disco_D\Desenvolvimento\IA\fluxa\apps\web\` |
+| 📁 Documentação (este repo) | `ai-engineering/projects/fluxa/` |
+| 💻 Código Backend (API) | `fluxa/apps/api/` |
+| 🌐 Código Frontend (Web) | `fluxa/apps/web/` |
 
 > Ao iniciar uma sessão de código, indique sempre em qual pasta está trabalhando.
 

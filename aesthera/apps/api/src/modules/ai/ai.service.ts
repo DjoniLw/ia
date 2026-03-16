@@ -1,9 +1,10 @@
-import { google } from '@ai-sdk/google'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { generateText, stepCountIs, streamText, tool } from 'ai'
 import { z } from 'zod/v4'
 import { prisma } from '../../database/prisma/client'
 import { redis } from '../../database/redis/client'
 import { appConfig } from '../../config/app.config'
+import { AppError } from '../../shared/errors/app-error'
 
 type Message = { role: 'user' | 'assistant'; content: string }
 
@@ -32,9 +33,14 @@ async function saveHistory(clinicId: string, sessionId: string, messages: Messag
 export class AiService {
   private getModel() {
     if (!appConfig.ai.geminiApiKey) {
-      throw new Error('GEMINI_API_KEY not configured')
+      throw new AppError(
+        'GEMINI_API_KEY não configurada. Acesse Configurações → Integrações IA para instruções.',
+        503,
+        'AI_NOT_CONFIGURED',
+      )
     }
-    return google('gemini-2.0-flash-exp')
+    const google = createGoogleGenerativeAI({ apiKey: appConfig.ai.geminiApiKey })
+    return google(appConfig.ai.geminiModel)
   }
 
   async streamChat(
@@ -56,6 +62,7 @@ export class AiService {
 
     const result = await streamText({
       model,
+      maxRetries: 0,
       system: `Você é a Aes, assistente inteligente da clínica estética no sistema Aesthera. 
 Hoje é ${today}. Responda sempre em português do Brasil, de forma profissional e objetiva.
 Você tem acesso a ferramentas para buscar informações reais da clínica quando necessário.`,
@@ -101,8 +108,8 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
     let fullResponse = ''
     for await (const event of result.fullStream) {
       if (event.type === 'text-delta') {
-        fullResponse += event.textDelta
-        onChunk(event.textDelta)
+        fullResponse += event.text
+        onChunk(event.text)
       } else if (event.type === 'tool-call' && onToolCall) {
         onToolCall(event.toolName)
       }
@@ -143,11 +150,19 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
     if (cached) return cached
 
     const context = JSON.stringify({ customer, appointments, billing })
-    const { text } = await generateText({
-      model,
-      prompt: `Gere um resumo clínico executivo do cliente a seguir em português, destacando frequência de visitas, serviços preferidos e status financeiro:\n\n${context}`,
-      maxOutputTokens: 500,
-    })
+    let text: string
+    try {
+      const result = await generateText({
+        model,
+        maxRetries: 0,
+        prompt: `Gere um resumo clínico executivo do cliente a seguir em português, destacando frequência de visitas, serviços preferidos e status financeiro:\n\n${context}`,
+        maxOutputTokens: 500,
+      })
+      text = result.text
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      throw new AppError(`Falha ao gerar resumo com IA: ${msg}`, 502, 'AI_ERROR')
+    }
 
     await redis.set(cacheKey, text, 'EX', 600) // 10min cache
     return text
@@ -198,11 +213,19 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
       revenueToday: (summary._sum.amount ?? 0) / 100,
     }
 
-    const { text } = await generateText({
-      model,
-      prompt: `Gere um briefing diário executivo da clínica no seguinte contexto (em português):\n\n${JSON.stringify(context, null, 2)}\n\nSeja conciso e use marcadores.`,
-      maxOutputTokens: 600,
-    })
+    let text: string
+    try {
+      const result = await generateText({
+        model,
+        maxRetries: 0,
+        prompt: `Gere um briefing diário executivo da clínica no seguinte contexto (em português):\n\n${JSON.stringify(context, null, 2)}\n\nSeja conciso e use marcadores.`,
+        maxOutputTokens: 600,
+      })
+      text = result.text
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      throw new AppError(`Falha ao gerar briefing com IA: ${msg}`, 502, 'AI_ERROR')
+    }
 
     await redis.set(cacheKey, text, 'EX', 300) // 5min cache
     return text

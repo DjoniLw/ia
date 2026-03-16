@@ -1,20 +1,43 @@
 import axios from 'axios'
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './auth'
 
-function getClinicSlug(): string {
+export function getClinicSlug(): string {
   if (typeof window === 'undefined') return ''
   const hostname = window.location.hostname
-  // e.g. "minha-clinica.localhost" or "minha-clinica.aesthera.com"
-  const parts = hostname.split('.')
-  if (parts.length >= 2 && parts[0] !== 'www' && parts[0] !== 'app' && parts[0] !== 'localhost') {
-    return parts[0]
+
+  // Production: only extract subdomain when on the configured custom domain
+  // e.g. NEXT_PUBLIC_BASE_DOMAIN=aesthera.com.br → "clinica.aesthera.com.br" → "clinica"
+  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN
+  if (baseDomain && hostname !== baseDomain && hostname.endsWith(`.${baseDomain}`)) {
+    const subdomain = hostname.slice(0, hostname.length - baseDomain.length - 1)
+    if (subdomain && subdomain !== 'www' && subdomain !== 'app') return subdomain
   }
-  // Fallback for local development: read from localStorage
+
+  // Local dev: extract from *.localhost (e.g. clinica.localhost:3002 → "clinica")
+  if (hostname.endsWith('.localhost')) {
+    const subdomain = hostname.slice(0, hostname.lastIndexOf('.localhost'))
+    if (subdomain && subdomain !== 'www' && subdomain !== 'app') return subdomain
+  }
+
+  // Fallback: slug stored in localStorage at login/register.
+  // Used for flat Railway/Vercel URLs (no clinic subdomain in the hostname).
   return localStorage.getItem('clinic-slug') ?? ''
 }
 
+/** Returns the API base URL with no trailing slash, safe to use in template literals. */
+function ensureAbsoluteUrl(url: string): string {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return `https://${url}`
+  }
+  return url
+}
+
+export const apiBaseUrl = ensureAbsoluteUrl(
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, ''),
+)
+
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001',
+  baseURL: apiBaseUrl,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -80,7 +103,7 @@ api.interceptors.response.use(
 
     try {
       const { data } = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'}/auth/refresh`,
+        `${apiBaseUrl}/auth/refresh`,
         { refreshToken },
       )
 

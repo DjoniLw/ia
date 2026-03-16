@@ -44,5 +44,19 @@ export const appConfig = {
 
   ai: {
     geminiApiKey: env.GEMINI_API_KEY,
+    geminiModel: env.GEMINI_MODEL,
   },
+
+  cors: {
+    // '*' means allow all origins. Set CORS_ORIGIN env var to lock it down.
+    origin:
+      env.CORS_ORIGIN === '*'
+        ? true
+        : env.CORS_ORIGIN
+            .split(',')
+            .map((o) => o.trim())
+            .filter(Boolean),
+  },
+
+  frontendUrl: env.FRONTEND_URL,
 } as const
