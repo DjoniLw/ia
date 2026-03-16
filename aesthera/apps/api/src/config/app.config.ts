@@ -57,4 +57,6 @@ export const appConfig = {
             .map((o) => o.trim())
             .filter(Boolean),
   },
+
+  frontendUrl: env.FRONTEND_URL,
 } as const

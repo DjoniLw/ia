@@ -107,6 +107,8 @@ model Clinic {
   plan          ClinicPlan   @default(trial)
   status        ClinicStatus @default(active)
   emailVerified Boolean      @default(false)      @map("email_verified")
+  emailVerificationToken    String?   @unique @map("email_verification_token")
+  emailVerificationExpiresAt DateTime? @map("email_verification_expires_at")
   timezone      String       @default("America/Sao_Paulo")
   address       Json?
   settings      Json?                             // notification prefs, due_date offset, etc.

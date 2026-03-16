@@ -1,5 +1,10 @@
 import { z } from 'zod'
 
+export const VerifyEmailDto = z.object({
+  token: z.string().min(1),
+})
+export type VerifyEmailDto = z.infer<typeof VerifyEmailDto>
+
 const passwordSchema = z
   .string()
   .min(8, 'Minimum 8 characters')

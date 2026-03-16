@@ -5,6 +5,7 @@ import {
   LoginDto,
   RefreshTokenDto,
   ProfessionalLoginDto,
+  VerifyEmailDto,
 } from './auth.dto'
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -16,6 +17,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const body = RegisterClinicDto.parse(request.body)
     const result = await authService.registerClinic(body)
     reply.status(201).send(result)
+  })
+
+  // ── POST /auth/verify-email ─────────────────────────────────────────────────
+  // Verifies clinic email, marks it active, and returns tokens. PUBLIC.
+  app.post('/auth/verify-email', async (request, reply) => {
+    const body = VerifyEmailDto.parse(request.body)
+    const result = await authService.verifyEmail(body.token)
+    reply.status(200).send(result)
   })
 
   // ── POST /auth/login ────────────────────────────────────────────────────────

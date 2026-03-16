@@ -50,6 +50,10 @@ const envSchema = z.object({
   // Example: https://app.aesthera.com,https://aesthera-web.up.railway.app
   // Defaults to '*' so the web frontend can reach the API out of the box.
   CORS_ORIGIN: z.string().default('*'),
+
+  // Base URL of the web frontend, used to build e-mail links (e.g. email verification).
+  // Example: https://app.aesthera.com
+  FRONTEND_URL: z.string().default('http://localhost:3001'),
 })
 
 export type Env = z.infer<typeof envSchema>

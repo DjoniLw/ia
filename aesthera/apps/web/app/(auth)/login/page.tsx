@@ -15,6 +15,8 @@ import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
 import { setTokens } from '@/lib/auth'
 
+const REMEMBER_KEY = 'aesthera-remember-login'
+
 const loginSchema = z.object({
   clinicSlug: z.string().min(1, 'Slug da clínica é obrigatório').trim(),
   email: z.string().email('E-mail inválido'),
@@ -27,16 +29,34 @@ export default function LoginPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
+  // Load saved credentials for "remember me"
+  const [defaults] = useState<Partial<LoginData>>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const saved = localStorage.getItem(REMEMBER_KEY)
+      if (saved) return JSON.parse(saved) as Partial<LoginData>
+    } catch { /* ignore */ }
+    return {}
+  })
+  const [remember, setRemember] = useState(() => typeof window !== 'undefined' && !!localStorage.getItem(REMEMBER_KEY))
+
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginData>({ resolver: zodResolver(loginSchema) })
+  } = useForm<LoginData>({ resolver: zodResolver(loginSchema), defaultValues: defaults })
 
   async function onSubmit(data: LoginData) {
     setLoading(true)
     const slug = data.clinicSlug.trim().toLowerCase()
     try {
+      // Save or clear remembered credentials
+      if (remember) {
+        localStorage.setItem(REMEMBER_KEY, JSON.stringify({ clinicSlug: slug, email: data.email }))
+      } else {
+        localStorage.removeItem(REMEMBER_KEY)
+      }
+
       localStorage.setItem('clinic-slug', slug)
       const response = await api.post<{ accessToken: string; refreshToken: string }>(
         '/auth/login',
@@ -68,7 +88,7 @@ export default function LoginPage() {
             <Label htmlFor="clinicSlug">Identificador da clínica</Label>
             <Input
               id="clinicSlug"
-              placeholder="ex: bella"
+              placeholder="ex: clinica-estetica"
               autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}
@@ -76,7 +96,7 @@ export default function LoginPage() {
             />
             <p className="text-xs text-muted-foreground">
               É gerado no cadastro a partir do nome da clínica — letras minúsculas, sem espaços.<br />
-              Ex: &quot;Clínica Bella&quot; → <span className="font-mono font-medium">clinica-bella</span>
+              Ex: &quot;Clínica Estética&quot; → <span className="font-mono font-medium">clinica-estetica</span>
             </p>
             {errors.clinicSlug && (
               <p className="text-sm text-destructive">{errors.clinicSlug.message}</p>
@@ -106,6 +126,20 @@ export default function LoginPage() {
             {errors.password && (
               <p className="text-sm text-destructive">{errors.password.message}</p>
             )}
+          </div>
+
+          {/* Remember me */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="remember"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 rounded border-input accent-primary"
+            />
+            <label htmlFor="remember" className="cursor-pointer text-sm text-muted-foreground">
+              Lembrar acesso (clínica e e-mail)
+            </label>
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>

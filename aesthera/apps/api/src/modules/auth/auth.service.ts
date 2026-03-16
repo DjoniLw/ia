@@ -8,9 +8,11 @@ import {
   ConflictError,
   UnauthorizedError,
   ForbiddenError,
+  NotFoundError,
 } from '../../shared/errors/app-error'
 import { generateId } from '../../shared/utils/id'
 import { authRepository } from './auth.repository'
+import { NotificationsService } from '../notifications/notifications.service'
 import type { FastifyInstance } from 'fastify'
 import type { RegisterClinicDto, LoginDto, ProfessionalLoginDto } from './auth.dto'
 
@@ -20,6 +22,7 @@ const BCRYPT_ROUNDS = 12
 const MAX_FAILED_ATTEMPTS = 5
 const LOCK_TTL_SECONDS = 900 // 15 min
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60 // 7 days
+const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -84,6 +87,8 @@ async function clearLockout(userId: string): Promise<void> {
 // ─── AuthService ──────────────────────────────────────────────────────────────
 
 export class AuthService {
+  private notifications = new NotificationsService()
+
   constructor(private readonly app: FastifyInstance) {}
 
   // ── Register ────────────────────────────────────────────────────────────────
@@ -114,6 +119,10 @@ export class AuthService {
     const clinicId = generateId()
     const adminId = generateId()
 
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex')
+    const verificationExpiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS)
+
     const clinic = await authRepository.createClinicWithAdmin({
       clinicId,
       slug,
@@ -125,20 +134,68 @@ export class AuthService {
       adminName: dto.adminName,
       adminEmail: dto.email,
       passwordHash,
+      emailVerificationToken: verificationToken,
+      emailVerificationExpiresAt: verificationExpiresAt,
     })
 
-    const tokens = await this.issueTokens(adminId, clinic.id, 'admin')
+    // Send welcome + verification email (fire-and-forget — don't block registration)
+    void this.sendWelcomeEmail({
+      clinicId,
+      email: dto.email,
+      adminName: dto.adminName,
+      clinicName: dto.clinicName,
+      slug,
+      verificationToken,
+    })
 
     return {
       clinic: { id: clinic.id, slug: clinic.slug, name: clinic.name },
       user: { id: adminId, name: dto.adminName, email: dto.email, role: 'admin' as const },
-      ...tokens,
     }
+  }
+
+  // ── Verify email ─────────────────────────────────────────────────────────────
+
+  async verifyEmail(token: string) {
+    const clinic = await authRepository.findClinicByVerificationToken(token)
+
+    if (!clinic) {
+      throw new NotFoundError('Verification token')
+    }
+
+    if (clinic.emailVerified) {
+      // Already verified — still issue tokens so the user lands in the dashboard
+      const user = await this.findAdminUser(clinic.id)
+      if (!user) throw new NotFoundError('User')
+      const tokens = await this.issueTokens(user.id, clinic.id, 'admin')
+      return { clinic: { slug: clinic.slug }, ...tokens }
+    }
+
+    if (
+      clinic.emailVerificationExpiresAt &&
+      clinic.emailVerificationExpiresAt < new Date()
+    ) {
+      throw new ForbiddenError('O link de verificação expirou. Por favor, cadastre-se novamente.')
+    }
+
+    await authRepository.verifyClinicEmail(clinic.id)
+
+    const user = await this.findAdminUser(clinic.id)
+    if (!user) throw new NotFoundError('User')
+    const tokens = await this.issueTokens(user.id, clinic.id, 'admin')
+
+    return { clinic: { slug: clinic.slug }, ...tokens }
   }
 
   // ── Login ───────────────────────────────────────────────────────────────────
 
   async login(clinicId: string, dto: LoginDto) {
+    // Block login until email is confirmed
+    const clinic = await authRepository.findClinicById(clinicId)
+    if (clinic && !clinic.emailVerified) {
+      throw new ForbiddenError('Por favor, confirme seu e-mail antes de fazer login.')
+    }
+
     const user = await authRepository.findUserByEmail(clinicId, dto.email)
 
     // Generic message: don't reveal whether the email exists
@@ -275,6 +332,59 @@ export class AuthService {
       if (!existing) return slug
       attempt++
       slug = `${base}-${attempt}`
+    }
+  }
+
+  private async findAdminUser(clinicId: string) {
+    return authRepository.findAdminUserByClinic(clinicId)
+  }
+
+  private async sendWelcomeEmail(params: {
+    clinicId: string
+    email: string
+    adminName: string
+    clinicName: string
+    slug: string
+    verificationToken: string
+  }) {
+    const verifyUrl = `${appConfig.frontendUrl}/verify-email?token=${params.verificationToken}`
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
+<body style="font-family:sans-serif;background:#f9fafb;padding:32px 16px;color:#111">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;border:1px solid #e5e7eb">
+    <h1 style="font-size:22px;font-weight:600;margin-bottom:4px">Bem-vindo(a) ao Aesthera! 🎉</h1>
+    <p style="color:#6b7280;margin-top:0">Gestão para Clínicas de Estética</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0" />
+    <p>Olá, <strong>${params.adminName}</strong>!</p>
+    <p>Sua clínica <strong>${params.clinicName}</strong> foi cadastrada com sucesso.</p>
+    <p style="margin-bottom:4px"><strong>Seu identificador de acesso:</strong></p>
+    <code style="display:inline-block;background:#f3f4f6;border-radius:6px;padding:6px 12px;font-size:16px;font-weight:700;color:#111">${params.slug}</code>
+    <p style="margin-top:16px">Para acessar o painel, você precisará deste identificador junto com seu e-mail e senha.</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0" />
+    <p><strong>Confirme seu e-mail para ativar sua conta:</strong></p>
+    <a href="${verifyUrl}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Confirmar e-mail</a>
+    <p style="margin-top:16px;font-size:12px;color:#9ca3af">
+      Ou acesse: <a href="${verifyUrl}" style="color:#7c3aed">${verifyUrl}</a><br />
+      Este link expira em 24 horas.
+    </p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0" />
+    <p style="font-size:12px;color:#9ca3af">Se você não criou esta conta, ignore este e-mail.</p>
+  </div>
+</body>
+</html>`
+
+    try {
+      await this.notifications.sendEmail({
+        clinicId: params.clinicId,
+        email: params.email,
+        subject: `Bem-vindo ao Aesthera — confirme seu e-mail`,
+        htmlBody: html,
+        event: 'clinic_registration',
+      })
+    } catch (err) {
+      logger.error({ err, email: params.email }, 'Failed to send welcome email')
     }
   }
 }

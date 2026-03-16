@@ -7,7 +7,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           Aesthera
         </h1>
         <p className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.25em] text-muted-foreground">
-          Gestão para Clínicas Estéticas
+          Gestão para Clínicas de Estética
         </p>
       </div>
 

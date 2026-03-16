@@ -70,6 +70,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     '/',
     '/health',
     '/auth/register',
+    '/auth/verify-email',
     '/auth/refresh',
     '/auth/logout',
   ])
