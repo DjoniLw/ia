@@ -1,0 +1,100 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+
+// ──── Types ────────────────────────────────────────────────────────────────────
+
+export type DiscountType = 'PERCENTAGE' | 'FIXED'
+export type PromotionStatus = 'active' | 'inactive' | 'expired'
+
+export interface Promotion {
+  id: string
+  name: string
+  code: string
+  description: string | null
+  discountType: DiscountType
+  discountValue: number
+  maxUses: number | null
+  usesCount: number
+  minAmount: number | null
+  applicableServiceIds: string[]
+  status: PromotionStatus
+  validFrom: string
+  validUntil: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface PromotionsPage {
+  items: Promotion[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface CreatePromotionInput {
+  name: string
+  code: string
+  description?: string
+  discountType: DiscountType
+  discountValue: number
+  maxUses?: number | null
+  minAmount?: number | null
+  applicableServiceIds?: string[]
+  validFrom: string
+  validUntil?: string | null
+}
+
+export interface UpdatePromotionInput {
+  name?: string
+  description?: string
+  status?: PromotionStatus
+  maxUses?: number | null
+  validUntil?: string | null
+}
+
+export interface ValidatePromotionResult {
+  discountAmount: number
+  promotion: Promotion
+}
+
+// ──── Hooks ────────────────────────────────────────────────────────────────────
+
+export function usePromotions(params?: { status?: PromotionStatus; page?: number; limit?: number }) {
+  return useQuery<PromotionsPage>({
+    queryKey: ['promotions', params],
+    queryFn: () => api.get('/promotions', { params }).then((r) => r.data),
+  })
+}
+
+export function usePromotion(id: string) {
+  return useQuery<Promotion>({
+    queryKey: ['promotions', id],
+    queryFn: () => api.get(`/promotions/${id}`).then((r) => r.data),
+    enabled: !!id,
+  })
+}
+
+export function useCreatePromotion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (dto: CreatePromotionInput) =>
+      api.post<Promotion>('/promotions', dto).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['promotions'] }),
+  })
+}
+
+export function useUpdatePromotion(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (dto: UpdatePromotionInput) =>
+      api.patch<Promotion>(`/promotions/${id}`, dto).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['promotions'] }),
+  })
+}
+
+export function useValidatePromotion() {
+  return useMutation({
+    mutationFn: (dto: { code: string; billingAmount: number; serviceIds?: string[] }) =>
+      api.post<ValidatePromotionResult>('/promotions/validate', dto).then((r) => r.data),
+  })
+}
