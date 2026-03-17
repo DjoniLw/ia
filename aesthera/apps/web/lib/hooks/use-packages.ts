@@ -131,3 +131,49 @@ export function useRedeemSession(sessionId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-packages'] }),
   })
 }
+
+/**
+ * Returns available (not yet used) sessions for a specific customer + service combination.
+ * Derived from /packages/customer/:customerId — no extra API call needed.
+ */
+export function useAvailableSessionsForService(customerId: string, serviceId: string) {
+  return useQuery<
+    Array<{
+      session: CustomerPackageSession
+      packageName: string
+      customerPackageId: string
+      expiresAt: string | null
+    }>
+  >({
+    queryKey: ['customer-package-sessions', customerId, serviceId],
+    queryFn: async () => {
+      const packages: CustomerPackage[] = await api
+        .get(`/packages/customer/${customerId}`)
+        .then((r) => r.data)
+
+      const result: Array<{
+        session: CustomerPackageSession
+        packageName: string
+        customerPackageId: string
+        expiresAt: string | null
+      }> = []
+
+      for (const cp of packages) {
+        const isExpired = cp.expiresAt && new Date(cp.expiresAt) < new Date()
+        if (isExpired) continue
+        for (const session of cp.sessions) {
+          if (session.serviceId === serviceId && session.usedAt === null) {
+            result.push({
+              session,
+              packageName: cp.package.name,
+              customerPackageId: cp.id,
+              expiresAt: cp.expiresAt,
+            })
+          }
+        }
+      }
+      return result
+    },
+    enabled: !!customerId && !!serviceId,
+  })
+}

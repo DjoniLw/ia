@@ -187,6 +187,7 @@ export function useCreateAppointment() {
       scheduledAt: string
       notes?: string
       equipmentIds?: string[]
+      packageSessionId?: string
     }) => api.post('/appointments', data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appointments'] })

@@ -135,4 +135,27 @@ export class PackagesRepository {
       },
     })
   }
+
+  /** Link a session to an appointment (reserve) without marking it as used yet */
+  async linkSession(sessionId: string, appointmentId: string) {
+    return prisma.customerPackageSession.update({
+      where: { id: sessionId },
+      data: { appointmentId },
+    })
+  }
+
+  /** Clear the appointmentId from a session (unreserve), keeping it available */
+  async unlinkSession(sessionId: string) {
+    return prisma.customerPackageSession.update({
+      where: { id: sessionId },
+      data: { appointmentId: null },
+    })
+  }
+
+  /** Find a session linked to an appointment that has not been used yet */
+  async findLinkedSession(clinicId: string, appointmentId: string) {
+    return prisma.customerPackageSession.findFirst({
+      where: { clinicId, appointmentId, usedAt: null },
+    })
+  }
 }

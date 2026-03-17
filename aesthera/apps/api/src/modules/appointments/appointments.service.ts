@@ -10,6 +10,7 @@ import type {
   UpdateAppointmentDto,
 } from './appointments.dto'
 import { AppointmentsRepository } from './appointments.repository'
+import { PackagesRepository } from '../packages/packages.repository'
 
 // HH:MM → minutes from midnight
 function timeToMinutes(t: string): number {
@@ -35,6 +36,7 @@ function hashToInt32(s: string): number {
 
 export class AppointmentsService {
   private repo = new AppointmentsRepository()
+  private pkgRepo = new PackagesRepository()
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
 
@@ -140,6 +142,10 @@ export class AppointmentsService {
           })
         }
 
+        if (dto.packageSessionId) {
+          await this.pkgRepo.linkSession(dto.packageSessionId, appointment.id)
+        }
+
         return this.repo.findById(clinicId, appointment.id)
       }
 
@@ -185,6 +191,10 @@ export class AppointmentsService {
           data: dto.equipmentIds.map((equipmentId) => ({ appointmentId: appointment.id, equipmentId })),
           skipDuplicates: true,
         })
+      }
+
+      if (dto.packageSessionId) {
+        await this.pkgRepo.linkSession(dto.packageSessionId, appointment.id)
       }
 
       return appointment
@@ -250,6 +260,14 @@ export class AppointmentsService {
       completedAt: new Date(),
     })
 
+    // Check if this appointment has a reserved (but not yet used) package session
+    const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)
+    if (linkedSession) {
+      // Redeem the session — no billing is created since the package was pre-paid
+      await this.pkgRepo.redeemSession(linkedSession.id, id)
+      return completed
+    }
+
     // If multi-service appointment, compute total price from service items
     const serviceItems = completed.serviceItems
     const billingPrice =
@@ -268,6 +286,13 @@ export class AppointmentsService {
     if (!['draft', 'confirmed'].includes(a.status)) {
       throw new AppError('Only draft or confirmed appointments can be cancelled', 400, 'INVALID_STATUS')
     }
+
+    // Unreserve any linked package session so it becomes available again
+    const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)
+    if (linkedSession) {
+      await this.pkgRepo.unlinkSession(linkedSession.id)
+    }
+
     return this.repo.transition(clinicId, id, 'cancelled', {
       cancellationReason: dto.cancellationReason,
       cancelledAt: new Date(),

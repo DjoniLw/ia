@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Plus,
@@ -11,6 +11,7 @@ import {
   ChevronUp,
   ShoppingBag,
   CheckCircle2,
+  Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCustomers, useServices } from '@/lib/hooks/use-resources'
@@ -35,6 +36,91 @@ function formatCurrency(cents: number) {
 function formatDate(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+// ──── Searchable Customer Input ────────────────────────────────────────────────
+
+function CustomerSearchInput({
+  value,
+  onChange,
+  placeholder = 'Buscar cliente…',
+}: {
+  value: { id: string; name: string } | null
+  onChange: (customer: { id: string; name: string } | null) => void
+  placeholder?: string
+}) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [debounced, setDebounced] = useState('')
+
+  const { data } = useCustomers(
+    debounced.trim().length >= 1 ? { name: debounced.trim(), limit: '20' } : undefined,
+  )
+  const results = data?.items ?? []
+
+  function handleInput(v: string) {
+    setSearch(v)
+    setOpen(true)
+    if (!v) onChange(null)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebounced(v), 250)
+  }
+
+  function handleSelect(c: { id: string; name: string }) {
+    onChange(c)
+    setSearch('')
+    setDebounced('')
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2">
+        <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <input
+          value={value && !open ? value.name : search}
+          onChange={(e) => handleInput(e.target.value)}
+          onFocus={() => { setSearch(''); setOpen(true) }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder={value ? value.name : placeholder}
+          className="flex-1 bg-transparent text-sm focus:outline-none"
+          autoComplete="off"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => { onChange(null); setSearch('') }}
+            className="text-muted-foreground hover:text-foreground text-xs"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {open && search.trim().length >= 1 && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-48 overflow-auto">
+          {results.length === 0 ? (
+            <p className="p-3 text-sm text-muted-foreground">Nenhum cliente encontrado</p>
+          ) : (
+            results.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSelect(c)}
+              >
+                <span className="font-medium">{c.name}</span>
+                {c.phone && (
+                  <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ──── Create Package Modal ─────────────────────────────────────────────────────
@@ -66,7 +152,6 @@ function PackageModal({
 
   const createMutation = useCreatePackage()
   const updateMutation = useUpdatePackage(editing?.id ?? '')
-
   const isPending = createMutation.isPending || updateMutation.isPending
 
   if (!open) return null
@@ -85,12 +170,10 @@ function PackageModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-
     if (!name.trim() || !price) {
       toast.error('Preencha os campos obrigatórios')
       return
     }
-
     try {
       if (editing) {
         const dto: UpdatePackageInput = {
@@ -131,10 +214,7 @@ function PackageModal({
           <h3 className="font-semibold text-foreground">
             {editing ? 'Editar pacote' : 'Novo pacote'}
           </h3>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-muted-foreground hover:text-foreground"
-          >
+          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground">
             ✕
           </button>
         </div>
@@ -177,10 +257,12 @@ function PackageModal({
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Validade (dias)</label>
+              <label className="text-xs font-medium text-muted-foreground">
+                Validade (dias){' '}
+                <span className="font-normal text-muted-foreground/60">— opcional</span>
+              </label>
               <input
                 type="number"
-                min="1"
                 value={validityDays}
                 onChange={(e) => setValidityDays(e.target.value)}
                 placeholder="Sem expiração"
@@ -233,19 +315,21 @@ function PackageModal({
                       </option>
                     ))}
                   </select>
-                  <input
-                    type="number"
-                    min="1"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                    className="w-20 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    title="Quantidade de sessões"
-                  />
+                  <div className="flex flex-col items-center justify-center">
+                    <label className="text-[10px] text-muted-foreground">Sessões</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                      className="w-20 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
                   {items.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeItem(index)}
-                      className="rounded p-1 text-destructive hover:bg-destructive/10"
+                      className="self-end rounded p-1 text-destructive hover:bg-destructive/10"
                     >
                       ✕
                     </button>
@@ -281,18 +365,16 @@ function PurchaseModal({
   open: boolean
   onClose: () => void
 }) {
-  const { data: customersData } = useCustomers()
-  const customers = customersData?.items ?? []
-  const [customerId, setCustomerId] = useState('')
+  const [customer, setCustomer] = useState<{ id: string; name: string } | null>(null)
   const purchase = usePurchasePackage(pkg.id)
 
   if (!open) return null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!customerId) { toast.error('Selecione um cliente'); return }
+    if (!customer) { toast.error('Selecione um cliente'); return }
     try {
-      await purchase.mutateAsync(customerId)
+      await purchase.mutateAsync(customer.id)
       toast.success('Pacote adquirido com sucesso')
       onClose()
     } catch {
@@ -322,26 +404,17 @@ function PurchaseModal({
 
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Cliente *</label>
-            <select
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              required
-            >
-              <option value="">Selecionar cliente…</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <CustomerSearchInput value={customer} onChange={setCustomer} />
+            {customer && (
+              <p className="text-xs text-green-600">✓ {customer.name}</p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={purchase.isPending}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={purchase.isPending}>
+            <Button type="submit" disabled={purchase.isPending || !customer}>
               {purchase.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirmar venda
             </Button>
@@ -427,7 +500,10 @@ function CustomerPackageCard({ cp }: { cp: CustomerPackage }) {
                 }`}
               />
               <span className={session.usedAt ? 'line-through opacity-60' : ''}>
-                Sessão {session.usedAt ? `— usada em ${formatDate(session.usedAt)}` : '— disponível'}
+                Sessão{' '}
+                {session.usedAt
+                  ? `— usada em ${formatDate(session.usedAt)}`
+                  : '— disponível'}
               </span>
             </div>
           ))}
@@ -450,13 +526,12 @@ function PackageCard({
 }) {
   const [editing, setEditing] = useState(false)
   const [purchasing, setPurchasing] = useState(false)
-  const { data: customersData } = useCustomers()
-  const customers = customersData?.items ?? []
-  const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  const [lookupCustomer, setLookupCustomer] = useState<{ id: string; name: string } | null>(null)
 
   return (
     <>
       <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        {/* Header row */}
         <div className="flex items-center gap-4 px-5 py-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -473,9 +548,7 @@ function PackageCard({
             <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">{formatCurrency(pkg.price)}</span>
               {pkg.validityDays && <span>Validade: {pkg.validityDays} dias</span>}
-              <span>
-                {pkg.items.reduce((sum, i) => sum + i.quantity, 0)} sessão(ões)
-              </span>
+              <span>{pkg.items.reduce((sum, i) => sum + i.quantity, 0)} sessão(ões)</span>
             </div>
           </div>
 
@@ -500,18 +573,14 @@ function PackageCard({
             <button
               onClick={onToggle}
               className="rounded p-1.5 text-muted-foreground hover:text-foreground"
-              title="Serviços / Pacotes de clientes"
+              title="Verificar pacotes de um cliente"
             >
-              {expanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
+              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
           </div>
         </div>
 
-        {/* Services list */}
+        {/* Services tags */}
         {pkg.items.length > 0 && (
           <div className="flex flex-wrap gap-1.5 border-t px-5 py-3">
             {pkg.items.map((item) => (
@@ -525,32 +594,19 @@ function PackageCard({
           </div>
         )}
 
-        {/* Expanded: customer packages lookup */}
+        {/* Expanded: customer package lookup */}
         {expanded && (
-          <div className="border-t px-5 py-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Verificar pacotes de um cliente
-              </h4>
-            </div>
-            <div className="flex gap-2">
-              <select
-                value={selectedCustomerId}
-                onChange={(e) => setSelectedCustomerId(e.target.value)}
-                className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="">Selecionar cliente…</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedCustomerId && (
-              <div className="mt-3">
-                <CustomerPackagesPanel customerId={selectedCustomerId} />
-              </div>
+          <div className="border-t px-5 py-4 space-y-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Verificar pacotes de um cliente
+            </h4>
+            <CustomerSearchInput
+              value={lookupCustomer}
+              onChange={setLookupCustomer}
+              placeholder="Buscar cliente por nome ou telefone…"
+            />
+            {lookupCustomer && (
+              <CustomerPackagesPanel customerId={lookupCustomer.id} />
             )}
           </div>
         )}
@@ -568,9 +624,6 @@ export default function PackagesPage() {
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [creating, setCreating] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-
-  const params: { active?: boolean } = {}
-  if (activeFilter !== undefined) params.active = activeFilter
 
   const { data, isLoading } = usePackages(
     activeFilter !== undefined ? { active: activeFilter } : undefined,
@@ -657,10 +710,7 @@ export default function PackagesPage() {
           <div>
             <p className="text-muted-foreground">Sessões totais (página)</p>
             <p className="text-lg font-semibold">
-              {data.items.reduce(
-                (sum, p) => sum + p.items.reduce((s, i) => s + i.quantity, 0),
-                0,
-              )}
+              {data.items.reduce((sum, p) => sum + p.items.reduce((s, i) => s + i.quantity, 0), 0)}
             </p>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays, Package } from 'lucide-react'
 import { useCallback, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ import {
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
+import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
 import { useCustomers, useAvailableEquipment, useEquipment, useProfessionals, useServices } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
@@ -161,6 +162,7 @@ interface CreateFormValues {
   professionalId: string
   notes: string
   equipmentIds: string[]
+  packageSessionId?: string
 }
 
 function CreateAppointmentForm({
