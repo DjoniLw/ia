@@ -365,7 +365,7 @@ export class AppointmentsService {
         duration: a.durationMinutes,
         status: a.status,
         customer: a.customer.name,
-        service: a.service.name,
+        service: a.service?.name ?? '',
         price: a.price,
         notes: a.notes,
         equipment: (a.equipment as Array<{ equipment: { id: string; name: string } }>).map(

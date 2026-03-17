@@ -205,7 +205,7 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
       appointmentList: appointments.map(a => ({
         time: a.scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         customer: a.customer.name,
-        service: a.service.name,
+        service: a.service?.name ?? '',
         professional: a.professional.name,
         status: a.status,
       })),
@@ -253,7 +253,7 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
       time: a.scheduledAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       customer: a.customer.name,
       phone: a.customer.phone,
-      service: a.service.name,
+      service: a.service?.name ?? '',
       professional: a.professional.name,
       status: a.status,
       duration: a.durationMinutes + ' min',
@@ -352,7 +352,7 @@ Você tem acesso a ferramentas para buscar informações reais da clínica quand
     return {
       recentAppointments: appointments.map(a => ({
         date: a.scheduledAt.toLocaleDateString('pt-BR'),
-        service: a.service.name,
+        service: a.service?.name ?? '',
         professional: a.professional.name,
         status: a.status,
       })),

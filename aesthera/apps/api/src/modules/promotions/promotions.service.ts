@@ -42,7 +42,7 @@ export class PromotionsService {
     code: string,
     billingAmount: number,
     serviceIds: string[],
-  ): Promise<{ promotion: Awaited<ReturnType<PromotionsRepository['findByCode']>>; discountAmount: number }> {
+  ): Promise<{ promotion: NonNullable<Awaited<ReturnType<PromotionsRepository['findByCode']>>>; discountAmount: number }> {
     const promotion = await this.repo.findByCode(clinicId, code)
     if (!promotion) throw new NotFoundError('Promotion')
 

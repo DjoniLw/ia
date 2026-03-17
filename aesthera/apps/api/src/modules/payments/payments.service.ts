@@ -46,7 +46,7 @@ export class PaymentsService {
       amount: billing.amount,
       method,
       dueDate: billing.dueDate,
-      description: `Serviço: ${billing.appointment.service.name}`,
+      description: `Serviço: ${billing.appointment?.service?.name ?? ''}`,
       metadata: { clinicId: billing.clinicId },
     })
 
