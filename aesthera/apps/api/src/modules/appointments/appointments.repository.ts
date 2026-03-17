@@ -11,6 +11,10 @@ const appointmentInclude = {
   professional: { select: { id: true, name: true, speciality: true } },
   service: { select: { id: true, name: true, category: true, durationMinutes: true } },
   equipment: { include: { equipment: { select: { id: true, name: true } } } },
+  serviceItems: {
+    include: { service: { select: { id: true, name: true, category: true } } },
+    orderBy: { order: 'asc' as const },
+  },
 } as const
 
 export class AppointmentsRepository {
@@ -59,7 +63,7 @@ export class AppointmentsRepository {
         clinicId,
         customerId: dto.customerId,
         professionalId: dto.professionalId,
-        serviceId: dto.serviceId,
+        serviceId: dto.serviceId ?? null,
         scheduledAt: new Date(dto.scheduledAt),
         durationMinutes: dto.durationMinutes,
         price: dto.price,

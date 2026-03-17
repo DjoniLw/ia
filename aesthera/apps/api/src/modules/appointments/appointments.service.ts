@@ -22,6 +22,15 @@ function dateToMinutes(d: Date): number {
   return d.getUTCHours() * 60 + d.getUTCMinutes()
 }
 
+// Simple hash to a 32-bit integer for advisory locks
+function hashToInt32(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) {
+    h = (h + s.charCodeAt(i)) % 2147483647
+  }
+  return h
+}
+
 export class AppointmentsService {
   private repo = new AppointmentsRepository()
 
@@ -38,57 +47,146 @@ export class AppointmentsService {
   }
 
   async create(clinicId: string, dto: CreateAppointmentDto) {
-    // 1. Load service to copy price + duration
-    const service = await prisma.service.findFirst({
-      where: { id: dto.serviceId, clinicId, active: true, deletedAt: null },
-    })
-    if (!service) throw new NotFoundError('Service')
-
-    // 2. Verify professional belongs to clinic and is active
-    const professional = await prisma.professional.findFirst({
-      where: { id: dto.professionalId, clinicId, active: true, deletedAt: null },
-    })
-    if (!professional) throw new NotFoundError('Professional')
-
-    // 3. Verify professional is assigned to service
-    const hasService = await this.repo.checkProfessionalHasService(dto.professionalId, dto.serviceId)
-    if (!hasService) {
-      throw new AppError('Professional is not assigned to this service', 400, 'SERVICE_NOT_ASSIGNED')
-    }
-
-    // 4. Verify customer belongs to clinic
-    const customer = await prisma.customer.findFirst({
-      where: { id: dto.customerId, clinicId, deletedAt: null },
-    })
-    if (!customer) throw new NotFoundError('Customer')
-
-    // 5. Check availability (with advisory lock via transaction)
     const scheduledDate = new Date(dto.scheduledAt)
     const dateStr = scheduledDate.toISOString().slice(0, 10)
-    const durationMinutes = service.durationMinutes
 
-    await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, durationMinutes, dateStr)
+    // Use Postgres advisory lock to prevent double-booking
+    const lockId = hashToInt32(dto.professionalId + dateStr)
 
-    // 6. Validate equipment IDs and check for conflicts
-    if (dto.equipmentIds && dto.equipmentIds.length > 0) {
-      await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, durationMinutes)
-    }
+    return prisma.$transaction(async (tx: any) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`
 
-    const appointment = await this.repo.create(clinicId, {
-      ...dto,
-      durationMinutes,
-      price: dto.price ?? service.price,
-    })
+      // ── Multi-service path ───────────────────────────────────────────────────
+      if (dto.services && dto.services.length > 0) {
+        // Validate all services exist
+        const serviceIds = dto.services.map((s) => s.serviceId)
+        const services: Array<{ id: string; price: number; durationMinutes: number }> =
+          await tx.service.findMany({
+            where: { id: { in: serviceIds }, clinicId, active: true, deletedAt: null },
+          })
+        if (services.length !== serviceIds.length) {
+          throw new NotFoundError('Service')
+        }
 
-    // 7. Persist equipment associations
-    if (dto.equipmentIds && dto.equipmentIds.length > 0) {
-      await prisma.appointmentEquipment.createMany({
-        data: dto.equipmentIds.map((equipmentId) => ({ appointmentId: appointment.id, equipmentId })),
-        skipDuplicates: true,
+        // Verify professional belongs to clinic and is active
+        const professional = await tx.professional.findFirst({
+          where: { id: dto.professionalId, clinicId, active: true, deletedAt: null },
+        })
+        if (!professional) throw new NotFoundError('Professional')
+
+        // Verify professional is assigned to all services
+        for (const svcId of serviceIds) {
+          const hasService = await this.repo.checkProfessionalHasService(dto.professionalId, svcId)
+          if (!hasService) {
+            throw new AppError('Professional is not assigned to this service', 400, 'SERVICE_NOT_ASSIGNED')
+          }
+        }
+
+        // Verify customer belongs to clinic
+        const customer = await tx.customer.findFirst({
+          where: { id: dto.customerId, clinicId, deletedAt: null },
+        })
+        if (!customer) throw new NotFoundError('Customer')
+
+        // Compute totals from all services
+        const serviceMap = new Map(services.map((s) => [s.id, s]))
+        const totalDuration = services.reduce((sum: number, s) => sum + s.durationMinutes, 0)
+        const totalPrice = dto.price ?? dto.services.reduce((sum: number, s) => {
+          const svcPrice = s.price ?? serviceMap.get(s.serviceId)?.price ?? 0
+          return sum + svcPrice
+        }, 0)
+
+        // Check availability with computed total duration
+        await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, totalDuration, dateStr)
+
+        if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+          await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, totalDuration)
+        }
+
+        // Use first service's id as the appointment serviceId for backward compat
+        const primaryServiceId = dto.services[0].serviceId
+
+        const appointment = await tx.appointment.create({
+          data: {
+            clinicId,
+            customerId: dto.customerId,
+            professionalId: dto.professionalId,
+            serviceId: primaryServiceId,
+            scheduledAt: scheduledDate,
+            durationMinutes: totalDuration,
+            price: totalPrice,
+            notes: dto.notes,
+          },
+        })
+
+        // Create service items
+        await tx.appointmentServiceItem.createMany({
+          data: dto.services.map((s, idx) => ({
+            appointmentId: appointment.id,
+            serviceId: s.serviceId,
+            clinicId,
+            price: s.price ?? serviceMap.get(s.serviceId)?.price ?? 0,
+            durationMinutes: serviceMap.get(s.serviceId)?.durationMinutes ?? 0,
+            order: idx,
+          })),
+        })
+
+        if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+          await tx.appointmentEquipment.createMany({
+            data: dto.equipmentIds.map((equipmentId: string) => ({ appointmentId: appointment.id, equipmentId })),
+            skipDuplicates: true,
+          })
+        }
+
+        return this.repo.findById(clinicId, appointment.id)
+      }
+
+      // ── Single-service (legacy) path ─────────────────────────────────────────
+      const serviceId = dto.serviceId!
+
+      const service = await tx.service.findFirst({
+        where: { id: serviceId, clinicId, active: true, deletedAt: null },
       })
-    }
+      if (!service) throw new NotFoundError('Service')
 
-    return appointment
+      const professional = await tx.professional.findFirst({
+        where: { id: dto.professionalId, clinicId, active: true, deletedAt: null },
+      })
+      if (!professional) throw new NotFoundError('Professional')
+
+      const hasService = await this.repo.checkProfessionalHasService(dto.professionalId, serviceId)
+      if (!hasService) {
+        throw new AppError('Professional is not assigned to this service', 400, 'SERVICE_NOT_ASSIGNED')
+      }
+
+      const customer = await tx.customer.findFirst({
+        where: { id: dto.customerId, clinicId, deletedAt: null },
+      })
+      if (!customer) throw new NotFoundError('Customer')
+
+      const durationMinutes = service.durationMinutes
+      await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, durationMinutes, dateStr)
+
+      if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+        await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, durationMinutes)
+      }
+
+      const appointment = await this.repo.create(clinicId, {
+        ...dto,
+        serviceId,
+        durationMinutes,
+        price: dto.price ?? service.price,
+      })
+
+      if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+        await prisma.appointmentEquipment.createMany({
+          data: dto.equipmentIds.map((equipmentId) => ({ appointmentId: appointment.id, equipmentId })),
+          skipDuplicates: true,
+        })
+      }
+
+      return appointment
+    })
   }
 
   async update(clinicId: string, id: string, dto: UpdateAppointmentDto) {
@@ -150,8 +248,15 @@ export class AppointmentsService {
       completedAt: new Date(),
     })
 
+    // If multi-service appointment, compute total price from service items
+    const serviceItems = (completed as typeof completed & { serviceItems?: Array<{ price: number }> }).serviceItems
+    const billingPrice =
+      serviceItems && serviceItems.length > 0
+        ? serviceItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0)
+        : completed.price
+
     // Auto-create billing (idempotent)
-    await this.createBillingForAppointment(completed)
+    await this.createBillingForAppointment({ ...completed, price: billingPrice })
 
     return completed
   }

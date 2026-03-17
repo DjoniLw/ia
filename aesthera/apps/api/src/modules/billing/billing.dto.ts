@@ -20,6 +20,7 @@ export const ReceivePaymentDto = z.object({
   method: z.enum(['cash', 'pix', 'card', 'voucher']),
   receivedAmount: z.number().int().positive(),
   voucherId: z.string().uuid().optional(),
+  promotionCode: z.string().optional(),
   notes: z.string().optional(),
 })
 export type ReceivePaymentDto = z.infer<typeof ReceivePaymentDto>

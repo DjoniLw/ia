@@ -3,9 +3,11 @@ import type { CancelBillingDto, ListBillingQuery, ReceivePaymentDto } from './bi
 import { BillingRepository } from './billing.repository'
 import { LedgerService } from '../ledger/ledger.service'
 import { WalletService } from '../wallet/wallet.service'
+import { PromotionsService } from '../promotions/promotions.service'
 
 const ledger = new LedgerService()
 const wallet = new WalletService()
+const promotions = new PromotionsService()
 
 export class BillingService {
   private repo = new BillingRepository()
@@ -96,20 +98,42 @@ export class BillingService {
       throw new AppError('Valor recebido é menor que o valor da cobrança', 400, 'INSUFFICIENT_AMOUNT')
     }
 
+    // Apply promotion discount if provided
+    let discountAmount = 0
+    if (dto.promotionCode) {
+      const promoResult = await promotions.apply(clinicId, {
+        code: dto.promotionCode,
+        billingId: billing.id,
+        customerId: billing.customerId,
+        billingAmount: billing.amount,
+      })
+      discountAmount = promoResult.discountAmount
+    }
+
+    const effectiveAmount = Math.max(0, billing.amount - discountAmount)
+
+    if (dto.receivedAmount < effectiveAmount) {
+      throw new AppError('Valor recebido é menor que o valor com desconto', 400, 'INSUFFICIENT_AMOUNT')
+    }
+
     const updated = await this.repo.updateStatus(clinicId, id, 'paid', { paidAt: new Date() })
 
     await ledger.createCreditEntry({
       clinicId,
-      amount: billing.amount,
+      amount: effectiveAmount,
       billingId: billing.id,
       appointmentId: billing.appointmentId ?? undefined,
       customerId: billing.customerId ?? undefined,
       description: `Pagamento recebido (${dto.method})${billing.appointment?.service?.name ? ` — ${billing.appointment.service.name}` : ''}`,
-      metadata: { source: 'receive_payment', method: dto.method },
+      metadata: {
+        source: 'receive_payment',
+        method: dto.method,
+        ...(discountAmount > 0 && { discountAmount, promotionCode: dto.promotionCode }),
+      },
     })
 
     // Overpayment → create wallet entry
-    const overpayment = dto.receivedAmount - billing.amount
+    const overpayment = dto.receivedAmount - effectiveAmount
     let walletEntry = null
     if (overpayment > 0) {
       walletEntry = await wallet.createInternal({
@@ -124,7 +148,7 @@ export class BillingService {
       })
     }
 
-    return { status: 'paid', billing: updated, walletEntry }
+    return { status: 'paid', billing: updated, walletEntry, discountAmount }
   }
 
   async getPaymentLink(clinicId: string, id: string) {

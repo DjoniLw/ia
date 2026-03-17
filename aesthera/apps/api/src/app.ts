@@ -24,6 +24,8 @@ import { clinicalRoutes } from './modules/clinical/clinical.routes'
 import { equipmentRoutes } from './modules/equipment/equipment.routes'
 import { suppliesRoutes } from './modules/supplies/supplies.routes'
 import { walletRoutes } from './modules/wallet/wallet.routes'
+import { promotionsRoutes } from './modules/promotions/promotions.routes'
+import { packagesRoutes } from './modules/packages/packages.routes'
 import './domain-event-handlers'
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -123,6 +125,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await equipmentRoutes(app)
   await suppliesRoutes(app)
   await walletRoutes(app)
+  await promotionsRoutes(app)
+  await packagesRoutes(app)
 
   return app
 }

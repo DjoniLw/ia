@@ -1,4 +1,5 @@
 import { AppError, NotFoundError } from '../../shared/errors/app-error'
+import { redis } from '../../database/redis/client'
 import type { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery } from './wallet.dto'
 import { WalletRepository } from './wallet.repository'
 
@@ -118,6 +119,7 @@ export class WalletService {
   /**
    * Use wallet balance to pay a billing.
    * Returns: { entry, newEntry (if split), remaining (if insufficient) }
+   * Uses Redis distributed lock to prevent concurrent usage of the same wallet entry.
    */
   async use(
     clinicId: string,
@@ -129,59 +131,80 @@ export class WalletService {
     newEntry: Awaited<ReturnType<WalletRepository['findById']>> | null
     remaining: number
   }> {
-    const entry = await this.repo.findById(clinicId, walletEntryId)
-    if (!entry) throw new NotFoundError('WalletEntry')
+    const lockKey = `wallet:lock:${walletEntryId}`
+    const lockValue = crypto.randomUUID()
+    const lockTTL = 5 // seconds
 
-    if (entry.status !== 'ACTIVE') {
-      throw new AppError('Este voucher não está ativo', 400, 'WALLET_NOT_ACTIVE')
+    const acquired = await redis.set(lockKey, lockValue, 'EX', lockTTL, 'NX')
+    if (!acquired) {
+      throw new AppError('Wallet entry is being processed, try again', 409, 'WALLET_LOCKED')
     }
 
-    if (entry.balance <= 0) {
-      throw new AppError('Saldo insuficiente no voucher', 400, 'INSUFFICIENT_BALANCE')
-    }
+    try {
+      const entry = await this.repo.findById(clinicId, walletEntryId)
+      if (!entry) throw new NotFoundError('WalletEntry')
 
-    const used = Math.min(entry.balance, amount)
-    const remaining = amount - used
-    const leftover = entry.balance - used
+      if (entry.status !== 'ACTIVE') {
+        throw new AppError('Este voucher não está ativo', 400, 'WALLET_NOT_ACTIVE')
+      }
 
-    // Mark current entry as USED (full balance consumed)
-    const updatedEntry = await this.repo.updateBalance(entry.id, 0, 'USED')
+      if (entry.balance <= 0) {
+        throw new AppError('Saldo insuficiente no voucher', 400, 'INSUFFICIENT_BALANCE')
+      }
 
-    await this.repo.createTransaction({
-      clinicId,
-      walletEntryId: entry.id,
-      type: 'USE',
-      value: used,
-      reference: billingId,
-      description: `Usado em cobrança ${billingId}`,
-    })
+      const used = Math.min(entry.balance, amount)
+      const remaining = amount - used
+      const leftover = entry.balance - used
 
-    let newEntry = null
-
-    // If there's leftover balance, create a new split entry
-    if (leftover > 0) {
-      newEntry = await this.createInternal({
-        clinicId,
-        customerId: entry.customerId,
-        type: entry.type,
-        value: leftover,
-        originType: 'VOUCHER_SPLIT',
-        originReference: entry.id,
-        notes: `Saldo restante do voucher ${entry.code}`,
-        transactionType: 'SPLIT',
-        transactionDescription: `Saldo remanescente do voucher ${entry.code}`,
-      })
+      // Mark current entry as USED (full balance consumed)
+      const updatedEntry = await this.repo.updateBalance(entry.id, 0, 'USED')
 
       await this.repo.createTransaction({
         clinicId,
         walletEntryId: entry.id,
-        type: 'SPLIT',
-        value: leftover,
-        reference: newEntry.id,
-        description: `Saldo dividido para novo voucher ${newEntry.code}`,
+        type: 'USE',
+        value: used,
+        reference: billingId,
+        description: `Usado em cobrança ${billingId}`,
       })
-    }
 
-    return { entry: updatedEntry, newEntry, remaining }
+      let newEntry = null
+
+      // If there's leftover balance, create a new split entry
+      if (leftover > 0) {
+        newEntry = await this.createInternal({
+          clinicId,
+          customerId: entry.customerId,
+          type: entry.type,
+          value: leftover,
+          originType: 'VOUCHER_SPLIT',
+          originReference: entry.id,
+          notes: `Saldo restante do voucher ${entry.code}`,
+          transactionType: 'SPLIT',
+          transactionDescription: `Saldo remanescente do voucher ${entry.code}`,
+        })
+
+        await this.repo.createTransaction({
+          clinicId,
+          walletEntryId: entry.id,
+          type: 'SPLIT',
+          value: leftover,
+          reference: newEntry.id,
+          description: `Saldo dividido para novo voucher ${newEntry.code}`,
+        })
+      }
+
+      return { entry: updatedEntry, newEntry, remaining }
+    } finally {
+      // Release lock only if we own it (atomic via Lua)
+      const releaseScript = `
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+          return redis.call("del", KEYS[1])
+        else
+          return 0
+        end
+      `
+      await redis.eval(releaseScript, 1, lockKey, lockValue)
+    }
   }
 }
