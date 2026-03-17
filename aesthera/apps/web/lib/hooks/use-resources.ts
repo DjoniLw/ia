@@ -444,6 +444,49 @@ export function useDeleteEquipment(id: string) {
   })
 }
 
+// ──── Rooms (Salas) ───────────────────────────────────────────────────────────
+
+export interface Room {
+  id: string
+  name: string
+  description: string | null
+  active: boolean
+  createdAt: string
+}
+
+export function useRooms() {
+  return useQuery<Room[]>({
+    queryKey: ['rooms'],
+    queryFn: () => api.get('/rooms').then((r) => r.data),
+  })
+}
+
+export function useCreateRoom() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name: string; description?: string }) =>
+      api.post('/rooms', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
+  })
+}
+
+export function useUpdateRoom(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name?: string; description?: string; active?: boolean }) =>
+      api.patch(`/rooms/${id}`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
+  })
+}
+
+export function useDeleteRoom(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.delete(`/rooms/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['rooms'] }),
+  })
+}
+
 // ──── Supplies (Insumos) ──────────────────────────────────────────────────────
 
 export interface Supply {

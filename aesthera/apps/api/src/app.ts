@@ -22,6 +22,7 @@ import { aiRoutes } from './modules/ai/ai.routes'
 import { productsRoutes } from './modules/products/products.routes'
 import { clinicalRoutes } from './modules/clinical/clinical.routes'
 import { equipmentRoutes } from './modules/equipment/equipment.routes'
+import { roomsRoutes } from './modules/rooms/rooms.routes'
 import { suppliesRoutes } from './modules/supplies/supplies.routes'
 import { walletRoutes } from './modules/wallet/wallet.routes'
 import { promotionsRoutes } from './modules/promotions/promotions.routes'
@@ -123,6 +124,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await productsRoutes(app)
   await clinicalRoutes(app)
   await equipmentRoutes(app)
+  await roomsRoutes(app)
   await suppliesRoutes(app)
   await walletRoutes(app)
   await promotionsRoutes(app)

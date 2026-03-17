@@ -173,6 +173,7 @@ model Clinic {
   productSales     ProductSale[]
   clinicalRecords  ClinicalRecord[]
   equipment        Equipment[]
+  rooms            Room[]
   supplies         Supply[]
   walletEntries    WalletEntry[]
   promotions       Promotion[]
@@ -725,6 +726,23 @@ model AppointmentEquipment {
 
   @@id([appointmentId, equipmentId])
   @@map("appointment_equipment")
+}
+
+// ─── Room ─────────────────────────────────────────────────────────────────────
+
+model Room {
+  id          String   @id @default(uuid())
+  clinicId    String                        @map("clinic_id")
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())      @map("created_at")
+  updatedAt   DateTime @updatedAt           @map("updated_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId])
+  @@map("rooms")
 }
 
 // ─── Wallet Entry ─────────────────────────────────────────────────────────────

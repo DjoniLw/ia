@@ -20,6 +20,7 @@ import {
   Users,
   Wallet,
   Wrench,
+  DoorOpen,
   X,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/professionals', label: 'Profissionais', icon: UserCheck },
   { href: '/customers', label: 'Clientes', icon: Users },
   { href: '/equipment', label: 'Equipamentos', icon: Wrench },
+  { href: '/rooms', label: 'Salas', icon: DoorOpen },
   { href: '/supplies', label: 'Insumos', icon: PackageOpen },
   { href: '/products', label: 'Produtos', icon: Package },
   { href: '/sales', label: 'Vendas', icon: ShoppingCart },
