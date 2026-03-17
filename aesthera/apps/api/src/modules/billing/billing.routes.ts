@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
-import { CancelBillingDto, ListBillingQuery } from './billing.dto'
+import { CancelBillingDto, ListBillingQuery, ReceivePaymentDto } from './billing.dto'
 import { BillingService } from './billing.service'
 
 export async function billingRoutes(app: FastifyInstance) {
@@ -38,6 +38,16 @@ export async function billingRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { id } = req.params as { id: string }
       return reply.send(await svc.markPaid(req.clinicId, id))
+    },
+  )
+
+  app.post(
+    '/billing/:id/receive-payment',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const dto = ReceivePaymentDto.parse(req.body)
+      return reply.send(await svc.receivePayment(req.clinicId, id, dto))
     },
   )
 
