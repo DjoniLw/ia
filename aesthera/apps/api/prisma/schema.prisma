@@ -77,6 +77,35 @@ enum LedgerEntryType {
   debit
 }
 
+enum WalletEntryType {
+  VOUCHER
+  CREDIT
+  CASHBACK
+  PACKAGE
+}
+
+enum WalletEntryStatus {
+  ACTIVE
+  USED
+  EXPIRED
+}
+
+enum WalletOriginType {
+  OVERPAYMENT
+  GIFT
+  REFUND
+  CASHBACK_PROMOTION
+  PACKAGE_PURCHASE
+  VOUCHER_SPLIT
+}
+
+enum WalletTransactionType {
+  CREATE
+  USE
+  SPLIT
+  ADJUST
+}
+
 enum NotificationType {
   whatsapp
   email
@@ -134,6 +163,7 @@ model Clinic {
   clinicalRecords  ClinicalRecord[]
   equipment        Equipment[]
   supplies         Supply[]
+  walletEntries    WalletEntry[]
 
   @@map("clinics")
 }
@@ -339,6 +369,7 @@ model Customer {
   notificationLogs NotificationLog[]
   productSales     ProductSale[]
   clinicalRecords  ClinicalRecord[]
+  walletEntries    WalletEntry[]
 
   @@unique([clinicId, email])
   @@unique([clinicId, document])
@@ -676,4 +707,53 @@ model AppointmentEquipment {
 
   @@id([appointmentId, equipmentId])
   @@map("appointment_equipment")
+}
+
+// ─── Wallet Entry ─────────────────────────────────────────────────────────────
+// Stores any type of customer balance: voucher, credit, cashback or package.
+
+model WalletEntry {
+  id               String            @id @default(uuid())
+  clinicId         String                                  @map("clinic_id")
+  customerId       String                                  @map("customer_id")
+  type             WalletEntryType
+  originalValue    Int                                     @map("original_value")  // BRL cents
+  balance          Int                                     // BRL cents (current)
+  code             String            @unique               // readable code e.g. VCHR-XXXX
+  originType       WalletOriginType                        @map("origin_type")
+  originReference  String?                                 @map("origin_reference") // e.g. billing ID
+  notes            String?
+  expirationDate   DateTime?         @db.Date              @map("expiration_date")
+  status           WalletEntryStatus @default(ACTIVE)
+  createdAt        DateTime          @default(now())       @map("created_at")
+  updatedAt        DateTime          @updatedAt            @map("updated_at")
+
+  clinic       Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer     Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  transactions WalletTransaction[]
+
+  @@index([clinicId])
+  @@index([clinicId, customerId])
+  @@index([clinicId, status])
+  @@map("wallet_entries")
+}
+
+// ─── Wallet Transaction ───────────────────────────────────────────────────────
+// Append-only audit log of all operations performed on a wallet entry.
+
+model WalletTransaction {
+  id            String                @id @default(uuid())
+  clinicId      String                                      @map("clinic_id")
+  walletEntryId String                                      @map("wallet_entry_id")
+  type          WalletTransactionType
+  value         Int                                         // BRL cents
+  reference     String?                                     // billing ID, voucher ID, etc.
+  description   String?
+  createdAt     DateTime              @default(now())       @map("created_at")
+
+  walletEntry WalletEntry @relation(fields: [walletEntryId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId])
+  @@index([walletEntryId])
+  @@map("wallet_transactions")
 }

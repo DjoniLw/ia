@@ -17,6 +17,7 @@ import {
   ShoppingCart,
   UserCheck,
   Users,
+  Wallet,
   Wrench,
   X,
 } from 'lucide-react'
@@ -38,6 +39,7 @@ const navItems = [
   { href: '/products', label: 'Produtos', icon: Package },
   { href: '/sales', label: 'Vendas', icon: ShoppingCart },
   { href: '/billing', label: 'Cobranças', icon: CreditCard },
+  { href: '/carteira', label: 'Carteira', icon: Wallet },
   { href: '/financial', label: 'Financeiro', icon: BarChart3 },
   { href: '/reports', label: 'Relatórios', icon: FileText },
   { href: '/notifications', label: 'Notificações', icon: Bell },
