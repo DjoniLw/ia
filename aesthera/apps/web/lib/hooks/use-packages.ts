@@ -40,6 +40,18 @@ export interface CustomerPackageSession {
   appointmentId: string | null
 }
 
+export interface AvailableSessionEntry {
+  session: CustomerPackageSession
+  packageName: string
+  customerPackageId: string
+  expiresAt: string | null
+  /** 1-based index of this session within all sessions for the same service in this package */
+  sessionNumber: number
+  /** Total sessions for this service in this package */
+  totalSessions: number
+  serviceName: string
+}
+
 export interface CustomerPackage {
   id: string
   customerId: string
@@ -133,44 +145,48 @@ export function useRedeemSession(sessionId: string) {
 }
 
 /**
- * Returns available (not yet used) sessions for a specific customer + service combination.
+ * Returns available (not yet used AND not linked to another appointment) sessions
+ * for a specific customer + service combination.
  * Derived from /packages/customer/:customerId — no extra API call needed.
  */
 export function useAvailableSessionsForService(customerId: string, serviceId: string) {
-  return useQuery<
-    Array<{
-      session: CustomerPackageSession
-      packageName: string
-      customerPackageId: string
-      expiresAt: string | null
-    }>
-  >({
+  return useQuery<AvailableSessionEntry[]>({
     queryKey: ['customer-package-sessions', customerId, serviceId],
     queryFn: async () => {
       const packages: CustomerPackage[] = await api
         .get(`/packages/customer/${customerId}`)
         .then((r) => r.data)
 
-      const result: Array<{
-        session: CustomerPackageSession
-        packageName: string
-        customerPackageId: string
-        expiresAt: string | null
-      }> = []
+      const result: AvailableSessionEntry[] = []
 
       for (const cp of packages) {
         const isExpired = cp.expiresAt && new Date(cp.expiresAt) < new Date()
         if (isExpired) continue
-        for (const session of cp.sessions) {
-          if (session.serviceId === serviceId && session.usedAt === null) {
+
+        // All sessions for this service in this package (used, reserved, and free)
+        const allForService = cp.sessions.filter((s) => s.serviceId === serviceId)
+        const totalSessions = allForService.length
+        if (totalSessions === 0) continue
+
+        // Determine service name from the package items
+        const serviceItem = cp.package.items.find((i) => i.serviceId === serviceId)
+        const serviceName = serviceItem?.service.name ?? ''
+
+        // Number all sessions 1..N in the order they appear (stable API order)
+        allForService.forEach((session, idx) => {
+          // Only include sessions that are not yet used AND not linked to another appointment
+          if (session.usedAt === null && session.appointmentId === null) {
             result.push({
               session,
               packageName: cp.package.name,
               customerPackageId: cp.id,
               expiresAt: cp.expiresAt,
+              sessionNumber: idx + 1,
+              totalSessions,
+              serviceName,
             })
           }
-        }
+        })
       }
       return result
     },

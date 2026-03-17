@@ -197,9 +197,11 @@ function CreateAppointmentForm({
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
   const [notes, setNotes] = useState('')
 
-  // ── Filter state for searchable dropdowns ─────────────────────────────────
-  const [serviceFilter, setServiceFilter] = useState('')
-  const [profFilter, setProfFilter] = useState('')
+  // ── Combobox state for service and professional ───────────────────────────
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false)
+  const [profSearch, setProfSearch] = useState('')
+  const [showProfDropdown, setShowProfDropdown] = useState(false)
   const [equipmentFilter, setEquipmentFilter] = useState('')
 
   // ── Package session state ─────────────────────────────────────────────────
@@ -419,34 +421,47 @@ function CreateAppointmentForm({
       {/* 2. Serviço */}
       <div className="space-y-2">
         <Label>Serviço *</Label>
-        <Input
-          placeholder="Filtrar por nome do serviço…"
-          value={serviceFilter}
-          onChange={(e) => setServiceFilter(e.target.value)}
-          className="mb-1"
-        />
-        <select
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          value={serviceId}
-          onChange={(e) => {
-            setServiceId(e.target.value)
-            setSelectedTime('')
-            setFinalProfessionalId('')
-            setProfessionalFilter('')
-            setUsePackageSession(false)
-            setSelectedPackageSessionId('')
-          }}
-          disabled={servicesLoading}
-          size={Math.min(6, (allServices?.items ?? []).filter(s => !serviceFilter || s.name.toLowerCase().includes(serviceFilter.toLowerCase())).length + 1)}
-        >
-          <option value="">{servicesLoading ? 'Carregando serviços…' : 'Selecione um serviço…'}</option>
-          {(allServices?.items ?? [])
-            .filter((s) => !serviceFilter || s.name.toLowerCase().includes(serviceFilter.toLowerCase()))
-            .map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-        </select>
-        {serviceId && <p className="text-xs text-green-600">✓ {(allServices?.items ?? []).find(s => s.id === serviceId)?.name}</p>}
+        <div className="relative">
+          <Input
+            placeholder={servicesLoading ? 'Carregando serviços…' : 'Buscar serviço por nome…'}
+            value={showServiceDropdown ? serviceSearch : ((allServices?.items ?? []).find(s => s.id === serviceId)?.name ?? serviceSearch)}
+            onChange={(e) => { setServiceSearch(e.target.value); setShowServiceDropdown(true) }}
+            onFocus={() => { setServiceSearch(''); setShowServiceDropdown(true) }}
+            onBlur={() => setTimeout(() => setShowServiceDropdown(false), 150)}
+            autoComplete="off"
+            disabled={servicesLoading}
+          />
+          {showServiceDropdown && (
+            <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-52 overflow-auto">
+              {(allServices?.items ?? [])
+                .filter((s) => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase()))
+                .map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-muted ${s.id === serviceId ? 'bg-muted font-medium' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setServiceId(s.id)
+                      setServiceSearch('')
+                      setShowServiceDropdown(false)
+                      setSelectedTime('')
+                      setFinalProfessionalId('')
+                      setProfessionalFilter('')
+                      setUsePackageSession(false)
+                      setSelectedPackageSessionId('')
+                    }}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              {(allServices?.items ?? []).filter((s) => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase())).length === 0 && (
+                <p className="px-3 py-2 text-sm text-muted-foreground">Nenhum serviço encontrado</p>
+              )}
+            </div>
+          )}
+        </div>
+        {serviceId && !showServiceDropdown && <p className="text-xs text-green-600">✓ {(allServices?.items ?? []).find(s => s.id === serviceId)?.name}</p>}
         {submitted && !serviceId && <p className="text-xs text-destructive">Selecione um serviço</p>}
       </div>
 
@@ -520,32 +535,50 @@ function CreateAppointmentForm({
           {profsFetching && profList.length === 0 ? (
             <p className="text-xs text-muted-foreground">Buscando profissionais disponíveis…</p>
           ) : (
-            <>
+            <div className="relative">
               <Input
-                placeholder="Filtrar profissional por nome…"
-                value={profFilter}
-                onChange={(e) => setProfFilter(e.target.value)}
-                className="mb-1"
+                placeholder="Buscar profissional por nome…"
+                value={showProfDropdown ? profSearch : (profList.find(p => p.id === finalProfessionalId)?.name ?? profSearch)}
+                onChange={(e) => { setProfSearch(e.target.value); setShowProfDropdown(true) }}
+                onFocus={() => { setProfSearch(''); setShowProfDropdown(true) }}
+                onBlur={() => setTimeout(() => setShowProfDropdown(false), 150)}
+                autoComplete="off"
               />
-              <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={finalProfessionalId}
-                onChange={(e) => handleProfessionalChange(e.target.value)}
-                size={Math.min(5, profList.filter(p => !profFilter || p.name.toLowerCase().includes(profFilter.toLowerCase())).length + 1)}
-              >
-                <option value="">Selecione um profissional…</option>
-                {profList
-                  .filter((p) => !profFilter || p.name.toLowerCase().includes(profFilter.toLowerCase()))
-                  .map((p) => (
-                    <option key={p.id} value={p.id} disabled={!p.available}>
-                      {p.name}{!p.available ? ' (ocupado neste horário)' : ''}
-                    </option>
-                  ))}
-              </select>
-            </>
+              {showProfDropdown && (
+                <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-52 overflow-auto">
+                  {profList
+                    .filter((p) => !profSearch || p.name.toLowerCase().includes(profSearch.toLowerCase()))
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={!p.available}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-muted ${p.id === finalProfessionalId ? 'bg-muted font-medium' : ''} ${!p.available ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          if (p.available) {
+                            handleProfessionalChange(p.id)
+                            setProfSearch('')
+                            setShowProfDropdown(false)
+                          }
+                        }}
+                      >
+                        {p.name}
+                        {!p.available && <span className="ml-1 text-xs text-muted-foreground">(ocupado neste horário)</span>}
+                      </button>
+                    ))}
+                  {profList.filter((p) => !profSearch || p.name.toLowerCase().includes(profSearch.toLowerCase())).length === 0 && (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">Nenhum profissional encontrado</p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {profList.length === 0 && !profsFetching && (
             <p className="text-xs text-muted-foreground">Nenhum profissional disponível neste horário</p>
+          )}
+          {finalProfessionalId && !showProfDropdown && (
+            <p className="text-xs text-green-600">✓ {profList.find(p => p.id === finalProfessionalId)?.name}</p>
           )}
           {selectedTime && (
             <p className="text-xs text-muted-foreground">Profissionais disponíveis no horário {selectedTime}</p>
@@ -611,36 +644,26 @@ function CreateAppointmentForm({
 
       {/* 7. Sessões de pacote — shown when customer + service selected and sessions exist */}
       {customerId && serviceId && hasPackageSessions && (
-        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-4">
+        <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-4">
           <div className="flex items-center gap-2">
             <Package className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
             <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
-              Cliente possui sessões disponíveis em pacote para este serviço
+              Cliente possui{' '}
+              <strong>{availablePackageSessions?.length}</strong>/{availablePackageSessions?.[0]?.totalSessions ?? '?'} sessões disponíveis para{' '}
+              <strong>{availablePackageSessions?.[0]?.serviceName ?? 'este serviço'}</strong>
             </span>
           </div>
 
-          {/* Session history */}
-          <div className="mt-2 space-y-1">
-            {availablePackageSessions?.map((entry) => (
-              <div key={entry.session.id} className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
-                <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-green-500" />
-                <span>
-                  Pacote: <strong>{entry.packageName}</strong> — sessão disponível
-                  {entry.expiresAt && ` (expira em ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})`}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Use session checkbox */}
-          <label className="mt-3 flex items-start gap-3 cursor-pointer">
+          {/* Use session toggle */}
+          <label className="flex items-start gap-3 cursor-pointer">
             <input
               type="checkbox"
               checked={usePackageSession}
               onChange={(e) => {
                 setUsePackageSession(e.target.checked)
-                if (!e.target.checked) setSelectedPackageSessionId('')
-                else if (availablePackageSessions?.length === 1) {
+                if (!e.target.checked) {
+                  setSelectedPackageSessionId('')
+                } else if (availablePackageSessions?.length === 1) {
                   setSelectedPackageSessionId(availablePackageSessions[0].session.id)
                 }
               }}
@@ -654,18 +677,18 @@ function CreateAppointmentForm({
             </span>
           </label>
 
-          {/* Session selector when multiple available */}
-          {usePackageSession && (availablePackageSessions?.length ?? 0) > 1 && (
+          {/* Session selector — always shown when opted in */}
+          {usePackageSession && (
             <select
-              className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               value={selectedPackageSessionId}
               onChange={(e) => setSelectedPackageSessionId(e.target.value)}
             >
               <option value="">Selecione qual sessão usar…</option>
               {availablePackageSessions?.map((entry) => (
                 <option key={entry.session.id} value={entry.session.id}>
-                  {entry.packageName}
-                  {entry.expiresAt ? ` — expira em ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')}` : ''}
+                  Sessão {entry.sessionNumber}/{entry.totalSessions} — {entry.packageName}
+                  {entry.expiresAt ? ` (expira ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})` : ''}
                 </option>
               ))}
             </select>
