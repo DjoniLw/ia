@@ -267,14 +267,14 @@ function CreateAppointmentForm({
   const { data: availableEquipment } = useAvailableEquipment(scheduledAt, serviceDuration)
   // Fallback: when no time is selected yet, show all clinic equipment (no availability marks)
   const { data: allEquipmentData } = useEquipment()
-  const displayEquipment = availableEquipment ?? allEquipmentData ?? []
+  const displayEquipment = availableEquipment ?? (allEquipmentData ?? []).filter((eq) => eq.active)
 
-  // Room availability for selected slot; fallback to all active rooms
+  // Room availability for selected slot; fallback to active rooms only
   const { data: availableRoomsData } = useAvailableRooms(
     scheduledAt && serviceDuration > 0 ? { scheduledAt, durationMinutes: serviceDuration } : null,
   )
   const { data: allRoomsData } = useRooms()
-  const displayRooms = availableRoomsData ?? (allRoomsData ?? []).map((r) => ({ ...r, available: true as const }))
+  const displayRooms = availableRoomsData ?? (allRoomsData ?? []).filter((r) => r.active).map((r) => ({ ...r, available: true as const }))
 
   // Package sessions available for the selected customer + service
   const { data: availablePackageSessions } = useAvailableSessionsForService(customerId, serviceId)
@@ -351,8 +351,15 @@ function CreateAppointmentForm({
   }
 
   function handleTimeSelect(time: string) {
+    if (selectedTime === time) {
+      // Toggle off: deselect the slot but keep equipment, room and professional
+      // as the user already filled them — only clear the professional if it
+      // had not been chosen yet (professionalFilter is still empty).
+      setSelectedTime('')
+      return
+    }
     setSelectedTime(time)
-    // If the pre-selected professional is unavailable at this time, clear it
+    // If the pre-selected professional is unavailable at this new time, clear it
     if (finalProfessionalId && !availableProfIds.has(finalProfessionalId)) {
       setFinalProfessionalId('')
     }
@@ -583,8 +590,10 @@ function CreateAppointmentForm({
                     onClick={() => {
                       if (available || selected) {
                         setRoomId(selected ? '' : r.id)
-                        // Deselect time if room changes so slots recompute
-                        if (!selected) setSelectedTime('')
+                        // Only clear the selected time if no time has been chosen yet,
+                        // so that selecting/changing a room pre-filters the slot list
+                        // without discarding a time the user already picked.
+                        if (!selected && !selectedTime) setSelectedTime('')
                       }
                     }}
                     className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
