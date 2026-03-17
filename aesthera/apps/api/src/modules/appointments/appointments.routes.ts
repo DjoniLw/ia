@@ -32,17 +32,24 @@ export async function appointmentsRoutes(app: FastifyInstance) {
   })
 
   // ── Available slots for a service on a date ───────────────────────────────────
-  // GET /appointments/available-slots?serviceId=UUID&date=YYYY-MM-DD[&professionalId=UUID][&equipmentId=UUID][&roomId=UUID]
+  // GET /appointments/available-slots?serviceId=UUID&date=YYYY-MM-DD[&professionalId=UUID][&equipmentId=UUID,UUID,...][&roomId=UUID]
   app.get('/appointments/available-slots', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const q = z.object({
       serviceId: z.string().uuid(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       professionalId: z.string().uuid().optional(),
-      equipmentId: z.string().uuid().optional(),
+      // Accept one or more equipment IDs as a comma-separated value
+      equipmentId: z.string().optional(),
       roomId: z.string().uuid().optional(),
     }).parse(req.query)
+
+    // Split comma-separated equipmentId into an array of UUIDs; ignore empty strings
+    const equipmentIds = q.equipmentId
+      ? q.equipmentId.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined
+
     return reply.send(
-      await availability.getAvailableSlots(req.clinicId, q.serviceId, q.date, q.professionalId, q.equipmentId, q.roomId),
+      await availability.getAvailableSlots(req.clinicId, q.serviceId, q.date, q.professionalId, equipmentIds, q.roomId),
     )
   })
 

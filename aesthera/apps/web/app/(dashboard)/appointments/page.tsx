@@ -241,11 +241,12 @@ function CreateAppointmentForm({
       // Only forward pre-filters when no time is selected yet;
       // once a time is selected the slot grid is irrelevant.
       professionalId: !selectedTime && professionalFilter ? professionalFilter : undefined,
-      // Only pass the FIRST selected equipment (most common case — equipment is usually
-      // selected one at a time when pre-filtering; multi-equipment pre-filtering is not
-      // supported by the backend since it would require multiple query params).
+      // Pass ALL selected equipment IDs as a comma-separated string so the backend
+      // returns only slots where every selected equipment item is simultaneously free.
       equipmentId:
-        !selectedTime && selectedEquipmentIds.length === 1 ? selectedEquipmentIds[0] : undefined,
+        !selectedTime && selectedEquipmentIds.length > 0
+          ? selectedEquipmentIds.join(',')
+          : undefined,
       roomId: !selectedTime && roomId ? roomId : undefined,
     }
   }, [serviceId, date, selectedTime, professionalFilter, selectedEquipmentIds, roomId])

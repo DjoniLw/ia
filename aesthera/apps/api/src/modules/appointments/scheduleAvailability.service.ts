@@ -64,8 +64,9 @@ export class ScheduleAvailabilityService {
    * considered. Otherwise, the union of slots across ALL professionals that can
    * perform the service is returned.
    *
-   * If `equipmentId` is provided, slots where that equipment is already
-   * booked in another appointment are additionally excluded.
+   * If `equipmentIds` is provided, slots where ANY of those equipment items are
+   * already booked in another appointment are additionally excluded (intersection
+   * of free windows across all selected equipment).
    *
    * The `professionals` array in the result lets the UI show per-professional
    * availability so it can filter the professional dropdown based on the chosen
@@ -76,7 +77,7 @@ export class ScheduleAvailabilityService {
     serviceId: string,
     date: string,
     professionalId?: string,
-    equipmentId?: string,
+    equipmentIds?: string[],
     roomId?: string,
   ): Promise<AvailableSlotsResult> {
     const service = await prisma.service.findFirst({
@@ -136,16 +137,16 @@ export class ScheduleAvailabilityService {
     const sortedSlots = [...allSlots].sort()
 
     // ── Equipment pre-filter ─────────────────────────────────────────────────
-    // If a specific equipment was pre-selected, remove slots where that equipment
-    // is already booked in another active appointment.
-    if (equipmentId) {
+    // If one or more equipment items were pre-selected, remove slots where ANY
+    // of those items is already booked — i.e. keep only slots where ALL are free.
+    if (equipmentIds && equipmentIds.length > 0) {
       const dayStart = dateNoon(date)
       dayStart.setUTCHours(0, 0, 0, 0)
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
 
       const busyLinks = await prisma.appointmentEquipment.findMany({
         where: {
-          equipmentId,
+          equipmentId: { in: equipmentIds },
           appointment: {
             clinicId,
             status: { notIn: ['cancelled', 'no_show'] },
@@ -155,7 +156,7 @@ export class ScheduleAvailabilityService {
         include: { appointment: { select: { scheduledAt: true, durationMinutes: true } } },
       })
 
-      // Build occupied windows for the equipment (in minutes from midnight UTC)
+      // Union of occupied windows across ALL selected equipment
       const equipOccupied = busyLinks.map((l) => ({
         start: dateToMinutes(l.appointment.scheduledAt),
         end: dateToMinutes(l.appointment.scheduledAt) + l.appointment.durationMinutes,
