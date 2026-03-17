@@ -197,6 +197,16 @@ function CreateAppointmentForm({
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
   const [notes, setNotes] = useState('')
 
+  // ── Filter state for searchable dropdowns ─────────────────────────────────
+  const [serviceFilter, setServiceFilter] = useState('')
+  const [profFilter, setProfFilter] = useState('')
+  const [equipmentFilter, setEquipmentFilter] = useState('')
+
+  // ── Package session state ─────────────────────────────────────────────────
+  const [usePackageSession, setUsePackageSession] = useState(false)
+  const [selectedPackageSessionId, setSelectedPackageSessionId] = useState('')
+  const [showPackageWarning, setShowPackageWarning] = useState(false)
+
   // ── Validation error state ─────────────────────────────────────────────────
   const [submitted, setSubmitted] = useState(false)
 
@@ -247,6 +257,10 @@ function CreateAppointmentForm({
   // Fallback: when no time is selected yet, show all clinic equipment (no availability marks)
   const { data: allEquipmentData } = useEquipment()
   const displayEquipment = availableEquipment ?? allEquipmentData ?? []
+
+  // Package sessions available for the selected customer + service
+  const { data: availablePackageSessions } = useAvailableSessionsForService(customerId, serviceId)
+  const hasPackageSessions = (availablePackageSessions?.length ?? 0) > 0
 
   // ── Derived ───────────────────────────────────────────────────────────────────
   const slots = slotsData?.slots ?? []
@@ -333,6 +347,20 @@ function CreateAppointmentForm({
     e.preventDefault()
     setSubmitted(true)
     if (!canSubmit) return
+    // Warn if there are available package sessions but user hasn't opted to use one
+    if (hasPackageSessions && !usePackageSession) {
+      setShowPackageWarning(true)
+      return
+    }
+    const pkgSessionId = usePackageSession && selectedPackageSessionId ? selectedPackageSessionId : undefined
+    await onSave(
+      { customerId, serviceId, date, time: selectedTime, professionalId: finalProfessionalId, notes, packageSessionId: pkgSessionId },
+      selectedEquipmentIds,
+    )
+  }
+
+  async function handleSubmitIgnoringPackage() {
+    setShowPackageWarning(false)
     await onSave(
       { customerId, serviceId, date, time: selectedTime, professionalId: finalProfessionalId, notes },
       selectedEquipmentIds,
@@ -391,6 +419,12 @@ function CreateAppointmentForm({
       {/* 2. Serviço */}
       <div className="space-y-2">
         <Label>Serviço *</Label>
+        <Input
+          placeholder="Filtrar por nome do serviço…"
+          value={serviceFilter}
+          onChange={(e) => setServiceFilter(e.target.value)}
+          className="mb-1"
+        />
         <select
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={serviceId}
@@ -399,14 +433,20 @@ function CreateAppointmentForm({
             setSelectedTime('')
             setFinalProfessionalId('')
             setProfessionalFilter('')
+            setUsePackageSession(false)
+            setSelectedPackageSessionId('')
           }}
           disabled={servicesLoading}
+          size={Math.min(6, (allServices?.items ?? []).filter(s => !serviceFilter || s.name.toLowerCase().includes(serviceFilter.toLowerCase())).length + 1)}
         >
           <option value="">{servicesLoading ? 'Carregando serviços…' : 'Selecione um serviço…'}</option>
-          {(allServices?.items ?? []).map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
+          {(allServices?.items ?? [])
+            .filter((s) => !serviceFilter || s.name.toLowerCase().includes(serviceFilter.toLowerCase()))
+            .map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
         </select>
+        {serviceId && <p className="text-xs text-green-600">✓ {(allServices?.items ?? []).find(s => s.id === serviceId)?.name}</p>}
         {submitted && !serviceId && <p className="text-xs text-destructive">Selecione um serviço</p>}
       </div>
 
@@ -480,18 +520,29 @@ function CreateAppointmentForm({
           {profsFetching && profList.length === 0 ? (
             <p className="text-xs text-muted-foreground">Buscando profissionais disponíveis…</p>
           ) : (
-            <select
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={finalProfessionalId}
-              onChange={(e) => handleProfessionalChange(e.target.value)}
-            >
-              <option value="">Selecione um profissional…</option>
-              {profList.map((p) => (
-                <option key={p.id} value={p.id} disabled={!p.available}>
-                  {p.name}{!p.available ? ' (ocupado neste horário)' : ''}
-                </option>
-              ))}
-            </select>
+            <>
+              <Input
+                placeholder="Filtrar profissional por nome…"
+                value={profFilter}
+                onChange={(e) => setProfFilter(e.target.value)}
+                className="mb-1"
+              />
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={finalProfessionalId}
+                onChange={(e) => handleProfessionalChange(e.target.value)}
+                size={Math.min(5, profList.filter(p => !profFilter || p.name.toLowerCase().includes(profFilter.toLowerCase())).length + 1)}
+              >
+                <option value="">Selecione um profissional…</option>
+                {profList
+                  .filter((p) => !profFilter || p.name.toLowerCase().includes(profFilter.toLowerCase()))
+                  .map((p) => (
+                    <option key={p.id} value={p.id} disabled={!p.available}>
+                      {p.name}{!p.available ? ' (ocupado neste horário)' : ''}
+                    </option>
+                  ))}
+              </select>
+            </>
           )}
           {profList.length === 0 && !profsFetching && (
             <p className="text-xs text-muted-foreground">Nenhum profissional disponível neste horário</p>
@@ -513,42 +564,140 @@ function CreateAppointmentForm({
             )}
           </Label>
           {(displayEquipment && displayEquipment.length > 0) ? (
-            <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
-              {displayEquipment.map((eq) => {
-                const available = 'available' in eq ? eq.available : true
-                const selected = selectedEquipmentIds.includes(eq.id)
-                return (
-                  <button
-                    key={eq.id}
-                    type="button"
-                    disabled={!available && !selected}
-                    onClick={() => {
-                      if (available || selected) {
-                        setSelectedEquipmentIds((prev) =>
-                          prev.includes(eq.id) ? prev.filter((e) => e !== eq.id) : [...prev, eq.id],
-                        )
-                      }
-                    }}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      selected
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : !available
-                        ? 'border-border bg-muted/50 text-muted-foreground/50 line-through cursor-not-allowed'
-                        : 'border-border bg-card text-muted-foreground hover:border-primary/50'
-                    }`}
-                  >
-                    {eq.name}{!available && ' (ocupado)'}
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <Input
+                placeholder="Filtrar equipamento por nome…"
+                value={equipmentFilter}
+                onChange={(e) => setEquipmentFilter(e.target.value)}
+                className="mb-1"
+              />
+              <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
+                {(displayEquipment as Array<{ id: string; name: string; available?: boolean }>)
+                  .filter((eq) => !equipmentFilter || eq.name.toLowerCase().includes(equipmentFilter.toLowerCase()))
+                  .map((eq) => {
+                    const available = eq.available !== false
+                    const selected = selectedEquipmentIds.includes(eq.id)
+                    return (
+                      <button
+                        key={eq.id}
+                        type="button"
+                        disabled={!available && !selected}
+                        onClick={() => {
+                          if (available || selected) {
+                            setSelectedEquipmentIds((prev) =>
+                              prev.includes(eq.id) ? prev.filter((e) => e !== eq.id) : [...prev, eq.id],
+                            )
+                          }
+                        }}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          selected
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : !available
+                            ? 'border-border bg-muted/50 text-muted-foreground/50 line-through cursor-not-allowed'
+                            : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                        }`}
+                      >
+                        {eq.name}{!available && ' (ocupado)'}
+                      </button>
+                    )
+                  })}
+              </div>
+            </>
           ) : (
             <p className="text-xs text-muted-foreground">Nenhum equipamento cadastrado</p>
           )}
         </div>
       )}
 
-      {/* 7. Observações */}
+      {/* 7. Sessões de pacote — shown when customer + service selected and sessions exist */}
+      {customerId && serviceId && hasPackageSessions && (
+        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-4">
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              Cliente possui sessões disponíveis em pacote para este serviço
+            </span>
+          </div>
+
+          {/* Session history */}
+          <div className="mt-2 space-y-1">
+            {availablePackageSessions?.map((entry) => (
+              <div key={entry.session.id} className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
+                <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-green-500" />
+                <span>
+                  Pacote: <strong>{entry.packageName}</strong> — sessão disponível
+                  {entry.expiresAt && ` (expira em ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})`}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Use session checkbox */}
+          <label className="mt-3 flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={usePackageSession}
+              onChange={(e) => {
+                setUsePackageSession(e.target.checked)
+                if (!e.target.checked) setSelectedPackageSessionId('')
+                else if (availablePackageSessions?.length === 1) {
+                  setSelectedPackageSessionId(availablePackageSessions[0].session.id)
+                }
+              }}
+              className="mt-0.5 h-4 w-4 rounded border"
+            />
+            <span className="text-sm text-amber-800 dark:text-amber-200">
+              Usar sessão do pacote para este agendamento
+              <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">
+                A sessão será descontada do pacote e não gerará cobrança.
+              </span>
+            </span>
+          </label>
+
+          {/* Session selector when multiple available */}
+          {usePackageSession && (availablePackageSessions?.length ?? 0) > 1 && (
+            <select
+              className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={selectedPackageSessionId}
+              onChange={(e) => setSelectedPackageSessionId(e.target.value)}
+            >
+              <option value="">Selecione qual sessão usar…</option>
+              {availablePackageSessions?.map((entry) => (
+                <option key={entry.session.id} value={entry.session.id}>
+                  {entry.packageName}
+                  {entry.expiresAt ? ` — expira em ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')}` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
+      {/* Package warning dialog */}
+      {showPackageWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <Package className="h-6 w-6 text-amber-500 flex-shrink-0" />
+              <h3 className="font-semibold text-foreground">Pacote disponível não utilizado</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              O cliente possui sessões disponíveis em um pacote para este serviço, mas você não marcou para utilizá-las.
+              Deseja continuar <strong>sem usar</strong> o pacote (será gerada uma cobrança separada)?
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowPackageWarning(false)}>
+                Voltar e usar pacote
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleSubmitIgnoringPackage}>
+                Continuar sem pacote
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Observações */}
       <div className="space-y-2">
         <Label>Observações</Label>
         <Input
@@ -1243,6 +1392,7 @@ export default function AppointmentsPage() {
         scheduledAt,
         notes: formData.notes,
         equipmentIds: equipmentIds.length > 0 ? equipmentIds : undefined,
+        packageSessionId: formData.packageSessionId,
       })
       toast.success('Agendamento criado')
       setCreating(false)
