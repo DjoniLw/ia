@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import { AppError, NotFoundError } from '../../shared/errors/app-error'
 import { redis } from '../../database/redis/client'
 import type { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery } from './wallet.dto'

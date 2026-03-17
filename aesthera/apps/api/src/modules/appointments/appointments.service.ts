@@ -22,13 +22,15 @@ function dateToMinutes(d: Date): number {
   return d.getUTCHours() * 60 + d.getUTCMinutes()
 }
 
-// Simple hash to a 32-bit integer for advisory locks
+// FNV-1a 32-bit hash for advisory locks — better distribution than additive sums
 function hashToInt32(s: string): number {
-  let h = 0
+  let h = 0x811c9dc5 >>> 0
   for (let i = 0; i < s.length; i++) {
-    h = (h + s.charCodeAt(i)) % 2147483647
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
   }
-  return h
+  // Clamp to positive signed 32-bit range for pg_advisory_xact_lock
+  return h & 0x7fffffff
 }
 
 export class AppointmentsService {
@@ -249,7 +251,7 @@ export class AppointmentsService {
     })
 
     // If multi-service appointment, compute total price from service items
-    const serviceItems = (completed as typeof completed & { serviceItems?: Array<{ price: number }> }).serviceItems
+    const serviceItems = completed.serviceItems
     const billingPrice =
       serviceItems && serviceItems.length > 0
         ? serviceItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0)
