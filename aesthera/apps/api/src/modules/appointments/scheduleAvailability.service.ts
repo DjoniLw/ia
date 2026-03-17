@@ -77,6 +77,7 @@ export class ScheduleAvailabilityService {
     date: string,
     professionalId?: string,
     equipmentId?: string,
+    roomId?: string,
   ): Promise<AvailableSlotsResult> {
     const service = await prisma.service.findFirst({
       where: { id: serviceId, clinicId, active: true, deletedAt: null },
@@ -167,6 +168,44 @@ export class ScheduleAvailabilityService {
       })
 
       // Also restrict profSlots to the equipment-filtered set
+      const filteredSet = new Set(filteredSlots)
+      const filteredProfSlots = profSlots.map((p) => ({
+        ...p,
+        slots: p.slots.filter((s) => filteredSet.has(s)),
+      }))
+
+      return { date, slots: filteredSlots, professionals: filteredProfSlots }
+    }
+
+    // ── Room pre-filter ──────────────────────────────────────────────────────
+    // If a specific room was pre-selected, remove slots where that room is already
+    // booked in another active appointment.
+    if (roomId) {
+      const dayStart = dateNoon(date)
+      dayStart.setUTCHours(0, 0, 0, 0)
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
+
+      const busyAppts = await prisma.appointment.findMany({
+        where: {
+          roomId,
+          clinicId,
+          status: { notIn: ['cancelled', 'no_show'] },
+          scheduledAt: { gte: dayStart, lt: dayEnd },
+        },
+        select: { scheduledAt: true, durationMinutes: true },
+      })
+
+      const roomOccupied = busyAppts.map((a) => ({
+        start: dateToMinutes(a.scheduledAt),
+        end: dateToMinutes(a.scheduledAt) + a.durationMinutes,
+      }))
+
+      const filteredSlots = sortedSlots.filter((slot) => {
+        const slotMin = timeToMinutes(slot)
+        const slotEnd = slotMin + dur
+        return !roomOccupied.some((o) => slotMin < o.end && slotEnd > o.start)
+      })
+
       const filteredSet = new Set(filteredSlots)
       const filteredProfSlots = profSlots.map((p) => ({
         ...p,

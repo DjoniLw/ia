@@ -13,6 +13,7 @@ export const CreateAppointmentDto = z.object({
     )
     .min(1)
     .optional(),
+  roomId: z.string().uuid().optional(),
   scheduledAt: z.string().datetime(), // ISO 8601
   notes: z.string().optional(),
   price: z.number().int().min(0).optional(), // override total price if needed
@@ -28,6 +29,7 @@ export const UpdateAppointmentDto = z.object({
   scheduledAt: z.string().datetime().optional(),
   notes: z.string().optional(),
   price: z.number().int().min(0).optional(),
+  roomId: z.string().uuid().nullable().optional(),
   equipmentIds: z.array(z.string().uuid()).optional(), // replaces current equipment list
 })
 export type UpdateAppointmentDto = z.infer<typeof UpdateAppointmentDto>

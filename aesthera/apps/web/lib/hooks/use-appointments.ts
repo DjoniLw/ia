@@ -153,9 +153,9 @@ export interface AvailableSlotsResult {
   professionals: { id: string; name: string; slots: string[] }[]
 }
 
-/** Available time slots for a service on a date (optionally filtered to one professional and/or one equipment) */
+/** Available time slots for a service on a date (optionally filtered to one professional, equipment, or room) */
 export function useAvailableSlots(
-  params: { serviceId: string; date: string; professionalId?: string; equipmentId?: string } | null,
+  params: { serviceId: string; date: string; professionalId?: string; equipmentId?: string; roomId?: string } | null,
 ) {
   return useQuery<AvailableSlotsResult>({
     queryKey: ['appointments-available-slots', params],
@@ -177,6 +177,26 @@ export function useAvailableProfessionals(
   })
 }
 
+export interface AvailableRoom {
+  id: string
+  name: string
+  description: string | null
+  active: boolean
+  available: boolean
+}
+
+/** Active rooms annotated with availability for a given time slot */
+export function useAvailableRooms(
+  params: { scheduledAt: string; durationMinutes: number; excludeAppointmentId?: string } | null,
+) {
+  return useQuery<AvailableRoom[]>({
+    queryKey: ['appointments-available-rooms', params],
+    queryFn: () =>
+      api.get('/appointments/available-rooms', { params: params! }).then((r) => r.data),
+    enabled: !!params?.scheduledAt && !!params?.durationMinutes,
+  })
+}
+
 export function useCreateAppointment() {
   const qc = useQueryClient()
   return useMutation({
@@ -188,6 +208,7 @@ export function useCreateAppointment() {
       notes?: string
       equipmentIds?: string[]
       packageSessionId?: string
+      roomId?: string
     }) => api.post('/appointments', data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appointments'] })

@@ -107,6 +107,10 @@ export class AppointmentsService {
           await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, totalDuration)
         }
 
+        if (dto.roomId) {
+          await this.assertRoomAvailable(clinicId, dto.roomId, scheduledDate, totalDuration)
+        }
+
         // Use first service's id as the appointment serviceId for backward compat
         const primaryServiceId = dto.services[0].serviceId
 
@@ -116,6 +120,7 @@ export class AppointmentsService {
             customerId: dto.customerId,
             professionalId: dto.professionalId,
             serviceId: primaryServiceId,
+            roomId: dto.roomId ?? null,
             scheduledAt: scheduledDate,
             durationMinutes: totalDuration,
             price: totalPrice,
@@ -179,6 +184,10 @@ export class AppointmentsService {
         await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, durationMinutes)
       }
 
+      if (dto.roomId) {
+        await this.assertRoomAvailable(clinicId, dto.roomId, scheduledDate, durationMinutes)
+      }
+
       const appointment = await this.repo.create(clinicId, {
         ...dto,
         serviceId,
@@ -214,6 +223,10 @@ export class AppointmentsService {
 
       if (dto.equipmentIds && dto.equipmentIds.length > 0) {
         await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, a.durationMinutes, id)
+      }
+
+      if (dto.roomId) {
+        await this.assertRoomAvailable(clinicId, dto.roomId, scheduledDate, a.durationMinutes, id)
       }
     }
 
@@ -542,6 +555,43 @@ export class AppointmentsService {
         `Conflito de equipamento: ${names} já está em uso neste horário`,
         409,
         'EQUIPMENT_CONFLICT',
+      )
+    }
+  }
+
+  private async assertRoomAvailable(
+    clinicId: string,
+    roomId: string,
+    scheduledAt: Date,
+    durationMinutes: number,
+    excludeAppointmentId?: string,
+  ) {
+    const room = await prisma.room.findFirst({ where: { id: roomId, clinicId, active: true } })
+    if (!room) throw new AppError('Sala não encontrada ou inativa', 400, 'ROOM_NOT_FOUND')
+
+    const slotEnd = new Date(scheduledAt.getTime() + durationMinutes * 60 * 1000)
+
+    const conflicts = await prisma.appointment.findMany({
+      where: {
+        roomId,
+        clinicId,
+        status: { notIn: ['cancelled', 'no_show'] },
+        id: excludeAppointmentId ? { not: excludeAppointmentId } : undefined,
+        scheduledAt: { lt: slotEnd },
+      },
+      select: { scheduledAt: true, durationMinutes: true },
+    })
+
+    const overlapping = conflicts.filter((c) => {
+      const apptEnd = new Date(c.scheduledAt.getTime() + c.durationMinutes * 60 * 1000)
+      return scheduledAt < apptEnd && slotEnd > c.scheduledAt
+    })
+
+    if (overlapping.length > 0) {
+      throw new AppError(
+        `Conflito de sala: ${room.name} já está ocupada neste horário`,
+        409,
+        'ROOM_CONFLICT',
       )
     }
   }

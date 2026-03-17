@@ -32,16 +32,17 @@ export async function appointmentsRoutes(app: FastifyInstance) {
   })
 
   // ── Available slots for a service on a date ───────────────────────────────────
-  // GET /appointments/available-slots?serviceId=UUID&date=YYYY-MM-DD[&professionalId=UUID][&equipmentId=UUID]
+  // GET /appointments/available-slots?serviceId=UUID&date=YYYY-MM-DD[&professionalId=UUID][&equipmentId=UUID][&roomId=UUID]
   app.get('/appointments/available-slots', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const q = z.object({
       serviceId: z.string().uuid(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       professionalId: z.string().uuid().optional(),
       equipmentId: z.string().uuid().optional(),
+      roomId: z.string().uuid().optional(),
     }).parse(req.query)
     return reply.send(
-      await availability.getAvailableSlots(req.clinicId, q.serviceId, q.date, q.professionalId, q.equipmentId),
+      await availability.getAvailableSlots(req.clinicId, q.serviceId, q.date, q.professionalId, q.equipmentId, q.roomId),
     )
   })
 
@@ -109,6 +110,50 @@ export async function appointmentsRoutes(app: FastifyInstance) {
 
     return reply.send(
       allEquipment.map((eq) => ({ ...eq, available: !busyIds.has(eq.id) })),
+    )
+  })
+
+  // ── Available rooms for a given time slot ───────────────────────────────────
+  // GET /appointments/available-rooms?scheduledAt=ISO&durationMinutes=N[&excludeAppointmentId=UUID]
+  app.get('/appointments/available-rooms', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const q = z.object({
+      scheduledAt: z.string().datetime(),
+      durationMinutes: z.coerce.number().int().positive(),
+      excludeAppointmentId: z.string().uuid().optional(),
+    }).parse(req.query)
+
+    const scheduledAt = new Date(q.scheduledAt)
+    const slotEnd = new Date(scheduledAt.getTime() + q.durationMinutes * 60 * 1000)
+
+    // All active rooms for this clinic
+    const allRooms = await prisma.room.findMany({
+      where: { clinicId: req.clinicId, active: true },
+      orderBy: { name: 'asc' },
+    })
+
+    // Find rooms that are busy during the slot
+    const busyAppointments = await prisma.appointment.findMany({
+      where: {
+        clinicId: req.clinicId,
+        roomId: { not: null },
+        status: { notIn: ['cancelled', 'no_show'] },
+        ...(q.excludeAppointmentId ? { id: { not: q.excludeAppointmentId } } : {}),
+        scheduledAt: { lt: slotEnd },
+      },
+      select: { roomId: true, scheduledAt: true, durationMinutes: true },
+    })
+
+    const busyIds = new Set(
+      busyAppointments
+        .filter((a) => {
+          const apptEnd = new Date(a.scheduledAt.getTime() + a.durationMinutes * 60_000)
+          return scheduledAt < apptEnd && slotEnd > a.scheduledAt
+        })
+        .map((a) => a.roomId as string),
+    )
+
+    return reply.send(
+      allRooms.map((r) => ({ ...r, available: !busyIds.has(r.id) })),
     )
   })
 

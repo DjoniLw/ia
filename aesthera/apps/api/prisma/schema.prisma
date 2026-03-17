@@ -426,6 +426,7 @@ model Appointment {
   customerId         String                               @map("customer_id")
   professionalId     String                               @map("professional_id")
   serviceId          String?                              @map("service_id")
+  roomId             String?                              @map("room_id")
   status             AppointmentStatus @default(draft)
   scheduledAt        DateTime                             @map("scheduled_at")      // start date+time
   durationMinutes    Int                                  @map("duration_minutes")  // copied from service at booking
@@ -442,6 +443,7 @@ model Appointment {
   customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
   professional     Professional      @relation(fields: [professionalId], references: [id], onDelete: Restrict)
   service          Service?          @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  room             Room?             @relation(fields: [roomId], references: [id], onDelete: Restrict)
   billing          Billing?
   ledgerEntries    LedgerEntry[]
   notificationLogs NotificationLog[]
@@ -740,6 +742,7 @@ model Room {
   updatedAt   DateTime @updatedAt           @map("updated_at")
 
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  appointments Appointment[]
 
   @@index([clinicId])
   @@map("rooms")
