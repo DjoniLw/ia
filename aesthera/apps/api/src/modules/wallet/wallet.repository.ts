@@ -1,5 +1,8 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../database/prisma/client'
 import type { ListWalletQuery } from './wallet.dto'
+
+export type Tx = Prisma.TransactionClient
 
 const walletEntryInclude = {
   customer: { select: { id: true, name: true, email: true, phone: true } },
@@ -34,6 +37,18 @@ export class WalletRepository {
     })
   }
 
+  /**
+   * Find a wallet entry and acquire a row-level lock (FOR UPDATE).
+   * Must be called inside a database transaction to prevent concurrent modifications.
+   */
+  async findByIdForUpdate(tx: Tx, clinicId: string, id: string) {
+    await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${id} AND clinic_id = ${clinicId} FOR UPDATE`
+    return tx.walletEntry.findFirst({
+      where: { id, clinicId },
+      include: walletEntryInclude,
+    })
+  }
+
   async findByCode(clinicId: string, code: string) {
     return prisma.walletEntry.findFirst({
       where: { code, clinicId },
@@ -41,19 +56,23 @@ export class WalletRepository {
     })
   }
 
-  async create(data: {
-    clinicId: string
-    customerId: string
-    type: string
-    originalValue: number
-    balance: number
-    code: string
-    originType: string
-    originReference?: string
-    notes?: string
-    expirationDate?: Date
-  }) {
-    return prisma.walletEntry.create({
+  async create(
+    data: {
+      clinicId: string
+      customerId: string
+      type: string
+      originalValue: number
+      balance: number
+      code: string
+      originType: string
+      originReference?: string
+      notes?: string
+      expirationDate?: Date
+    },
+    tx?: Tx,
+  ) {
+    const client = tx ?? prisma
+    return client.walletEntry.create({
       data: {
         clinicId: data.clinicId,
         customerId: data.customerId,
@@ -71,23 +90,28 @@ export class WalletRepository {
     })
   }
 
-  async updateBalance(id: string, balance: number, status?: string) {
-    return prisma.walletEntry.update({
+  async updateBalance(id: string, balance: number, status?: string, tx?: Tx) {
+    const client = tx ?? prisma
+    return client.walletEntry.update({
       where: { id },
       data: { balance, ...(status ? { status: status as never } : {}), updatedAt: new Date() },
       include: walletEntryInclude,
     })
   }
 
-  async createTransaction(data: {
-    clinicId: string
-    walletEntryId: string
-    type: string
-    value: number
-    reference?: string
-    description?: string
-  }) {
-    return prisma.walletTransaction.create({
+  async createTransaction(
+    data: {
+      clinicId: string
+      walletEntryId: string
+      type: string
+      value: number
+      reference?: string
+      description?: string
+    },
+    tx?: Tx,
+  ) {
+    const client = tx ?? prisma
+    return client.walletTransaction.create({
       data: {
         clinicId: data.clinicId,
         walletEntryId: data.walletEntryId,
