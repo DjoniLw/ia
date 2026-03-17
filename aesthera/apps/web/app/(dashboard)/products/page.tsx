@@ -383,16 +383,16 @@ export default function ProductsPage() {
 
       {/* Product catalog */}
       {tab === 'catalog' && (
-        <div className="rounded-lg border bg-card">
+        <div className="rounded-lg border bg-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-muted-foreground">
                 <th className="py-3 pl-4 pr-2 text-left font-medium">Nome</th>
-                <th className="px-2 py-3 text-left font-medium">Categoria</th>
-                <th className="px-2 py-3 text-left font-medium">Marca</th>
+                <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Categoria</th>
+                <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Marca</th>
                 <th className="px-2 py-3 text-right font-medium">Preço</th>
                 <th className="px-2 py-3 text-right font-medium">Estoque</th>
-                <th className="px-2 py-3 text-center font-medium">Status</th>
+                <th className="hidden sm:table-cell px-2 py-3 text-center font-medium">Status</th>
                 <th className="px-2 py-3 text-right font-medium">Ações</th>
               </tr>
             </thead>
@@ -411,14 +411,14 @@ export default function ProductsPage() {
                       {p.name}
                       {p.sku && <span className="ml-1 text-xs text-muted-foreground">#{p.sku}</span>}
                     </td>
-                    <td className="px-2 py-3 text-muted-foreground">{p.category ?? '—'}</td>
-                    <td className="px-2 py-3 text-muted-foreground">{p.brand ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.category ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.brand ?? '—'}</td>
                     <td className="px-2 py-3 text-right font-medium">{formatCurrency(p.price)}</td>
                     <td className={`px-2 py-3 text-right font-medium ${isLow ? 'text-amber-700' : ''}`}>
                       {p.stock} {p.unit}
                       {isLow && <span className="ml-1 text-xs">(baixo)</span>}
                     </td>
-                    <td className="px-2 py-3 text-center">
+                    <td className="hidden sm:table-cell px-2 py-3 text-center">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.active ? 'bg-green-100 text-green-800' : 'bg-muted text-muted-foreground'}`}>
                         {p.active ? 'Ativo' : 'Inativo'}
                       </span>
@@ -455,15 +455,15 @@ export default function ProductsPage() {
 
       {/* Sales history */}
       {tab === 'sales' && (
-        <div className="rounded-lg border bg-card">
+        <div className="rounded-lg border bg-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-muted-foreground">
                 <th className="py-3 pl-4 pr-2 text-left font-medium">Data</th>
                 <th className="px-2 py-3 text-left font-medium">Produto</th>
-                <th className="px-2 py-3 text-left font-medium">Cliente</th>
-                <th className="px-2 py-3 text-right font-medium">Qtd</th>
-                <th className="px-2 py-3 text-right font-medium">Unit.</th>
+                <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Cliente</th>
+                <th className="hidden sm:table-cell px-2 py-3 text-right font-medium">Qtd</th>
+                <th className="hidden sm:table-cell px-2 py-3 text-right font-medium">Unit.</th>
                 <th className="px-2 py-3 text-right font-medium">Total</th>
               </tr>
             </thead>
@@ -480,9 +480,9 @@ export default function ProductsPage() {
                     {new Date(s.soldAt).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="px-2 py-3 font-medium">{s.product.name}</td>
-                  <td className="px-2 py-3 text-muted-foreground">{s.customer?.name ?? '—'}</td>
-                  <td className="px-2 py-3 text-right">{s.quantity} {s.product.unit}</td>
-                  <td className="px-2 py-3 text-right text-muted-foreground">{formatCurrency(s.unitPrice)}</td>
+                  <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{s.customer?.name ?? '—'}</td>
+                  <td className="hidden sm:table-cell px-2 py-3 text-right">{s.quantity} {s.product.unit}</td>
+                  <td className="hidden sm:table-cell px-2 py-3 text-right text-muted-foreground">{formatCurrency(s.unitPrice)}</td>
                   <td className="px-2 py-3 text-right font-medium">{formatCurrency(s.totalPrice)}</td>
                 </tr>
               ))}

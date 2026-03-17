@@ -211,7 +211,7 @@ export function ChatPanel() {
       {/* Floating button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all hover:scale-105 ${
+        className={`fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all hover:scale-105 sm:bottom-6 sm:right-6 ${
           open ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'
         }`}
         aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
@@ -221,10 +221,10 @@ export function ChatPanel() {
 
       {/* Panel */}
       <div
-        className={`fixed bottom-24 right-6 z-50 flex w-96 max-w-[calc(100vw-24px)] flex-col rounded-2xl border bg-card shadow-2xl transition-all duration-200 ${
+        className={`fixed bottom-[4.75rem] left-3 right-3 z-50 flex flex-col rounded-2xl border bg-card shadow-2xl transition-all duration-200 sm:bottom-24 sm:left-auto sm:right-6 sm:w-96 ${
           open ? 'pointer-events-auto opacity-100 translate-y-0' : 'pointer-events-none opacity-0 translate-y-4'
         }`}
-        style={{ height: '520px' }}
+        style={{ height: 'min(520px, calc(100dvh - 5.5rem))' /* 5.5rem = floating button (3.5rem) + gap (1rem) + bottom offset (1rem) */ }}
       >
         {/* Header */}
         <div className="flex items-center gap-3 rounded-t-2xl border-b bg-gradient-to-r from-violet-600 to-violet-700 px-4 py-3">

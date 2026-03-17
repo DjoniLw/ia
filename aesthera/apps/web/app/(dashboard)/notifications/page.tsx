@@ -65,13 +65,13 @@ function NotificationRow({ log }: { log: NotificationLog }) {
   return (
     <tr className="hover:bg-muted/20 transition-colors">
       <td className="px-5 py-3 text-muted-foreground">{formatDate(log.createdAt)}</td>
-      <td className="px-5 py-3">
+      <td className="hidden sm:table-cell px-5 py-3">
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
           {CHANNEL_LABEL[log.type] ?? log.type}
         </span>
       </td>
       <td className="px-5 py-3 text-sm text-foreground">{EVENT_LABEL[log.event] ?? log.event}</td>
-      <td className="px-5 py-3">
+      <td className="hidden sm:table-cell px-5 py-3">
         <div>
           <p className="text-sm text-foreground">{log.customer?.name ?? '—'}</p>
           <p className="text-xs text-muted-foreground">{log.channel}</p>
@@ -83,7 +83,7 @@ function NotificationRow({ log }: { log: NotificationLog }) {
           {cfg.label}
         </span>
       </td>
-      <td className="px-5 py-3 text-xs text-muted-foreground">{log.attempts}x · {formatDate(log.lastAttemptAt)}</td>
+      <td className="hidden sm:table-cell px-5 py-3 text-xs text-muted-foreground">{log.attempts}x · {formatDate(log.lastAttemptAt)}</td>
       <td className="px-5 py-3">
         {log.status === 'failed' && <RetryButton id={log.id} />}
       </td>
@@ -161,11 +161,11 @@ export default function NotificationsPage() {
               <thead>
                 <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-3">Data</th>
-                  <th className="px-5 py-3">Canal</th>
+                  <th className="hidden sm:table-cell px-5 py-3">Canal</th>
                   <th className="px-5 py-3">Evento</th>
-                  <th className="px-5 py-3">Destinatário</th>
+                  <th className="hidden sm:table-cell px-5 py-3">Destinatário</th>
                   <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Tentativas</th>
+                  <th className="hidden sm:table-cell px-5 py-3">Tentativas</th>
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>

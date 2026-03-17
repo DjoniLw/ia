@@ -9,6 +9,7 @@ import {
   FileText,
   Home,
   LogOut,
+  Menu,
   Package,
   PackageOpen,
   Scissors,
@@ -17,10 +18,11 @@ import {
   UserCheck,
   Users,
   Wrench,
+  X,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { clearTokens, getRefreshToken } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { ChatPanel } from '@/components/chat-panel'
@@ -45,12 +47,18 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated()) {
       router.replace('/login')
     }
   }, [router])
+
+  // Close sidebar on route change (mobile navigation)
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [pathname])
 
   async function handleLogout() {
     const refreshToken = getRefreshToken()
@@ -68,14 +76,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="flex w-60 flex-col border-r bg-card shadow-sm">
+      <aside
+        className={[
+          'fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r bg-card shadow-sm transition-transform duration-200 md:relative md:z-auto md:translate-x-0',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+        ].join(' ')}
+      >
         {/* Brand */}
         <div className="flex h-14 items-center gap-2.5 border-b px-5">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
             <Scissors className="h-3.5 w-3.5 text-primary-foreground" />
           </div>
           <span className="text-base font-semibold tracking-tight text-foreground">Aesthera</span>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="ml-auto rounded-lg p-1 text-neutral-400 hover:bg-accent hover:text-accent-foreground md:hidden"
+            aria-label="Fechar menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Nav */}
@@ -115,7 +143,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-14 items-center border-b bg-card px-6 shadow-sm">
+        <header className="flex h-14 items-center border-b bg-card px-4 shadow-sm md:px-6">
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="mr-3 rounded-lg p-1.5 text-neutral-500 hover:bg-accent hover:text-accent-foreground md:hidden"
+            aria-label="Abrir menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+
           <div className="flex items-center gap-2">
             {currentPage && <currentPage.icon className="h-4 w-4 text-muted-foreground" />}
             <span className="text-sm font-medium text-foreground">
@@ -124,7 +161,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
       </div>
 
       {/* AI Chat Panel */}

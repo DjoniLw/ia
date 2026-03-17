@@ -244,9 +244,9 @@ export default function ReportsPage() {
                       <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         <th className="px-5 py-3">Nome</th>
                         <th className="px-5 py-3">Telefone</th>
-                        <th className="px-5 py-3">Email</th>
-                        <th className="px-5 py-3">Nascimento</th>
-                        <th className="px-5 py-3">Cadastro</th>
+                        <th className="hidden sm:table-cell px-5 py-3">Email</th>
+                        <th className="hidden sm:table-cell px-5 py-3">Nascimento</th>
+                        <th className="hidden sm:table-cell px-5 py-3">Cadastro</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -254,11 +254,11 @@ export default function ReportsPage() {
                         <tr key={c.id} className="hover:bg-muted/20 transition-colors">
                           <td className="px-5 py-3 font-medium text-foreground">{c.name}</td>
                           <td className="px-5 py-3 text-muted-foreground">{c.phone ?? '—'}</td>
-                          <td className="px-5 py-3 text-muted-foreground">{c.email ?? '—'}</td>
-                          <td className="px-5 py-3 text-muted-foreground">
+                          <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground">{c.email ?? '—'}</td>
+                          <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground">
                             {c.birthDate ? new Date(c.birthDate).toLocaleDateString('pt-BR') : '—'}
                           </td>
-                          <td className="px-5 py-3 text-muted-foreground">
+                          <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground">
                             {new Date(c.createdAt).toLocaleDateString('pt-BR')}
                           </td>
                         </tr>
@@ -356,6 +356,7 @@ export default function ReportsPage() {
                   <div className="border-b px-5 py-4">
                     <h3 className="text-sm font-semibold text-foreground">Top produtos vendidos</h3>
                   </div>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -374,6 +375,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               )}
             </>
@@ -446,28 +448,30 @@ export default function ReportsPage() {
                   <div className="border-b px-5 py-4">
                     <h3 className="text-sm font-semibold text-foreground">Detalhamento por serviço</h3>
                   </div>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         <th className="px-5 py-3">Serviço</th>
-                        <th className="px-5 py-3">Categoria</th>
+                        <th className="hidden sm:table-cell px-5 py-3">Categoria</th>
                         <th className="px-5 py-3 text-right">Qtd</th>
                         <th className="px-5 py-3 text-right">Receita</th>
-                        <th className="px-5 py-3 text-right">Ticket Médio</th>
+                        <th className="hidden sm:table-cell px-5 py-3 text-right">Ticket Médio</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
                       {serviceStats.sorted.map((s, i) => (
                         <tr key={i} className="hover:bg-muted/20 transition-colors">
                           <td className="px-5 py-3 font-medium text-foreground">{s.name}</td>
-                          <td className="px-5 py-3 text-muted-foreground">{s.category ?? '—'}</td>
+                          <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground">{s.category ?? '—'}</td>
                           <td className="px-5 py-3 text-right text-muted-foreground">{s.count}</td>
                           <td className="px-5 py-3 text-right font-semibold text-green-600">{formatCurrency(s.revenue)}</td>
-                          <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(s.count > 0 ? Math.round(s.revenue / s.count) : 0)}</td>
+                          <td className="hidden sm:table-cell px-5 py-3 text-right text-muted-foreground">{formatCurrency(s.count > 0 ? Math.round(s.revenue / s.count) : 0)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               )}
 
@@ -560,11 +564,11 @@ export default function ReportsPage() {
                     <thead>
                       <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         <th className="px-5 py-3">Produto</th>
-                        <th className="px-5 py-3">Categoria</th>
-                        <th className="px-5 py-3">SKU</th>
+                        <th className="hidden sm:table-cell px-5 py-3">Categoria</th>
+                        <th className="hidden sm:table-cell px-5 py-3">SKU</th>
                         <th className="px-5 py-3 text-right">Estoque</th>
-                        <th className="px-5 py-3 text-right">Mínimo</th>
-                        <th className="px-5 py-3 text-right">Preço</th>
+                        <th className="hidden sm:table-cell px-5 py-3 text-right">Mínimo</th>
+                        <th className="hidden sm:table-cell px-5 py-3 text-right">Preço</th>
                         <th className="px-5 py-3 text-center">Status</th>
                       </tr>
                     </thead>
@@ -572,13 +576,13 @@ export default function ReportsPage() {
                       {stockStats.sorted.map((p) => (
                         <tr key={p.id} className="hover:bg-muted/20 transition-colors">
                           <td className="px-5 py-3 font-medium text-foreground">{p.name}</td>
-                          <td className="px-5 py-3 text-muted-foreground">{p.category ?? '—'}</td>
-                          <td className="px-5 py-3 text-muted-foreground font-mono text-xs">{p.sku ?? '—'}</td>
+                          <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground">{p.category ?? '—'}</td>
+                          <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground font-mono text-xs">{p.sku ?? '—'}</td>
                           <td className={`px-5 py-3 text-right font-semibold ${p.stock === 0 ? 'text-red-600' : p.stock <= p.minStock && p.minStock > 0 ? 'text-yellow-600' : 'text-foreground'}`}>
                             {p.stock} {p.unit}
                           </td>
-                          <td className="px-5 py-3 text-right text-muted-foreground">{p.minStock}</td>
-                          <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(p.price)}</td>
+                          <td className="hidden sm:table-cell px-5 py-3 text-right text-muted-foreground">{p.minStock}</td>
+                          <td className="hidden sm:table-cell px-5 py-3 text-right text-muted-foreground">{formatCurrency(p.price)}</td>
                           <td className="px-5 py-3 text-center">
                             {p.stock === 0 ? (
                               <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Sem estoque</span>

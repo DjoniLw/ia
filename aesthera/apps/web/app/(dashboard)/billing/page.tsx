@@ -126,15 +126,15 @@ export default function BillingPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="py-3 pl-4 pr-2 text-left font-medium">Cliente</th>
-              <th className="px-2 py-3 text-left font-medium">Serviço</th>
-              <th className="px-2 py-3 text-left font-medium">Agendamento</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Serviço</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Agendamento</th>
               <th className="px-2 py-3 text-left font-medium">Valor</th>
-              <th className="px-2 py-3 text-left font-medium">Vencimento</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Vencimento</th>
               <th className="px-2 py-3 text-left font-medium">Status</th>
               <th className="px-2 py-3 text-right font-medium">Ações</th>
             </tr>
@@ -157,17 +157,17 @@ export default function BillingPage() {
             {data?.items.map((b) => (
               <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="py-3 pl-4 pr-2 font-medium">{b.customer.name}</td>
-                <td className="px-2 py-3 text-muted-foreground">
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">
                   {b.appointment.service.name}
                   <span className="block text-[11px]">
                     por {b.appointment.professional.name}
                   </span>
                 </td>
-                <td className="px-2 py-3 text-muted-foreground">
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">
                   {formatDate(b.appointment.scheduledAt)}
                 </td>
                 <td className="px-2 py-3 font-medium">{formatCurrency(b.amount)}</td>
-                <td className="px-2 py-3 text-muted-foreground">{formatDate(b.dueDate)}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(b.dueDate)}</td>
                 <td className="px-2 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[b.status]}`}>
                     {STATUS_LABEL[b.status]}

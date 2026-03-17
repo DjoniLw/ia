@@ -420,12 +420,13 @@ export default function ServicesPage() {
         <p className="text-sm text-muted-foreground">Carregando...</p>
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground">
               <tr>
                 <th className="text-left px-4 py-3 font-medium">Nome</th>
-                <th className="text-left px-4 py-3 font-medium">Categoria</th>
-                <th className="text-right px-4 py-3 font-medium">Duração</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Categoria</th>
+                <th className="hidden sm:table-cell text-right px-4 py-3 font-medium">Duração</th>
                 <th className="text-right px-4 py-3 font-medium">Preço</th>
                 <th className="text-center px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3" />
@@ -435,8 +436,8 @@ export default function ServicesPage() {
               {data?.items.map((s) => (
                 <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-medium">{s.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{s.category ?? '—'}</td>
-                  <td className="px-4 py-3 text-right">{s.durationMinutes}min</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-muted-foreground">{s.category ?? '—'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right">{s.durationMinutes}min</td>
                   <td className="px-4 py-3 text-right">{priceDisplay(s.price)}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${s.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
@@ -459,6 +460,7 @@ export default function ServicesPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

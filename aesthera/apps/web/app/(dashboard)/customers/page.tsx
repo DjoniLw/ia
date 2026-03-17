@@ -22,7 +22,7 @@ import {
   useDeleteCustomer,
   useUpdateCustomer,
 } from '@/lib/hooks/use-resources'
-import { type AnamnesisQuestion, useAnamnesisTemplate } from '@/lib/hooks/use-settings'
+import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { api } from '@/lib/api'
 
 // ──── Masks ────────────────────────────────────────────────────────────────────
@@ -544,12 +544,14 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
   // ── clinical / prontuário ──────────────────────────────────────────────
   const clinicalRecords = useClinicalRecords(customer.id)
-  const { data: anamnesisTemplate, isLoading: templateLoading } = useAnamnesisTemplate()
+  const { data: anamnesisGroups, isLoading: groupsLoading } = useAnamnesisGroups()
   const createRecord = useCreateClinicalRecord()
 
   // new-entry form
   const [showEntryForm, setShowEntryForm] = useState(false)
   const [entryType, setEntryType] = useState<EntryType>('anamnesis')
+  // selected group for new anamnesis
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   // for non-anamnesis types
   const [simpleRecord, setSimpleRecord] = useState({ title: '', content: '', performedAt: '' })
   // for anamnesis type
@@ -559,11 +561,22 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   // edit record
   const [editingRecord, setEditingRecord] = useState<ClinicalRecord | null>(null)
   const [editValues, setEditValues] = useState({ title: '', content: '', performedAt: '' })
+  // edit anamnesis answers (used when editingRecord.type === 'anamnesis')
+  const [editAnamnesisAnswers, setEditAnamnesisAnswers] = useState<Record<string, string>>({})
+  // group used in the anamnesis being edited (questions to show in edit form)
+  const [editAnamnesisGroup, setEditAnamnesisGroup] = useState<AnamnesisGroup | null>(null)
   const updateRecord = useUpdateClinicalRecord(editingRecord?.id ?? '')
   const [editSubmitting, setEditSubmitting] = useState(false)
 
+  // helpers
+  const templateLoading = groupsLoading
+  const selectedGroup = anamnesisGroups?.find((g) => g.id === selectedGroupId) ?? anamnesisGroups?.[0] ?? null
+  // Only real questions (not separators) from selected group
+  const selectedGroupQuestions = (selectedGroup?.questions ?? []).filter((q): q is AnamnesisQuestion => q.type !== 'separator')
+
   function openEntryForm() {
     setEntryType('anamnesis')
+    setSelectedGroupId(anamnesisGroups?.[0]?.id ?? '')
     setSimpleRecord({ title: '', content: '', performedAt: '' })
     setAnamnesisAnswers({})
     setShowEntryForm(true)
@@ -571,25 +584,87 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
   function openEditRecord(r: ClinicalRecord) {
     setEditingRecord(r)
-    setEditValues({
-      title: r.title,
-      content: r.content,
-      performedAt: r.performedAt ? r.performedAt.slice(0, 10) : '',
-    })
+    if (r.type === 'anamnesis') {
+      // Parse stored content: { groupId?, groupName?, entries: [...] } OR legacy flat array
+      let storedGroupId: string | undefined
+      let entries: Array<{ question: string; answer: string; type?: string }> = []
+      try {
+        const parsed = JSON.parse(r.content) as { groupId?: string; entries?: typeof entries } | typeof entries
+        if (Array.isArray(parsed)) {
+          entries = parsed
+        } else {
+          storedGroupId = parsed.groupId
+          entries = parsed.entries ?? []
+        }
+      } catch (err) { console.warn('Failed to parse anamnesis content for record', r.id, '– displaying empty edit form', err) }
+
+      // Find the group used for this anamnesis (by stored id, else first group)
+      const group = (storedGroupId ? anamnesisGroups?.find((g) => g.id === storedGroupId) : null) ?? anamnesisGroups?.[0] ?? null
+      setEditAnamnesisGroup(group)
+
+      const questions = (group?.questions ?? []).filter((q): q is AnamnesisQuestion => q.type !== 'separator')
+      const answers: Record<string, string> = {}
+      for (const q of questions) {
+        const entry = entries.find((e) => e.question === q.text)
+        if (entry) {
+          if (q.type === 'select') {
+            try {
+              const p = JSON.parse(entry.answer) as { choice?: string; description?: string }
+              answers[q.id] = p.choice ?? ''
+              if (p.description) answers[q.id + '__desc'] = p.description
+            } catch {
+              answers[q.id] = entry.answer
+            }
+          } else {
+            answers[q.id] = entry.answer
+          }
+        }
+      }
+      setEditAnamnesisAnswers(answers)
+    } else {
+      setEditValues({
+        title: r.title,
+        content: r.content,
+        performedAt: r.performedAt ? r.performedAt.slice(0, 10) : '',
+      })
+    }
   }
 
   async function submitEdit() {
     if (!editingRecord) return
     setEditSubmitting(true)
     try {
-      await updateRecord.mutateAsync({
-        customerId: customer.id,
-        title: editValues.title,
-        content: editValues.content,
-        performedAt: editValues.performedAt ? new Date(editValues.performedAt).toISOString() : null,
-      })
+      if (editingRecord.type === 'anamnesis') {
+        const questions = (editAnamnesisGroup?.questions ?? []).filter((q): q is AnamnesisQuestion => q.type !== 'separator')
+        const missing = questions.filter((q: AnamnesisQuestion) => q.required && !editAnamnesisAnswers[q.id]?.trim())
+        if (missing.length > 0) {
+          toast.error(`Preencha os campos obrigatórios: ${missing.map((q: AnamnesisQuestion) => q.text).join(', ')}`)
+          setEditSubmitting(false)
+          return
+        }
+        const entries = questions.map((q: AnamnesisQuestion) => {
+          let answer = editAnamnesisAnswers[q.id] ?? ''
+          if (q.type === 'select') {
+            const desc = editAnamnesisAnswers[q.id + '__desc'] ?? ''
+            answer = JSON.stringify(desc.trim() ? { choice: answer, description: desc.trim() } : { choice: answer })
+          }
+          return { question: q.text, answer, type: q.type }
+        })
+        await updateRecord.mutateAsync({
+          customerId: customer.id,
+          content: JSON.stringify({ groupId: editAnamnesisGroup?.id, groupName: editAnamnesisGroup?.name, entries }),
+        })
+        toast.success('Anamnese atualizada')
+      } else {
+        await updateRecord.mutateAsync({
+          customerId: customer.id,
+          title: editValues.title,
+          content: editValues.content,
+          performedAt: editValues.performedAt ? new Date(editValues.performedAt).toISOString() : null,
+        })
+        toast.success('Lançamento atualizado')
+      }
       setEditingRecord(null)
-      toast.success('Lançamento atualizado')
     } catch {
       toast.error('Erro ao atualizar lançamento')
     } finally {
@@ -601,22 +676,25 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
     setEntrySubmitting(true)
     try {
       if (entryType === 'anamnesis') {
-        const questions = anamnesisTemplate ?? []
+        const questions = selectedGroupQuestions
         const missing = questions.filter((q: AnamnesisQuestion) => q.required && !anamnesisAnswers[q.id]?.trim())
         if (missing.length > 0) {
           toast.error(`Preencha os campos obrigatórios: ${missing.map((q: AnamnesisQuestion) => q.text).join(', ')}`)
           setEntrySubmitting(false)
           return
         }
-        const entries = questions.map((q: AnamnesisQuestion) => ({
-          question: q.text,
-          answer: anamnesisAnswers[q.id] ?? '',
-          type: q.type,
-        }))
+        const entries = questions.map((q: AnamnesisQuestion) => {
+          let answer = anamnesisAnswers[q.id] ?? ''
+          if (q.type === 'select') {
+            const desc = anamnesisAnswers[q.id + '__desc'] ?? ''
+            answer = JSON.stringify(desc.trim() ? { choice: answer, description: desc.trim() } : { choice: answer })
+          }
+          return { question: q.text, answer, type: q.type }
+        })
         await createRecord.mutateAsync({
           customerId: customer.id,
-          title: 'Anamnese',
-          content: JSON.stringify(entries),
+          title: `Anamnese${selectedGroup ? ` – ${selectedGroup.name}` : ''}`,
+          content: JSON.stringify({ groupId: selectedGroup?.id, groupName: selectedGroup?.name, entries }),
           type: 'anamnesis',
         })
       } else {
@@ -836,82 +914,162 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                 </div>
               </div>
 
-              {/* Anamnese form — uses configured template */}
+              {/* Anamnese form — group selector + questions */}
               {entryType === 'anamnesis' && (
                 <div className="space-y-3">
                   {templateLoading ? (
                     <div className="flex items-center justify-center py-4">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     </div>
-                  ) : (anamnesisTemplate ?? []).length === 0 ? (
+                  ) : !anamnesisGroups?.length ? (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/10 dark:text-amber-300">
-                      Nenhuma pergunta configurada. Configure as perguntas em{' '}
+                      Nenhum grupo configurado. Configure em{' '}
                       <strong>Configurações → Anamnese</strong>.
                     </p>
                   ) : (
-                    (anamnesisTemplate ?? []).map((q: AnamnesisQuestion) => (
-                      <div key={q.id} className="space-y-1">
-                        <label className="text-xs font-medium text-foreground">
-                          {q.text}
-                          {q.required && <span className="ml-1 text-red-500">*</span>}
-                        </label>
-                        {q.type === 'text' && (
-                          <textarea
-                            value={anamnesisAnswers[q.id] ?? ''}
-                            onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                            rows={2}
-                            className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
-                            placeholder="Escreva aqui…"
-                          />
-                        )}
-                        {q.type === 'yesno' && (
-                          <div className="flex gap-4">
-                            {(['Sim', 'Não'] as const).map((opt) => (
-                              <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name={`anamnesis-${q.id}`}
-                                  value={opt}
-                                  checked={anamnesisAnswers[q.id] === opt}
-                                  onChange={() => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: opt }))}
-                                />
-                                {opt}
-                              </label>
+                    <>
+                      {/* Group selector (only if more than one group) */}
+                      {anamnesisGroups.length > 1 && (
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">Grupo de anamnese</label>
+                          <select
+                            value={selectedGroupId || anamnesisGroups[0]?.id}
+                            onChange={(e) => { setSelectedGroupId(e.target.value); setAnamnesisAnswers({}) }}
+                            className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
+                          >
+                            {anamnesisGroups.map((g) => (
+                              <option key={g.id} value={g.id}>{g.name}</option>
                             ))}
-                          </div>
-                        )}
-                        {q.type === 'numeric' && (
-                          <input
-                            type="number"
-                            value={anamnesisAnswers[q.id] ?? ''}
-                            onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                            className="w-32 rounded-md border bg-background px-2 py-1 text-xs"
-                          />
-                        )}
-                        {q.type === 'date' && (
-                          <input
-                            type="date"
-                            value={anamnesisAnswers[q.id] ?? ''}
-                            onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
-                            className="rounded-md border bg-background px-2 py-1 text-xs"
-                          />
-                        )}
-                        {q.type === 'multiple' && (q.options ?? []).map((opt) => (
-                          <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={(anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean).includes(opt)}
-                              onChange={(e) => {
-                                const current = (anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
-                                const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
-                                setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
-                              }}
-                            />
-                            {opt}
-                          </label>
-                        ))}
-                      </div>
-                    ))
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Questions + separators from selected group */}
+                      {(selectedGroup?.questions ?? []).length === 0 ? (
+                        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/10 dark:text-amber-300">
+                          Este grupo não tem perguntas. Configure em{' '}
+                          <strong>Configurações → Anamnese</strong>.
+                        </p>
+                      ) : (
+                        (selectedGroup?.questions ?? []).map((item) => {
+                          if (item.type === 'separator') {
+                            return (
+                              <div key={item.id} className="flex items-center gap-2 pt-1">
+                                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{item.text}</span>
+                                <div className="flex-1 h-px bg-border" />
+                              </div>
+                            )
+                          }
+                          const q = item as AnamnesisQuestion
+                          return (
+                            <div key={q.id} className="space-y-1">
+                              <label className="text-xs font-medium text-foreground">
+                                {q.text}
+                                {q.required && <span className="ml-1 text-red-500">*</span>}
+                              </label>
+                              {q.type === 'text' && (
+                                <textarea
+                                  value={anamnesisAnswers[q.id] ?? ''}
+                                  onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                                  rows={2}
+                                  className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                                  placeholder="Escreva aqui…"
+                                />
+                              )}
+                              {q.type === 'yesno' && (
+                                <div className="flex gap-4">
+                                  {(['Sim', 'Não'] as const).map((opt) => (
+                                    <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                      <input
+                                        type="radio"
+                                        name={`anamnesis-${q.id}`}
+                                        value={opt}
+                                        checked={anamnesisAnswers[q.id] === opt}
+                                        onChange={() => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: opt }))}
+                                      />
+                                      {opt}
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                              {q.type === 'numeric' && (
+                                <input
+                                  type="number"
+                                  value={anamnesisAnswers[q.id] ?? ''}
+                                  onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                                  className="w-32 rounded-md border bg-background px-2 py-1 text-xs"
+                                />
+                              )}
+                              {q.type === 'date' && (
+                                <input
+                                  type="date"
+                                  value={anamnesisAnswers[q.id] ?? ''}
+                                  onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                                  className="rounded-md border bg-background px-2 py-1 text-xs"
+                                />
+                              )}
+                              {q.type === 'multiple' && (
+                                <div className="space-y-1">
+                                  {(q.options ?? []).map((opt) => (
+                                    <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={(anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean).includes(opt)}
+                                        onChange={(e) => {
+                                          const current = (anamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
+                                          const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
+                                          setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
+                                        }}
+                                      />
+                                      {opt}
+                                    </label>
+                                  ))}
+                                  {(q.options ?? []).length === 0 && (
+                                    <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                                  )}
+                                </div>
+                              )}
+                              {q.type === 'select' && (
+                                <div className="space-y-1.5">
+                                  {(q.selectOptions ?? []).map((opt) => (
+                                    <div key={opt.label} className="space-y-1">
+                                      <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name={`anamnesis-select-${q.id}`}
+                                          value={opt.label}
+                                          checked={anamnesisAnswers[q.id] === opt.label}
+                                          onChange={() => {
+                                            setAnamnesisAnswers((prev) => {
+                                              const next = { ...prev, [q.id]: opt.label }
+                                              if (!opt.withDescription) delete next[q.id + '__desc']
+                                              return next
+                                            })
+                                          }}
+                                        />
+                                        {opt.label}
+                                      </label>
+                                      {opt.withDescription && anamnesisAnswers[q.id] === opt.label && (
+                                        <textarea
+                                          value={anamnesisAnswers[q.id + '__desc'] ?? ''}
+                                          onChange={(e) => setAnamnesisAnswers((prev) => ({ ...prev, [q.id + '__desc']: e.target.value }))}
+                                          rows={2}
+                                          placeholder="Descreva…"
+                                          className="ml-5 w-[calc(100%-1.25rem)] rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                                        />
+                                      )}
+                                    </div>
+                                  ))}
+                                  {(q.selectOptions ?? []).length === 0 && (
+                                    <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -975,7 +1133,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           )}
 
           {/* ── Edit record modal ── */}
-          {editingRecord && (
+          {editingRecord && editingRecord.type !== 'anamnesis' && (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
               <p className="text-xs font-semibold text-primary">Editar lançamento</p>
               <div className="space-y-1">
@@ -1022,6 +1180,149 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             </div>
           )}
 
+          {/* ── Edit anamnesis modal ── */}
+          {editingRecord && editingRecord.type === 'anamnesis' && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+              <p className="text-xs font-semibold text-primary">
+                Editar Anamnese{editAnamnesisGroup ? ` – ${editAnamnesisGroup.name}` : ''}
+              </p>
+              {templateLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : (editAnamnesisGroup?.questions ?? []).length === 0 ? (
+                <p className="text-xs text-amber-600">Nenhuma pergunta neste grupo.</p>
+              ) : (
+                (editAnamnesisGroup?.questions ?? []).map((item) => {
+                  if (item.type === 'separator') {
+                    return (
+                      <div key={item.id} className="flex items-center gap-2 pt-1">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{item.text}</span>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+                    )
+                  }
+                  const q = item as AnamnesisQuestion
+                  return (
+                    <div key={q.id} className="space-y-1">
+                      <label className="text-xs font-medium text-foreground">
+                        {q.text}
+                        {q.required && <span className="ml-1 text-red-500">*</span>}
+                      </label>
+                      {q.type === 'text' && (
+                        <textarea
+                          value={editAnamnesisAnswers[q.id] ?? ''}
+                          onChange={(e) => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                          rows={2}
+                          className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                          placeholder="Escreva aqui…"
+                        />
+                      )}
+                      {q.type === 'yesno' && (
+                        <div className="flex gap-4">
+                          {(['Sim', 'Não'] as const).map((opt) => (
+                            <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`edit-anamnesis-${q.id}`}
+                                value={opt}
+                                checked={editAnamnesisAnswers[q.id] === opt}
+                                onChange={() => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: opt }))}
+                              />
+                              {opt}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      {q.type === 'numeric' && (
+                        <input
+                          type="number"
+                          value={editAnamnesisAnswers[q.id] ?? ''}
+                          onChange={(e) => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                          className="w-32 rounded-md border bg-background px-2 py-1 text-xs"
+                        />
+                      )}
+                      {q.type === 'date' && (
+                        <input
+                          type="date"
+                          value={editAnamnesisAnswers[q.id] ?? ''}
+                          onChange={(e) => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                          className="rounded-md border bg-background px-2 py-1 text-xs"
+                        />
+                      )}
+                      {q.type === 'multiple' && (
+                        <div className="space-y-1">
+                          {(q.options ?? []).map((opt) => (
+                            <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={(editAnamnesisAnswers[q.id] ?? '').split(',').filter(Boolean).includes(opt)}
+                                onChange={(e) => {
+                                  const current = (editAnamnesisAnswers[q.id] ?? '').split(',').filter(Boolean)
+                                  const updated = e.target.checked ? [...current, opt] : current.filter((v) => v !== opt)
+                                  setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
+                                }}
+                              />
+                              {opt}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      {q.type === 'select' && (
+                        <div className="space-y-1.5">
+                          {(q.selectOptions ?? []).map((opt) => (
+                            <div key={opt.label} className="space-y-1">
+                              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`edit-anamnesis-select-${q.id}`}
+                                  value={opt.label}
+                                  checked={editAnamnesisAnswers[q.id] === opt.label}
+                                  onChange={() => {
+                                    setEditAnamnesisAnswers((prev) => {
+                                      const next = { ...prev, [q.id]: opt.label }
+                                      if (!opt.withDescription) delete next[q.id + '__desc']
+                                      return next
+                                    })
+                                  }}
+                                />
+                                {opt.label}
+                              </label>
+                              {opt.withDescription && editAnamnesisAnswers[q.id] === opt.label && (
+                                <textarea
+                                  value={editAnamnesisAnswers[q.id + '__desc'] ?? ''}
+                                  onChange={(e) => setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id + '__desc']: e.target.value }))}
+                                  rows={2}
+                                  placeholder="Descreva…"
+                                  className="ml-5 w-[calc(100%-1.25rem)] rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => void submitEdit()}
+                  disabled={editSubmitting}
+                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {editSubmitting ? 'Salvando…' : 'Salvar anamnese'}
+                </button>
+                <button
+                  onClick={() => setEditingRecord(null)}
+                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── Chronological history ── */}
           {clinicalRecords.isLoading ? (
             <div className="flex items-center justify-center py-4">
@@ -1035,28 +1336,48 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             <div className="space-y-2">
               {clinicalRecords.data.items.map((r) => {
                 // For anamnesis, parse JSON entries; for others show content as text
-                let anamnesisEntries: Array<{ question: string; answer: string }> = []
+                let anamnesisEntries: Array<{ question: string; answer: string; type?: string }> = []
+                let anamnesisGroupName: string | undefined
                 if (r.type === 'anamnesis') {
-                  try { anamnesisEntries = JSON.parse(r.content) } catch { anamnesisEntries = [] }
+                  try {
+                    const parsed = JSON.parse(r.content) as { groupName?: string; entries?: typeof anamnesisEntries } | typeof anamnesisEntries
+                    if (Array.isArray(parsed)) {
+                      anamnesisEntries = parsed
+                    } else {
+                      anamnesisGroupName = parsed.groupName
+                      anamnesisEntries = parsed.entries ?? []
+                    }
+                  } catch { anamnesisEntries = [] }
                 }
+
+                function formatAnswer(answer: string, type?: string): string {
+                  if (type === 'select') {
+                    try {
+                      const parsed = JSON.parse(answer) as { choice?: string; description?: string }
+                      return parsed.description ? `${parsed.choice}: ${parsed.description}` : (parsed.choice ?? answer)
+                    } catch { return answer }
+                  }
+                  return answer
+                }
+
                 return (
                   <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-foreground">
-                        {r.type === 'anamnesis' ? 'Anamnese' : r.title}
+                        {r.type === 'anamnesis'
+                          ? `Anamnese${anamnesisGroupName ? ` – ${anamnesisGroupName}` : ''}`
+                          : r.title}
                       </p>
                       <div className="flex items-center gap-1">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
                           {TYPE_LABEL[r.type] ?? r.type}
                         </span>
-                        {r.type !== 'anamnesis' && (
-                          <button
-                            onClick={() => openEditRecord(r)}
-                            className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border"
-                          >
-                            Editar
-                          </button>
-                        )}
+                        <button
+                          onClick={() => openEditRecord(r)}
+                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border"
+                        >
+                          Editar
+                        </button>
                       </div>
                     </div>
 
@@ -1065,7 +1386,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                         {anamnesisEntries.filter((e) => e.answer?.trim()).map((e, i) => (
                           <div key={i} className="flex gap-2 text-xs">
                             <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
-                            <span className="font-medium text-foreground text-right max-w-[55%]">{e.answer}</span>
+                            <span className="font-medium text-foreground text-right max-w-[55%]">{formatAnswer(e.answer, e.type)}</span>
                           </div>
                         ))}
                         {anamnesisEntries.filter((e) => e.answer?.trim()).length === 0 && (
@@ -1218,16 +1539,16 @@ export default function CustomersPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-muted-foreground">
               <th className="py-3 pl-4 pr-2 text-left font-medium">Nome</th>
-              <th className="px-2 py-3 text-left font-medium">E-mail</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">E-mail</th>
               <th className="px-2 py-3 text-left font-medium">Telefone</th>
-              <th className="px-2 py-3 text-left font-medium">CPF</th>
-              <th className="px-2 py-3 text-left font-medium">Cidade</th>
-              <th className="px-2 py-3 text-left font-medium">Cadastro</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">CPF</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Cidade</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Cadastro</th>
               <th className="px-2 py-3 text-right font-medium">Ações</th>
             </tr>
           </thead>
@@ -1245,11 +1566,11 @@ export default function CustomersPage() {
                     {c.name}
                   </button>
                 </td>
-                <td className="px-2 py-3 text-muted-foreground">{c.email ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.email ?? '—'}</td>
                 <td className="px-2 py-3 text-muted-foreground">{c.phone ?? '—'}</td>
-                <td className="px-2 py-3 text-muted-foreground">{c.document ?? '—'}</td>
-                <td className="px-2 py-3 text-muted-foreground">{c.address?.city ?? '—'}</td>
-                <td className="px-2 py-3 text-muted-foreground">{formatDate(c.createdAt)}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.document ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.address?.city ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(c.createdAt)}</td>
                 <td className="px-2 py-3">
                   <div className="flex justify-end gap-1">
                     <Button variant="ghost" size="sm" className="text-violet-600 hover:text-violet-700" onClick={() => setAiSummary(c)}>

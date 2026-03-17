@@ -276,9 +276,9 @@ export default function SalesPage() {
                 <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <th className="px-5 py-3">Data</th>
                   <th className="px-5 py-3">Produto</th>
-                  <th className="px-5 py-3">Cliente</th>
-                  <th className="px-5 py-3 text-center">Qtd</th>
-                  <th className="px-5 py-3">Pagamento</th>
+                  <th className="hidden sm:table-cell px-5 py-3">Cliente</th>
+                  <th className="hidden sm:table-cell px-5 py-3 text-center">Qtd</th>
+                  <th className="hidden sm:table-cell px-5 py-3">Pagamento</th>
                   <th className="px-5 py-3 text-right">Total</th>
                 </tr>
               </thead>
@@ -287,11 +287,11 @@ export default function SalesPage() {
                   <tr key={sale.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-5 py-3 text-muted-foreground whitespace-nowrap">{formatDate(sale.soldAt)}</td>
                     <td className="px-5 py-3 font-medium text-foreground">{sale.product.name}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{sale.customer?.name ?? '—'}</td>
-                    <td className="px-5 py-3 text-center text-muted-foreground">
+                    <td className="hidden sm:table-cell px-5 py-3 text-muted-foreground">{sale.customer?.name ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-5 py-3 text-center text-muted-foreground">
                       {sale.quantity} {sale.product.unit}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="hidden sm:table-cell px-5 py-3">
                       {sale.paymentMethod ? (
                         <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                           {PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod}
