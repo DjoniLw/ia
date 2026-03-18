@@ -1,6 +1,5 @@
 import { prisma } from '../../database/prisma/client'
 import { AppError, NotFoundError } from '../../shared/errors/app-error'
-import { redis } from '../../database/redis/client'
 import type { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery } from './wallet.dto'
 import { WalletRepository } from './wallet.repository'
 import type { Tx } from './wallet.repository'
