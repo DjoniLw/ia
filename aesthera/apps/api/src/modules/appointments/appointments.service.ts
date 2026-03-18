@@ -403,9 +403,11 @@ export class AppointmentsService {
         duration: a.durationMinutes,
         status: a.status,
         customer: a.customer.name,
+        customerId: a.customer.id,
         service: a.service?.name ?? '',
         price: a.price,
         notes: a.notes,
+        room: (a as Record<string, unknown>).room as { id: string; name: string } | null ?? null,
         equipment: (a.equipment as Array<{ equipment: { id: string; name: string } }>).map(
           (e) => e.equipment,
         ),
