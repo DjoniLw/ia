@@ -238,18 +238,16 @@ function CreateAppointmentForm({
     return {
       serviceId,
       date,
-      // Only forward pre-filters when no time is selected yet;
-      // once a time is selected the slot grid is irrelevant.
-      professionalId: !selectedTime && professionalFilter ? professionalFilter : undefined,
-      // Pass ALL selected equipment IDs as a comma-separated string so the backend
-      // returns only slots where every selected equipment item is simultaneously free.
-      equipmentId:
-        !selectedTime && selectedEquipmentIds.length > 0
-          ? selectedEquipmentIds.join(',')
-          : undefined,
-      roomId: !selectedTime && roomId ? roomId : undefined,
+      // Always forward pre-filters — including after a time has been selected — so
+      // the slot grid never reloads with a different (unfiltered) query when the user
+      // clicks a time slot.
+      professionalId: professionalFilter || undefined,
+      // All selected equipment IDs as a comma-separated string so the backend returns
+      // only slots where every selected equipment item is simultaneously free.
+      equipmentId: selectedEquipmentIds.length > 0 ? selectedEquipmentIds.join(',') : undefined,
+      roomId: roomId || undefined,
     }
-  }, [serviceId, date, selectedTime, professionalFilter, selectedEquipmentIds, roomId])
+  }, [serviceId, date, professionalFilter, selectedEquipmentIds, roomId])
 
   const { data: slotsData, isFetching: slotsFetching } = useAvailableSlots(slotsParams)
 
