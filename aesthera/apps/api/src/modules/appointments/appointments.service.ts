@@ -102,7 +102,6 @@ export class AppointmentsService {
 
         // Check availability with computed total duration
         await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, totalDuration, dateStr)
-        await this.assertCustomerAvailable(clinicId, dto.customerId, scheduledDate, totalDuration, dateStr, undefined, dto.force)
 
         if (dto.equipmentIds && dto.equipmentIds.length > 0) {
           await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, totalDuration)
@@ -180,7 +179,6 @@ export class AppointmentsService {
 
       const durationMinutes = service.durationMinutes
       await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, durationMinutes, dateStr)
-      await this.assertCustomerAvailable(clinicId, dto.customerId, scheduledDate, durationMinutes, dateStr, undefined, dto.force)
 
       if (dto.equipmentIds && dto.equipmentIds.length > 0) {
         await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, durationMinutes)
@@ -594,36 +592,6 @@ export class AppointmentsService {
         `Conflito de sala: ${room.name} já está ocupada neste horário`,
         409,
         'ROOM_CONFLICT',
-      )
-    }
-  }
-
-  private async assertCustomerAvailable(
-    clinicId: string,
-    customerId: string,
-    scheduledAt: Date,
-    durationMinutes: number,
-    dateStr: string,
-    excludeId?: string,
-    force?: boolean,
-  ) {
-    if (force) return // caller explicitly acknowledged the conflict
-
-    const existing = await this.repo.getCustomerAppointmentsForDate(clinicId, customerId, dateStr, excludeId)
-    const slotStart = scheduledAt.getTime()
-    const slotEnd = slotStart + durationMinutes * 60 * 1000
-
-    const hasConflict = existing.some((a: { scheduledAt: Date; durationMinutes: number }) => {
-      const aStart = a.scheduledAt.getTime()
-      const aEnd = aStart + a.durationMinutes * 60 * 1000
-      return slotStart < aEnd && slotEnd > aStart
-    })
-
-    if (hasConflict) {
-      throw new AppError(
-        'O cliente já possui um agendamento neste horário',
-        409,
-        'CUSTOMER_CONFLICT',
       )
     }
   }

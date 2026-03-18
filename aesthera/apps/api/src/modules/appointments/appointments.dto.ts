@@ -19,7 +19,6 @@ export const CreateAppointmentDto = z.object({
   price: z.number().int().min(0).optional(), // override total price if needed
   equipmentIds: z.array(z.string().uuid()).optional(), // equipment to use for this appointment
   packageSessionId: z.string().uuid().optional(), // reserve a package session for this appointment
-  force: z.boolean().optional(), // skip customer-conflict check when true
 }).refine((data) => data.serviceId || (data.services && data.services.length > 0), {
   message: 'Either serviceId or services array must be provided',
   path: ['serviceId'],
