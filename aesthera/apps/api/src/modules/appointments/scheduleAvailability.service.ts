@@ -134,7 +134,7 @@ export class ScheduleAvailabilityService {
       profSlots.push({ id: prof.id, name: prof.name, slots })
     }
 
-    const sortedSlots = [...allSlots].sort()
+    let filteredSlots = [...allSlots].sort()
 
     // ── Equipment pre-filter ─────────────────────────────────────────────────
     // If one or more equipment items were pre-selected, remove slots where ANY
@@ -162,25 +162,17 @@ export class ScheduleAvailabilityService {
         end: dateToMinutes(l.appointment.scheduledAt) + l.appointment.durationMinutes,
       }))
 
-      const filteredSlots = sortedSlots.filter((slot) => {
+      filteredSlots = filteredSlots.filter((slot) => {
         const slotMin = timeToMinutes(slot)
         const slotEnd = slotMin + dur
         return !equipOccupied.some((o) => slotMin < o.end && slotEnd > o.start)
       })
-
-      // Also restrict profSlots to the equipment-filtered set
-      const filteredSet = new Set(filteredSlots)
-      const filteredProfSlots = profSlots.map((p) => ({
-        ...p,
-        slots: p.slots.filter((s) => filteredSet.has(s)),
-      }))
-
-      return { date, slots: filteredSlots, professionals: filteredProfSlots }
     }
 
     // ── Room pre-filter ──────────────────────────────────────────────────────
     // If a specific room was pre-selected, remove slots where that room is already
-    // booked in another active appointment.
+    // booked in another active appointment.  Applied on top of the equipment
+    // filter so both constraints are always enforced simultaneously.
     if (roomId) {
       const dayStart = dateNoon(date)
       dayStart.setUTCHours(0, 0, 0, 0)
@@ -201,22 +193,20 @@ export class ScheduleAvailabilityService {
         end: dateToMinutes(a.scheduledAt) + a.durationMinutes,
       }))
 
-      const filteredSlots = sortedSlots.filter((slot) => {
+      filteredSlots = filteredSlots.filter((slot) => {
         const slotMin = timeToMinutes(slot)
         const slotEnd = slotMin + dur
         return !roomOccupied.some((o) => slotMin < o.end && slotEnd > o.start)
       })
-
-      const filteredSet = new Set(filteredSlots)
-      const filteredProfSlots = profSlots.map((p) => ({
-        ...p,
-        slots: p.slots.filter((s) => filteredSet.has(s)),
-      }))
-
-      return { date, slots: filteredSlots, professionals: filteredProfSlots }
     }
 
-    return { date, slots: sortedSlots, professionals: profSlots }
+    const filteredSet = new Set(filteredSlots)
+    const filteredProfSlots = profSlots.map((p) => ({
+      ...p,
+      slots: p.slots.filter((s) => filteredSet.has(s)),
+    }))
+
+    return { date, slots: filteredSlots, professionals: filteredProfSlots }
   }
 
   /**
