@@ -1,7 +1,8 @@
 'use client'
 
 import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays, Package } from 'lucide-react'
-import { useCallback, useMemo, useState, type FormEvent } from 'react'
+import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -173,12 +174,14 @@ function CreateAppointmentForm({
   isPending,
   prefillTime,
   prefillProfessionalId,
+  onDirtyChange,
 }: {
   defaultDate: string
   onSave: (data: Omit<CreateFormValues, 'equipmentIds'>, equipmentIds: string[]) => Promise<void>
   isPending: boolean
   prefillTime?: string
   prefillProfessionalId?: string
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   // ── Step state ────────────────────────────────────────────────────────────────
   const [customerId, setCustomerId] = useState('')
@@ -297,7 +300,9 @@ function CreateAppointmentForm({
   // Otherwise fall back to the service-filtered list (everyone marked available).
   const profListFromApi = availProfsData?.professionals ?? []
   const profList = useMemo(() => {
-    if (serviceId && date && profListFromApi.length > 0) {
+    // Use the API result whenever it has actually responded (even if empty),
+    // so that services with no associated professionals show an empty list.
+    if (serviceId && date && availProfsData !== undefined) {
       return profListFromApi.map((p) => ({
         ...p,
         // Only mark as unavailable AFTER a time has been selected.
@@ -312,7 +317,14 @@ function CreateAppointmentForm({
       available: true as const,
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profListFromApi, serviceFilteredProfs, serviceId, date, selectedTime])
+  }, [profListFromApi, availProfsData, serviceFilteredProfs, serviceId, date, selectedTime])
+
+  // Track dirty state so the parent can show a close-without-saving warning
+  useEffect(() => {
+    const dirty = !!(customerId || serviceId || notes.trim() || selectedEquipmentIds.length > 0 || roomId || selectedTime || finalProfessionalId)
+    onDirtyChange?.(dirty)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId, serviceId, notes, selectedEquipmentIds, roomId, selectedTime, finalProfessionalId])
 
   // Human-readable hint when slots are pre-filtered by professional, equipment, or room
   const slotFilterHint = useMemo(() => {
@@ -1055,6 +1067,9 @@ function AdvancedScheduleDialog({
 function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => void }) {
   const transitions = useAppointmentTransition(slot.id)
   const status = slot.status!
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
+  const profName = (slot as CalendarSlot & { _profName?: string })._profName ?? slot.professional?.name
 
   async function handleAction(action: 'confirm' | 'start' | 'complete' | 'cancel' | 'noShow') {
     try {
@@ -1070,12 +1085,29 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
     }
   }
 
+  const appointmentDate = slot.start
+    ? new Date(slot.start).toLocaleDateString('pt-BR', {
+        weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC',
+      })
+    : null
+
+  const canCancel = status === 'draft' || status === 'confirmed' || status === 'in_progress'
+
   return (
     <div className="space-y-3">
       <div>
+        {appointmentDate && (
+          <p className="text-xs text-muted-foreground capitalize mb-1">{appointmentDate}</p>
+        )}
         <p className="font-semibold">{slot.customer}</p>
         <p className="text-sm text-muted-foreground">{slot.service}</p>
         {slot.start && <p className="text-sm text-muted-foreground">{formatTime(slot.start)} · {slot.duration}min</p>}
+        {profName && (
+          <p className="text-sm text-muted-foreground">👤 {profName}</p>
+        )}
+        {slot.room?.name && (
+          <p className="text-sm text-muted-foreground">🚪 {slot.room.name}</p>
+        )}
         <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[status]}`}>
           {STATUS_LABEL[status]}
         </span>
@@ -1102,11 +1134,44 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
             <Button size="sm" variant="outline" onClick={() => handleAction('noShow')}>No-show</Button>
           </>
         )}
-        {(status === 'draft' || status === 'confirmed') && (
-          <Button size="sm" variant="destructive" onClick={() => handleAction('cancel')}>Cancelar</Button>
+        {canCancel && (
+          <Button size="sm" variant="destructive" onClick={() => setShowCancelConfirm(true)}>Cancelar</Button>
+        )}
+        {slot.customerId ? (
+          <Link href={`/customers?id=${slot.customerId}`}>
+            <Button size="sm" variant="outline" type="button">Ver ficha do cliente</Button>
+          </Link>
+        ) : (
+          <Link href="/customers">
+            <Button size="sm" variant="outline" type="button">Ver ficha do cliente</Button>
+          </Link>
         )}
       </div>
       {slot.notes && <p className="text-xs text-muted-foreground border-t pt-2">{slot.notes}</p>}
+
+      {/* Cancel confirmation */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl p-5 space-y-4">
+            <h3 className="font-semibold text-foreground">Cancelar agendamento?</h3>
+            <p className="text-sm text-muted-foreground">
+              O agendamento será removido da agenda. Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowCancelConfirm(false)}>
+                Voltar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => { setShowCancelConfirm(false); handleAction('cancel') }}
+              >
+                Cancelar agendamento
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1184,7 +1249,7 @@ function DayView({
                   return (
                     <button
                       key={slot.id}
-                      onClick={() => onSlotClick(slot)}
+                      onClick={() => onSlotClick({ ...slot, _profName: prof.name } as CalendarSlot)}
                       className={`absolute left-0.5 right-0.5 rounded p-1 text-left overflow-hidden transition-opacity hover:opacity-80 ${EVENT_COLOR[status]}`}
                       style={{ top, height, minHeight: SLOT_PX }}
                     >
@@ -1193,6 +1258,9 @@ function DayView({
                       </div>
                       <div className="text-[10px] truncate leading-tight mt-0.5 font-medium">{slot.customer}</div>
                       {height > 32 && <div className="text-[9px] truncate leading-tight opacity-80">{slot.service}</div>}
+                      {height > 40 && slot.room?.name && (
+                        <div className="text-[9px] truncate leading-tight opacity-70">🚪 {slot.room.name}</div>
+                      )}
                       {height > 48 && slot.equipment && slot.equipment.length > 0 && (
                         <div className="text-[9px] truncate leading-tight opacity-70">
                           🔧 {slot.equipment.map((e) => e.name).join(', ')}
@@ -1250,6 +1318,23 @@ function WeekView({
   }, [professionals, weekStart])
 
   const todayStr = toDateStr(new Date())
+
+  // Check if there are any appointments in the displayed week
+  const hasAnyAppointments = useMemo(() => {
+    for (const slots of dayMap.values()) {
+      if (slots.length > 0) return true
+    }
+    return false
+  }, [dayMap])
+
+  if (!hasAnyAppointments) {
+    return (
+      <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+        <CalendarDays className="mx-auto mb-2 h-8 w-8 opacity-30" />
+        Nenhum agendamento para esta semana.
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
@@ -1353,6 +1438,9 @@ function WeekView({
                       </div>
                       {height > 24 && <div className="text-[9px] truncate leading-tight mt-0.5">{slot.customer}</div>}
                       {height > 40 && slot._profName && <div className="text-[9px] truncate opacity-75">{slot._profName}</div>}
+                      {height > 48 && (slot as CalendarSlot).room?.name && (
+                        <div className="text-[9px] truncate opacity-70">🚪 {(slot as CalendarSlot).room!.name}</div>
+                      )}
                       {height > 56 && slot.equipment && slot.equipment.length > 0 && (
                         <div className="text-[9px] truncate opacity-70">
                           🔧 {slot.equipment.map((e) => e.name).join(', ')}
@@ -1398,6 +1486,14 @@ function MonthView({
     return map
   }, [professionals])
 
+  // Check if there are any appointments in the displayed month
+  const hasAnyAppointments = useMemo(() => {
+    for (const slots of dayMap.values()) {
+      if (slots.length > 0) return true
+    }
+    return false
+  }, [dayMap])
+
   const year = monthStart.getUTCFullYear()
   const month = monthStart.getUTCMonth()
   const firstDow = monthStart.getUTCDay()
@@ -1411,6 +1507,15 @@ function MonthView({
     }),
   ]
   while (cells.length % 7 !== 0) cells.push(null)
+
+  if (!hasAnyAppointments) {
+    return (
+      <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+        <CalendarDays className="mx-auto mb-2 h-8 w-8 opacity-30" />
+        Nenhum agendamento para este mês.
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
@@ -1476,6 +1581,7 @@ export default function AppointmentsPage() {
   const [currentDate, setCurrentDate] = useState(todayStr)
   const [view, setView] = useState<'day' | 'week' | 'month'>('day')
   const [creating, setCreating] = useState(false)
+  const [formIsDirty, setFormIsDirty] = useState(false)
   const [createPrefill, setCreatePrefill] = useState<{ date: string; time: string; professionalId: string } | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<CalendarSlot | null>(null)
@@ -1517,6 +1623,7 @@ export default function AppointmentsPage() {
       toast.success('Agendamento criado')
       setCreating(false)
       setCreatePrefill(null)
+      setFormIsDirty(false)
       setAdvancedOpen(false)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -1647,7 +1754,11 @@ export default function AppointmentsPage() {
 
       {/* Create dialog */}
       {creating && (
-        <Dialog open onClose={() => { setCreating(false); setCreatePrefill(null) }}>
+        <Dialog
+          open
+          onClose={() => { setCreating(false); setCreatePrefill(null); setFormIsDirty(false) }}
+          isDirty={formIsDirty}
+        >
           <DialogTitle>Novo Agendamento</DialogTitle>
           <div className="mt-4">
             <CreateAppointmentForm
@@ -1656,6 +1767,7 @@ export default function AppointmentsPage() {
               prefillProfessionalId={createPrefill?.professionalId}
               onSave={handleCreate}
               isPending={createAppointment.isPending}
+              onDirtyChange={setFormIsDirty}
             />
           </div>
         </Dialog>

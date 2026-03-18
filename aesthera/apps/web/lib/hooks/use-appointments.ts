@@ -61,6 +61,9 @@ export interface CalendarSlot {
   duration?: number
   status?: AppointmentStatus
   customer?: string
+  customerId?: string
+  professional?: { id: string; name: string }
+  room?: { id: string; name: string } | null
   service?: string
   price?: number
   notes?: string | null
