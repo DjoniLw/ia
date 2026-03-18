@@ -1,7 +1,6 @@
 'use client'
 
 import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays, Package } from 'lucide-react'
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -19,7 +18,7 @@ import {
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
 import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
-import { useCustomers, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
+import { useCustomers, useGetCustomer, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1062,12 +1061,52 @@ function AdvancedScheduleDialog({
   )
 }
 
+// ──── Customer Quick View ─────────────────────────────────────────────────────
+
+function CustomerQuickView({ customerId, onClose }: { customerId: string; onClose: () => void }) {
+  const { data: customer, isLoading } = useGetCustomer(customerId)
+
+  function field(label: string, value: string | null | undefined) {
+    if (!value) return null
+    return (
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-sm font-medium">{value}</p>
+      </div>
+    )
+  }
+
+  return (
+    <Dialog open onClose={onClose} className="max-w-md">
+      <DialogTitle>Ficha do Cliente</DialogTitle>
+      <div className="mt-4">
+        {isLoading && <p className="text-sm text-muted-foreground">Carregando…</p>}
+        {customer && (
+          <div className="space-y-3">
+            {field('Nome', customer.name)}
+            {field('E-mail', customer.email)}
+            {field('Telefone', customer.phone)}
+            {field('CPF', customer.document)}
+            {customer.birthDate && field('Data de nascimento', new Date(customer.birthDate).toLocaleDateString('pt-BR'))}
+            {customer.address?.city && field('Cidade', [customer.address.city, customer.address.state].filter(Boolean).join(' – '))}
+            {field('Observações', customer.notes)}
+          </div>
+        )}
+        <div className="mt-4 flex justify-end">
+          <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
 // ──── Slot Actions Popover ────────────────────────────────────────────────────
 
 function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => void }) {
   const transitions = useAppointmentTransition(slot.id)
   const status = slot.status!
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [viewingCustomerId, setViewingCustomerId] = useState<string | null>(null)
 
   const profName = (slot as CalendarSlot & { _profName?: string })._profName ?? slot.professional?.name
 
@@ -1137,15 +1176,9 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         {canCancel && (
           <Button size="sm" variant="destructive" onClick={() => setShowCancelConfirm(true)}>Cancelar</Button>
         )}
-        {slot.customerId ? (
-          <Link href={`/customers?id=${slot.customerId}`}>
-            <Button size="sm" variant="outline" type="button">Ver ficha do cliente</Button>
-          </Link>
-        ) : (
-          <Link href="/customers">
-            <Button size="sm" variant="outline" type="button">Ver ficha do cliente</Button>
-          </Link>
-        )}
+        <Button size="sm" variant="outline" type="button" onClick={() => setViewingCustomerId(slot.customerId ?? null)}>
+          Ver ficha do cliente
+        </Button>
       </div>
       {slot.notes && <p className="text-xs text-muted-foreground border-t pt-2">{slot.notes}</p>}
 
@@ -1171,6 +1204,11 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
             </div>
           </div>
         </div>
+      )}
+
+      {/* Customer quick view */}
+      {viewingCustomerId && (
+        <CustomerQuickView customerId={viewingCustomerId} onClose={() => setViewingCustomerId(null)} />
       )}
     </div>
   )
