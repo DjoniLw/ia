@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays, Package } from 'lucide-react'
 import { useCallback, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -12,11 +12,13 @@ import {
   type CalendarSlot,
   useAppointmentTransition,
   useAvailableProfessionals,
+  useAvailableRooms,
   useAvailableSlots,
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
-import { useCustomers, useAvailableEquipment, useEquipment, useProfessionals, useServices } from '@/lib/hooks/use-resources'
+import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
+import { useCustomers, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -161,6 +163,8 @@ interface CreateFormValues {
   professionalId: string
   notes: string
   equipmentIds: string[]
+  roomId?: string
+  packageSessionId?: string
 }
 
 function CreateAppointmentForm({
@@ -185,6 +189,8 @@ function CreateAppointmentForm({
   const debounceRef = useMemo(() => ({ timer: undefined as ReturnType<typeof setTimeout> | undefined }), [])
 
   const [serviceId, setServiceId] = useState('')
+  // durationOverride: editable copy of the service duration (never 0)
+  const [durationOverride, setDurationOverride] = useState<number | ''>('')
   const [date, setDate] = useState(defaultDate)
   // professionalFilter: user optionally pre-selects a professional to filter slots
   const [professionalFilter, setProfessionalFilter] = useState(prefillProfessionalId ?? '')
@@ -193,7 +199,20 @@ function CreateAppointmentForm({
   // finalProfessionalId: the professional confirmed for submission
   const [finalProfessionalId, setFinalProfessionalId] = useState(prefillProfessionalId ?? '')
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([])
+  const [roomId, setRoomId] = useState('')
   const [notes, setNotes] = useState('')
+
+  // ── Combobox state for service and professional ───────────────────────────
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false)
+  const [profSearch, setProfSearch] = useState('')
+  const [showProfDropdown, setShowProfDropdown] = useState(false)
+  const [equipmentFilter, setEquipmentFilter] = useState('')
+
+  // ── Package session state ─────────────────────────────────────────────────
+  const [usePackageSession, setUsePackageSession] = useState(false)
+  const [selectedPackageSessionId, setSelectedPackageSessionId] = useState('')
+  const [showPackageWarning, setShowPackageWarning] = useState(false)
 
   // ── Validation error state ─────────────────────────────────────────────────
   const [submitted, setSubmitted] = useState(false)
@@ -206,29 +225,29 @@ function CreateAppointmentForm({
 
   const { data: custSearchData } = useCustomers(
     customerSearchDebounced.trim().length >= 1
-      ? { name: customerSearchDebounced.trim(), limit: '20' }
+      ? { search: customerSearchDebounced.trim(), limit: '20' }
       : undefined,
   )
   const searchResults = custSearchData?.items ?? []
 
   // Available slots: driven by service + date.
-  // When a professional or equipment is pre-selected BEFORE a time is chosen,
+  // When a professional, equipment, or room is pre-selected BEFORE a time is chosen,
   // pass those as filters so only compatible slots are shown.
   const slotsParams = useMemo(() => {
     if (!serviceId || !date) return null
     return {
       serviceId,
       date,
-      // Only forward pre-filters when no time is selected yet;
-      // once a time is selected the slot grid is irrelevant.
-      professionalId: !selectedTime && professionalFilter ? professionalFilter : undefined,
-      // Only pass the FIRST selected equipment (most common case — equipment is usually
-      // selected one at a time when pre-filtering; multi-equipment pre-filtering is not
-      // supported by the backend since it would require multiple query params).
-      equipmentId:
-        !selectedTime && selectedEquipmentIds.length === 1 ? selectedEquipmentIds[0] : undefined,
+      // Always forward pre-filters — including after a time has been selected — so
+      // the slot grid never reloads with a different (unfiltered) query when the user
+      // clicks a time slot.
+      professionalId: professionalFilter || undefined,
+      // All selected equipment IDs as a comma-separated string so the backend returns
+      // only slots where every selected equipment item is simultaneously free.
+      equipmentId: selectedEquipmentIds.length > 0 ? selectedEquipmentIds.join(',') : undefined,
+      roomId: roomId || undefined,
     }
-  }, [serviceId, date, selectedTime, professionalFilter, selectedEquipmentIds])
+  }, [serviceId, date, professionalFilter, selectedEquipmentIds, roomId])
 
   const { data: slotsData, isFetching: slotsFetching } = useAvailableSlots(slotsParams)
 
@@ -239,12 +258,26 @@ function CreateAppointmentForm({
 
   // Equipment availability for selected slot
   const selectedServiceObj = (allServices?.items ?? []).find((s) => s.id === serviceId)
-  const serviceDuration = selectedServiceObj?.durationMinutes ?? 0
+  // effectiveDuration: use override (if set) else service default
+  const serviceDuration = typeof durationOverride === 'number' && durationOverride > 0
+    ? durationOverride
+    : (selectedServiceObj?.durationMinutes ?? 0)
   const scheduledAt = date && selectedTime ? `${date}T${selectedTime}:00.000Z` : ''
   const { data: availableEquipment } = useAvailableEquipment(scheduledAt, serviceDuration)
   // Fallback: when no time is selected yet, show all clinic equipment (no availability marks)
   const { data: allEquipmentData } = useEquipment()
-  const displayEquipment = availableEquipment ?? allEquipmentData ?? []
+  const displayEquipment = availableEquipment ?? (allEquipmentData ?? []).filter((eq) => eq.active)
+
+  // Room availability for selected slot; fallback to active rooms only
+  const { data: availableRoomsData } = useAvailableRooms(
+    scheduledAt && serviceDuration > 0 ? { scheduledAt, durationMinutes: serviceDuration } : null,
+  )
+  const { data: allRoomsData } = useRooms()
+  const displayRooms = availableRoomsData ?? (allRoomsData ?? []).filter((r) => r.active).map((r) => ({ ...r, available: true as const }))
+
+  // Package sessions available for the selected customer + service
+  const { data: availablePackageSessions } = useAvailableSessionsForService(customerId, serviceId)
+  const hasPackageSessions = (availablePackageSessions?.length ?? 0) > 0
 
   // ── Derived ───────────────────────────────────────────────────────────────────
   const slots = slotsData?.slots ?? []
@@ -281,7 +314,7 @@ function CreateAppointmentForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profListFromApi, serviceFilteredProfs, serviceId, date, selectedTime])
 
-  // Human-readable hint when slots are pre-filtered by professional and/or equipment
+  // Human-readable hint when slots are pre-filtered by professional, equipment, or room
   const slotFilterHint = useMemo(() => {
     if (selectedTime) return null
     const parts: string[] = []
@@ -295,13 +328,17 @@ function CreateAppointmentForm({
       )
       if (eq) parts.push(`equipamento "${eq.name}"`)
     }
-    return parts.length > 0 ? `Horários filtrados por: ${parts.join(' e ')}` : null
-  }, [selectedTime, professionalFilter, selectedEquipmentIds, profList, displayEquipment])
+    if (roomId) {
+      const rm = displayRooms.find((r) => r.id === roomId)
+      if (rm) parts.push(`sala "${rm.name}"`)
+    }
+    return parts.length > 0 ? `Horários filtrados por: ${parts.join(', ')}` : null
+  }, [selectedTime, professionalFilter, selectedEquipmentIds, profList, displayEquipment, roomId, displayRooms])
 
   // After a time is selected, the finalProfessionalId must come from profList (filtered to available)
   const availableProfIds = new Set(profList.filter((p) => p.available).map((p) => p.id))
 
-  const canSubmit = !!(customerId && serviceId && date && selectedTime && finalProfessionalId)
+  const canSubmit = !!(customerId && serviceId && serviceDuration > 0 && date && selectedTime && finalProfessionalId && roomId)
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   function handleCustomerInput(value: string) {
@@ -313,8 +350,15 @@ function CreateAppointmentForm({
   }
 
   function handleTimeSelect(time: string) {
+    if (selectedTime === time) {
+      // Toggle off: deselect the slot but keep equipment, room and professional
+      // as the user already filled them — only clear the professional if it
+      // had not been chosen yet (professionalFilter is still empty).
+      setSelectedTime('')
+      return
+    }
     setSelectedTime(time)
-    // If the pre-selected professional is unavailable at this time, clear it
+    // If the pre-selected professional is unavailable at this new time, clear it
     if (finalProfessionalId && !availableProfIds.has(finalProfessionalId)) {
       setFinalProfessionalId('')
     }
@@ -331,8 +375,22 @@ function CreateAppointmentForm({
     e.preventDefault()
     setSubmitted(true)
     if (!canSubmit) return
+    // Warn if there are available package sessions but user hasn't opted to use one
+    if (hasPackageSessions && !usePackageSession) {
+      setShowPackageWarning(true)
+      return
+    }
+    const pkgSessionId = usePackageSession && selectedPackageSessionId ? selectedPackageSessionId : undefined
     await onSave(
-      { customerId, serviceId, date, time: selectedTime, professionalId: finalProfessionalId, notes },
+      { customerId, serviceId, date, time: selectedTime, professionalId: finalProfessionalId, notes, packageSessionId: pkgSessionId, roomId: roomId || undefined },
+      selectedEquipmentIds,
+    )
+  }
+
+  async function handleSubmitIgnoringPackage() {
+    setShowPackageWarning(false)
+    await onSave(
+      { customerId, serviceId, date, time: selectedTime, professionalId: finalProfessionalId, notes, roomId: roomId || undefined },
       selectedEquipmentIds,
     )
   }
@@ -389,26 +447,176 @@ function CreateAppointmentForm({
       {/* 2. Serviço */}
       <div className="space-y-2">
         <Label>Serviço *</Label>
-        <select
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          value={serviceId}
-          onChange={(e) => {
-            setServiceId(e.target.value)
-            setSelectedTime('')
-            setFinalProfessionalId('')
-            setProfessionalFilter('')
-          }}
-          disabled={servicesLoading}
-        >
-          <option value="">{servicesLoading ? 'Carregando serviços…' : 'Selecione um serviço…'}</option>
-          {(allServices?.items ?? []).map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <Input
+            placeholder={servicesLoading ? 'Carregando serviços…' : 'Buscar serviço por nome…'}
+            value={showServiceDropdown ? serviceSearch : ((allServices?.items ?? []).find(s => s.id === serviceId)?.name ?? serviceSearch)}
+            onChange={(e) => { setServiceSearch(e.target.value); setShowServiceDropdown(true) }}
+            onFocus={() => { setServiceSearch(''); setShowServiceDropdown(true) }}
+            onBlur={() => setTimeout(() => setShowServiceDropdown(false), 150)}
+            autoComplete="off"
+            disabled={servicesLoading}
+          />
+          {showServiceDropdown && (
+            <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-52 overflow-auto">
+              {(allServices?.items ?? [])
+                .filter((s) => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase()))
+                .map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`w-full px-3 py-2 text-left text-sm hover:bg-muted ${s.id === serviceId ? 'bg-muted font-medium' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setServiceId(s.id)
+                      setDurationOverride(s.durationMinutes)
+                      setServiceSearch('')
+                      setShowServiceDropdown(false)
+                      setSelectedTime('')
+                      setFinalProfessionalId('')
+                      setProfessionalFilter('')
+                      setUsePackageSession(false)
+                      setSelectedPackageSessionId('')
+                    }}
+                  >
+                    {s.name}
+                    <span className="ml-1 text-xs text-muted-foreground">({s.durationMinutes} min)</span>
+                  </button>
+                ))}
+              {(allServices?.items ?? []).filter((s) => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase())).length === 0 && (
+                <p className="px-3 py-2 text-sm text-muted-foreground">Nenhum serviço encontrado</p>
+              )}
+            </div>
+          )}
+        </div>
+        {serviceId && !showServiceDropdown && <p className="text-xs text-green-600">✓ {(allServices?.items ?? []).find(s => s.id === serviceId)?.name}</p>}
         {submitted && !serviceId && <p className="text-xs text-destructive">Selecione um serviço</p>}
       </div>
 
-      {/* 3. Data */}
+      {/* 3. Duração do serviço — auto-carregada, editável, nunca 0 */}
+      {serviceId && (
+        <div className="space-y-2">
+          <Label>Tempo do serviço (min) *</Label>
+          <Input
+            type="number"
+            min={1}
+            value={durationOverride}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              setDurationOverride(Number.isNaN(v) || v <= 0 ? '' : v)
+              // Duration change invalidates existing time slot
+              setSelectedTime('')
+            }}
+            placeholder="Ex: 60"
+          />
+          {submitted && (typeof durationOverride !== 'number' || durationOverride <= 0) && (
+            <p className="text-xs text-destructive">Informe a duração (mínimo 1 min)</p>
+          )}
+        </div>
+      )}
+
+      {/* 4. Equipamentos — optional, shown after service is selected */}
+      {serviceId && (
+        <div className="space-y-2">
+          <Label>
+            Equipamentos
+            {scheduledAt && serviceDuration > 0 && (
+              <span className="ml-1 text-xs text-muted-foreground">(✓ = disponível nesse horário)</span>
+            )}
+          </Label>
+          {(displayEquipment && displayEquipment.length > 0) ? (
+            <>
+              <Input
+                placeholder="Filtrar equipamento por nome…"
+                value={equipmentFilter}
+                onChange={(e) => setEquipmentFilter(e.target.value)}
+                className="mb-1"
+              />
+              <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
+                {(displayEquipment as Array<{ id: string; name: string; available?: boolean }>)
+                  .filter((eq) => !equipmentFilter || eq.name.toLowerCase().includes(equipmentFilter.toLowerCase()))
+                  .map((eq) => {
+                    const available = eq.available !== false
+                    const selected = selectedEquipmentIds.includes(eq.id)
+                    return (
+                      <button
+                        key={eq.id}
+                        type="button"
+                        disabled={!available && !selected}
+                        onClick={() => {
+                          if (available || selected) {
+                            setSelectedEquipmentIds((prev) =>
+                              prev.includes(eq.id) ? prev.filter((e) => e !== eq.id) : [...prev, eq.id],
+                            )
+                          }
+                        }}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          selected
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : !available
+                            ? 'border-border bg-muted/50 text-muted-foreground/50 line-through cursor-not-allowed'
+                            : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                        }`}
+                      >
+                        {eq.name}{!available && ' (ocupado)'}
+                      </button>
+                    )
+                  })}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">Nenhum equipamento cadastrado</p>
+          )}
+        </div>
+      )}
+
+      {/* 5. Sala — required, only active rooms */}
+      {serviceId && (
+        <div className="space-y-2">
+          <Label>Sala *</Label>
+          {displayRooms.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma sala cadastrada</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {displayRooms.map((r) => {
+                const available = r.available !== false
+                const selected = roomId === r.id
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    disabled={!available && !selected}
+                    onClick={() => {
+                      if (available || selected) {
+                        setRoomId(selected ? '' : r.id)
+                        // Only clear the selected time if no time has been chosen yet,
+                        // so that selecting/changing a room pre-filters the slot list
+                        // without discarding a time the user already picked.
+                        if (!selected && !selectedTime) setSelectedTime('')
+                      }
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                      selected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : !available
+                        ? 'border-border bg-muted/50 text-muted-foreground/50 line-through cursor-not-allowed'
+                        : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                    }`}
+                  >
+                    {r.name}{!available && ' (ocupada)'}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {roomId && (
+            <p className="text-xs text-green-600">✓ {displayRooms.find((r) => r.id === roomId)?.name}</p>
+          )}
+          {submitted && !roomId && <p className="text-xs text-destructive">Selecione uma sala</p>}
+        </div>
+      )}
+
+      {/* 6. Data */}
       <div className="space-y-2">
         <Label>Data *</Label>
         <Input
@@ -423,7 +631,7 @@ function CreateAppointmentForm({
         {submitted && !date && <p className="text-xs text-destructive">Selecione uma data</p>}
       </div>
 
-      {/* 4. Horários disponíveis — appears once service + date are both set */}
+      {/* 7. Horários disponíveis — appears once service + date are both set */}
       {serviceId && date && (
         <div className="space-y-2">
           <Label>Horários disponíveis *</Label>
@@ -471,28 +679,57 @@ function CreateAppointmentForm({
         </div>
       )}
 
-      {/* 5. Profissional — visible whenever service + date are set */}
+      {/* 8. Profissional — visible whenever service + date are set */}
       {serviceId && date && (
         <div className="space-y-2">
           <Label>Profissional *</Label>
           {profsFetching && profList.length === 0 ? (
             <p className="text-xs text-muted-foreground">Buscando profissionais disponíveis…</p>
           ) : (
-            <select
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={finalProfessionalId}
-              onChange={(e) => handleProfessionalChange(e.target.value)}
-            >
-              <option value="">Selecione um profissional…</option>
-              {profList.map((p) => (
-                <option key={p.id} value={p.id} disabled={!p.available}>
-                  {p.name}{!p.available ? ' (ocupado neste horário)' : ''}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <Input
+                placeholder="Buscar profissional por nome…"
+                value={showProfDropdown ? profSearch : (profList.find(p => p.id === finalProfessionalId)?.name ?? profSearch)}
+                onChange={(e) => { setProfSearch(e.target.value); setShowProfDropdown(true) }}
+                onFocus={() => { setProfSearch(''); setShowProfDropdown(true) }}
+                onBlur={() => setTimeout(() => setShowProfDropdown(false), 150)}
+                autoComplete="off"
+              />
+              {showProfDropdown && (
+                <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-52 overflow-auto">
+                  {profList
+                    .filter((p) => !profSearch || p.name.toLowerCase().includes(profSearch.toLowerCase()))
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={!p.available}
+                        className={`w-full px-3 py-2 text-left text-sm hover:bg-muted ${p.id === finalProfessionalId ? 'bg-muted font-medium' : ''} ${!p.available ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          if (p.available) {
+                            handleProfessionalChange(p.id)
+                            setProfSearch('')
+                            setShowProfDropdown(false)
+                          }
+                        }}
+                      >
+                        {p.name}
+                        {!p.available && <span className="ml-1 text-xs text-muted-foreground">(ocupado neste horário)</span>}
+                      </button>
+                    ))}
+                  {profList.filter((p) => !profSearch || p.name.toLowerCase().includes(profSearch.toLowerCase())).length === 0 && (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">Nenhum profissional encontrado</p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {profList.length === 0 && !profsFetching && (
             <p className="text-xs text-muted-foreground">Nenhum profissional disponível neste horário</p>
+          )}
+          {finalProfessionalId && !showProfDropdown && (
+            <p className="text-xs text-green-600">✓ {profList.find(p => p.id === finalProfessionalId)?.name}</p>
           )}
           {selectedTime && (
             <p className="text-xs text-muted-foreground">Profissionais disponíveis no horário {selectedTime}</p>
@@ -501,52 +738,85 @@ function CreateAppointmentForm({
         </div>
       )}
 
-      {/* 6. Equipamentos — always visible once service + date are set */}
-      {serviceId && date && (
-        <div className="space-y-2">
-          <Label>
-            Equipamentos
-            {scheduledAt && serviceDuration > 0 && (
-              <span className="ml-1 text-xs text-muted-foreground">(✓ = disponível nesse horário)</span>
-            )}
-          </Label>
-          {(displayEquipment && displayEquipment.length > 0) ? (
-            <div className="flex flex-wrap gap-2 rounded-md border border-input bg-background p-2">
-              {displayEquipment.map((eq) => {
-                const available = 'available' in eq ? eq.available : true
-                const selected = selectedEquipmentIds.includes(eq.id)
-                return (
-                  <button
-                    key={eq.id}
-                    type="button"
-                    disabled={!available && !selected}
-                    onClick={() => {
-                      if (available || selected) {
-                        setSelectedEquipmentIds((prev) =>
-                          prev.includes(eq.id) ? prev.filter((e) => e !== eq.id) : [...prev, eq.id],
-                        )
-                      }
-                    }}
-                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      selected
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : !available
-                        ? 'border-border bg-muted/50 text-muted-foreground/50 line-through cursor-not-allowed'
-                        : 'border-border bg-card text-muted-foreground hover:border-primary/50'
-                    }`}
-                  >
-                    {eq.name}{!available && ' (ocupado)'}
-                  </button>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">Nenhum equipamento cadastrado</p>
+      {/* 9. Sessões de pacote — shown when customer + service selected and sessions exist */}
+      {customerId && serviceId && hasPackageSessions && (
+        <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-4">
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              Cliente possui{' '}
+              <strong>{availablePackageSessions?.length}</strong>/{availablePackageSessions?.[0]?.totalSessions ?? '?'} sessões disponíveis para{' '}
+              <strong>{availablePackageSessions?.[0]?.serviceName ?? 'este serviço'}</strong>
+            </span>
+          </div>
+
+          {/* Use session toggle */}
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={usePackageSession}
+              onChange={(e) => {
+                setUsePackageSession(e.target.checked)
+                if (!e.target.checked) {
+                  setSelectedPackageSessionId('')
+                } else if (availablePackageSessions?.length === 1) {
+                  setSelectedPackageSessionId(availablePackageSessions[0].session.id)
+                }
+              }}
+              className="mt-0.5 h-4 w-4 rounded border"
+            />
+            <span className="text-sm text-amber-800 dark:text-amber-200">
+              Usar sessão do pacote para este agendamento
+              <span className="block text-xs font-normal text-amber-600 dark:text-amber-400">
+                A sessão será descontada do pacote e não gerará cobrança.
+              </span>
+            </span>
+          </label>
+
+          {/* Session selector — always shown when opted in */}
+          {usePackageSession && (
+            <select
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={selectedPackageSessionId}
+              onChange={(e) => setSelectedPackageSessionId(e.target.value)}
+            >
+              <option value="">Selecione qual sessão usar…</option>
+              {availablePackageSessions?.map((entry) => (
+                <option key={entry.session.id} value={entry.session.id}>
+                  Sessão {entry.sessionNumber}/{entry.totalSessions} — {entry.packageName}
+                  {entry.expiresAt ? ` (expira ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})` : ''}
+                </option>
+              ))}
+            </select>
           )}
         </div>
       )}
 
-      {/* 7. Observações */}
+      {/* Package warning dialog */}
+      {showPackageWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <Package className="h-6 w-6 text-amber-500 flex-shrink-0" />
+              <h3 className="font-semibold text-foreground">Pacote disponível não utilizado</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              O cliente possui sessões disponíveis em um pacote para este serviço, mas você não marcou para utilizá-las.
+              Deseja continuar <strong>sem usar</strong> o pacote (será gerada uma cobrança separada)?
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowPackageWarning(false)}>
+                Voltar e usar pacote
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleSubmitIgnoringPackage}>
+                Continuar sem pacote
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 10. Observações */}
       <div className="space-y-2">
         <Label>Observações</Label>
         <Input
@@ -1241,6 +1511,8 @@ export default function AppointmentsPage() {
         scheduledAt,
         notes: formData.notes,
         equipmentIds: equipmentIds.length > 0 ? equipmentIds : undefined,
+        packageSessionId: formData.packageSessionId,
+        roomId: formData.roomId,
       })
       toast.success('Agendamento criado')
       setCreating(false)

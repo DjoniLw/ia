@@ -3,11 +3,25 @@ import { z } from 'zod'
 export const CreateAppointmentDto = z.object({
   customerId: z.string().uuid(),
   professionalId: z.string().uuid(),
-  serviceId: z.string().uuid(),
+  serviceId: z.string().uuid().optional(), // kept for backward compat
+  services: z
+    .array(
+      z.object({
+        serviceId: z.string().uuid(),
+        price: z.number().int().min(0).optional(),
+      }),
+    )
+    .min(1)
+    .optional(),
+  roomId: z.string().uuid().optional(),
   scheduledAt: z.string().datetime(), // ISO 8601
   notes: z.string().optional(),
-  price: z.number().int().min(0).optional(), // override service price if needed
+  price: z.number().int().min(0).optional(), // override total price if needed
   equipmentIds: z.array(z.string().uuid()).optional(), // equipment to use for this appointment
+  packageSessionId: z.string().uuid().optional(), // reserve a package session for this appointment
+}).refine((data) => data.serviceId || (data.services && data.services.length > 0), {
+  message: 'Either serviceId or services array must be provided',
+  path: ['serviceId'],
 })
 export type CreateAppointmentDto = z.infer<typeof CreateAppointmentDto>
 
@@ -15,6 +29,7 @@ export const UpdateAppointmentDto = z.object({
   scheduledAt: z.string().datetime().optional(),
   notes: z.string().optional(),
   price: z.number().int().min(0).optional(),
+  roomId: z.string().uuid().nullable().optional(),
   equipmentIds: z.array(z.string().uuid()).optional(), // replaces current equipment list
 })
 export type UpdateAppointmentDto = z.infer<typeof UpdateAppointmentDto>

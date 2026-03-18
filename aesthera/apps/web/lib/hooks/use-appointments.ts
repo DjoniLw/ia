@@ -153,14 +153,19 @@ export interface AvailableSlotsResult {
   professionals: { id: string; name: string; slots: string[] }[]
 }
 
-/** Available time slots for a service on a date (optionally filtered to one professional and/or one equipment) */
+/** Available time slots for a service on a date (optionally filtered to one professional, one or more equipment items, or room) */
 export function useAvailableSlots(
-  params: { serviceId: string; date: string; professionalId?: string; equipmentId?: string } | null,
+  params: { serviceId: string; date: string; professionalId?: string; equipmentId?: string; roomId?: string } | null,
 ) {
   return useQuery<AvailableSlotsResult>({
     queryKey: ['appointments-available-slots', params],
-    queryFn: () =>
-      api.get('/appointments/available-slots', { params: params! }).then((r) => r.data),
+    queryFn: () => {
+      const { equipmentId, ...rest } = params!
+      // The backend accepts equipmentId as a comma-separated string of UUIDs
+      const queryParams: Record<string, string | undefined> = { ...rest }
+      if (equipmentId) queryParams.equipmentId = equipmentId
+      return api.get('/appointments/available-slots', { params: queryParams }).then((r) => r.data)
+    },
     enabled: !!params?.serviceId && !!params?.date,
   })
 }
@@ -177,6 +182,26 @@ export function useAvailableProfessionals(
   })
 }
 
+export interface AvailableRoom {
+  id: string
+  name: string
+  description: string | null
+  active: boolean
+  available: boolean
+}
+
+/** Active rooms annotated with availability for a given time slot */
+export function useAvailableRooms(
+  params: { scheduledAt: string; durationMinutes: number; excludeAppointmentId?: string } | null,
+) {
+  return useQuery<AvailableRoom[]>({
+    queryKey: ['appointments-available-rooms', params],
+    queryFn: () =>
+      api.get('/appointments/available-rooms', { params: params! }).then((r) => r.data),
+    enabled: !!params?.scheduledAt && !!params?.durationMinutes,
+  })
+}
+
 export function useCreateAppointment() {
   const qc = useQueryClient()
   return useMutation({
@@ -187,6 +212,8 @@ export function useCreateAppointment() {
       scheduledAt: string
       notes?: string
       equipmentIds?: string[]
+      packageSessionId?: string
+      roomId?: string
     }) => api.post('/appointments', data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appointments'] })

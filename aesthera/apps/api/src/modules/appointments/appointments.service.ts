@@ -10,6 +10,7 @@ import type {
   UpdateAppointmentDto,
 } from './appointments.dto'
 import { AppointmentsRepository } from './appointments.repository'
+import { PackagesRepository } from '../packages/packages.repository'
 
 // HH:MM → minutes from midnight
 function timeToMinutes(t: string): number {
@@ -22,8 +23,20 @@ function dateToMinutes(d: Date): number {
   return d.getUTCHours() * 60 + d.getUTCMinutes()
 }
 
+// FNV-1a 32-bit hash for advisory locks — better distribution than additive sums
+function hashToInt32(s: string): number {
+  let h = 0x811c9dc5 >>> 0
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  // Clamp to positive signed 32-bit range for pg_advisory_xact_lock
+  return h & 0x7fffffff
+}
+
 export class AppointmentsService {
   private repo = new AppointmentsRepository()
+  private pkgRepo = new PackagesRepository()
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
 
@@ -38,57 +51,163 @@ export class AppointmentsService {
   }
 
   async create(clinicId: string, dto: CreateAppointmentDto) {
-    // 1. Load service to copy price + duration
-    const service = await prisma.service.findFirst({
-      where: { id: dto.serviceId, clinicId, active: true, deletedAt: null },
-    })
-    if (!service) throw new NotFoundError('Service')
-
-    // 2. Verify professional belongs to clinic and is active
-    const professional = await prisma.professional.findFirst({
-      where: { id: dto.professionalId, clinicId, active: true, deletedAt: null },
-    })
-    if (!professional) throw new NotFoundError('Professional')
-
-    // 3. Verify professional is assigned to service
-    const hasService = await this.repo.checkProfessionalHasService(dto.professionalId, dto.serviceId)
-    if (!hasService) {
-      throw new AppError('Professional is not assigned to this service', 400, 'SERVICE_NOT_ASSIGNED')
-    }
-
-    // 4. Verify customer belongs to clinic
-    const customer = await prisma.customer.findFirst({
-      where: { id: dto.customerId, clinicId, deletedAt: null },
-    })
-    if (!customer) throw new NotFoundError('Customer')
-
-    // 5. Check availability (with advisory lock via transaction)
     const scheduledDate = new Date(dto.scheduledAt)
     const dateStr = scheduledDate.toISOString().slice(0, 10)
-    const durationMinutes = service.durationMinutes
 
-    await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, durationMinutes, dateStr)
+    // Use Postgres advisory lock to prevent double-booking
+    const lockId = hashToInt32(dto.professionalId + dateStr)
 
-    // 6. Validate equipment IDs and check for conflicts
-    if (dto.equipmentIds && dto.equipmentIds.length > 0) {
-      await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, durationMinutes)
-    }
+    return prisma.$transaction(async (tx: any) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockId})`
 
-    const appointment = await this.repo.create(clinicId, {
-      ...dto,
-      durationMinutes,
-      price: dto.price ?? service.price,
-    })
+      // ── Multi-service path ───────────────────────────────────────────────────
+      if (dto.services && dto.services.length > 0) {
+        // Validate all services exist
+        const serviceIds = dto.services.map((s) => s.serviceId)
+        const services: Array<{ id: string; price: number; durationMinutes: number }> =
+          await tx.service.findMany({
+            where: { id: { in: serviceIds }, clinicId, active: true, deletedAt: null },
+          })
+        if (services.length !== serviceIds.length) {
+          throw new NotFoundError('Service')
+        }
 
-    // 7. Persist equipment associations
-    if (dto.equipmentIds && dto.equipmentIds.length > 0) {
-      await prisma.appointmentEquipment.createMany({
-        data: dto.equipmentIds.map((equipmentId) => ({ appointmentId: appointment.id, equipmentId })),
-        skipDuplicates: true,
+        // Verify professional belongs to clinic and is active
+        const professional = await tx.professional.findFirst({
+          where: { id: dto.professionalId, clinicId, active: true, deletedAt: null },
+        })
+        if (!professional) throw new NotFoundError('Professional')
+
+        // Verify professional is assigned to all services
+        for (const svcId of serviceIds) {
+          const hasService = await this.repo.checkProfessionalHasService(dto.professionalId, svcId)
+          if (!hasService) {
+            throw new AppError('Professional is not assigned to this service', 400, 'SERVICE_NOT_ASSIGNED')
+          }
+        }
+
+        // Verify customer belongs to clinic
+        const customer = await tx.customer.findFirst({
+          where: { id: dto.customerId, clinicId, deletedAt: null },
+        })
+        if (!customer) throw new NotFoundError('Customer')
+
+        // Compute totals from all services
+        const serviceMap = new Map(services.map((s) => [s.id, s]))
+        const totalDuration = services.reduce((sum: number, s) => sum + s.durationMinutes, 0)
+        const totalPrice = dto.price ?? dto.services.reduce((sum: number, s) => {
+          const svcPrice = s.price ?? serviceMap.get(s.serviceId)?.price ?? 0
+          return sum + svcPrice
+        }, 0)
+
+        // Check availability with computed total duration
+        await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, totalDuration, dateStr)
+
+        if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+          await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, totalDuration)
+        }
+
+        if (dto.roomId) {
+          await this.assertRoomAvailable(clinicId, dto.roomId, scheduledDate, totalDuration)
+        }
+
+        // Use first service's id as the appointment serviceId for backward compat
+        const primaryServiceId = dto.services[0].serviceId
+
+        const appointment = await tx.appointment.create({
+          data: {
+            clinicId,
+            customerId: dto.customerId,
+            professionalId: dto.professionalId,
+            serviceId: primaryServiceId,
+            roomId: dto.roomId ?? null,
+            scheduledAt: scheduledDate,
+            durationMinutes: totalDuration,
+            price: totalPrice,
+            notes: dto.notes,
+          },
+        })
+
+        // Create service items
+        await tx.appointmentServiceItem.createMany({
+          data: dto.services.map((s, idx) => ({
+            appointmentId: appointment.id,
+            serviceId: s.serviceId,
+            clinicId,
+            price: s.price ?? serviceMap.get(s.serviceId)?.price ?? 0,
+            durationMinutes: serviceMap.get(s.serviceId)?.durationMinutes ?? 0,
+            order: idx,
+          })),
+        })
+
+        if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+          await tx.appointmentEquipment.createMany({
+            data: dto.equipmentIds.map((equipmentId: string) => ({ appointmentId: appointment.id, equipmentId })),
+            skipDuplicates: true,
+          })
+        }
+
+        if (dto.packageSessionId) {
+          await this.pkgRepo.linkSession(dto.packageSessionId, appointment.id)
+        }
+
+        return this.repo.findById(clinicId, appointment.id)
+      }
+
+      // ── Single-service (legacy) path ─────────────────────────────────────────
+      const serviceId = dto.serviceId!
+
+      const service = await tx.service.findFirst({
+        where: { id: serviceId, clinicId, active: true, deletedAt: null },
       })
-    }
+      if (!service) throw new NotFoundError('Service')
 
-    return appointment
+      const professional = await tx.professional.findFirst({
+        where: { id: dto.professionalId, clinicId, active: true, deletedAt: null },
+      })
+      if (!professional) throw new NotFoundError('Professional')
+
+      const hasService = await this.repo.checkProfessionalHasService(dto.professionalId, serviceId)
+      if (!hasService) {
+        throw new AppError('Professional is not assigned to this service', 400, 'SERVICE_NOT_ASSIGNED')
+      }
+
+      const customer = await tx.customer.findFirst({
+        where: { id: dto.customerId, clinicId, deletedAt: null },
+      })
+      if (!customer) throw new NotFoundError('Customer')
+
+      const durationMinutes = service.durationMinutes
+      await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, durationMinutes, dateStr)
+
+      if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+        await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, durationMinutes)
+      }
+
+      if (dto.roomId) {
+        await this.assertRoomAvailable(clinicId, dto.roomId, scheduledDate, durationMinutes)
+      }
+
+      const appointment = await this.repo.create(clinicId, {
+        ...dto,
+        serviceId,
+        durationMinutes,
+        price: dto.price ?? service.price,
+      })
+
+      if (dto.equipmentIds && dto.equipmentIds.length > 0) {
+        await prisma.appointmentEquipment.createMany({
+          data: dto.equipmentIds.map((equipmentId) => ({ appointmentId: appointment.id, equipmentId })),
+          skipDuplicates: true,
+        })
+      }
+
+      if (dto.packageSessionId) {
+        await this.pkgRepo.linkSession(dto.packageSessionId, appointment.id)
+      }
+
+      return appointment
+    })
   }
 
   async update(clinicId: string, id: string, dto: UpdateAppointmentDto) {
@@ -104,6 +223,10 @@ export class AppointmentsService {
 
       if (dto.equipmentIds && dto.equipmentIds.length > 0) {
         await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, a.durationMinutes, id)
+      }
+
+      if (dto.roomId) {
+        await this.assertRoomAvailable(clinicId, dto.roomId, scheduledDate, a.durationMinutes, id)
       }
     }
 
@@ -150,8 +273,23 @@ export class AppointmentsService {
       completedAt: new Date(),
     })
 
+    // Check if this appointment has a reserved (but not yet used) package session
+    const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)
+    if (linkedSession) {
+      // Redeem the session — no billing is created since the package was pre-paid
+      await this.pkgRepo.redeemSession(linkedSession.id, id)
+      return completed
+    }
+
+    // If multi-service appointment, compute total price from service items
+    const serviceItems = completed.serviceItems
+    const billingPrice =
+      serviceItems && serviceItems.length > 0
+        ? serviceItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0)
+        : completed.price
+
     // Auto-create billing (idempotent)
-    await this.createBillingForAppointment(completed)
+    await this.createBillingForAppointment({ ...completed, price: billingPrice })
 
     return completed
   }
@@ -161,6 +299,13 @@ export class AppointmentsService {
     if (!['draft', 'confirmed'].includes(a.status)) {
       throw new AppError('Only draft or confirmed appointments can be cancelled', 400, 'INVALID_STATUS')
     }
+
+    // Unreserve any linked package session so it becomes available again
+    const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)
+    if (linkedSession) {
+      await this.pkgRepo.unlinkSession(linkedSession.id)
+    }
+
     return this.repo.transition(clinicId, id, 'cancelled', {
       cancellationReason: dto.cancellationReason,
       cancelledAt: new Date(),
@@ -258,7 +403,7 @@ export class AppointmentsService {
         duration: a.durationMinutes,
         status: a.status,
         customer: a.customer.name,
-        service: a.service.name,
+        service: a.service?.name ?? '',
         price: a.price,
         notes: a.notes,
         equipment: (a.equipment as Array<{ equipment: { id: string; name: string } }>).map(
@@ -410,6 +555,43 @@ export class AppointmentsService {
         `Conflito de equipamento: ${names} já está em uso neste horário`,
         409,
         'EQUIPMENT_CONFLICT',
+      )
+    }
+  }
+
+  private async assertRoomAvailable(
+    clinicId: string,
+    roomId: string,
+    scheduledAt: Date,
+    durationMinutes: number,
+    excludeAppointmentId?: string,
+  ) {
+    const room = await prisma.room.findFirst({ where: { id: roomId, clinicId, active: true } })
+    if (!room) throw new AppError('Sala não encontrada ou inativa', 400, 'ROOM_NOT_FOUND')
+
+    const slotEnd = new Date(scheduledAt.getTime() + durationMinutes * 60 * 1000)
+
+    const conflicts = await prisma.appointment.findMany({
+      where: {
+        roomId,
+        clinicId,
+        status: { notIn: ['cancelled', 'no_show'] },
+        id: excludeAppointmentId ? { not: excludeAppointmentId } : undefined,
+        scheduledAt: { lt: slotEnd },
+      },
+      select: { scheduledAt: true, durationMinutes: true },
+    })
+
+    const overlapping = conflicts.filter((c) => {
+      const apptEnd = new Date(c.scheduledAt.getTime() + c.durationMinutes * 60 * 1000)
+      return scheduledAt < apptEnd && slotEnd > c.scheduledAt
+    })
+
+    if (overlapping.length > 0) {
+      throw new AppError(
+        `Conflito de sala: ${room.name} já está ocupada neste horário`,
+        409,
+        'ROOM_CONFLICT',
       )
     }
   }

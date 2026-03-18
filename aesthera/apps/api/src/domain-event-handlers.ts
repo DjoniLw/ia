@@ -127,7 +127,7 @@ eventBus.subscribe('appointment.confirmed', async (event: DomainEvent) => {
       minute: '2-digit',
     })
 
-    const message = `Olá, ${appointment.customer.name}! Seu agendamento de ${appointment.service.name} com ${appointment.professional.name} foi confirmado para ${date} às ${time}. Até lá! 💙`
+    const message = `Olá, ${appointment.customer.name}! Seu agendamento de ${appointment.service?.name ?? 'serviço'} com ${appointment.professional.name} foi confirmado para ${date} às ${time}. Até lá! 💙`
 
     if (appointment.customer.phone) {
       void notificationsService.sendWhatsApp({

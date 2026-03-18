@@ -123,6 +123,17 @@ enum RecurrenceType {
   weekly
 }
 
+enum PromotionDiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum PromotionStatus {
+  active
+  inactive
+  expired
+}
+
 // ─── Clinic ───────────────────────────────────────────────────────────────────
 // Central tenant entity. Every other table references clinic_id.
 
@@ -162,8 +173,12 @@ model Clinic {
   productSales     ProductSale[]
   clinicalRecords  ClinicalRecord[]
   equipment        Equipment[]
+  rooms            Room[]
   supplies         Supply[]
   walletEntries    WalletEntry[]
+  promotions       Promotion[]
+  servicePackages  ServicePackage[]
+  customerPackages CustomerPackage[]
 
   @@map("clinics")
 }
@@ -338,6 +353,8 @@ model Service {
   professionals ProfessionalService[]
   appointments  Appointment[]
   supplies      ServiceSupply[]
+  appointmentItems AppointmentServiceItem[]
+  packageItems     ServicePackageItem[]
 
   @@index([clinicId])
   @@map("services")
@@ -370,6 +387,7 @@ model Customer {
   productSales     ProductSale[]
   clinicalRecords  ClinicalRecord[]
   walletEntries    WalletEntry[]
+  customerPackages CustomerPackage[]
 
   @@unique([clinicId, email])
   @@unique([clinicId, document])
@@ -407,7 +425,8 @@ model Appointment {
   clinicId           String                               @map("clinic_id")
   customerId         String                               @map("customer_id")
   professionalId     String                               @map("professional_id")
-  serviceId          String                               @map("service_id")
+  serviceId          String?                              @map("service_id")
+  roomId             String?                              @map("room_id")
   status             AppointmentStatus @default(draft)
   scheduledAt        DateTime                             @map("scheduled_at")      // start date+time
   durationMinutes    Int                                  @map("duration_minutes")  // copied from service at booking
@@ -423,11 +442,13 @@ model Appointment {
   clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
   professional     Professional      @relation(fields: [professionalId], references: [id], onDelete: Restrict)
-  service          Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  service          Service?          @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  room             Room?             @relation(fields: [roomId], references: [id], onDelete: Restrict)
   billing          Billing?
   ledgerEntries    LedgerEntry[]
   notificationLogs NotificationLog[]
   equipment        AppointmentEquipment[]
+  serviceItems     AppointmentServiceItem[]
 
   @@index([clinicId])
   @@index([clinicId, professionalId])
@@ -709,6 +730,24 @@ model AppointmentEquipment {
   @@map("appointment_equipment")
 }
 
+// ─── Room ─────────────────────────────────────────────────────────────────────
+
+model Room {
+  id          String   @id @default(uuid())
+  clinicId    String                        @map("clinic_id")
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())      @map("created_at")
+  updatedAt   DateTime @updatedAt           @map("updated_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  appointments Appointment[]
+
+  @@index([clinicId])
+  @@map("rooms")
+}
+
 // ─── Wallet Entry ─────────────────────────────────────────────────────────────
 // Stores any type of customer balance: voucher, credit, cashback or package.
 
@@ -756,4 +795,137 @@ model WalletTransaction {
   @@index([clinicId])
   @@index([walletEntryId])
   @@map("wallet_transactions")
+}
+
+// ─── Appointment Service Item ─────────────────────────────────────────────────
+// Supports multiple services per appointment (many-to-many).
+
+model AppointmentServiceItem {
+  id              String @id @default(uuid())
+  appointmentId   String @map("appointment_id")
+  serviceId       String @map("service_id")
+  clinicId        String @map("clinic_id")
+  price           Int    // price at time of booking
+  durationMinutes Int    @map("duration_minutes")
+  order           Int    @default(0)
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  service     Service     @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@unique([appointmentId, serviceId])
+  @@index([clinicId])
+  @@map("appointment_service_items")
+}
+
+// ─── Promotion ────────────────────────────────────────────────────────────────
+
+model Promotion {
+  id                   String               @id @default(uuid())
+  clinicId             String               @map("clinic_id")
+  name                 String
+  code                 String
+  description          String?
+  discountType         PromotionDiscountType @map("discount_type")
+  discountValue        Int                  @map("discount_value") // percentage (0-100) or BRL cents
+  maxUses              Int?                 @map("max_uses")
+  usesCount            Int                  @default(0) @map("uses_count")
+  minAmount            Int?                 @map("min_amount")
+  applicableServiceIds String[]             @map("applicable_service_ids")
+  validFrom            DateTime             @map("valid_from")
+  validUntil           DateTime?            @map("valid_until")
+  status               PromotionStatus      @default(active)
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  clinic Clinic           @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  usages PromotionUsage[]
+
+  @@unique([clinicId, code])
+  @@index([clinicId])
+  @@map("promotions")
+}
+
+model PromotionUsage {
+  id             String   @id @default(uuid())
+  clinicId       String   @map("clinic_id")
+  promotionId    String   @map("promotion_id")
+  customerId     String   @map("customer_id")
+  billingId      String?  @map("billing_id")
+  discountAmount Int      @map("discount_amount")
+  usedAt         DateTime @default(now()) @map("used_at")
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId])
+  @@index([promotionId])
+  @@map("promotion_usages")
+}
+
+// ─── Service Package ─────────────────────────────────────────────────────────
+
+model ServicePackage {
+  id           String    @id @default(uuid())
+  clinicId     String    @map("clinic_id")
+  name         String
+  description  String?
+  price        Int       // BRL cents
+  validityDays Int?      @map("validity_days")
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  clinic           Clinic               @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  items            ServicePackageItem[]
+  customerPackages CustomerPackage[]
+
+  @@index([clinicId])
+  @@map("service_packages")
+}
+
+model ServicePackageItem {
+  id        String @id @default(uuid())
+  packageId String @map("package_id")
+  serviceId String @map("service_id")
+  clinicId  String @map("clinic_id")
+  quantity  Int    @default(1)
+
+  package ServicePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  service Service        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  @@unique([packageId, serviceId])
+  @@index([clinicId])
+  @@map("service_package_items")
+}
+
+model CustomerPackage {
+  id            String    @id @default(uuid())
+  clinicId      String    @map("clinic_id")
+  customerId    String    @map("customer_id")
+  packageId     String    @map("package_id")
+  walletEntryId String?   @unique @map("wallet_entry_id")
+  purchasedAt   DateTime  @default(now()) @map("purchased_at")
+  expiresAt     DateTime? @map("expires_at")
+
+  clinic    Clinic         @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer  Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  package   ServicePackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  sessions  CustomerPackageSession[]
+
+  @@index([clinicId])
+  @@index([clinicId, customerId])
+  @@map("customer_packages")
+}
+
+model CustomerPackageSession {
+  id                String    @id @default(uuid())
+  clinicId          String    @map("clinic_id")
+  customerPackageId String    @map("customer_package_id")
+  serviceId         String    @map("service_id")
+  appointmentId     String?   @map("appointment_id")
+  usedAt            DateTime? @map("used_at")
+
+  customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId])
+  @@map("customer_package_sessions")
 }
