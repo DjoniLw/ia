@@ -1,26 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+/**
+ * LIST SCREEN TEMPLATE
+ *
+ * Use this file as the starting point for any new list screen.
+ * Follow /docs/ui-standards.md for all conventions.
+ *
+ * Steps to adapt:
+ *  1. Replace `Entity` / `entity` / `entities` with the real name
+ *  2. Replace `EntityIcon` with the appropriate lucide-react icon
+ *  3. Replace `useEntities`, `useCreateEntity`, etc. with real hooks
+ *  4. Adjust the form fields inside `EntityForm`
+ *  5. Remove this comment block
+ */
+
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Pencil, Trash2, Plus, Wrench } from 'lucide-react'
+import { Pencil, Trash2, Plus, Box } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 
+// Replace with real types and hooks from @/lib/hooks/use-resources
+type Entity = { id: string; name: string; description?: string | null; active: boolean }
+declare function useEntities(): { data: Entity[] | undefined; isLoading: boolean }
+declare function useCreateEntity(): { mutateAsync: (d: Omit<Entity, 'id'>) => Promise<void>; isPending: boolean }
+declare function useUpdateEntity(id: string): { mutateAsync: (d: Partial<Entity>) => Promise<void>; isPending: boolean }
+declare function useDeleteEntity(id: string): { mutateAsync: () => Promise<void>; isPending: boolean }
+
+// ──── Status filter type ──────────────────────────────────────────────────────
+
 type StatusFilter = 'all' | 'active' | 'inactive'
-const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
-import {
-  type Equipment,
-  useEquipment,
-  useCreateEquipment,
-  useUpdateEquipment,
-  useDeleteEquipment,
-} from '@/lib/hooks/use-resources'
 
-// ──── Equipment Form ──────────────────────────────────────────────────────────
+const STATUS_LABELS: Record<StatusFilter, string> = {
+  all: 'Todos',
+  active: 'Ativos',
+  inactive: 'Inativos',
+}
 
-function EquipmentForm({
+// ──── Entity Form ─────────────────────────────────────────────────────────────
+
+function EntityForm({
   initial,
   onSave,
   onCancel,
@@ -28,8 +49,8 @@ function EquipmentForm({
   showActiveToggle = false,
   onDirtyChange,
 }: {
-  initial?: Equipment
-  onSave: (data: { name: string; description: string; active?: boolean }) => Promise<void>
+  initial?: Entity
+  onSave: (data: Omit<Entity, 'id'>) => Promise<void>
   onCancel: () => void
   isPending: boolean
   showActiveToggle?: boolean
@@ -50,7 +71,11 @@ function EquipmentForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) return
-    await onSave({ name: name.trim(), description: description.trim(), ...(showActiveToggle ? { active } : {}) })
+    await onSave({
+      name: name.trim(),
+      description: description.trim(),
+      active,
+    })
   }
 
   return (
@@ -60,7 +85,7 @@ function EquipmentForm({
         <Input
           value={name}
           onChange={(e) => { setName(e.target.value); markDirty() }}
-          placeholder="Ex: Laser IPL, Ultrassom focalizado…"
+          placeholder="Nome do registro"
           required
         />
       </div>
@@ -69,27 +94,23 @@ function EquipmentForm({
         <Input
           value={description}
           onChange={(e) => { setDescription(e.target.value); markDirty() }}
-          placeholder="Informações adicionais sobre o equipamento"
+          placeholder="Informações adicionais (opcional)"
         />
       </div>
       {showActiveToggle && (
         <div className="flex items-center gap-3">
           <input
             type="checkbox"
-            id="eq-active"
+            id="entity-active"
             checked={active}
             onChange={(e) => { setActive(e.target.checked); markDirty() }}
             className="h-4 w-4 rounded border-input accent-primary"
           />
-          <Label htmlFor="eq-active" className="cursor-pointer">
-            Equipamento ativo (disponível para agendamentos)
-          </Label>
+          <Label htmlFor="entity-active" className="cursor-pointer">Registro ativo</Label>
         </div>
       )}
       <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancelar
-        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
         <Button type="submit" disabled={isPending || !name.trim()}>
           {isPending ? 'Salvando…' : 'Salvar'}
         </Button>
@@ -98,18 +119,17 @@ function EquipmentForm({
   )
 }
 
-// ──── Delete Confirm ─────────────────────────────────────────────────────────
+// ──── Delete Confirm ──────────────────────────────────────────────────────────
 
-function DeleteConfirm({ equipment, onConfirm, onCancel }: {
-  equipment: Equipment
+function DeleteConfirm({ entity, onConfirm, onCancel }: {
+  entity: Entity
   onConfirm: () => void
   onCancel: () => void
 }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Tem certeza que deseja remover o equipamento <strong>{equipment.name}</strong>?
-        Esta ação não pode ser desfeita.
+        Tem certeza que deseja remover <strong>{entity.name}</strong>? Esta ação não pode ser desfeita.
       </p>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>Cancelar</Button>
@@ -119,36 +139,39 @@ function DeleteConfirm({ equipment, onConfirm, onCancel }: {
   )
 }
 
-// ──── Equipment Row ──────────────────────────────────────────────────────────
+// ──── Entity Row ──────────────────────────────────────────────────────────────
 
-function EquipmentRow({ eq, onEdit, onDelete }: {
-  eq: Equipment
+function EntityRow({ entity, onEdit, onDelete }: {
+  entity: Entity
   onEdit: () => void
   onDelete: () => void
 }) {
   return (
     <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
       <div className="flex items-center gap-3">
-        <div className={`flex h-8 w-8 items-center justify-center rounded-full ${eq.active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-          <Wrench className="h-4 w-4" />
+        <div className={`flex h-8 w-8 items-center justify-center rounded-full ${entity.active ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+          <Box className="h-4 w-4" />
         </div>
         <div>
-          <p className="text-sm font-medium">{eq.name}</p>
-          {eq.description && (
-            <p className="text-xs text-muted-foreground">{eq.description}</p>
+          <p className="text-sm font-medium">{entity.name}</p>
+          {entity.description && (
+            <p className="text-xs text-muted-foreground">{entity.description}</p>
           )}
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {!eq.active && (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-            Inativo
-          </span>
+        {!entity.active && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Inativo</span>
         )}
         <Button variant="ghost" size="sm" onClick={onEdit}>
           <Pencil className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={onDelete} className="text-destructive hover:text-destructive">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDelete}
+          className="text-destructive hover:text-destructive"
+        >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -158,35 +181,35 @@ function EquipmentRow({ eq, onEdit, onDelete }: {
 
 // ──── Page ────────────────────────────────────────────────────────────────────
 
-export default function EquipmentPage() {
-  const { data: equipmentList, isLoading } = useEquipment()
-  const createEquipment = useCreateEquipment()
+export default function EntityListPage() {
+  const { data: entityList, isLoading } = useEntities()
+  const createEntity = useCreateEntity()
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
-  const [editing, setEditing] = useState<Equipment | null>(null)
-  const [deleting, setDeleting] = useState<Equipment | null>(null)
+  const [editing, setEditing] = useState<Entity | null>(null)
+  const [deleting, setDeleting] = useState<Entity | null>(null)
 
   // ── Filters ──
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
-  const filtered = (equipmentList ?? []).filter((eq) => {
-    const matchesSearch = eq.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = (entityList ?? []).filter((e) => {
+    const matchesSearch = e.name.toLowerCase().includes(search.toLowerCase())
     const matchesStatus =
       statusFilter === 'all' ||
-      (statusFilter === 'active' && eq.active) ||
-      (statusFilter === 'inactive' && !eq.active)
+      (statusFilter === 'active' && e.active) ||
+      (statusFilter === 'inactive' && !e.active)
     return matchesSearch && matchesStatus
   })
 
-  async function handleCreate(data: { name: string; description: string }) {
+  async function handleCreate(data: Omit<Entity, 'id'>) {
     try {
-      await createEquipment.mutateAsync(data)
-      toast.success('Equipamento criado com sucesso')
+      await createEntity.mutateAsync(data)
+      toast.success('Registro criado com sucesso')
       setCreating(false)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao criar equipamento')
+      toast.error(msg ?? 'Erro ao criar registro')
     }
   }
 
@@ -195,14 +218,12 @@ export default function EquipmentPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Equipamentos</h2>
-          <p className="text-sm text-muted-foreground">
-            Gerencie os equipamentos da clínica para controle de disponibilidade nos agendamentos.
-          </p>
+          <h2 className="text-xl font-semibold">Entidades</h2>
+          <p className="text-sm text-muted-foreground">Gerencie os registros.</p>
         </div>
         <Button onClick={() => setCreating(true)}>
           <Plus className="mr-1.5 h-4 w-4" />
-          Novo Equipamento
+          Nova Entidade
         </Button>
       </div>
 
@@ -233,12 +254,12 @@ export default function EquipmentPage() {
       {/* List */}
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
-      ) : !equipmentList || equipmentList.length === 0 ? (
+      ) : !entityList || entityList.length === 0 ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
-          <Wrench className="mx-auto mb-2 h-8 w-8 opacity-30" />
-          <p className="text-sm">Nenhum equipamento cadastrado.</p>
+          <Box className="mx-auto mb-2 h-8 w-8 opacity-30" />
+          <p className="text-sm">Nenhuma entidade cadastrada.</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
-            Criar primeiro equipamento
+            Criar primeira entidade
           </Button>
         </div>
       ) : filtered.length === 0 ? (
@@ -247,12 +268,12 @@ export default function EquipmentPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((eq) => (
-            <EquipmentRow
-              key={eq.id}
-              eq={eq}
-              onEdit={() => setEditing(eq)}
-              onDelete={() => setDeleting(eq)}
+          {filtered.map((entity) => (
+            <EntityRow
+              key={entity.id}
+              entity={entity}
+              onEdit={() => setEditing(entity)}
+              onDelete={() => setDeleting(entity)}
             />
           ))}
         </div>
@@ -261,12 +282,12 @@ export default function EquipmentPage() {
       {/* Create dialog */}
       {creating && (
         <Dialog open onClose={() => setCreating(false)} isDirty={formDirty}>
-          <DialogTitle>Novo Equipamento</DialogTitle>
+          <DialogTitle>Nova Entidade</DialogTitle>
           <div className="mt-4">
-            <EquipmentForm
+            <EntityForm
               onSave={handleCreate}
               onCancel={() => setCreating(false)}
-              isPending={createEquipment.isPending}
+              isPending={createEntity.isPending}
               onDirtyChange={setFormDirty}
             />
           </div>
@@ -274,41 +295,37 @@ export default function EquipmentPage() {
       )}
 
       {/* Edit dialog */}
-      {editing && (
-        <EditDialog equipment={editing} onClose={() => setEditing(null)} />
-      )}
+      {editing && <EditDialog entity={editing} onClose={() => setEditing(null)} />}
 
       {/* Delete dialog */}
-      {deleting && (
-        <DeleteDialog equipment={deleting} onClose={() => setDeleting(null)} />
-      )}
+      {deleting && <DeleteDialog entity={deleting} onClose={() => setDeleting(null)} />}
     </div>
   )
 }
 
-// ──── Edit Dialog (needs its own hook call) ───────────────────────────────────
+// ──── Edit Dialog ─────────────────────────────────────────────────────────────
 
-function EditDialog({ equipment, onClose }: { equipment: Equipment; onClose: () => void }) {
-  const update = useUpdateEquipment(equipment.id)
+function EditDialog({ entity, onClose }: { entity: Entity; onClose: () => void }) {
+  const update = useUpdateEntity(entity.id)
   const [isDirty, setIsDirty] = useState(false)
 
-  async function handleSave(data: { name: string; description: string; active?: boolean }) {
+  async function handleSave(data: Omit<Entity, 'id'>) {
     try {
       await update.mutateAsync(data)
-      toast.success('Equipamento atualizado')
+      toast.success('Registro atualizado')
       onClose()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao atualizar equipamento')
+      toast.error(msg ?? 'Erro ao atualizar registro')
     }
   }
 
   return (
     <Dialog open onClose={onClose} isDirty={isDirty}>
-      <DialogTitle>Editar Equipamento</DialogTitle>
+      <DialogTitle>Editar Entidade</DialogTitle>
       <div className="mt-4">
-        <EquipmentForm
-          initial={equipment}
+        <EntityForm
+          initial={entity}
           onSave={handleSave}
           onCancel={onClose}
           isPending={update.isPending}
@@ -320,25 +337,27 @@ function EditDialog({ equipment, onClose }: { equipment: Equipment; onClose: () 
   )
 }
 
-function DeleteDialog({ equipment, onClose }: { equipment: Equipment; onClose: () => void }) {
-  const del = useDeleteEquipment(equipment.id)
+// ──── Delete Dialog ───────────────────────────────────────────────────────────
+
+function DeleteDialog({ entity, onClose }: { entity: Entity; onClose: () => void }) {
+  const del = useDeleteEntity(entity.id)
 
   async function handleConfirm() {
     try {
       await del.mutateAsync()
-      toast.success('Equipamento removido')
+      toast.success('Registro removido')
       onClose()
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao remover equipamento')
+      toast.error(msg ?? 'Erro ao remover registro')
     }
   }
 
   return (
     <Dialog open onClose={onClose}>
-      <DialogTitle>Remover Equipamento</DialogTitle>
+      <DialogTitle>Remover Entidade</DialogTitle>
       <div className="mt-4">
-        <DeleteConfirm equipment={equipment} onConfirm={handleConfirm} onCancel={onClose} />
+        <DeleteConfirm entity={entity} onConfirm={handleConfirm} onCancel={onClose} />
       </div>
     </Dialog>
   )

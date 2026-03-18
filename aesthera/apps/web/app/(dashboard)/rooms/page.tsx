@@ -15,6 +15,9 @@ import {
   useDeleteRoom,
 } from '@/lib/hooks/use-resources'
 
+type StatusFilter = 'all' | 'active' | 'inactive'
+const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
+
 // ──── Room Form ───────────────────────────────────────────────────────────────
 
 function RoomForm({
@@ -23,16 +26,26 @@ function RoomForm({
   onCancel,
   isPending,
   showActiveToggle = false,
+  onDirtyChange,
 }: {
   initial?: Room
   onSave: (data: { name: string; description: string; active?: boolean }) => Promise<void>
   onCancel: () => void
   isPending: boolean
   showActiveToggle?: boolean
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [active, setActive] = useState(initial?.active ?? true)
+  const [dirty, setDirty] = useState(false)
+
+  function markDirty() {
+    if (!dirty) {
+      setDirty(true)
+      onDirtyChange?.(true)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -46,7 +59,7 @@ function RoomForm({
         <Label>Nome *</Label>
         <Input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => { setName(e.target.value); markDirty() }}
           placeholder="Ex: Sala 1, Sala VIP, Sala de Depilação…"
           required
         />
@@ -55,7 +68,7 @@ function RoomForm({
         <Label>Descrição</Label>
         <Input
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) => { setDescription(e.target.value); markDirty() }}
           placeholder="Informações adicionais sobre a sala"
         />
       </div>
@@ -65,7 +78,7 @@ function RoomForm({
             type="checkbox"
             id="room-active"
             checked={active}
-            onChange={(e) => setActive(e.target.checked)}
+            onChange={(e) => { setActive(e.target.checked); markDirty() }}
             className="h-4 w-4 rounded border-input accent-primary"
           />
           <Label htmlFor="room-active" className="cursor-pointer">
@@ -155,6 +168,7 @@ function RoomRow({ room, onEdit, onDelete }: { room: Room; onEdit: () => void; o
 
 function EditDialog({ room, onClose }: { room: Room; onClose: () => void }) {
   const update = useUpdateRoom(room.id)
+  const [isDirty, setIsDirty] = useState(false)
 
   async function handleSave(data: { name: string; description: string; active?: boolean }) {
     try {
@@ -168,7 +182,7 @@ function EditDialog({ room, onClose }: { room: Room; onClose: () => void }) {
   }
 
   return (
-    <Dialog open onClose={onClose}>
+    <Dialog open onClose={onClose} isDirty={isDirty}>
       <DialogTitle>Editar Sala</DialogTitle>
       <div className="mt-4">
         <RoomForm
@@ -177,6 +191,7 @@ function EditDialog({ room, onClose }: { room: Room; onClose: () => void }) {
           onCancel={onClose}
           isPending={update.isPending}
           showActiveToggle
+          onDirtyChange={setIsDirty}
         />
       </div>
     </Dialog>
@@ -215,8 +230,22 @@ export default function RoomsPage() {
   const { data: roomsList, isLoading } = useRooms()
   const createRoom = useCreateRoom()
   const [creating, setCreating] = useState(false)
+  const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Room | null>(null)
   const [deleting, setDeleting] = useState<Room | null>(null)
+
+  // ── Filters ──
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+  const filtered = (roomsList ?? []).filter((room) => {
+    const matchesSearch = room.name.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && room.active) ||
+      (statusFilter === 'inactive' && !room.active)
+    return matchesSearch && matchesStatus
+  })
 
   async function handleCreate(data: { name: string; description: string }) {
     try {
@@ -243,6 +272,30 @@ export default function RoomsPage() {
         </Button>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Buscar por nome…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 w-48 text-sm"
+        />
+        {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={[
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              statusFilter === s
+                ? 'bg-primary text-primary-foreground'
+                : 'border border-input text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            {STATUS_LABELS[s]}
+          </button>
+        ))}
+      </div>
+
       {/* List */}
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
@@ -250,11 +303,17 @@ export default function RoomsPage() {
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <DoorOpen className="mx-auto mb-2 h-8 w-8 opacity-30" />
           <p className="text-sm">Nenhuma sala cadastrada.</p>
-          <p className="mt-1 text-xs">Clique em &quot;Nova Sala&quot; para começar.</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
+            Criar primeira sala
+          </Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
+          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {roomsList.map((room) => (
+          {filtered.map((room) => (
             <RoomRow
               key={room.id}
               room={room}
@@ -267,13 +326,14 @@ export default function RoomsPage() {
 
       {/* Create dialog */}
       {creating && (
-        <Dialog open onClose={() => setCreating(false)}>
+        <Dialog open onClose={() => setCreating(false)} isDirty={formDirty}>
           <DialogTitle>Nova Sala</DialogTitle>
           <div className="mt-4">
             <RoomForm
               onSave={handleCreate}
               onCancel={() => setCreating(false)}
               isPending={createRoom.isPending}
+              onDirtyChange={setFormDirty}
             />
           </div>
         </Dialog>

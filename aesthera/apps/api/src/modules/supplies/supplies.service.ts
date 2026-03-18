@@ -39,6 +39,20 @@ export class SuppliesService {
 
   async delete(clinicId: string, id: string) {
     await this.get(clinicId, id)
+
+    // Prevent deletion if the supply is linked to any active service
+    const linkedService = await prisma.serviceSupply.findFirst({
+      where: { supplyId: id, clinicId, service: { deletedAt: null } },
+      include: { service: { select: { name: true } } },
+    })
+    if (linkedService) {
+      throw new AppError(
+        `Este insumo está vinculado ao serviço "${linkedService.service.name}" e não pode ser removido.`,
+        409,
+        'SUPPLY_IN_USE',
+      )
+    }
+
     await prisma.supply.update({ where: { id }, data: { deletedAt: new Date(), active: false } })
     return { message: 'Supply deleted' }
   }
