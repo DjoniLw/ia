@@ -4,13 +4,28 @@ import type { CreateCustomerDto, ListCustomersQuery, UpdateCustomerDto } from '.
 export class CustomersRepository {
   async findAll(clinicId: string, q: ListCustomersQuery) {
     const skip = (q.page - 1) * q.limit
+
+    // When `search` is provided, match name OR document (CPF) OR phone with OR logic.
+    // Individual field filters (name/email/phone/document) are still supported as AND conditions.
+    const searchOr = q.search
+      ? {
+          OR: [
+            { name: { contains: q.search, mode: 'insensitive' as const } },
+            { document: { contains: q.search, mode: 'insensitive' as const } },
+            { phone: { contains: q.search } },
+          ],
+        }
+      : undefined
+
     const where = {
       clinicId,
       deletedAt: null,
-      ...(q.name && { name: { contains: q.name, mode: 'insensitive' as const } }),
-      ...(q.email && { email: { contains: q.email, mode: 'insensitive' as const } }),
-      ...(q.phone && { phone: { contains: q.phone } }),
-      ...(q.document && { document: q.document }),
+      ...(searchOr ?? {
+        ...(q.name && { name: { contains: q.name, mode: 'insensitive' as const } }),
+        ...(q.email && { email: { contains: q.email, mode: 'insensitive' as const } }),
+        ...(q.phone && { phone: { contains: q.phone } }),
+        ...(q.document && { document: q.document }),
+      }),
     }
     const [items, total] = await Promise.all([
       prisma.customer.findMany({ where, skip, take: q.limit, orderBy: { name: 'asc' } }),

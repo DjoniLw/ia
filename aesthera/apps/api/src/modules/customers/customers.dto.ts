@@ -58,6 +58,7 @@ export const UpdateCustomerDto = z.object({
 export type UpdateCustomerDto = z.infer<typeof UpdateCustomerDto>
 
 export const ListCustomersQuery = z.object({
+  search: z.string().optional(), // searches name OR document (CPF) OR phone
   name: z.string().optional(),
   email: z.string().optional(),
   phone: z.string().optional(),

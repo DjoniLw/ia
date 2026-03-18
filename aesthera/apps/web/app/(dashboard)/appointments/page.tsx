@@ -225,7 +225,7 @@ function CreateAppointmentForm({
 
   const { data: custSearchData } = useCustomers(
     customerSearchDebounced.trim().length >= 1
-      ? { name: customerSearchDebounced.trim(), limit: '20' }
+      ? { search: customerSearchDebounced.trim(), limit: '20' }
       : undefined,
   )
   const searchResults = custSearchData?.items ?? []
@@ -1479,6 +1479,10 @@ export default function AppointmentsPage() {
   const [createPrefill, setCreatePrefill] = useState<{ date: string; time: string; professionalId: string } | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<CalendarSlot | null>(null)
+  const [customerConflict, setCustomerConflict] = useState<{
+    formData: Omit<CreateFormValues, 'equipmentIds'>
+    equipmentIds: string[]
+  } | null>(null)
 
   const queryView = view === 'month' ? 'week' : view
   const { data: calendar, isLoading } = useCalendar({ date: currentDate, view: queryView })
@@ -1501,6 +1505,7 @@ export default function AppointmentsPage() {
   async function handleCreate(
     formData: Omit<CreateFormValues, 'equipmentIds'>,
     equipmentIds: string[],
+    force = false,
   ) {
     const scheduledAt = new Date(`${formData.date}T${formData.time}:00.000Z`).toISOString()
     try {
@@ -1513,15 +1518,27 @@ export default function AppointmentsPage() {
         equipmentIds: equipmentIds.length > 0 ? equipmentIds : undefined,
         packageSessionId: formData.packageSessionId,
         roomId: formData.roomId,
+        force: force || undefined,
       })
       toast.success('Agendamento criado')
       setCreating(false)
       setCreatePrefill(null)
       setAdvancedOpen(false)
+      setCustomerConflict(null)
     } catch (err: unknown) {
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
+      if (code === 'CUSTOMER_CONFLICT') {
+        setCustomerConflict({ formData, equipmentIds })
+        return
+      }
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao criar agendamento')
     }
+  }
+
+  async function handleCreateForced() {
+    if (!customerConflict) return
+    await handleCreate(customerConflict.formData, customerConflict.equipmentIds, true)
   }
 
   function handleAdvancedCreateClick(date: string, time: string, professionalId: string) {
@@ -1659,6 +1676,29 @@ export default function AppointmentsPage() {
             />
           </div>
         </Dialog>
+      )}
+
+      {/* Customer conflict confirmation dialog */}
+      {customerConflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <CalendarDays className="h-6 w-6 text-amber-500 flex-shrink-0" />
+              <h3 className="font-semibold text-foreground">Conflito de agendamento</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              O cliente já possui um agendamento neste horário. Deseja agendar mesmo assim?
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setCustomerConflict(null)}>
+                Cancelar
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleCreateForced} disabled={createAppointment.isPending}>
+                Agendar mesmo assim
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

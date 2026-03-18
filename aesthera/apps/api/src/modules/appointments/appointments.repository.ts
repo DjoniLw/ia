@@ -122,6 +122,26 @@ export class AppointmentsRepository {
     })
   }
 
+  async getCustomerAppointmentsForDate(
+    clinicId: string,
+    customerId: string,
+    date: string, // YYYY-MM-DD
+    excludeId?: string,
+  ) {
+    const start = new Date(`${date}T00:00:00.000Z`)
+    const end = new Date(`${date}T23:59:59.999Z`)
+    return prisma.appointment.findMany({
+      where: {
+        clinicId,
+        customerId,
+        scheduledAt: { gte: start, lte: end },
+        status: { in: ['draft', 'confirmed', 'in_progress'] },
+        ...(excludeId && { id: { not: excludeId } }),
+      },
+      select: { scheduledAt: true, durationMinutes: true },
+    })
+  }
+
   async getBlockedSlotsForDate(clinicId: string, professionalId: string, date: string) {
     const dayOfWeek = new Date(date + 'T12:00:00Z').getUTCDay()
     const dateObj = new Date(date + 'T00:00:00.000Z')
