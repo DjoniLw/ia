@@ -53,7 +53,6 @@ multiple business verticals** — modules are added per vertical, the core is sh
 - AI analytics / demand forecasting
 - Marketplace integrations
 - Advanced marketing automation
-- Inventory management
 - Employee payroll
 
 ## Roadmap (post-MVP)

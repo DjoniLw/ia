@@ -68,6 +68,12 @@ Cole o conteúdo deste arquivo + `context/stack.md` + `context/architecture.md` 
 | `features/reports.md` | Relatórios: clientes, produtos vendidos, serviços, estoque |
 | `features/clinical-records.md` | Histórico clínico append-only por cliente |
 | `features/contracts.md` | Contratos digitais com assinatura eletrônica (scaffold) |
+| `features/equipment.md` | Equipamentos da clínica — catálogo + vínculo com agendamentos |
+| `features/rooms.md` | Salas de atendimento — catálogo + vínculo com agendamentos |
+| `features/supplies.md` | Insumos consumíveis + estoque + vínculo com serviços |
+| `features/wallet.md` | Carteira do cliente — vouchers, créditos, cashback, pacotes |
+| `features/promotions.md` | Campanhas de desconto — códigos promocionais com regras de uso |
+| `features/packages.md` | Pacotes de serviços — venda, sessões pré-geradas, resgate |
 | `agents/system-architect.md` | Persona do agente com regras Aesthera |
 
 ## Prompts Específicos

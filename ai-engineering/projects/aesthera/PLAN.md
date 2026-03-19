@@ -184,6 +184,32 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+## Fase 9 — "Gestão avançada de recursos e fidelização"
+
+**Objetivo**: controle operacional completo — equipamentos, salas, insumos, pacotes, vouchers e promoções.
+
+### Backend
+- [x] Módulo Equipment: CRUD de equipamentos + vínculo com agendamentos (`AppointmentEquipment`)
+- [x] Módulo Rooms: CRUD de salas de atendimento + vínculo com agendamentos
+- [x] Módulo Supplies: CRUD de insumos + estoque + `minStock` + vínculo com serviços (`ServiceSupply`)
+- [x] Módulo Wallet: vouchers, créditos, cashback, saldo de pacote — com log de transações append-only
+- [x] Módulo Promotions: códigos de desconto (PERCENTAGE / FIXED) com janela de validade, `maxUses`, `minAmount` e filtro por serviço
+- [x] Módulo Packages: pacotes de serviços com pré-geração de sessões + resgate + integração com Wallet
+
+### Frontend
+- [x] Página Equipamentos: lista + criar/editar + toggle ativo
+- [x] Página Salas: lista + criar/editar + toggle ativo
+- [x] Página Insumos: lista com badge de estoque + criar/editar + alerta de estoque baixo
+- [x] Página Carteira (por cliente): lista de entradas + criar voucher/crédito + ajuste de saldo
+- [x] Página Promoções: lista + criar/editar + contador de usos + validar código
+- [x] Página Pacotes: lista + criar/editar + comprar pacote + ver sessões do cliente
+
+### Resultado
+> Você cadastra o pacote "Botox 5 sessões" por R$1.500, vende para a Maria, ela usa 3 sessões,
+> e o sistema rastreia o saldo restante na carteira dela automaticamente.
+
+---
+
 ## Resumo das Fases
 
 | Fase | O que você vê no final | Duração estimada |
@@ -195,6 +221,8 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 | 5 | **Cobranças + pagamentos PIX/cartão** | ~1–2 semanas |
 | 6 | WhatsApp automático | ~1 semana |
 | 7 | Dashboard financeiro | ~3–4 dias |
+| 8 | IA embutida (chat + resumos + briefing) | ~1 semana |
+| 9 | Equipamentos, salas, insumos, pacotes, wallet, promoções | ~1–2 semanas |
 
 > Fases 4 e 5 são as mais complexas e o core do produto.
 > Fases 1–3 são fundação — rápidas de fazer, essenciais para o resto funcionar.
