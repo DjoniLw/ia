@@ -22,10 +22,8 @@ jobs:
         with:
           node-version: 18
 
-      - name: Rodar review com IA
-        env: 
-         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: node scripts/ai-review.js
+      - name: Run AI Review
+        run: node .github/workflows/scripts/ai-review.js
          
       - name: Comentar no PR
         uses: marocchino/sticky-pull-request-comment@v2
