@@ -92,6 +92,37 @@ src/
 │   │   ├── ai.tools.ts       -- function calling tool definitions
 │   │   └── ai.test.ts
 │
+│   ├── equipment/            -- clinic equipment catalog
+│   │   ├── equipment.routes.ts
+│   │   └── equipment.service.ts
+│
+│   ├── rooms/                -- clinic treatment rooms
+│   │   ├── rooms.routes.ts
+│   │   └── rooms.service.ts
+│
+│   ├── supplies/             -- consumable supplies + service assignments
+│   │   ├── supplies.routes.ts
+│   │   ├── supplies.service.ts
+│   │   └── supplies.dto.ts
+│
+│   ├── wallet/               -- customer wallet (vouchers, credits, cashback, packages)
+│   │   ├── wallet.routes.ts
+│   │   ├── wallet.service.ts
+│   │   ├── wallet.repository.ts
+│   │   └── wallet.dto.ts
+│
+│   ├── promotions/           -- discount promotion codes
+│   │   ├── promotions.routes.ts
+│   │   ├── promotions.service.ts
+│   │   ├── promotions.repository.ts
+│   │   └── promotions.dto.ts
+│
+│   ├── packages/             -- service packages + session management
+│   │   ├── packages.routes.ts
+│   │   ├── packages.service.ts
+│   │   ├── packages.repository.ts
+│   │   └── packages.dto.ts
+│
 │   └── integrations/
 │       ├── stripe/
 │       │   └── stripe.service.ts
