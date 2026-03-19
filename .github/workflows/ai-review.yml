@@ -14,16 +14,13 @@ jobs:
 
       - name: Pegar diff
         run: |
-          git fetch origin main
-          git diff origin/main > diff.txt
+          git fetch origin
+          git diff origin/HEAD > diff.txt
 
       - name: Instalar Node
         uses: actions/setup-node@v3
         with:
           node-version: 18
-
-      - name: Instalar axios
-        run: npm install axios
 
       - name: Rodar review com IA
         env:
@@ -31,48 +28,33 @@ jobs:
         run: |
           node <<EOF
           const fs = require("fs");
-          const axios = require("axios");
 
-          const diff = fs.readFileSync("diff.txt", "utf8");
+          const diff = fs.readFileSync("diff.txt", "utf8").substring(0, 10000);
 
           async function run() {
-            const response = await axios.post(
-              "https://api.openai.com/v1/chat/completions",
-              {
+            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + process.env.OPENAI_API_KEY
+              },
+              body: JSON.stringify({
                 model: "gpt-4.1",
                 messages: [
                   {
                     role: "system",
-                    content: `
-You are a senior software architect reviewing code.
-
-Follow these rules:
-- Validate architecture
-- Check UI consistency
-- Check business rules
-- Identify risks
-
-Respond in:
-- ✅ Correct
-- ⚠️ Issues
-- ❌ Critical
-- 💡 Suggestions
-                    `
+                    content: "You are a senior code reviewer"
                   },
                   {
                     role: "user",
                     content: diff
                   }
                 ]
-              },
-              {
-                headers: {
-                  Authorization: \`Bearer \${process.env.OPENAI_API_KEY}\`
-                }
-              }
-            );
+              })
+            });
 
-            const review = response.data.choices[0].message.content;
+            const data = await response.json();
+            const review = data.choices[0].message.content;
 
             fs.writeFileSync("review.txt", review);
           }
