@@ -5,6 +5,7 @@
 - Respeite as regras de estilo de código do projeto (ex.: PSR/PEP, convenções internas).
 - Comentários de revisão devem ser claros e úteis para devs iniciantes.
 - Não sugira códigos que quebrem lint ou fail de CI.
+- Considerar o contexto no arquivo: AGENT_RULES.md localizado na raiz do projeto
 
 # Instruções de uso de IA para Revisão do Aesthera
 
