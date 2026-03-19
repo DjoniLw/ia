@@ -1,5 +1,7 @@
 # IA — Workspace de Desenvolvimento com IA
 
+teste
+
 Workspace centralizado para projetos desenvolvidos com assistência de IA (GitHub Copilot, ChatGPT, Claude).
 
 > **Quer rodar sem clonar?** Use o Railway — veja a seção [Deploy online (Railway)](#deploy-online-railway) abaixo.
