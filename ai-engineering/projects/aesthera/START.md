@@ -6,7 +6,10 @@ Use este arquivo para iniciar qualquer nova sessão de desenvolvimento.
 
 ## Como usar no VS Code (Copilot Chat)
 
+> ⚠️ `AGENT_RULES.md` deve ser o **primeiro arquivo** em toda sessão — é obrigatório.
+
 ```
+#file:AGENT_RULES.md
 #file:projects/aesthera/START.md
 #file:projects/aesthera/context/stack.md
 #file:projects/aesthera/context/architecture.md
@@ -17,7 +20,7 @@ Etapa X — [descrição do que fazer]
 
 ## Como usar em chat externo (ChatGPT, Claude etc.)
 
-Cole o conteúdo deste arquivo + `context/stack.md` + `context/architecture.md` + o `features/[modulo].md` relevante.
+Cole o conteúdo de `AGENT_RULES.md` + este arquivo + `context/stack.md` + `context/architecture.md` + o `features/[modulo].md` relevante.
 
 ---
 

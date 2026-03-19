@@ -11,19 +11,20 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 **Objetivo**: abrir o navegador, ver a tela de login, entrar e ver o dashboard.
 
 ### Backend
-- [ ] Setup do projeto (Fastify + Prisma + Docker + PostgreSQL + Redis)
-- [ ] Prisma schema completo (todas as tabelas — schema definitivo antes de qualquer código)
-- [ ] Módulo Auth: registro de clínica, login, logout, refresh token
-- [ ] Tenant Middleware: slug → clinic_id via Redis/DB
-- [ ] Health check endpoint (`GET /health`)
+- [x] Setup do projeto (Fastify + Prisma + Docker + PostgreSQL + Redis)
+- [x] Prisma schema completo (todas as tabelas — schema definitivo antes de qualquer código)
+- [x] Módulo Auth: registro de clínica, login, logout, refresh token
+- [x] Tenant Middleware: slug → clinic_id via Redis/DB
+- [x] Health check endpoint (`GET /health`)
 
 ### Frontend
-- [ ] Setup Next.js 15 + Tailwind + TanStack Query
-- [ ] Configuração de subdomínio local para dev (`clinica.localhost`)
-- [ ] Tela de login (`/login`)
-- [ ] Tela de registro de clínica (`/register`)
-- [ ] Shell do dashboard (sidebar, header, área de conteúdo) — layout vazio
-- [ ] Rota protegida: redireciona para login se não autenticado
+- [x] Setup Next.js 15 + Tailwind + TanStack Query
+- [x] Configuração de subdomínio local para dev (`clinica.localhost`)
+- [x] Tela de login (`/login`)
+- [x] Tela de registro de clínica (`/register`)
+- [x] Tela de verificação de email (`/verify-email`)
+- [x] Shell do dashboard (sidebar, header, área de conteúdo) — layout vazio
+- [x] Rota protegida: redireciona para login se não autenticado
 
 ### Resultado
 > Você acessa `clinicaana.localhost/login`, entra com e-mail e senha, e vê o dashboard vazio.
@@ -35,15 +36,15 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 **Objetivo**: configurar dados da clínica, horários de funcionamento e criar usuários da equipe.
 
 ### Backend
-- [ ] Módulo Clinics: `GET /clinics/me`, `PATCH /clinics/me`, business hours
-- [ ] Módulo Users: listagem, convite por email, roles (admin/staff)
-- [ ] Guard de role: `staff` não acessa rotas restritas
+- [x] Módulo Clinics: `GET /clinics/me`, `PATCH /clinics/me`, business hours
+- [x] Módulo Users: listagem, convite por email, roles (admin/staff)
+- [x] Guard de role: `staff` não acessa rotas restritas
 
 ### Frontend
-- [ ] Página Configurações → aba Clínica (nome, telefone, endereço)
-- [ ] Página Configurações → aba Horários de funcionamento (grid por dia da semana)
-- [ ] Página Configurações → aba Usuários (lista + botão convidar)
-- [ ] Flow de aceitar convite (`/accept-invite?token=...`)
+- [x] Página Configurações → aba Clínica (nome, telefone, endereço)
+- [x] Página Configurações → aba Horários de funcionamento (grid por dia da semana)
+- [x] Página Configurações → aba Usuários (lista + botão convidar)
+- [x] Flow de aceitar convite (`/accept-invite?token=...`)
 
 ### Resultado
 > Você configura o nome da clínica, define que funciona seg–sex 8h–18h e convida uma recepcionista.
@@ -55,14 +56,14 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 **Objetivo**: ter profissionais e serviços no sistema — base para os agendamentos.
 
 ### Backend
-- [ ] Módulo Professionals: CRUD + working hours + assign services
-- [ ] Módulo Services: CRUD (catálogo de tratamentos)
-- [ ] Módulo Customers: CRUD + filtros
+- [x] Módulo Professionals: CRUD + working hours + assign services
+- [x] Módulo Services: CRUD (catálogo de tratamentos)
+- [x] Módulo Customers: CRUD + filtros
 
 ### Frontend
-- [ ] Página Profissionais: lista + criar/editar + horários individuais
-- [ ] Página Serviços: lista + criar/editar (nome, duração, preço, categoria)
-- [ ] Página Clientes: lista + criar/editar + página de detalhe do cliente
+- [x] Página Profissionais: lista + criar/editar + horários individuais
+- [x] Página Serviços: lista + criar/editar (nome, duração, preço, categoria)
+- [x] Página Clientes: lista + criar/editar + página de detalhe do cliente
 
 ### Resultado
 > Você cadastra "Ana" como dermatologista que faz "Botox" (60min, R$350) e "Limpeza de pele" (45min, R$180).
@@ -75,17 +76,17 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 **Objetivo**: o coração do sistema — agendar um atendimento e visualizá-lo no calendário.
 
 ### Backend
-- [ ] Módulo Appointments: CRUD + state machine completa
-- [ ] `GET /appointments/availability` — slots livres por profissional + dia
-- [ ] `GET /appointments/calendar` — visão dia/semana agrupada por profissional
-- [ ] Blocked slots: criar, listar, remover
-- [ ] Cron / scheduler: lembrete D-1 (BullMQ delayed job)
+- [x] Módulo Appointments: CRUD + state machine completa
+- [x] `GET /appointments/availability` — slots livres por profissional + dia
+- [x] `GET /appointments/calendar` — visão dia/semana agrupada por profissional
+- [x] Blocked slots: criar, listar, remover
+- [x] Cron / scheduler: lembrete D-1 (BullMQ delayed job)
 
 ### Frontend
-- [ ] Página Calendário: visão do dia/semana com grade por profissional
-- [ ] Modal de novo agendamento: escolher cliente → profissional → serviço → slot disponível
-- [ ] Modal de detalhe do agendamento: ver info + mudar status (confirmar, iniciar, concluir, cancelar)
-- [ ] Gerenciar bloqueios de agenda (folga, almoço, ausência)
+- [x] Página Calendário: visão do dia/semana com grade por profissional
+- [x] Modal de novo agendamento: escolher cliente → profissional → serviço → slot disponível
+- [x] Modal de detalhe do agendamento: ver info + mudar status (confirmar, iniciar, concluir, cancelar)
+- [x] Gerenciar bloqueios de agenda (folga, almoço, ausência)
 
 ### Resultado
 > Você abre o calendário, vê a agenda da Ana no dia de hoje, clica em um horário livre,
@@ -98,17 +99,17 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 **Objetivo**: após o atendimento, o sistema gera a cobrança e envia o link de pagamento.
 
 ### Backend
-- [ ] Módulo Billing: criação automática em `appointment.completed` + cancelamento
-- [ ] Módulo Payments: integração Stripe (cartão) + MercadoPago (PIX + boleto)
-- [ ] Webhooks: `POST /payments/webhooks/stripe` e `/mercadopago`
-- [ ] Página pública de pagamento (`GET /pay/:token`)
-- [ ] Módulo Ledger: entry criada em `payment.succeeded`
+- [x] Módulo Billing: criação automática em `appointment.completed` + cancelamento
+- [x] Módulo Payments: integração Stripe (cartão) + MercadoPago (PIX + boleto)
+- [x] Webhooks: `POST /payments/webhooks/stripe` e `/mercadopago`
+- [x] Página pública de pagamento (`GET /pay/:token`)
+- [x] Módulo Ledger: entry criada em `payment.succeeded`
 
 ### Frontend
-- [ ] Página Cobranças: lista com status (pending, paid, overdue, cancelled)
-- [ ] Detalhe da cobrança: valor, status, botão "reenviar link"
-- [ ] Página pública de pagamento (`/pay/[token]`) — responsiva para celular
-- [ ] Página Financeiro: resumo do ledger (total recebido, total pendente, net)
+- [x] Página Cobranças: lista com status (pending, paid, overdue, cancelled)
+- [x] Detalhe da cobrança: valor, status, botão "reenviar link"
+- [x] Página pública de pagamento (`/pay/[token]`) — responsiva para celular
+- [x] Página Financeiro: resumo do ledger (total recebido, total pendente, net)
 
 ### Resultado
 > Você conclui o atendimento da Ana → o sistema cria a cobrança de R$350 automaticamente
@@ -121,15 +122,15 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 **Objetivo**: WhatsApp e email saem automaticamente nos momentos certos — sem ação manual.
 
 ### Backend
-- [ ] Integração WhatsApp: Z-API ou Evolution API HTTP client
-- [ ] Integração Resend: templates de email
-- [ ] Módulo Notifications: filas BullMQ (whatsapp + email)
-- [ ] Triggers: confirmação de agendamento, D-1 reminder, link de pagamento, recibo
-- [ ] Logs de notificação + retry manual
+- [x] Integração WhatsApp: Z-API ou Evolution API HTTP client
+- [x] Integração Resend: templates de email
+- [x] Módulo Notifications: filas BullMQ (whatsapp + email)
+- [x] Triggers: confirmação de agendamento, D-1 reminder, link de pagamento, recibo
+- [x] Logs de notificação + retry manual
 
 ### Frontend
-- [ ] Página Notificações: log de envios (status, canal, evento, data)
-- [ ] Botão "reenviar" em caso de falha
+- [x] Página Notificações: log de envios (status, canal, evento, data)
+- [x] Botão "reenviar" em caso de falha
 
 ### Resultado
 > O cliente recebe WhatsApp: "Seu agendamento amanhã às 14h com Ana está confirmado."
@@ -210,19 +211,36 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+---
+
+## Fase 10 — Pendente / Não implementado
+
+> Itens identificados no código ou features que ainda não foram construídos.
+
+### Backend
+- [ ] Módulo Contracts: contratos digitais com assinatura eletrônica (`features/contracts.md` existe, código não)
+- [ ] `clinical.service.ts` ausente — módulo clinical só tem dto, repository e routes
+
+### Frontend
+- [ ] Página Vendas (`/sales`) — pasta existe no frontend mas página não consta no PLAN
+- [ ] Página Prontuário Clínico — tela de detalhe do histórico clínico por cliente
+
+---
+
 ## Resumo das Fases
 
-| Fase | O que você vê no final | Duração estimada |
-|------|------------------------|------------------|
-| 1 | Login + dashboard vazio | ~1 semana |
-| 2 | Configurações da clínica + usuários | ~3–4 dias |
-| 3 | Profissionais + serviços + clientes | ~3–4 dias |
-| 4 | **Calendário + agendamentos** | ~1–2 semanas |
-| 5 | **Cobranças + pagamentos PIX/cartão** | ~1–2 semanas |
-| 6 | WhatsApp automático | ~1 semana |
-| 7 | Dashboard financeiro | ~3–4 dias |
-| 8 | IA embutida (chat + resumos + briefing) | ~1 semana |
-| 9 | Equipamentos, salas, insumos, pacotes, wallet, promoções | ~1–2 semanas |
+| Fase | O que você vê no final | Status |
+|------|------------------------|--------|
+| 1 | Login + dashboard vazio | ✅ Concluída |
+| 2 | Configurações da clínica + usuários | ✅ Concluída |
+| 3 | Profissionais + serviços + clientes | ✅ Concluída |
+| 4 | **Calendário + agendamentos** | ✅ Concluída |
+| 5 | **Cobranças + pagamentos PIX/cartão** | ✅ Concluída |
+| 6 | WhatsApp automático | ✅ Concluída |
+| 7 | Dashboard financeiro | ✅ Concluída |
+| 8 | IA embutida (chat + resumos + briefing) | ✅ Concluída |
+| 9 | Equipamentos, salas, insumos, pacotes, wallet, promoções | ✅ Concluída |
+| 10 | Contracts, clinical service, sales page | 🔲 Pendente |
 
 > Fases 4 e 5 são as mais complexas e o core do produto.
 > Fases 1–3 são fundação — rápidas de fazer, essenciais para o resto funcionar.
@@ -234,6 +252,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 Ao iniciar uma fase, abra a sessão assim:
 
 ```
+#file:AGENT_RULES.md
 #file:projects/aesthera/START.md
 #file:projects/aesthera/context/stack.md
 #file:projects/aesthera/context/architecture.md
@@ -242,3 +261,5 @@ Ao iniciar uma fase, abra a sessão assim:
 
 Fase X — iniciando [nome da fase]
 ```
+
+> ⚠️ Após cada entrega, marque os itens concluídos neste arquivo com `[x]`.

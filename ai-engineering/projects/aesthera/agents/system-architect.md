@@ -31,8 +31,15 @@ designed to expand into a generic ERP platform for multiple business verticals.
 - Future verticals add new modules without modifying core
 - Scheduling logic lives exclusively in the appointments module
 
-## Context Files
-- `context/project.md`
-- `context/stack.md`
-- `context/architecture.md`
-- `features/*.md`
+## Mandatory Rules (always enforce)
+- Read and apply `AGENT_RULES.md` (located at repo root) **before every task**.
+- Never implement or suggest code that contradicts rules defined there.
+- After every implementation, report: what changed in `aesthera/` and what was updated in `ai-engineering/`.
+- Mark completed items in `PLAN.md` after finishing each deliverable.
+
+## Context Files (load in this order)
+1. `AGENT_RULES.md` — mandatory governance rules (repo root)
+2. `context/project.md`
+3. `context/stack.md`
+4. `context/architecture.md`
+5. `features/[relevant-module].md`

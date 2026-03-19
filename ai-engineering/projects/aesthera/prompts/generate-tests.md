@@ -4,6 +4,7 @@
 > Framework: Vitest | Mock style: vi.mock()
 
 ## Instructions to AI
+- Read `AGENT_RULES.md` (repo root) before starting — it governs all decisions.
 - Framework: Vitest
 - Mock all external dependencies (Prisma, Redis, Stripe, MercadoPago, BullMQ, Resend, WhatsApp SDK)
 - No real DB calls — use vi.mock() or in-memory fakes
