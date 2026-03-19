@@ -52,6 +52,7 @@ export const UpdateCustomerDto = z.object({
   occupation: z.string().nullish(),
   howFound: z.string().nullish(),
   notes: z.string().nullish(),
+  active: z.boolean().optional(),
   address: AddressSchema,
   anamnesis: AnamnesisSchema,
 })
@@ -63,6 +64,7 @@ export const ListCustomersQuery = z.object({
   email: z.string().optional(),
   phone: z.string().optional(),
   document: z.string().optional(),
+  active: z.enum(['true', 'false']).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(500).default(20),
 })

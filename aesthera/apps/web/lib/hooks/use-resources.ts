@@ -73,6 +73,7 @@ export interface Customer {
   document: string | null
   birthDate: string | null
   notes: string | null
+  active: boolean
   address: CustomerAddress | null
   metadata: CustomerMeta | null
   createdAt: string

@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Bot, ClipboardList, FileSignature, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User } from 'lucide-react'
+import { Bot, ClipboardList, FileSignature, Loader2, Package, Pencil, Plus, Scissors, Trash2, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -1466,9 +1466,18 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
+type StatusFilter = 'all' | 'active' | 'inactive'
+const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
+
 export default function CustomersPage() {
   const [search, setSearch] = useState('')
-  const { data, isLoading } = useCustomers(search ? { name: search } : undefined)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+  const params: Record<string, string> = {}
+  if (search) params.name = search
+  if (statusFilter !== 'all') params.active = statusFilter === 'active' ? 'true' : 'false'
+
+  const { data, isLoading } = useCustomers(Object.keys(params).length ? params : undefined)
   const createCustomer = useCreateCustomer()
   const deleteCustomer = useDeleteCustomer()
 
@@ -1519,24 +1528,40 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Clientes</h2>
           <p className="text-sm text-muted-foreground">Base de clientes da clínica</p>
         </div>
-        <Button onClick={() => setCreating(true)}>+ Novo Cliente</Button>
+        <Button onClick={() => setCreating(true)}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          Novo Cliente
+        </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
         <Input
-          className="pl-9"
           placeholder="Buscar por nome…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          className="h-8 w-48 text-sm"
         />
+        {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={[
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              statusFilter === s
+                ? 'bg-primary text-primary-foreground'
+                : 'border border-input text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            {STATUS_LABELS[s]}
+          </button>
+        ))}
       </div>
 
       {/* Table */}
@@ -1549,16 +1574,17 @@ export default function CustomersPage() {
               <th className="px-2 py-3 text-left font-medium">Telefone</th>
               <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">CPF</th>
               <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Cidade</th>
+              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Status</th>
               <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Cadastro</th>
               <th className="px-2 py-3 text-right font-medium">Ações</th>
             </tr>
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>
+              <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>
             )}
             {!isLoading && data?.items.length === 0 && (
-              <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum cliente encontrado.</td></tr>
+              <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">Nenhum cliente encontrado.</td></tr>
             )}
             {data?.items.map((c) => (
               <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
@@ -1571,6 +1597,17 @@ export default function CustomersPage() {
                 <td className="px-2 py-3 text-muted-foreground">{c.phone ?? '—'}</td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.document ?? '—'}</td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.address?.city ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3">
+                  {c.active ? (
+                    <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      Ativo
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                      Inativo
+                    </span>
+                  )}
+                </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(c.createdAt)}</td>
                 <td className="px-2 py-3">
                   <div className="flex justify-end gap-1">
