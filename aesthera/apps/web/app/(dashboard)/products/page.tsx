@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Package, ShoppingCart } from 'lucide-react'
+import { AlertCircle, Package, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -269,6 +269,7 @@ export default function ProductsPage() {
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
+  const [deleting, setDeleting] = useState<Product | null>(null)
   const [selling, setSelling] = useState<Product | null>(null)
 
   const { data: products, isLoading } = useProducts()
@@ -331,10 +332,10 @@ export default function ProductsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Excluir este produto?')) return
     try {
       await deleteProduct.mutateAsync(id)
       toast.success('Produto removido')
+      setDeleting(null)
     } catch {
       toast.error('Erro ao remover produto')
     }
@@ -350,7 +351,10 @@ export default function ProductsPage() {
           <p className="text-sm text-muted-foreground">Catálogo e vendas de produtos</p>
         </div>
         {tab === 'catalog' && (
-          <Button onClick={() => setCreating(true)}>+ Novo Produto</Button>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Novo Produto
+          </Button>
         )}
       </div>
 
@@ -428,20 +432,26 @@ export default function ProductsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          title="Vender produto"
+                          aria-label="Vender produto"
                           className="text-green-700 hover:text-green-800"
                           onClick={() => setSelling(p)}
                           disabled={!p.active || p.stock <= 0}
                         >
-                          Vender
+                          <ShoppingCart className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(p)}>Editar</Button>
+                        <Button variant="ghost" size="sm" title="Editar produto" aria-label="Editar produto" onClick={() => setEditing(p)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
+                          title="Remover produto"
+                          aria-label="Remover produto"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(p.id)}
+                          onClick={() => setDeleting(p)}
                         >
-                          Excluir
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </td>
@@ -540,6 +550,22 @@ export default function ProductsPage() {
           </DialogTitle>
           <div className="mt-4">
             <SellDialog product={selling} onClose={() => setSelling(null)} />
+          </div>
+        </Dialog>
+      )}
+
+      {/* Delete dialog */}
+      {deleting && (
+        <Dialog open onClose={() => setDeleting(null)}>
+          <DialogTitle>Remover Produto</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Remover o produto <strong>{deleting.name}</strong>? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleting(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => handleDelete(deleting.id)}>Remover</Button>
+            </div>
           </div>
         </Dialog>
       )}
