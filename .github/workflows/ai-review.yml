@@ -24,6 +24,8 @@ jobs:
 
       - name: Run AI Review
         run: node .github/workflows/scripts/ai-review.js
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
          
       - name: Comentar no PR
         uses: marocchino/sticky-pull-request-comment@v2
