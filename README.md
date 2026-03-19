@@ -1,4 +1,5 @@
 # IA — Workspace de Desenvolvimento com IA
+teste
 
 Workspace centralizado para projetos desenvolvidos com assistência de IA (GitHub Copilot, ChatGPT, Claude).
 
