@@ -47,7 +47,24 @@ jobs:
                   },
                   {
                     role: "user",
-                    content: diff
+                    const rules = fs.existsSync("AGENT_RULES.md")
+                      ? fs.readFileSync("AGENT_RULES.md", "utf8")
+                      : "";
+                    
+                    const ui = fs.existsSync("docs/ui-standards.md")
+                      ? fs.readFileSync("docs/ui-standards.md", "utf8")
+                      : "";
+                    
+                    const context = `
+                    AGENT RULES:
+                    ${rules}
+                    
+                    UI STANDARDS:
+                    ${ui}
+                    
+                    CODE DIFF:
+                    ${diff}
+                    `;
                   }
                 ]
               })
