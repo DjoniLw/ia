@@ -14,6 +14,8 @@ import {
   Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { useCustomers, useServices } from '@/lib/hooks/use-resources'
 import {
   type CreatePackageInput,
@@ -149,6 +151,11 @@ function PackageModal({
       { serviceId: '', quantity: 1 },
     ],
   )
+  const [isDirty, setIsDirty] = useState(false)
+
+  function markDirty() {
+    if (!isDirty) setIsDirty(true)
+  }
 
   const createMutation = useCreatePackage()
   const updateMutation = useUpdatePackage(editing?.id ?? '')
@@ -158,14 +165,17 @@ function PackageModal({
 
   function addItem() {
     setItems((prev) => [...prev, { serviceId: '', quantity: 1 }])
+    markDirty()
   }
 
   function removeItem(index: number) {
     setItems((prev) => prev.filter((_, i) => i !== index))
+    markDirty()
   }
 
   function updateItem(index: number, field: 'serviceId' | 'quantity', value: string | number) {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)))
+    markDirty()
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -208,149 +218,136 @@ function PackageModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg overflow-y-auto rounded-xl border bg-card shadow-xl max-h-[90vh]">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">
-            {editing ? 'Editar pacote' : 'Novo pacote'}
-          </h3>
-          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
+    <Dialog open={open} onClose={onClose} isDirty={isDirty}>
+      <DialogTitle>{editing ? 'Editar pacote' : 'Novo pacote'}</DialogTitle>
+
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Nome *</label>
+          <Input
+            value={name}
+            onChange={(e) => { setName(e.target.value); markDirty() }}
+            placeholder="Pacote Facial Premium"
+            required
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Nome *</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Pacote Facial Premium"
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Descrição</label>
+          <Input
+            value={description}
+            onChange={(e) => { setDescription(e.target.value); markDirty() }}
+            placeholder="Descrição opcional"
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Preço (R$) *</label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={price}
+              onChange={(e) => { setPrice(e.target.value); markDirty() }}
+              placeholder="350,00"
               required
             />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Descrição</label>
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Descrição opcional"
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              Validade (dias){' '}
+              <span className="font-normal text-muted-foreground/60">— opcional</span>
+            </label>
+            <Input
+              type="number"
+              value={validityDays}
+              onChange={(e) => { setValidityDays(e.target.value); markDirty() }}
+              placeholder="Sem expiração"
             />
           </div>
+        </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Preço (R$) *</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="350,00"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
-              />
-            </div>
+        {editing && (
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="active-toggle"
+              checked={active}
+              onChange={(e) => { setActive(e.target.checked); markDirty() }}
+              className="h-4 w-4 rounded border"
+            />
+            <label htmlFor="active-toggle" className="text-sm text-foreground">
+              Pacote ativo (disponível para venda)
+            </label>
+          </div>
+        )}
 
-            <div className="space-y-1">
+        {!editing && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-muted-foreground">
-                Validade (dias){' '}
-                <span className="font-normal text-muted-foreground/60">— opcional</span>
+                Serviços incluídos *
               </label>
-              <input
-                type="number"
-                value={validityDays}
-                onChange={(e) => setValidityDays(e.target.value)}
-                placeholder="Sem expiração"
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <button
+                type="button"
+                onClick={addItem}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                + Adicionar serviço
+              </button>
             </div>
-          </div>
 
-          {editing && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="active-toggle"
-                checked={active}
-                onChange={(e) => setActive(e.target.checked)}
-                className="h-4 w-4 rounded border"
-              />
-              <label htmlFor="active-toggle" className="text-sm text-foreground">
-                Pacote ativo (disponível para venda)
-              </label>
-            </div>
-          )}
-
-          {!editing && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Serviços incluídos *
-                </label>
-                <button
-                  type="button"
-                  onClick={addItem}
-                  className="text-xs font-medium text-primary hover:underline"
+            {items.map((item, index) => (
+              <div key={index} className="flex gap-2">
+                <select
+                  value={item.serviceId}
+                  onChange={(e) => updateItem(index, 'serviceId', e.target.value)}
+                  className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  + Adicionar serviço
-                </button>
-              </div>
-
-              {items.map((item, index) => (
-                <div key={index} className="flex gap-2">
-                  <select
-                    value={item.serviceId}
-                    onChange={(e) => updateItem(index, 'serviceId', e.target.value)}
-                    className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">Selecionar serviço…</option>
-                    {services.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex flex-col items-center justify-center">
-                    <label className="text-[10px] text-muted-foreground">Sessões</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                      className="w-20 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      className="self-end rounded p-1 text-destructive hover:bg-destructive/10"
-                    >
-                      ✕
-                    </button>
-                  )}
+                  <option value="">Selecionar serviço…</option>
+                  {services.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-col items-center justify-center">
+                  <label className="text-[10px] text-muted-foreground">Sessões</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
+                    className="w-20"
+                  />
                 </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editing ? 'Salvar' : 'Criar pacote'}
-            </Button>
+                {items.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeItem(index)}
+                    className="self-end rounded p-1 text-destructive hover:bg-destructive/10"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-        </form>
-      </div>
-    </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={isPending}>
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {editing ? 'Salvar' : 'Criar pacote'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   )
 }
 
@@ -383,45 +380,38 @@ function PurchaseModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">Vender pacote</h3>
-          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>Vender pacote</DialogTitle>
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+          <div className="font-medium text-foreground">{pkg.name}</div>
+          <div className="mt-1 text-muted-foreground">{formatCurrency(pkg.price)}</div>
+          {pkg.validityDays && (
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              Validade: {pkg.validityDays} dias
+            </div>
+          )}
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
-          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-            <div className="font-medium text-foreground">{pkg.name}</div>
-            <div className="mt-1 text-muted-foreground">{formatCurrency(pkg.price)}</div>
-            {pkg.validityDays && (
-              <div className="mt-0.5 text-xs text-muted-foreground">
-                Validade: {pkg.validityDays} dias
-              </div>
-            )}
-          </div>
 
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Cliente *</label>
-            <CustomerSearchInput value={customer} onChange={setCustomer} />
-            {customer && (
-              <p className="text-xs text-green-600">✓ {customer.name}</p>
-            )}
-          </div>
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">Cliente *</label>
+          <CustomerSearchInput value={customer} onChange={setCustomer} />
+          {customer && (
+            <p className="text-xs text-green-600">✓ {customer.name}</p>
+          )}
+        </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={purchase.isPending}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={purchase.isPending || !customer}>
-              {purchase.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirmar venda
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={purchase.isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={purchase.isPending || !customer}>
+            {purchase.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Confirmar venda
+          </Button>
+        </div>
+      </form>
+    </Dialog>
   )
 }
 
@@ -624,6 +614,7 @@ export default function PackagesPage() {
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [creating, setCreating] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data, isLoading } = usePackages(
     activeFilter !== undefined ? { active: activeFilter } : undefined,
@@ -635,23 +626,34 @@ export default function PackagesPage() {
     { value: false, label: 'Inativos' },
   ]
 
+  const filteredPackages = (data?.items ?? []).filter((pkg) =>
+    pkg.name.toLowerCase().includes(search.toLowerCase()) ||
+    (pkg.description ?? '').toLowerCase().includes(search.toLowerCase()),
+  )
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Pacotes</h2>
+          <h2 className="text-xl font-semibold">Pacotes</h2>
           <p className="text-sm text-muted-foreground">
             Pacotes de serviços com sessões pré-pagas
           </p>
         </div>
-        <Button onClick={() => setCreating(true)} size="sm">
+        <Button onClick={() => setCreating(true)}>
           <Plus className="mr-1.5 h-4 w-4" />
           Novo pacote
         </Button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Buscar por nome…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 w-48 text-sm"
+        />
         {filterOptions.map((opt) => (
           <button
             key={String(opt.value)}
@@ -674,16 +676,20 @@ export default function PackagesPage() {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : !data?.items.length ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-16 text-center shadow-sm">
-          <PackageIcon className="h-8 w-8 text-muted-foreground/30" />
-          <p className="text-sm text-muted-foreground">Nenhum pacote encontrado</p>
-          <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
+        <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+          <PackageIcon className="mx-auto mb-2 h-8 w-8 opacity-30" />
+          <p className="text-sm">Nenhum pacote cadastrado.</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
             Criar primeiro pacote
           </Button>
         </div>
+      ) : filteredPackages.length === 0 ? (
+        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
+          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {data.items.map((pkg) => (
+          {filteredPackages.map((pkg) => (
             <PackageCard
               key={pkg.id}
               pkg={pkg}

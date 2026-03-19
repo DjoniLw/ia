@@ -147,6 +147,9 @@ function SupplyForm({
 
 // ──── Page ────────────────────────────────────────────────────────────────────
 
+type StatusFilter = 'all' | 'active' | 'inactive'
+const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
+
 export default function SuppliesPage() {
   const { data, isLoading } = useSupplies()
   const createSupply = useCreateSupply()
@@ -155,6 +158,19 @@ export default function SuppliesPage() {
   const [editing, setEditing] = useState<Supply | null>(null)
   const [deleting, setDeleting] = useState<Supply | null>(null)
   const [converting, setConverting] = useState<Supply | null>(null)
+
+  // ── Filters ──
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+  const filtered = (data?.items ?? []).filter((s) => {
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && s.active) ||
+      (statusFilter === 'inactive' && !s.active)
+    return matchesSearch && matchesStatus
+  })
 
   async function handleCreate(d: Parameters<typeof createSupply.mutateAsync>[0]) {
     try {
@@ -182,12 +198,43 @@ export default function SuppliesPage() {
         </Button>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Buscar por nome…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 w-48 text-sm"
+        />
+        {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={[
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              statusFilter === s
+                ? 'bg-primary text-primary-foreground'
+                : 'border border-input text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            {STATUS_LABELS[s]}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
       ) : !data || data.items.length === 0 ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <PackageOpen className="mx-auto mb-2 h-8 w-8 opacity-30" />
           <p className="text-sm">Nenhum insumo cadastrado.</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
+            Criar primeiro insumo
+          </Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
+          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
         </div>
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -204,7 +251,7 @@ export default function SuppliesPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {data.items.map((s) => (
+              {filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-medium">
                     {s.name}

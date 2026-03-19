@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import {
   type CreatePromotionInput,
   type Promotion,
@@ -69,6 +71,12 @@ function PromotionModal({
   const [validUntil, setValidUntil] = useState(editing?.validUntil?.slice(0, 10) ?? '')
   const [status, setStatus] = useState<PromotionStatus>(editing?.status ?? 'active')
 
+  const [isDirty, setIsDirty] = useState(false)
+
+  function markDirty() {
+    if (!isDirty) setIsDirty(true)
+  }
+
   const createMutation = useCreatePromotion()
   const updateMutation = useUpdatePromotion(editing?.id ?? '')
 
@@ -117,27 +125,16 @@ function PromotionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl border bg-card shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">
-            {editing ? 'Editar promoção' : 'Nova promoção'}
-          </h3>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-muted-foreground hover:text-foreground"
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open={open} onClose={onClose} isDirty={isDirty}>
+      <DialogTitle>{editing ? 'Editar promoção' : 'Nova promoção'}</DialogTitle>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Nome *</label>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => { setName(e.target.value); markDirty() }}
                 placeholder="Black Friday 20%"
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 required
@@ -150,7 +147,7 @@ function PromotionModal({
               </label>
               <input
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onChange={(e) => { setCode(e.target.value.toUpperCase()); markDirty() }}
                 placeholder="BLACKFRIDAY20"
                 disabled={!!editing}
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
@@ -163,7 +160,7 @@ function PromotionModal({
             <label className="text-xs font-medium text-muted-foreground">Descrição</label>
             <input
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => { setDescription(e.target.value); markDirty() }}
               placeholder="Descrição opcional"
               className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             />
@@ -175,7 +172,7 @@ function PromotionModal({
                 <label className="text-xs font-medium text-muted-foreground">Tipo de desconto *</label>
                 <select
                   value={discountType}
-                  onChange={(e) => setDiscountType(e.target.value as 'PERCENTAGE' | 'FIXED')}
+                  onChange={(e) => { setDiscountType(e.target.value as 'PERCENTAGE' | 'FIXED'); markDirty() }}
                   className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="PERCENTAGE">Percentual (%)</option>
@@ -192,7 +189,7 @@ function PromotionModal({
                   min="1"
                   max={discountType === 'PERCENTAGE' ? '100' : undefined}
                   value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value)}
+                  onChange={(e) => { setDiscountValue(e.target.value); markDirty() }}
                   placeholder={discountType === 'PERCENTAGE' ? '20' : '50'}
                   className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   required
@@ -208,7 +205,7 @@ function PromotionModal({
                 type="number"
                 min="1"
                 value={maxUses}
-                onChange={(e) => setMaxUses(e.target.value)}
+                onChange={(e) => { setMaxUses(e.target.value); markDirty() }}
                 placeholder="Ilimitado"
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
@@ -222,7 +219,7 @@ function PromotionModal({
                   min="0"
                   step="0.01"
                   value={minAmount}
-                  onChange={(e) => setMinAmount(e.target.value)}
+                  onChange={(e) => { setMinAmount(e.target.value); markDirty() }}
                   placeholder="Sem mínimo"
                   className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
@@ -250,7 +247,7 @@ function PromotionModal({
               <input
                 type="date"
                 value={validUntil}
-                onChange={(e) => setValidUntil(e.target.value)}
+                onChange={(e) => { setValidUntil(e.target.value); markDirty() }}
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -261,7 +258,7 @@ function PromotionModal({
               <label className="text-xs font-medium text-muted-foreground">Status</label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as PromotionStatus)}
+                onChange={(e) => { setStatus(e.target.value as PromotionStatus); markDirty() }}
                 className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="active">Ativo</option>
@@ -282,9 +279,8 @@ function PromotionModal({
               {editing ? 'Salvar' : 'Criar promoção'}
             </Button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Dialog>
   )
 }
 
@@ -321,6 +317,7 @@ export default function PromotionsPage() {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Promotion | undefined>()
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   const params = statusFilter ? { status: statusFilter } : undefined
   const { data, isLoading } = usePromotions(params)
@@ -332,23 +329,34 @@ export default function PromotionsPage() {
     { value: 'expired', label: 'Expirados' },
   ]
 
+  const filteredPromotions = (data?.items ?? []).filter((p) =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.code.toLowerCase().includes(search.toLowerCase()),
+  )
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Promoções</h2>
+          <h2 className="text-xl font-semibold">Promoções</h2>
           <p className="text-sm text-muted-foreground">
             Códigos de desconto para clientes
           </p>
         </div>
-        <Button onClick={() => setCreating(true)} size="sm">
+        <Button onClick={() => setCreating(true)}>
           <Plus className="mr-1.5 h-4 w-4" />
           Nova promoção
         </Button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Buscar por nome…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 w-48 text-sm"
+        />
         {statusOptions.map((s) => (
           <button
             key={s.value}
@@ -372,12 +380,16 @@ export default function PromotionsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : !data?.items.length ? (
-          <div className="flex flex-col items-center gap-2 py-16 text-center">
-            <Tag className="h-8 w-8 text-muted-foreground/30" />
-            <p className="text-sm text-muted-foreground">Nenhuma promoção encontrada</p>
-            <Button variant="outline" size="sm" onClick={() => setCreating(true)}>
+          <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+            <Tag className="mx-auto mb-2 h-8 w-8 opacity-30" />
+            <p className="text-sm">Nenhuma promoção cadastrada.</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
               Criar primeira promoção
             </Button>
+          </div>
+        ) : filteredPromotions.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground">
+            <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -393,7 +405,7 @@ export default function PromotionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {data.items.map((promo) => (
+                {filteredPromotions.map((promo) => (
                   <>
                     <tr key={promo.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3">

@@ -263,6 +263,8 @@ function SellDialog({ product, onClose }: { product: Product; onClose: () => voi
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
 type PageTab = 'catalog' | 'sales'
+type StatusFilter = 'all' | 'active' | 'inactive'
+const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
 
 export default function ProductsPage() {
   const [tab, setTab] = useState<PageTab>('catalog')
@@ -272,11 +274,27 @@ export default function ProductsPage() {
   const [deleting, setDeleting] = useState<Product | null>(null)
   const [selling, setSelling] = useState<Product | null>(null)
 
+  // ── Filters ──
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
   const { data: products, isLoading } = useProducts()
   const { data: sales, isLoading: salesLoading } = useProductSales()
   const createProduct = useCreateProduct()
   const updateProduct = useUpdateProduct(editing?.id ?? '')
   const deleteProduct = useDeleteProduct()
+
+  const filteredProducts = (products?.items ?? []).filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.category ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (p.brand ?? '').toLowerCase().includes(search.toLowerCase())
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && p.active) ||
+      (statusFilter === 'inactive' && !p.active)
+    return matchesSearch && matchesStatus
+  })
 
   async function handleCreate(formData: ProductFormData) {
     try {
@@ -387,80 +405,116 @@ export default function ProductsPage() {
 
       {/* Product catalog */}
       {tab === 'catalog' && (
-        <div className="rounded-lg border bg-card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-muted-foreground">
-                <th className="py-3 pl-4 pr-2 text-left font-medium">Nome</th>
-                <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Categoria</th>
-                <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Marca</th>
-                <th className="px-2 py-3 text-right font-medium">Preço</th>
-                <th className="px-2 py-3 text-right font-medium">Estoque</th>
-                <th className="hidden sm:table-cell px-2 py-3 text-center font-medium">Status</th>
-                <th className="px-2 py-3 text-right font-medium">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>
-              )}
-              {!isLoading && products?.items.length === 0 && (
-                <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum produto cadastrado.</td></tr>
-              )}
-              {products?.items.map((p) => {
-                const isLow = p.stock <= p.minStock
-                return (
-                  <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 pl-4 pr-2 font-medium">
-                      {p.name}
-                      {p.sku && <span className="ml-1 text-xs text-muted-foreground">#{p.sku}</span>}
-                    </td>
-                    <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.category ?? '—'}</td>
-                    <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.brand ?? '—'}</td>
-                    <td className="px-2 py-3 text-right font-medium">{formatCurrency(p.price)}</td>
-                    <td className={`px-2 py-3 text-right font-medium ${isLow ? 'text-amber-700' : ''}`}>
-                      {p.stock} {p.unit}
-                      {isLow && <span className="ml-1 text-xs">(baixo)</span>}
-                    </td>
-                    <td className="hidden sm:table-cell px-2 py-3 text-center">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.active ? 'bg-green-100 text-green-800' : 'bg-muted text-muted-foreground'}`}>
-                        {p.active ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </td>
-                    <td className="px-2 py-3">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Vender produto"
-                          aria-label="Vender produto"
-                          className="text-green-700 hover:text-green-800"
-                          onClick={() => setSelling(p)}
-                          disabled={!p.active || p.stock <= 0}
-                        >
-                          <ShoppingCart className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="sm" title="Editar produto" aria-label="Editar produto" onClick={() => setEditing(p)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Remover produto"
-                          aria-label="Remover produto"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => setDeleting(p)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
+        <>
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              placeholder="Buscar por nome…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 w-48 text-sm"
+            />
+            {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={[
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  statusFilter === s
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-input text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+
+          {isLoading ? (
+            <div className="py-12 text-center text-muted-foreground">Carregando…</div>
+          ) : !products || products.items.length === 0 ? (
+            <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+              <Package className="mx-auto mb-2 h-8 w-8 opacity-30" />
+              <p className="text-sm">Nenhum produto cadastrado.</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
+                Criar primeiro produto
+              </Button>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
+              <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-card overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="py-3 pl-4 pr-2 text-left font-medium">Nome</th>
+                    <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Categoria</th>
+                    <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Marca</th>
+                    <th className="px-2 py-3 text-right font-medium">Preço</th>
+                    <th className="px-2 py-3 text-right font-medium">Estoque</th>
+                    <th className="hidden sm:table-cell px-2 py-3 text-center font-medium">Status</th>
+                    <th className="px-2 py-3 text-right font-medium">Ações</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {filteredProducts.map((p) => {
+                    const isLow = p.stock <= p.minStock
+                    return (
+                      <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="py-3 pl-4 pr-2 font-medium">
+                          {p.name}
+                          {p.sku && <span className="ml-1 text-xs text-muted-foreground">#{p.sku}</span>}
+                        </td>
+                        <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.category ?? '—'}</td>
+                        <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.brand ?? '—'}</td>
+                        <td className="px-2 py-3 text-right font-medium">{formatCurrency(p.price)}</td>
+                        <td className={`px-2 py-3 text-right font-medium ${isLow ? 'text-amber-700' : ''}`}>
+                          {p.stock} {p.unit}
+                          {isLow && <span className="ml-1 text-xs">(baixo)</span>}
+                        </td>
+                        <td className="hidden sm:table-cell px-2 py-3 text-center">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
+                            {p.active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-3">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Vender produto"
+                              aria-label="Vender produto"
+                              className="text-green-700 hover:text-green-800"
+                              onClick={() => setSelling(p)}
+                              disabled={!p.active || p.stock <= 0}
+                            >
+                              <ShoppingCart className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" title="Editar produto" aria-label="Editar produto" onClick={() => setEditing(p)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Remover produto"
+                              aria-label="Remover produto"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeleting(p)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {/* Sales history */}
