@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Bot, ClipboardList, FileSignature, Loader2, Package, Plus, Scissors, Search, User } from 'lucide-react'
+import { Bot, ClipboardList, FileSignature, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -1475,6 +1475,7 @@ export default function CustomersPage() {
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
+  const [deleting, setDeleting] = useState<Customer | null>(null)
   const [viewing, setViewing] = useState<Customer | null>(null)
   const [aiSummary, setAiSummary] = useState<Customer | null>(null)
 
@@ -1508,10 +1509,10 @@ export default function CustomersPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Excluir este cliente? Esta ação não pode ser desfeita.')) return
     try {
       await deleteCustomer.mutateAsync(id)
       toast.success('Cliente removido')
+      setDeleting(null)
     } catch {
       toast.error('Erro ao remover cliente')
     }
@@ -1573,12 +1574,18 @@ export default function CustomersPage() {
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(c.createdAt)}</td>
                 <td className="px-2 py-3">
                   <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="sm" className="text-violet-600 hover:text-violet-700" onClick={() => setAiSummary(c)}>
+                    <Button variant="ghost" size="sm" title="Resumo IA" aria-label="Resumo IA" className="text-violet-600 hover:text-violet-700" onClick={() => setAiSummary(c)}>
                       <Bot className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setViewing(c)}>Ver ficha</Button>
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>Editar</Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(c.id)}>Excluir</Button>
+                    <Button variant="ghost" size="sm" title="Ver ficha" aria-label="Ver ficha" onClick={() => setViewing(c)}>
+                      <User className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" title="Editar cliente" aria-label="Editar cliente" onClick={() => setEditing(c)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" title="Remover cliente" aria-label="Remover cliente" className="text-destructive hover:text-destructive" onClick={() => setDeleting(c)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -1628,6 +1635,22 @@ export default function CustomersPage() {
 
       {/* AI Summary */}
       {aiSummary && <AiSummaryDialog customer={aiSummary} onClose={() => setAiSummary(null)} />}
+
+      {/* Delete dialog */}
+      {deleting && (
+        <Dialog open onClose={() => setDeleting(null)}>
+          <DialogTitle>Remover Cliente</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Remover o cliente <strong>{deleting.name}</strong>? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleting(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => handleDelete(deleting.id)}>Remover</Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useDeactivateUser, useInviteUser, useUsers } from '@/lib/hooks/use-settings'
@@ -25,6 +26,7 @@ export function UsersTab() {
   const { mutateAsync: inviteUser, isPending: inviting } = useInviteUser()
   const { mutateAsync: deactivate } = useDeactivateUser()
   const [showForm, setShowForm] = useState(false)
+  const [deactivating, setDeactivating] = useState<{ id: string; name: string } | null>(null)
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<InviteData>({
     resolver: zodResolver(inviteSchema),
@@ -44,10 +46,10 @@ export function UsersTab() {
   }
 
   async function handleDeactivate(userId: string, name: string) {
-    if (!confirm(`Desativar ${name}?`)) return
     try {
       await deactivate(userId)
       toast.success(`${name} desativado`)
+      setDeactivating(null)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Erro ao desativar usuário'
       toast.error(msg)
@@ -118,7 +120,7 @@ export function UsersTab() {
                       variant="ghost"
                       size="sm"
                       className="text-destructive hover:text-destructive"
-                      onClick={() => handleDeactivate(user.id, user.name)}
+                      onClick={() => setDeactivating({ id: user.id, name: user.name })}
                     >
                       Remover
                     </Button>
@@ -132,6 +134,23 @@ export function UsersTab() {
           )}
         </CardContent>
       </Card>
+
+      {deactivating && (
+        <Dialog open onClose={() => setDeactivating(null)}>
+          <DialogTitle>Desativar Usuário</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Desativar o acesso de <strong>{deactivating.name}</strong>? O usuário não poderá mais acessar o painel.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeactivating(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => handleDeactivate(deactivating.id, deactivating.name)}>
+                Desativar
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   )
 }

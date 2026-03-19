@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { PaymentModal } from '@/components/payment-modal'
 import { type BillingStatus, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
 
@@ -35,12 +36,13 @@ const STATUS_COLOR: Record<BillingStatus, string> = {
 
 function CancelBillingButton({ id, status }: { id: string; status: BillingStatus }) {
   const cancel = useCancelBilling(id)
+  const [confirming, setConfirming] = useState(false)
 
   async function handleCancel() {
-    if (!confirm('Cancelar esta cobrança?')) return
     try {
       await cancel.mutateAsync()
       toast.success('Cobrança cancelada')
+      setConfirming(false)
     } catch {
       toast.error('Erro ao cancelar cobrança')
     }
@@ -49,15 +51,34 @@ function CancelBillingButton({ id, status }: { id: string; status: BillingStatus
   if (status !== 'pending' && status !== 'overdue') return null
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="text-destructive hover:text-destructive"
-      onClick={handleCancel}
-      disabled={cancel.isPending}
-    >
-      Cancelar
-    </Button>
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:text-destructive"
+        onClick={() => setConfirming(true)}
+        disabled={cancel.isPending}
+      >
+        Cancelar
+      </Button>
+
+      {confirming && (
+        <Dialog open onClose={() => setConfirming(false)}>
+          <DialogTitle>Cancelar Cobrança</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Tem certeza que deseja cancelar esta cobrança? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirming(false)}>Voltar</Button>
+              <Button variant="destructive" onClick={handleCancel} disabled={cancel.isPending}>
+                {cancel.isPending ? 'Cancelando…' : 'Confirmar cancelamento'}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+    </>
   )
 }
 

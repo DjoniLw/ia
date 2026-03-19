@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
+import { FlaskConical, Pencil, Plus, Scissors, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -353,6 +354,14 @@ function ServiceSuppliesDialog({ service, onClose }: { service: Service; onClose
   )
 }
 
+type StatusFilter = 'all' | 'active' | 'inactive'
+
+const STATUS_LABELS: Record<StatusFilter, string> = {
+  all: 'Todos',
+  active: 'Ativos',
+  inactive: 'Inativos',
+}
+
 export default function ServicesPage() {
   const { data, isLoading } = useServices()
   const { mutateAsync: create, isPending: creating } = useCreateService()
@@ -361,17 +370,31 @@ export default function ServicesPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
   const [editing, setEditing] = useState<Service | null>(null)
+  const [deleting, setDeleting] = useState<Service | null>(null)
   const [managingSupplies, setManagingSupplies] = useState<Service | null>(null)
   const { mutateAsync: update, isPending: updating } = useUpdateService(editing?.id ?? '')
 
-  async function handleCreate(data: ServiceFormData) {
+  // ── Filters ──
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+  const filtered = (data?.items ?? []).filter((s) => {
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && s.active) ||
+      (statusFilter === 'inactive' && !s.active)
+    return matchesSearch && matchesStatus
+  })
+
+  async function handleCreate(formData: ServiceFormData) {
     try {
       await create({
-        name: data.name,
-        description: data.description ?? null,
-        category: data.category ?? null,
-        durationMinutes: data.durationMinutes,
-        price: parseBRL(data.priceDisplay),
+        name: formData.name,
+        description: formData.description ?? null,
+        category: formData.category ?? null,
+        durationMinutes: formData.durationMinutes,
+        price: parseBRL(formData.priceDisplay),
       })
       toast.success('Serviço criado')
       setShowCreate(false)
@@ -381,15 +404,15 @@ export default function ServicesPage() {
     }
   }
 
-  async function handleUpdate(data: ServiceFormData & { active?: boolean }) {
+  async function handleUpdate(formData: ServiceFormData & { active?: boolean }) {
     try {
       await update({
-        name: data.name,
-        description: data.description ?? null,
-        category: data.category ?? null,
-        durationMinutes: data.durationMinutes,
-        price: parseBRL(data.priceDisplay),
-        ...(data.active !== undefined ? { active: data.active } : {}),
+        name: formData.name,
+        description: formData.description ?? null,
+        category: formData.category ?? null,
+        durationMinutes: formData.durationMinutes,
+        price: parseBRL(formData.priceDisplay),
+        ...(formData.active !== undefined ? { active: formData.active } : {}),
       })
       toast.success('Serviço atualizado')
       setEditing(null)
@@ -399,79 +422,132 @@ export default function ServicesPage() {
     }
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Excluir "${name}"?`)) return
+  async function handleDelete(id: string) {
     try {
       await del(id)
       toast.success('Serviço excluído')
+      setDeleting(null)
     } catch {
       toast.error('Erro ao excluir serviço')
     }
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold">Serviços</h2>
-        <Button onClick={() => setShowCreate(true)}>+ Novo serviço</Button>
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Serviços</h2>
+          <p className="text-sm text-muted-foreground">Gerencie os serviços oferecidos.</p>
+        </div>
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          Novo Serviço
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          placeholder="Buscar por nome…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 w-48 text-sm"
+        />
+        {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={[
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              statusFilter === s
+                ? 'bg-primary text-primary-foreground'
+                : 'border border-input text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            {STATUS_LABELS[s]}
+          </button>
+        ))}
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando...</p>
+        <div className="py-12 text-center text-muted-foreground">Carregando…</div>
+      ) : !data || data.items.length === 0 ? (
+        <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+          <Scissors className="mx-auto mb-2 h-8 w-8 opacity-30" />
+          <p className="text-sm">Nenhum serviço cadastrado.</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowCreate(true)}>
+            Criar primeiro serviço
+          </Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
+          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+        </div>
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium">Nome</th>
-                <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Categoria</th>
-                <th className="hidden sm:table-cell text-right px-4 py-3 font-medium">Duração</th>
-                <th className="text-right px-4 py-3 font-medium">Preço</th>
-                <th className="text-center px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {data?.items.map((s) => (
-                <tr key={s.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-medium">{s.name}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-muted-foreground">{s.category ?? '—'}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-right">{s.durationMinutes}min</td>
-                  <td className="px-4 py-3 text-right">{priceDisplay(s.price)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${s.active ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
-                      {s.active ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>Editar</Button>
-                    <Button variant="ghost" size="sm" onClick={() => setManagingSupplies(s)}>Insumos</Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(s.id, s.name)}>Excluir</Button>
-                  </td>
-                </tr>
-              ))}
-              {data?.items.length === 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-muted-foreground">
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
-                    Nenhum serviço cadastrado.
-                  </td>
+                  <th className="text-left px-4 py-3 font-medium">Nome</th>
+                  <th className="hidden sm:table-cell text-left px-4 py-3 font-medium">Categoria</th>
+                  <th className="hidden sm:table-cell text-right px-4 py-3 font-medium">Duração</th>
+                  <th className="text-right px-4 py-3 font-medium">Preço</th>
+                  <th className="text-center px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3" />
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y">
+                {filtered.map((s) => (
+                  <tr key={s.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3 font-medium">{s.name}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-muted-foreground">{s.category ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-right">{s.durationMinutes}min</td>
+                    <td className="px-4 py-3 text-right">{priceDisplay(s.price)}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${s.active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted px-2 py-0.5 text-xs text-muted-foreground'}`}>
+                        {s.active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button variant="ghost" size="sm" title="Gerenciar insumos" aria-label="Gerenciar insumos" onClick={() => setManagingSupplies(s)}>
+                        <FlaskConical className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="sm" title="Editar serviço" aria-label="Editar serviço" onClick={() => setEditing(s)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Remover serviço"
+                        aria-label="Remover serviço"
+                        onClick={() => setDeleting(s)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      <Dialog open={showCreate} onClose={() => setShowCreate(false)} isDirty={formDirty}>
-        <DialogTitle>Novo serviço</DialogTitle>
-        <ServiceForm onSave={handleCreate} isPending={creating} onDirtyChange={setFormDirty} />
-      </Dialog>
+      {/* Create dialog */}
+      {showCreate && (
+        <Dialog open onClose={() => setShowCreate(false)} isDirty={formDirty}>
+          <DialogTitle>Novo Serviço</DialogTitle>
+          <ServiceForm onSave={handleCreate} isPending={creating} onDirtyChange={setFormDirty} />
+        </Dialog>
+      )}
 
-      <Dialog open={!!editing} onClose={() => setEditing(null)} isDirty={formDirty}>
-        <DialogTitle>Editar serviço</DialogTitle>
-        {editing && (
+      {/* Edit dialog */}
+      {editing && (
+        <Dialog open onClose={() => setEditing(null)} isDirty={formDirty}>
+          <DialogTitle>Editar Serviço</DialogTitle>
           <ServiceForm
             defaultValues={{
               ...editing,
@@ -483,8 +559,24 @@ export default function ServicesPage() {
             showActiveToggle
             onDirtyChange={setFormDirty}
           />
-        )}
-      </Dialog>
+        </Dialog>
+      )}
+
+      {/* Delete dialog */}
+      {deleting && (
+        <Dialog open onClose={() => setDeleting(null)}>
+          <DialogTitle>Remover Serviço</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Remover o serviço <strong>{deleting.name}</strong>? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleting(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => handleDelete(deleting.id)}>Remover</Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
 
       {managingSupplies && (
         <ServiceSuppliesDialog
