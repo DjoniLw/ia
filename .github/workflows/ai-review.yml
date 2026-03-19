@@ -1,0 +1,86 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+
+      - name: Pegar diff
+        run: |
+          git fetch origin main
+          git diff origin/main > diff.txt
+
+      - name: Instalar Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Instalar axios
+        run: npm install axios
+
+      - name: Rodar review com IA
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          node <<EOF
+          const fs = require("fs");
+          const axios = require("axios");
+
+          const diff = fs.readFileSync("diff.txt", "utf8");
+
+          async function run() {
+            const response = await axios.post(
+              "https://api.openai.com/v1/chat/completions",
+              {
+                model: "gpt-4.1",
+                messages: [
+                  {
+                    role: "system",
+                    content: `
+You are a senior software architect reviewing code.
+
+Follow these rules:
+- Validate architecture
+- Check UI consistency
+- Check business rules
+- Identify risks
+
+Respond in:
+- ✅ Correct
+- ⚠️ Issues
+- ❌ Critical
+- 💡 Suggestions
+                    `
+                  },
+                  {
+                    role: "user",
+                    content: diff
+                  }
+                ]
+              },
+              {
+                headers: {
+                  Authorization: \`Bearer \${process.env.OPENAI_API_KEY}\`
+                }
+              }
+            );
+
+            const review = response.data.choices[0].message.content;
+
+            fs.writeFileSync("review.txt", review);
+          }
+
+          run();
+          EOF
+
+      - name: Comentar no PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: review.txt
