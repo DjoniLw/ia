@@ -184,3 +184,9 @@ Plataforma de billing e cobrança API-first — empresas usam o Fluxa para cobra
 ## Como usar o AI Engineering
 
 Ver [`ai-engineering/README.md`](ai-engineering/README.md) para instruções completas.
+
+
+
+
+
+Autor: Djoni
