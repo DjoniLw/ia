@@ -170,6 +170,7 @@ export function useAvailableSlots(
       return api.get('/appointments/available-slots', { params: queryParams }).then((r) => r.data)
     },
     enabled: !!params?.serviceId && !!params?.date,
+    staleTime: 0,
   })
 }
 
@@ -182,6 +183,7 @@ export function useAvailableProfessionals(
     queryFn: () =>
       api.get('/appointments/available-professionals', { params: params! }).then((r) => r.data),
     enabled: !!params?.serviceId && !!params?.date,
+    staleTime: 0,
   })
 }
 
@@ -202,6 +204,7 @@ export function useAvailableRooms(
     queryFn: () =>
       api.get('/appointments/available-rooms', { params: params! }).then((r) => r.data),
     enabled: !!params?.scheduledAt && !!params?.durationMinutes,
+    staleTime: 0,
   })
 }
 
@@ -222,6 +225,10 @@ export function useCreateAppointment() {
       qc.invalidateQueries({ queryKey: ['appointments'] })
       qc.invalidateQueries({ queryKey: ['appointments-calendar'] })
       qc.invalidateQueries({ queryKey: ['appointments-availability'] })
+      qc.invalidateQueries({ queryKey: ['appointments-available-slots'] })
+      qc.invalidateQueries({ queryKey: ['appointments-available-professionals'] })
+      qc.invalidateQueries({ queryKey: ['appointments-available-rooms'] })
+      qc.invalidateQueries({ queryKey: ['available-equipment'] })
     },
   })
 }
@@ -231,6 +238,10 @@ export function useAppointmentTransition(id: string) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['appointments'] })
     qc.invalidateQueries({ queryKey: ['appointments-calendar'] })
+    qc.invalidateQueries({ queryKey: ['appointments-available-slots'] })
+    qc.invalidateQueries({ queryKey: ['appointments-available-professionals'] })
+    qc.invalidateQueries({ queryKey: ['appointments-available-rooms'] })
+    qc.invalidateQueries({ queryKey: ['available-equipment'] })
   }
   return {
     confirm: useMutation({

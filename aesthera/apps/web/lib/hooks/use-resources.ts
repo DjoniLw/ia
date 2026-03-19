@@ -577,5 +577,6 @@ export function useAvailableEquipment(scheduledAt: string, durationMinutes: numb
         })
         .then((r) => r.data),
     enabled: !!(scheduledAt && durationMinutes),
+    staleTime: 0,
   })
 }
