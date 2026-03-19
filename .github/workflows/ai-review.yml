@@ -26,53 +26,77 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          node <<EOF
+          node <<'EOF'
           const fs = require("fs");
-
-          const diff = fs.readFileSync("diff.txt", "utf8").substring(0, 10000);
-          const rules = fs.existsSync("AGENT_RULES.md") ? fs.readFileSync("AGENT_RULES.md", "utf8") : "";
-          const ui = fs.existsSync("docs/ui-standards.md") ? fs.readFileSync("docs/ui-standards.md", "utf8") : "";
+      
+          // lê diff
+          const diff = fs.existsSync("diff.txt")
+            ? fs.readFileSync("diff.txt", "utf8").substring(0, 10000)
+            : "";
+      
+          // lê regras (se existir)
+          const rules = fs.existsSync("AGENT_RULES.md")
+            ? fs.readFileSync("AGENT_RULES.md", "utf8")
+            : "";
+      
+          // lê UI standards (se existir)
+          const ui = fs.existsSync("docs/ui-standards.md")
+            ? fs.readFileSync("docs/ui-standards.md", "utf8")
+            : "";
+      
           const context = `
-          AGENT RULES:
-          ${rules}
-
-          UI STANDARDS:
-          ${ui}
-
-          CODE DIFF:
-          ${diff}
-          `;
-
-          async function run() {
-            const response = await fetch("https://api.openai.com/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer " + process.env.OPENAI_API_KEY
-              },
-              body: JSON.stringify({
-                model: "gpt-4.1",
-                messages: [
-                  {
-                    role: "system",
-                    content: `...` // keep as is
-                  },
-                  {
-                    role: "user",
-                    content: context
+            AGENT RULES:
+            ${rules}
+            
+            UI STANDARDS:
+            ${ui}
+            
+            CODE DIFF:
+            ${diff}
+            `;
+            
+                async function run() {
+                  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": "Bearer " + process.env.OPENAI_API_KEY
+                    },
+                    body: JSON.stringify({
+                      model: "gpt-4.1",
+                      messages: [
+                        {
+                          role: "system",
+                          content: "You are a senior software architect and code reviewer."
+                        },
+                        {
+                          role: "user",
+                          content: context
+                        }
+                      ]
+                    })
+                  });
+            
+                  const data = await response.json();
+            
+                  if (!data.choices || !data.choices[0]) {
+                    console.error("Erro na resposta da API:", data);
+                    process.exit(1);
                   }
-                ]
-              })
-            });
-
-            const data = await response.json();
-            const review = data.choices[0].message.content;
-
-            fs.writeFileSync("review.txt", review);
-          }
-
-          run();
-          EOF
+            
+                  const review = data.choices[0].message.content;
+            
+                  fs.writeFileSync("review.txt", review);
+            
+                  // Bloqueia PR se tiver erro crítico
+                  if (review.includes("❌")) {
+                    console.log("Critical issues found. Failing pipeline.");
+                    process.exit(1);
+                  }
+                }
+            
+                run();
+                EOF
 
       - name: Comentar no PR
         uses: marocchino/sticky-pull-request-comment@v2
