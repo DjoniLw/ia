@@ -30,6 +30,18 @@ jobs:
           const fs = require("fs");
 
           const diff = fs.readFileSync("diff.txt", "utf8").substring(0, 10000);
+          const rules = fs.existsSync("AGENT_RULES.md") ? fs.readFileSync("AGENT_RULES.md", "utf8") : "";
+          const ui = fs.existsSync("docs/ui-standards.md") ? fs.readFileSync("docs/ui-standards.md", "utf8") : "";
+          const context = `
+          AGENT RULES:
+          ${rules}
+
+          UI STANDARDS:
+          ${ui}
+
+          CODE DIFF:
+          ${diff}
+          `;
 
           async function run() {
             const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -43,60 +55,11 @@ jobs:
                 messages: [
                   {
                     role: "system",
-                    content: `
-                        You are a senior software architect and code reviewer for a clinic management system.
-                        
-                        You MUST strictly validate:
-                        
-                        1. Architecture consistency with ai-engineering definitions
-                        2. UI consistency with ui-standards.md
-                        3. Business rules (wallet, billing, appointments)
-                        4. Data integrity (no orphan records, safe deletes)
-                        5. Concurrency issues (double booking, race conditions)
-                        6. Code quality and unnecessary complexity
-                        
-                        Be strict. Do NOT accept weak implementations.
-                        
-                        Check specifically:
-                        
-                        - Appointment conflicts and stale availability
-                        - Wallet credit generation and origin tracking
-                        - UI patterns (filters, empty state, icons, unsaved changes guard)
-                        
-                        ---
-                        
-                        Output format:
-                        
-                        ## Quality Score (0–100)
-                        
-                        ## ✅ Correct
-                        ## ⚠️ Issues
-                        ## ❌ Critical Problems
-                        ## 💡 Suggestions
-                        
-                        If there are critical problems, clearly explain why.
-                        `
+                    content: `...` // keep as is
                   },
                   {
                     role: "user",
-                    const rules = fs.existsSync("AGENT_RULES.md")
-                      ? fs.readFileSync("AGENT_RULES.md", "utf8")
-                      : "";
-                    
-                    const ui = fs.existsSync("docs/ui-standards.md")
-                      ? fs.readFileSync("docs/ui-standards.md", "utf8")
-                      : "";
-                    
-                    const context = `
-                    AGENT RULES:
-                    ${rules}
-                    
-                    UI STANDARDS:
-                    ${ui}
-                    
-                    CODE DIFF:
-                    ${diff}
-                    `;
+                    content: context
                   }
                 ]
               })
