@@ -81,4 +81,67 @@ Never implement against an undefined or stale specification.
 
 ---
 
-_This document governs all future implementations. Be strict, clear, and concise._
+## 9. Concurrency and State Consistency (CRITICAL)
+
+The system MUST handle concurrent operations safely.
+
+- Prevent double booking (appointments)
+- Prevent simultaneous wallet usage conflicts
+- Avoid stale UI state after mutations
+
+Frontend MUST:
+- Refresh data after mutations
+- Never rely on stale cached data
+
+Backend MUST:
+- Ensure atomic operations
+- Use transactions and locking where necessary_This document governs all future implementations. Be strict, clear, and concise._
+
+---
+
+## 10. UI Standard Enforcement
+
+All screens MUST:
+
+- Have filters (when applicable)
+- Have empty state with CTA ("Criar primeiro ...")
+- Use icon-only actions (edit/delete)
+- Use confirmation dialogs (never window.confirm)
+- Use unsaved changes guard (isDirty)
+
+Any deviation is considered a violation.
+
+---
+
+## 11. No Assumptions Rule
+
+Do NOT assume business rules.
+
+If something is unclear:
+
+- Check ai-engineering definitions
+- If not defined, ask or define before implementing
+
+Never invent behavior.
+
+---
+
+## 12. Mandatory Pre-Implementation Check
+
+Before coding ANY feature:
+
+- Validate if definitions exist in ai-engineering
+- If missing, create or update definitions
+- Only then proceed with implementation
+
+---
+
+## 13. Anti-Regression Rule
+
+New implementations MUST NOT break:
+
+- existing flows
+- existing business rules
+- existing UI behavior
+
+Always preserve backward compatibility.
