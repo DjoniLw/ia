@@ -27,23 +27,21 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           node <<'EOF'
-          const fs = require("fs");
-      
+          const fs = require("fs");    
+          console.log("teste");
+          EOF      
           // lê diff
           const diff = fs.existsSync("diff.txt")
             ? fs.readFileSync("diff.txt", "utf8").substring(0, 10000)
             : "";
-      
           // lê regras (se existir)
           const rules = fs.existsSync("AGENT_RULES.md")
             ? fs.readFileSync("AGENT_RULES.md", "utf8")
             : "";
-      
           // lê UI standards (se existir)
           const ui = fs.existsSync("docs/ui-standards.md")
             ? fs.readFileSync("docs/ui-standards.md", "utf8")
             : "";
-      
           const context = `
             AGENT RULES:
             ${rules}
@@ -94,10 +92,10 @@ jobs:
                     process.exit(1);
                   }
                 }
-            
+                
                 run();
                 EOF
-
+                
       - name: Comentar no PR
         uses: marocchino/sticky-pull-request-comment@v2
         with:
