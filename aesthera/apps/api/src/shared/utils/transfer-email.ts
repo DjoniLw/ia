@@ -3,7 +3,16 @@ export function buildTransferEmailHtml(params: {
   targetClinicName: string
   confirmUrl: string
   rejectUrl: string
+  isAdminTransfer?: boolean
 }) {
+  const adminWarning = params.isAdminTransfer
+    ? `<p style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;line-height:1.6;margin:16px 0">
+        ⚠️ <strong>Atenção:</strong> Ao confirmar, você será transferido para
+        <strong>${params.targetClinicName}</strong> e <strong>perderá acesso</strong>
+        à <strong>${params.sourceClinicName}</strong>.
+      </p>`
+    : ''
+
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -15,6 +24,7 @@ export function buildTransferEmailHtml(params: {
       Recebemos uma solicitação para transferir seu acesso da empresa
       <strong>${params.sourceClinicName}</strong> para <strong>${params.targetClinicName}</strong>.
     </p>
+    ${adminWarning}
     <p style="color:#4b5563;line-height:1.6">
       Ao confirmar, seu acesso na empresa de origem será marcado como inativo, mas todo o seu histórico será preservado.
     </p>

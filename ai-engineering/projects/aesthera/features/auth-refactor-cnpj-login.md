@@ -35,16 +35,18 @@ Refatorar o fluxo de cadastro de empresa e autenticação em quatro frentes prin
 
 ### 2a — No cadastro de empresa (tela de registro)
 
-**Situação atual:**
-- Campo `clinicDocument` (CNPJ) no `RegisterClinicDto` é **opcional** (`z.string().min(14).max(18).optional()`)
-- No Prisma: `document String?` na tabela `clinics` — sem constraint `@unique`
-- Não há validação de formato nem unicidade
+**Decisão atualizada (issue #54 — implementado em 2026-03-20):**
+O campo CNPJ foi **removido completamente** do formulário `/register`. O CNPJ deve ser informado apenas na tela de Configurações, após o primeiro acesso. Isso elimina uma barreira desnecessária no onboarding.
 
-**Mudança desejada:**
-- CNPJ **não é obrigatório** no cadastro — o campo permanece opcional na tela de registro
-- Se informado no cadastro, validar apenas o formato (`XX.XXX.XXX/XXXX-XX` ou 14 dígitos) — **sem** validar dígito verificador e **sem** consultar a Receita Federal neste momento
-- Remover qualquer validação de unicidade de CNPJ no fluxo de cadastro (a constraint `@unique` não deve ser adicionada agora — CNPJ `null` múltiplo é permitido)
-- Tela de cadastro: campo CNPJ **opcional**, com máscara `XX.XXX.XXX/XXXX-XX`
+**Estado atual (pós-implementação):**
+- Campo `clinicDocument` **não existe mais** no formulário de cadastro (`register/page.tsx`)
+- `RegisterClinicDto` no backend permanece com o campo como opcional (`optionalCnpjSchema`) — aceita `undefined` sem erro
+- No Prisma: `document String?` na tabela `clinics` — sem constraint `@unique` (sem alteração)
+- `applyCnpjMask`, `handleCnpjChange` e toda lógica relacionada foram removidos do frontend
+
+**Fora do escopo (não fazer no cadastro):**
+- Não validar CNPJ no cadastro (campo não existe mais)
+- Não adicionar constraint `@unique` no cadastro
 
 ### 2b — Nas Configurações da empresa (após login)
 
@@ -114,15 +116,23 @@ Esta regra se aplica em **dois cenários**:
 
 ### Cenário A — Cadastro de nova empresa com e-mail já existente
 
-**Situação atual:**
-- Se o e-mail do administrador já está cadastrado em outra empresa, o sistema retorna erro e bloqueia o cadastro
+**Atualização (issue #55 — implementado em 2026-03-20): Confirmação prévia + distinção admin vs membro**
 
-**Mudança desejada:**
-- Em vez de bloquear, o sistema deve:
-  1. Criar a nova empresa normalmente
-  2. Não associar o usuário automaticamente à nova empresa
-  3. Enviar um **e-mail de confirmação de transferência** ao endereço informado
-  4. Aguardar confirmação para fazer a associação
+O antigo fluxo criava a clínica automaticamente e enviava o e-mail de transferência sem perguntar o usuário. O novo fluxo:
+
+1. **Sem `confirmTransfer: true` no request** → retornar `409` com código específico antes de criar a clínica:
+   - `EMAIL_CONFLICT_ADMIN` (quando o usuário é admin da outra clínica) + `data: { clinicName }`
+   - `EMAIL_CONFLICT_MEMBER` (quando é staff) + `data: { clinicName }`
+2. **O frontend exibe um `Dialog`** com conteúdo diferente conforme o tipo de conflito:
+   - Admin: alerta grave sobre perda de acesso + opção "Recuperar acesso" (chama `POST /auth/recover-access`)
+   - Membro: confirmação simples de transferência
+3. **Re-submit com `confirmTransfer: true`** → criar a clínica + enviar e-mail de transferência
+   - E-mail de admin tem aviso reforçado: "Ao confirmar, você será transferido… e perderá acesso à [Clínica X]"
+
+**Novo endpoint:** `POST /auth/recover-access` — recebe `{ email }`, envia e-mail de redefinição de senha (token armazenado no Redis por 1 hora), retorna 200 sem expor existência de conta. Rota adicionada ao `PUBLIC_ROUTES`.
+
+**Situação original (antes da issue #55):**
+- Se o e-mail do administrador já estava cadastrado em outra empresa, o sistema criava a nova empresa e enviava o e-mail de transferência automaticamente
 
 ### Cenário B — Convite de usuário (Configurações > aba Usuários) com e-mail de outra empresa
 

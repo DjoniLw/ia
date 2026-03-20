@@ -77,6 +77,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     '/auth/verify-email',
     '/auth/refresh',
     '/auth/logout',
+    '/auth/recover-access',
   ])
 
   app.addHook('preHandler', async (request, reply) => {

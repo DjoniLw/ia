@@ -3,7 +3,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { ChangeEvent } from 'react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -11,6 +10,7 @@ import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
@@ -26,15 +26,6 @@ function slugifyPreview(name: string): string {
     .substring(0, 60)
 }
 
-function applyCnpjMask(value: string): string {
-  const digits = value.replace(/\D/g, '').substring(0, 14)
-  if (digits.length <= 2) return digits
-  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`
-  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`
-  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`
-  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`
-}
-
 const passwordSchema = z
   .string()
   .min(8, 'Senha deve ter ao menos 8 caracteres')
@@ -44,10 +35,6 @@ const passwordSchema = z
 
 const registerSchema = z
   .object({
-    clinicDocument: z.string().refine((value: string) => {
-      const digits = value.replace(/\D/g, '')
-      return digits.length === 0 || digits.length === 14
-    }, 'Informe um CNPJ válido com 14 dígitos ou deixe em branco.'),
     clinicName: z.string().min(2, 'Nome da clínica deve ter ao menos 2 caracteres'),
     adminName: z.string().min(2, 'Seu nome deve ter ao menos 2 caracteres'),
     email: z.string().email('E-mail inválido'),
@@ -65,28 +52,26 @@ type RegisterData = z.infer<typeof registerSchema>
 export default function RegisterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [recoverLoading, setRecoverLoading] = useState(false)
+  const [conflictDialog, setConflictDialog] = useState<{
+    type: 'admin' | 'member'
+    clinicName: string
+  } | null>(null)
+  const [pendingFormData, setPendingFormData] = useState<RegisterData | null>(null)
 
   const {
     register,
     handleSubmit,
     watch,
-    setValue,
     formState: { errors },
   } = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { clinicDocument: '' },
   })
 
   const clinicName = watch('clinicName') ?? ''
-  const clinicDocument = watch('clinicDocument') ?? ''
   const slugPreview = clinicName.length >= 2 ? slugifyPreview(clinicName) : ''
-  const clinicDocumentField = register('clinicDocument')
 
-  function handleCnpjChange(event: ChangeEvent<HTMLInputElement>) {
-    setValue('clinicDocument', applyCnpjMask(event.target.value), { shouldValidate: true })
-  }
-
-  async function onSubmit(data: RegisterData) {
+  async function submitRegister(data: RegisterData, confirmTransfer = false) {
     setLoading(true)
     try {
       const response = await api.post<{
@@ -98,11 +83,11 @@ export default function RegisterPage() {
         transferPending?: boolean
       }>('/auth/register', {
         clinicName: data.clinicName,
-        clinicDocument: data.clinicDocument || undefined,
         adminName: data.adminName,
         email: data.email,
         password: data.password,
         phone: data.phone,
+        ...(confirmTransfer ? { confirmTransfer: true } : {}),
       })
 
       const slug = response.data.clinic.slug
@@ -118,12 +103,43 @@ export default function RegisterPage() {
       const mode = response.data.transferPending ? 'transfer' : 'verification'
       router.push(`/register/success?mode=${mode}&slug=${encodeURIComponent(slug)}&email=${encodeURIComponent(data.email)}&emailSent=${response.data.emailVerificationSent !== false}`)
     } catch (error: unknown) {
-      const message =
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Erro ao cadastrar clínica'
-      toast.error(message)
+      const errResp = (error as { response?: { data?: { error?: string; message?: string; data?: { clinicName?: string } } } })?.response?.data
+      const errCode = errResp?.error
+      if (errCode === 'EMAIL_CONFLICT_ADMIN' || errCode === 'EMAIL_CONFLICT_MEMBER') {
+        setPendingFormData(data)
+        setConflictDialog({
+          type: errCode === 'EMAIL_CONFLICT_ADMIN' ? 'admin' : 'member',
+          clinicName: errResp?.data?.clinicName ?? '',
+        })
+        return
+      }
+      toast.error(errResp?.message ?? 'Erro ao cadastrar clínica')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function onSubmit(data: RegisterData) {
+    await submitRegister(data)
+  }
+
+  async function handleConfirmTransfer() {
+    if (!pendingFormData) return
+    setConflictDialog(null)
+    await submitRegister(pendingFormData, true)
+  }
+
+  async function handleRecoverAccess() {
+    if (!pendingFormData) return
+    setRecoverLoading(true)
+    try {
+      await api.post('/auth/recover-access', { email: pendingFormData.email })
+      setConflictDialog(null)
+      toast.success('E-mail de recuperação enviado. Verifique sua caixa de entrada.')
+    } catch {
+      toast.error('Não foi possível enviar o e-mail de recuperação.')
+    } finally {
+      setRecoverLoading(false)
     }
   }
 
@@ -135,22 +151,6 @@ export default function RegisterPage() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="clinicDocument">CNPJ da empresa (opcional)</Label>
-            <Input
-              id="clinicDocument"
-              name={clinicDocumentField.name}
-              ref={clinicDocumentField.ref}
-              value={clinicDocument}
-              onChange={handleCnpjChange}
-              placeholder="00.000.000/0000-00"
-            />
-            <p className="text-xs text-muted-foreground">
-              Você pode preencher depois em Configurações. Se informar agora, validaremos apenas o formato.
-            </p>
-            {errors.clinicDocument && <p className="text-sm text-destructive">{errors.clinicDocument.message}</p>}
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="clinicName">Nome da clínica</Label>
             <Input id="clinicName" placeholder="Clínica Estética" {...register('clinicName')} />
@@ -206,6 +206,59 @@ export default function RegisterPage() {
           </Link>
         </p>
       </CardContent>
+
+      {conflictDialog && (
+        <Dialog open onClose={() => setConflictDialog(null)}>
+          {conflictDialog.type === 'admin' ? (
+            <>
+              <DialogTitle>Você já é administrador desta clínica</DialogTitle>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                Você já é administrador da clínica{' '}
+                <strong className="text-foreground">{conflictDialog.clinicName}</strong>. Se continuar
+                com o cadastro de{' '}
+                <strong className="text-foreground">{pendingFormData?.clinicName}</strong>, será
+                transferido e <strong className="text-foreground">perderá acesso</strong> à{' '}
+                <strong className="text-foreground">{conflictDialog.clinicName}</strong>.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={handleRecoverAccess}
+                  disabled={recoverLoading || loading}
+                >
+                  {recoverLoading ? 'Enviando...' : `Recuperar acesso à ${conflictDialog.clinicName}`}
+                </Button>
+                <Button onClick={handleConfirmTransfer} disabled={loading || recoverLoading}>
+                  {loading ? 'Cadastrando...' : `Continuar com nova clínica`}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogTitle>E-mail já cadastrado em outra clínica</DialogTitle>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                Este e-mail já está cadastrado na clínica{' '}
+                <strong className="text-foreground">{conflictDialog.clinicName}</strong>. Deseja criar
+                a nova clínica{' '}
+                <strong className="text-foreground">{pendingFormData?.clinicName}</strong> e se
+                transferir?
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setConflictDialog(null)}
+                  disabled={loading}
+                >
+                  Cancelar
+                </Button>
+                <Button onClick={handleConfirmTransfer} disabled={loading}>
+                  {loading ? 'Cadastrando...' : 'Sim, criar nova clínica'}
+                </Button>
+              </div>
+            </>
+          )}
+        </Dialog>
+      )}
     </Card>
   )
 }
