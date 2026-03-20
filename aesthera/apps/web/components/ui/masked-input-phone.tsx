@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef } from 'react'
+import { forwardRef, type FocusEventHandler } from 'react'
 import { IMaskInput } from 'react-imask'
 import { cn } from '@/lib/utils'
 
@@ -10,7 +10,7 @@ const INPUT_CLASS =
 interface MaskedInputPhoneProps {
   value?: string
   onChange?: (value: string) => void
-  onBlur?: React.FocusEventHandler<HTMLInputElement>
+  onBlur?: FocusEventHandler<HTMLInputElement>
   name?: string
   placeholder?: string
   className?: string
@@ -25,9 +25,9 @@ const PHONE_MASKS = [
 
 /**
  * Campo de telefone com máscara dinâmica.
- * - Fixo: (00) 0000-0000
- * - Celular: (00) 00000-0000
- * A seleção é feita automaticamente pelo 5º dígito.
+ * - Fixo: (00) 0000-0000  — até 10 dígitos (DDD + 8)
+ * - Celular: (00) 00000-0000 — 11 dígitos (DDD + 9)
+ * A máscara muda automaticamente ao atingir 11 dígitos.
  * Armazena e emite apenas dígitos (sem formatação).
  */
 export const MaskedInputPhone = forwardRef<HTMLInputElement, MaskedInputPhoneProps>(
@@ -37,6 +37,7 @@ export const MaskedInputPhone = forwardRef<HTMLInputElement, MaskedInputPhonePro
       mask={PHONE_MASKS as any}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       dispatch={(appended: string, dynamicMasked: any) => {
+        // Seleciona pelo total de dígitos: ≤ 10 → fixo (DDD + 8 dígitos), > 10 → celular (DDD + 9 dígitos)
         const number = (String(dynamicMasked.value) + appended).replace(/\D/g, '')
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         return dynamicMasked.compiledMasks[number.length > 10 ? 1 : 0]

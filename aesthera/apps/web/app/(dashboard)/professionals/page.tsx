@@ -407,7 +407,7 @@ export default function ProfessionalsPage() {
             <ProfessionalForm
               defaultValues={{
                 ...editing,
-                phone: editing.phone ?? undefined,
+                phone: (editing.phone ?? '').replace(/\D/g, '') || undefined,
                 speciality: editing.speciality ?? undefined,
               }}
               onSave={handleUpdate}

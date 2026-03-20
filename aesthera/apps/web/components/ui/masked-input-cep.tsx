@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef } from 'react'
+import { forwardRef, type FocusEventHandler } from 'react'
 import { IMaskInput } from 'react-imask'
 import { cn } from '@/lib/utils'
 
@@ -10,7 +10,7 @@ const INPUT_CLASS =
 interface MaskedInputCepProps {
   value?: string
   onChange?: (value: string) => void
-  onBlur?: React.FocusEventHandler<HTMLInputElement>
+  onBlur?: FocusEventHandler<HTMLInputElement>
   name?: string
   placeholder?: string
   className?: string
