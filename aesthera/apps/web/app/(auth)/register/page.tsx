@@ -53,8 +53,9 @@ export default function RegisterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [recoverLoading, setRecoverLoading] = useState(false)
+  const [resendTransferLoading, setResendTransferLoading] = useState(false)
   const [conflictDialog, setConflictDialog] = useState<{
-    type: 'admin' | 'member' | 'slug_linked'
+    type: 'admin' | 'member' | 'slug_linked' | 'transfer_pending'
     clinicName: string
   } | null>(null)
   const [pendingFormData, setPendingFormData] = useState<RegisterData | null>(null)
@@ -121,6 +122,11 @@ export default function RegisterPage() {
         })
         return
       }
+      if (errCode === 'TRANSFER_PENDING') {
+        setPendingFormData(data)
+        setConflictDialog({ type: 'transfer_pending', clinicName: '' })
+        return
+      }
       toast.error(errResp?.message ?? 'Erro ao cadastrar clínica')
     } finally {
       setLoading(false)
@@ -148,6 +154,31 @@ export default function RegisterPage() {
       toast.error('Não foi possível enviar o e-mail de recuperação.')
     } finally {
       setRecoverLoading(false)
+    }
+  }
+
+  async function handleResendTransferFromDialog() {
+    if (!pendingFormData) return
+    setResendTransferLoading(true)
+    try {
+      const res = await api.post<{ sent: boolean }>('/auth/resend-transfer', {
+        email: pendingFormData.email,
+      })
+      setConflictDialog(null)
+      if (res.data.sent) {
+        router.push(
+          `/register/success?mode=transfer&email=${encodeURIComponent(pendingFormData.email)}`,
+        )
+      } else {
+        toast.error(
+          'Não foi possível reenviar o e-mail. O serviço de e-mail pode não estar configurado.',
+        )
+      }
+    } catch (error: unknown) {
+      const errData = (error as { response?: { data?: { message?: string } } })?.response?.data
+      toast.error(errData?.message ?? 'Erro ao reenviar. Tente novamente.')
+    } finally {
+      setResendTransferLoading(false)
     }
   }
 
@@ -217,7 +248,28 @@ export default function RegisterPage() {
 
       {conflictDialog && (
         <Dialog open onClose={() => setConflictDialog(null)}>
-          {conflictDialog.type === 'slug_linked' ? (
+          {conflictDialog.type === 'transfer_pending' ? (
+            <>
+              <DialogTitle>Transferência pendente</DialogTitle>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                Já existe um e-mail de transferência pendente para{' '}
+                <strong className="text-foreground">{pendingFormData?.email}</strong>. Deseja reenviar
+                o e-mail de confirmação de transferência?
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setConflictDialog(null)}
+                  disabled={resendTransferLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button onClick={handleResendTransferFromDialog} disabled={resendTransferLoading}>
+                  {resendTransferLoading ? 'Reenviando...' : 'Reenviar e-mail de transferência'}
+                </Button>
+              </div>
+            </>
+          ) : conflictDialog.type === 'slug_linked' ? (
             <>
               <DialogTitle>Você já possui vínculo com esta empresa</DialogTitle>
               <p className="text-sm text-muted-foreground leading-relaxed mb-4">

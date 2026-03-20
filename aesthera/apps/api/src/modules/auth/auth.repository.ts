@@ -259,6 +259,26 @@ export class AuthRepository {
     })
   }
 
+  findPendingTransferForResend(email: string) {
+    return prisma.transferToken.findFirst({
+      where: { email, status: 'pending', kind: 'clinic_registration' },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        sourceClinicId: true,
+        sourceUserId: true,
+        targetClinicId: true,
+        targetUserId: true,
+        role: true,
+        kind: true,
+        sourceClinic: { select: { name: true } },
+        targetClinic: { select: { name: true } },
+        sourceUser: { select: { role: true } },
+      },
+    })
+  }
+
   findTransferByToken(token: string) {
     return prisma.transferToken.findUnique({
       where: { token },

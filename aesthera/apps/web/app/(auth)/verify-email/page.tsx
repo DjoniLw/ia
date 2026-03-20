@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
@@ -17,6 +16,16 @@ function VerifyContent() {
   const [state, setState] = useState<VerifyState>('loading')
   const [slug, setSlug] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cancel pending redirect on unmount
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current !== null) {
+        clearTimeout(redirectTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!token) {
@@ -36,7 +45,7 @@ function VerifyContent() {
         localStorage.setItem('clinic-slug', clinicSlug)
         setTokens(res.data.accessToken, res.data.refreshToken)
         setState('success')
-        setTimeout(() => router.push('/dashboard'), 3000)
+        redirectTimerRef.current = setTimeout(() => router.push('/dashboard'), 3000)
       })
       .catch((err: unknown) => {
         const msg =
@@ -46,6 +55,14 @@ function VerifyContent() {
         setState('error')
       })
   }, [token, router])
+
+  function handleGoToDashboard() {
+    if (redirectTimerRef.current !== null) {
+      clearTimeout(redirectTimerRef.current)
+      redirectTimerRef.current = null
+    }
+    router.push('/dashboard')
+  }
 
   if (state === 'loading') {
     return (
@@ -77,8 +94,8 @@ function VerifyContent() {
               <p className="font-mono font-semibold text-foreground">{slug}</p>
             </div>
           )}
-          <Button asChild className="w-full">
-            <Link href="/dashboard">Ir para o painel</Link>
+          <Button className="w-full" onClick={handleGoToDashboard}>
+            Ir para o painel
           </Button>
         </CardContent>
       </Card>

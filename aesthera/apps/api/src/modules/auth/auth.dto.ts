@@ -62,6 +62,10 @@ export const ResendVerificationDto = z.object({
   email: z.string().email(),
 })
 
+export const ResendTransferDto = z.object({
+  email: z.string().email(),
+})
+
 export const RecoverAccessDto = z.object({
   email: z.string().email(),
 })
@@ -80,4 +84,5 @@ export type ResetPasswordDto = z.infer<typeof ResetPasswordDto>
 export type ProfessionalLoginDto = z.infer<typeof ProfessionalLoginDto>
 export type RecoverAccessDto = z.infer<typeof RecoverAccessDto>
 export type ResendVerificationDto = z.infer<typeof ResendVerificationDto>
+export type ResendTransferDto = z.infer<typeof ResendTransferDto>
 export type TransferTokenActionDto = z.infer<typeof TransferTokenActionDto>
