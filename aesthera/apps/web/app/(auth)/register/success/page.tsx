@@ -2,11 +2,25 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
+
+const TRANSFER_COOLDOWN_TOTAL = 60
+
+function transferCooldownKey(email: string) {
+  return `transfer-resend-ts:${email}`
+}
+
+function getRemainingCooldown(email: string): number {
+  if (!email || typeof window === 'undefined') return 0
+  const stored = localStorage.getItem(transferCooldownKey(email))
+  if (!stored) return 0
+  const elapsed = Math.floor((Date.now() - parseInt(stored, 10)) / 1000)
+  return Math.max(0, TRANSFER_COOLDOWN_TOTAL - elapsed)
+}
 
 function SuccessContent() {
   const searchParams = useSearchParams()
@@ -19,6 +33,20 @@ function SuccessContent() {
 
   const [resending, setResending] = useState(false)
   const [resent, setResent] = useState(false)
+
+  // Transfer resend state — inicializa do localStorage para resistir a reloads
+  const [resendingTransfer, setResendingTransfer] = useState(false)
+  const [resentTransfer, setResentTransfer] = useState(false)
+  const [cooldownSeconds, setCooldownSeconds] = useState(() =>
+    mode === 'transfer' ? getRemainingCooldown(email) : 0,
+  )
+
+  // Decrement cooldown every second
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return
+    const timer = setTimeout(() => setCooldownSeconds((s) => Math.max(0, s - 1)), 1000)
+    return () => clearTimeout(timer)
+  }, [cooldownSeconds])
 
   async function handleResend() {
     if (!email || resending) return
@@ -37,6 +65,35 @@ function SuccessContent() {
       toast.error('Erro ao reenviar o e-mail. Tente novamente.')
     } finally {
       setResending(false)
+    }
+  }
+
+  async function handleResendTransfer() {
+    if (!email || resendingTransfer || cooldownSeconds > 0) return
+    setResendingTransfer(true)
+    try {
+      const res = await api.post<{ sent: boolean }>('/auth/resend-transfer', { email })
+      if (res.data.sent) {
+        setResentTransfer(true)
+        localStorage.setItem(transferCooldownKey(email), Date.now().toString())
+        setCooldownSeconds(TRANSFER_COOLDOWN_TOTAL)
+        toast.success('E-mail de transferência reenviado!')
+      } else {
+        toast.error(
+          'Não foi possível reenviar o e-mail. O serviço de e-mail pode não estar configurado.',
+        )
+      }
+    } catch (error: unknown) {
+      const errData = (
+        error as { response?: { data?: { message?: string; data?: { secondsRemaining?: number } } } }
+      )?.response?.data
+      const seconds = errData?.data?.secondsRemaining
+      if (seconds) {
+        setCooldownSeconds(seconds)
+      }
+      toast.error(errData?.message ?? 'Erro ao reenviar. Tente novamente.')
+    } finally {
+      setResendingTransfer(false)
     }
   }
 
@@ -85,6 +142,27 @@ function SuccessContent() {
               O sistema usará esse identificador automaticamente durante o login.
             </p>
           </div>
+        )}
+
+        {mode === 'transfer' && email && (
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={handleResendTransfer}
+            disabled={resendingTransfer || cooldownSeconds > 0}
+          >
+            {resendingTransfer
+              ? 'Reenviando...'
+              : cooldownSeconds > 0
+                ? `Reenviar em ${cooldownSeconds}s`
+                : 'Reenviar e-mail de transferência'}
+          </Button>
+        )}
+
+        {resentTransfer && (
+          <p className="text-sm text-green-600 dark:text-green-400">
+            ✓ E-mail de transferência reenviado! Verifique sua caixa de entrada e a pasta de spam.
+          </p>
         )}
 
         {mode !== 'transfer' && email && !resent && (

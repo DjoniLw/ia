@@ -54,9 +54,11 @@ function TransferConfirmContent() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{message}</p>
-        <Button asChild className="w-full" variant={state === 'success' ? 'default' : 'outline'}>
-          <Link href="/login">Ir para o login</Link>
-        </Button>
+        {state !== 'loading' && (
+          <Button asChild className="w-full" variant={state === 'success' ? 'default' : 'outline'}>
+            <Link href="/login">Ir para o login</Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   )

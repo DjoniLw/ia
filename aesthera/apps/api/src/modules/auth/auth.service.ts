@@ -9,7 +9,6 @@ import { logger } from '../../shared/logger/logger'
 import { buildTransferEmailHtml } from '../../shared/utils/transfer-email'
 import {
   AppError,
-  ConflictError,
   UnauthorizedError,
   ForbiddenError,
   NotFoundError,
@@ -28,6 +27,7 @@ const LOCK_TTL_SECONDS = 900 // 15 min
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60 // 7 days
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 const TRANSFER_TOKEN_TTL_MS = 48 * 60 * 60 * 1000 // 48 hours
+const TRANSFER_RESEND_COOLDOWN_SECONDS = 60
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -112,7 +112,11 @@ export class AuthService {
     if (appConfig.isProduction) {
       const pendingTransfer = await authRepository.findLatestPendingTransferByEmail(dto.email)
       if (pendingTransfer?.kind === 'clinic_registration') {
-        throw new ConflictError('Já existe uma transferência pendente para este e-mail. Verifique sua caixa de entrada.')
+        throw new AppError(
+          'Já existe uma transferência pendente para este e-mail. Verifique sua caixa de entrada.',
+          409,
+          'TRANSFER_PENDING',
+        )
       }
     }
 
@@ -355,6 +359,87 @@ export class AuthService {
     }
 
     return { sent: emailVerificationSent }
+  }
+
+  // ── Resend transfer email ─────────────────────────────────────────────────
+
+  async resendTransfer(email: string): Promise<{ sent: boolean }> {
+    const transfer = await authRepository.findPendingTransferForResend(email)
+
+    if (!transfer) {
+      // Resposta genérica — não expõe existência do registro
+      return { sent: false }
+    }
+
+    // Verificar se o e-mail pode ser enviado ANTES de qualquer mutação.
+    // Sem chave de e-mail configurada não há motivo para rotacionar o token.
+    const emailSent = Boolean(appConfig.email.apiKey)
+    if (!emailSent) {
+      return { sent: false }
+    }
+
+    // Verificar e adquirir cooldown de forma atômica com SET NX.
+    // SET NX retorna 'OK' somente se a chave não existia — se retornar null
+    // significa que o cooldown ainda está ativo para este e-mail.
+    const cooldownKey = `transfer-resend-cooldown:${email}`
+    try {
+      const acquired = await redis.set(
+        cooldownKey,
+        '1',
+        'EX',
+        TRANSFER_RESEND_COOLDOWN_SECONDS,
+        'NX',
+      )
+      if (acquired === null) {
+        const ttl = await redis.ttl(cooldownKey)
+        const secondsRemaining = ttl > 0 ? ttl : TRANSFER_RESEND_COOLDOWN_SECONDS
+        throw new AppError(
+          `Aguarde ${secondsRemaining} segundos antes de reenviar.`,
+          429,
+          'COOLDOWN_ACTIVE',
+          { secondsRemaining },
+        )
+      }
+    } catch (err) {
+      if (err instanceof AppError) throw err
+      logger.warn({ err }, 'Redis unavailable — skipping cooldown check for resend-transfer')
+    }
+
+    // Rotação atômica: expirar todos os tokens pendentes e criar novo em transação.
+    // Usar updateMany por email+kind para garantir que tokens duplicados também sejam expirados.
+    const newToken = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + TRANSFER_TOKEN_TTL_MS)
+
+    await prisma.$transaction(async (tx) => {
+      await tx.transferToken.updateMany({
+        where: { email, kind: transfer.kind, status: 'pending' },
+        data: { status: 'expired' },
+      })
+      await tx.transferToken.create({
+        data: {
+          token: newToken,
+          email,
+          sourceClinicId: transfer.sourceClinicId ?? undefined,
+          sourceUserId: transfer.sourceUserId ?? undefined,
+          targetClinicId: transfer.targetClinicId,
+          targetUserId: transfer.targetUserId ?? undefined,
+          role: transfer.role,
+          kind: transfer.kind,
+          expiresAt,
+        },
+      })
+    })
+
+    void this.sendTransferEmail({
+      clinicId: transfer.targetClinicId,
+      email,
+      sourceClinicName: transfer.sourceClinic?.name ?? '',
+      targetClinicName: transfer.targetClinic?.name ?? '',
+      token: newToken,
+      isAdminTransfer: transfer.sourceUser?.role === 'admin',
+    })
+
+    return { sent: true }
   }
 
   // ── Login ───────────────────────────────────────────────────────────────────

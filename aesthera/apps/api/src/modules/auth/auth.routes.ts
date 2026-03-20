@@ -8,6 +8,7 @@ import {
   TransferTokenActionDto,
   VerifyEmailDto,
   ResendVerificationDto,
+  ResendTransferDto,
   RecoverAccessDto,
   ResetPasswordDto,
 } from './auth.dto'
@@ -48,7 +49,13 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const result = await authService.resendVerification(body.email)
     reply.status(200).send(result)
   })
-
+  // ── POST /auth/resend-transfer ─────────────────────────────────────────────
+  // Invalidates the current pending transfer token and sends a new e-mail. PUBLIC.
+  app.post('/auth/resend-transfer', async (request, reply) => {
+    const body = ResendTransferDto.parse(request.body)
+    const result = await authService.resendTransfer(body.email)
+    reply.status(200).send(result)
+  })
   // ── POST /auth/recover-access ─────────────────────────────────────────────────
   // Sends a password reset e-mail to the user without exposing account existence. PUBLIC.
   app.post('/auth/recover-access', async (request, reply) => {
