@@ -124,39 +124,59 @@ Após **toda** ação que produza saída no projeto, você deve:
 
 ---
 
-## Rotina de Entrega — Commit, Branch e PR (obrigatória ao final de toda implementação)
+## Rotina de Entrega — Commit, PR e Railway (obrigatória ao final de toda implementação)
 
-Após concluir a implementação e atualizar o PLAN.md, **sempre** apresente o resumo do que foi feito e pergunte:
+Após concluir a implementação e atualizar o PLAN.md, siga **obrigatoriamente** esta sequência de confirmações — **cada etapa é independente e requer aprovação explícita antes de avançar**:
 
-> **"Deseja que eu faça o commit das alterações em uma nova branch, push e abra um Pull Request?"**
+---
 
-Se o usuário confirmar, execute os seguintes passos **na ordem**:
+### Etapa 1 — Commit e Push (perguntar antes de executar)
 
-### 1. Criar e mudar para nova branch
+Apresente o resumo do que foi implementado e pergunte:
 
-Nome da branch seguindo o padrão:
-- Com issue: `feat/issue-{número}-{slug-curto-da-feature}` (ex: `feat/issue-42-appointment-notes`)
-- Sem issue: `feat/{slug-curto-da-feature}` (ex: `feat/appointment-notes`)
+> **"Deseja que eu crie a branch `{nome-da-branch}` e faça o commit das alterações?"**
 
-### 2. Commit das alterações
+**Somente se confirmado**, execute:
 
-Mensagem de commit seguindo Conventional Commits:
-- Com issue: `feat: {descrição curta} (closes #{número})` (ex: `feat: add notes field to appointments (closes #42)`)
-- Sem issue: `feat: {descrição curta}` (ex: `feat: add notes field to appointments`)
+1. Criar e mudar para a nova branch seguindo o padrão:
+   - Com issue: `feat/issue-{número}-{slug-curto}` (ex: `feat/issue-42-appointment-notes`)
+   - Sem issue: `feat/{slug-curto}` (ex: `feat/appointment-notes`)
 
-### 3. Push da branch
+2. Commit seguindo Conventional Commits:
+   - Com issue: `feat: {descrição curta} (closes #{número})`
+   - Sem issue: `feat: {descrição curta}`
 
-Fazer push da branch para o repositório remoto.
+3. Push da branch para o repositório remoto.
 
-### 4. Abrir Pull Request
+---
 
+### Etapa 2 — Pull Request (perguntar antes de executar)
+
+Após o push, pergunte **separadamente**:
+
+> **"Deseja que eu abra um Pull Request para a branch `{nome-da-branch}`?"**
+
+**Somente se confirmado**, abra o PR com:
 - **Título**: `feat: {descrição curta da feature}`
-- **Corpo**: incluir resumo do que foi implementado, arquivos alterados e critérios de aceitação atendidos
-- **Issue vinculada**: se houver número de issue, incluir `Closes #{número}` no corpo do PR para vinculação automática
+- **Corpo**: resumo do que foi implementado, arquivos alterados e critérios de aceitação atendidos
+- **Issue vinculada**: se houver número de issue, incluir `Closes #{número}` no corpo
 - **Branch base**: `main` (ou `develop`, conforme convenção do repositório)
 
-### 5. Informar resultado
+Após criar o PR, exiba o link gerado.
 
-Após criar o PR, exibir o link do PR gerado.
+---
 
-> **Nunca** faça commit, push ou abra PR sem confirmação explícita do usuário.
+### Etapa 3 — Railway: Atualizar Branch e Deploy (perguntar antes de executar)
+
+Após o PR ser criado, pergunte **separadamente**:
+
+> **"Deseja que eu atualize o Railway (projeto `aesthera-dev`) para apontar para a branch `{nome-da-branch}` e fazer deploy dos serviços `aesthera-api` e `aesthera-front`?"**
+
+**Somente se confirmado**, execute via Railway MCP:
+
+1. Localize o projeto `aesthera-dev` no Railway
+2. Para o serviço `aesthera-api`: altere a "Branch connected to production" para `{nome-da-branch}` e dispare o deploy
+3. Para o serviço `aesthera-front`: altere a "Branch connected to production" para `{nome-da-branch}` e dispare o deploy
+4. Aguarde confirmação de deployment iniciado e exiba o status
+
+> ⚠️ **REGRA ABSOLUTA**: Nunca faça commit, push, abra PR ou altere o Railway sem confirmação explícita e individual do usuário para cada etapa.
