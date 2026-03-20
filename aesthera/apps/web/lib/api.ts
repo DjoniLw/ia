@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { toast } from 'sonner'
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './auth'
 
 export function getClinicSlug(): string {
@@ -70,11 +71,16 @@ function processQueue(error: unknown, token: string | null) {
   failedQueue = []
 }
 
-// Intercept 401 → try refresh → replay request
+// Intercept 401/403 → handle auth errors
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config
+
+    if (error.response?.status === 403) {
+      toast.error('Acesso negado. Você não tem permissão para realizar esta ação.', { id: 'forbidden' })
+      return Promise.reject(error)
+    }
 
     if (error.response?.status !== 401 || original._retry) {
       return Promise.reject(error)
