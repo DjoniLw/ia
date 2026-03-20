@@ -278,9 +278,11 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - **Impacto:** autenticação e onboarding ficaram mais simples no frontend; backend passou a suportar transferência segura de acesso entre clínicas e validação centralizada de CNPJ
 
 ### [2026-03-20] — #55 — Fluxo de conflito de e-mail no cadastro — distinção admin vs membro com confirmação prévia
-- **Arquivo(s) afetado(s):** aesthera/apps/api/src/shared/errors/app-error.ts, aesthera/apps/api/src/shared/errors/error-handler.ts, aesthera/apps/api/src/shared/utils/transfer-email.ts, aesthera/apps/api/src/modules/auth/auth.dto.ts, aesthera/apps/api/src/modules/auth/auth.service.ts, aesthera/apps/api/src/modules/auth/auth.routes.ts, aesthera/apps/api/src/app.ts, aesthera/apps/web/app/(auth)/register/page.tsx, ai-engineering/projects/aesthera/features/auth-refactor-cnpj-login.md
-- **O que foi feito:** Cadastro com e-mail em conflito agora não cria clínica automaticamente — retorna 409 com código `EMAIL_CONFLICT_ADMIN` ou `EMAIL_CONFLICT_MEMBER` antes de qualquer criação. Frontend exibe Dialog com conteúdo diferenciado: admin recebe alerta grave de perda de acesso + opção "Recuperar acesso"; membro recebe confirmação simples. Re-submit com `confirmTransfer: true` cria a clínica e envia e-mail de transferência (com alerta reforçado para admin). Novo endpoint `POST /auth/recover-access` envia e-mail de redefinição de senha via Redis. `AppError` estendido com campo `data` opcional para transportar metadados do erro.
-- **Impacto:** Fluxo de onboarding com conflito de e-mail ficou seguro e explícito; admin não perde acesso por engano.
+
+### [2026-03-20] — #56 — Lógica de colisão de slug — recuperação de conta e confirmação de troca
+- **Arquivo(s) afetado(s):** aesthera/apps/api/src/modules/auth/auth.repository.ts, aesthera/apps/api/src/modules/auth/auth.service.ts, aesthera/apps/web/app/(auth)/register/page.tsx, ai-engineering/projects/aesthera/features/auth-refactor-cnpj-login.md
+- **O que foi feito:** Adicionada verificação `SLUG_LINKED_SAME_CLINIC` em `registerClinic()` antes do `uniqueSlug()`, nos dois branches (produção com `confirmTransfer: true` e fresh registration). Quando o slug base já existe e o usuário tem vínculo ativo com aquela mesma clínica, o fluxo é bloqueado com `409 SLUG_LINKED_SAME_CLINIC`. Frontend trata esse código exibindo Dialog com opção "Recuperar acesso" (chama `POST /auth/recover-access`) e "Cancelar" — sem oferecer "continuar cadastrando". Adicionado `name` ao select de `findClinicBySlug()` no repository. Spec atualizada com seção 5 sobre colisão de slug.
+- **Impacto:** Cenário A (usuário esqueceu senha e tenta re-cadastrar a mesma clínica) agora é tratado corretamente com oferta de recuperação de acesso, ao invés de criar uma segunda clínica duplicada.
 
 ---
 

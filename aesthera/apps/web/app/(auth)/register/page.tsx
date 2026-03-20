@@ -54,7 +54,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [recoverLoading, setRecoverLoading] = useState(false)
   const [conflictDialog, setConflictDialog] = useState<{
-    type: 'admin' | 'member'
+    type: 'admin' | 'member' | 'slug_linked'
     clinicName: string
   } | null>(null)
   const [pendingFormData, setPendingFormData] = useState<RegisterData | null>(null)
@@ -109,6 +109,14 @@ export default function RegisterPage() {
         setPendingFormData(data)
         setConflictDialog({
           type: errCode === 'EMAIL_CONFLICT_ADMIN' ? 'admin' : 'member',
+          clinicName: errResp?.data?.clinicName ?? '',
+        })
+        return
+      }
+      if (errCode === 'SLUG_LINKED_SAME_CLINIC') {
+        setPendingFormData(data)
+        setConflictDialog({
+          type: 'slug_linked',
           clinicName: errResp?.data?.clinicName ?? '',
         })
         return
@@ -209,7 +217,32 @@ export default function RegisterPage() {
 
       {conflictDialog && (
         <Dialog open onClose={() => setConflictDialog(null)}>
-          {conflictDialog.type === 'admin' ? (
+          {conflictDialog.type === 'slug_linked' ? (
+            <>
+              <DialogTitle>Você já possui vínculo com esta empresa</DialogTitle>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                Você já possui vínculo com a empresa{' '}
+                <strong className="text-foreground">{conflictDialog.clinicName}</strong>, que tem o
+                mesmo identificador que você está tentando cadastrar. Deseja recuperar o acesso à
+                sua conta?
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setConflictDialog(null)}
+                  disabled={recoverLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleRecoverAccess}
+                  disabled={recoverLoading}
+                >
+                  {recoverLoading ? 'Enviando...' : 'Recuperar acesso'}
+                </Button>
+              </div>
+            </>
+          ) : conflictDialog.type === 'admin' ? (
             <>
               <DialogTitle>Você já é administrador desta clínica</DialogTitle>
               <p className="text-sm text-muted-foreground leading-relaxed mb-4">

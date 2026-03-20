@@ -169,6 +169,16 @@ export class AuthService {
       }
 
       const baseSlug = slugify(dto.clinicName)
+      // Step 2: Verificar colisão de slug com vínculo na mesma clínica (Cenário A)
+      const existingClinicForSlug = await authRepository.findClinicBySlug(baseSlug)
+      if (existingClinicForSlug && sourceMembership.clinicId === existingClinicForSlug.id) {
+        throw new AppError(
+          `Você já possui vínculo com a empresa "${existingClinicForSlug.name}", que tem o mesmo identificador que você está tentando cadastrar.`,
+          409,
+          'SLUG_LINKED_SAME_CLINIC',
+          { clinicName: existingClinicForSlug.name },
+        )
+      }
       const slug = await this.uniqueSlug(baseSlug)
       clinicId = generateId()
       adminId = generateId()
@@ -213,6 +223,18 @@ export class AuthService {
     } else {
       // Fresh registration
       const baseSlug = slugify(dto.clinicName)
+      // Verificar colisão de slug com vínculo na mesma clínica (Cenário A — inclui dev mode)
+      if (sourceMembership) {
+        const existingClinicForSlug = await authRepository.findClinicBySlug(baseSlug)
+        if (existingClinicForSlug && sourceMembership.clinicId === existingClinicForSlug.id) {
+          throw new AppError(
+            `Você já possui vínculo com a empresa "${existingClinicForSlug.name}", que tem o mesmo identificador que você está tentando cadastrar.`,
+            409,
+            'SLUG_LINKED_SAME_CLINIC',
+            { clinicName: existingClinicForSlug.name },
+          )
+        }
+      }
       const slug = await this.uniqueSlug(baseSlug)
       const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS)
       clinicId = generateId()
