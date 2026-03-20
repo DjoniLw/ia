@@ -30,6 +30,14 @@ export class AuthRepository {
     })
   }
 
+  updateUserPassword(userId: string, passwordHash: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+      select: { id: true },
+    })
+  }
+
   // ─── Clinic queries ────────────────────────────────────────────────────────
 
   findClinicBySlug(slug: string) {

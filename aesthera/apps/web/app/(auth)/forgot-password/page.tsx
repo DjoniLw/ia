@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
   async function onSubmit(data: ForgotData) {
     setPageState('loading')
     try {
-      await api.post('/auth/forgot-password', { email: data.email })
+      await api.post('/auth/recover-access', { email: data.email })
       setPageState('success')
     } catch {
       setPageState('error')
