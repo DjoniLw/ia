@@ -27,9 +27,26 @@ export function isAuthenticated(): boolean {
 
 export function decodeJwtPayload<T = Record<string, unknown>>(token: string): T | null {
   try {
-    const base64 = token.split('.')[1]
+    let base64 = token.split('.')[1]
     if (!base64) return null
-    const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'))
+
+    // Normaliza Base64URL para Base64 padrão e adiciona padding
+    base64 = base64.replace(/-/g, '+').replace(/_/g, '/')
+    while (base64.length % 4 !== 0) {
+      base64 += '='
+    }
+
+    const binary = atob(base64)
+
+    // Garante decodificação correta em UTF-8
+    let json: string
+    if (typeof TextDecoder !== 'undefined') {
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+      json = new TextDecoder('utf-8').decode(bytes)
+    } else {
+      json = decodeURIComponent(escape(binary))
+    }
+
     return JSON.parse(json) as T
   } catch {
     return null

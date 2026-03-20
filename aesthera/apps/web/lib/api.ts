@@ -78,7 +78,7 @@ api.interceptors.response.use(
     const original = error.config
 
     if (error.response?.status === 403) {
-      toast.error('Acesso negado. Você não tem permissão para realizar esta ação.')
+      toast.error('Acesso negado. Você não tem permissão para realizar esta ação.', { id: 'forbidden' })
       return Promise.reject(error)
     }
 

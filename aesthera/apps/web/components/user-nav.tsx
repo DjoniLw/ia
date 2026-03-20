@@ -17,7 +17,7 @@ interface UserMe {
 
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Administrador',
-  staff: 'Colaborador',
+  staff: 'Recepcionista',
 }
 
 function getInitials(name: string): string {

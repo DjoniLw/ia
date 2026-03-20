@@ -31,9 +31,6 @@ import { useEffect, useState } from 'react'
 import { ChatPanel } from '@/components/chat-panel'
 import { toast } from 'sonner'
 
-// Rotas restritas a administradores — staff é redirecionado
-const ADMIN_ONLY_PATHS = ['/billing', '/financial', '/reports', '/settings']
-
 const navItems = [
   { href: '/dashboard', label: 'Início', icon: Home, adminOnly: false },
   { href: '/appointments', label: 'Agendamentos', icon: CalendarDays, adminOnly: false },
@@ -54,6 +51,9 @@ const navItems = [
   { href: '/notifications', label: 'Notificações', icon: Bell, adminOnly: false },
   { href: '/settings', label: 'Configurações', icon: Settings, adminOnly: true },
 ]
+
+// Derivado de navItems — fonte única de verdade
+const ADMIN_ONLY_PATHS = navItems.filter((i) => i.adminOnly).map((i) => i.href)
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
