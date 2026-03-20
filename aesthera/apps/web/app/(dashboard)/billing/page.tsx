@@ -21,7 +21,7 @@ function formatDate(iso: string | null) {
 const STATUS_LABEL: Record<BillingStatus, string> = {
   pending: 'Pendente',
   paid: 'Pago',
-  overdue: 'Em atraso',
+  overdue: 'Vencido',
   cancelled: 'Cancelado',
 }
 
@@ -124,7 +124,7 @@ export default function BillingPage() {
     { value: '', label: 'Todos' },
     { value: 'pending', label: 'Pendente' },
     { value: 'paid', label: 'Pago' },
-    { value: 'overdue', label: 'Em atraso' },
+    { value: 'overdue', label: 'Vencido' },
     { value: 'cancelled', label: 'Cancelado' },
   ]
 
