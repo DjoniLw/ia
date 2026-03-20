@@ -24,3 +24,23 @@ export function clearTokens(): void {
 export function isAuthenticated(): boolean {
   return Boolean(getAccessToken())
 }
+
+export function decodeJwtPayload<T = Record<string, unknown>>(token: string): T | null {
+  try {
+    const base64 = token.split('.')[1]
+    if (!base64) return null
+    const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'))
+    return JSON.parse(json) as T
+  } catch {
+    return null
+  }
+}
+
+export type UserRole = 'admin' | 'staff'
+
+export function getUserRole(): UserRole | null {
+  const token = getAccessToken()
+  if (!token) return null
+  const payload = decodeJwtPayload<{ role?: UserRole }>(token)
+  return payload?.role ?? null
+}
