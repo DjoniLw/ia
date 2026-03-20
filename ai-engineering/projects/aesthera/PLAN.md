@@ -222,8 +222,8 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - [x] #44 — Revisar e simplificar lógica de resolução de slug (tenant): middleware.ts com redirect `/sem-acesso` para bare localhost; tenant.middleware.ts com cache `{clinicId,status}` e erros descritivos; README com seção multi-tenant dev; clinics.md atualizado
 - [ ] #44 — Revisar e simplificar lógica de resolução de slug (tenant)
 - [x] Refatorar autenticação: login por e-mail sem slug manual, CNPJ opcional no cadastro, CNPJ validado nas Configurações e transferência de empresa por e-mail
-- [ ] #45 — Exibir clínica e usuário logado no header/sidebar
-- [ ] #46 — Controle de acesso por perfil de usuário no frontend
+- [x] #45 — Exibir clínica e usuário logado no header/sidebar
+- [x] #46 — Controle de acesso por perfil de usuário no frontend
 - [ ] #47 — Auto-preenchimento de endereço por CEP (ViaCEP)
 - [ ] #48 — Máscaras de entrada para CPF, CNPJ, telefone e CEP
 - [ ] #49 — Cadastro e configuração de formas de pagamento da clínica
@@ -298,6 +298,13 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - **Arquivo(s) afetado(s):** aesthera/apps/web/app/(auth)/login/page.tsx, aesthera/apps/web/app/(auth)/forgot-password/page.tsx (novo), aesthera/apps/web/app/(auth)/reset-password/page.tsx (novo)
 - **O que foi feito:** Adicionado link "Esqueci minha senha" na tela de login (abaixo do campo de senha, alinhado à direita). Criada página `/forgot-password` com formulário de e-mail que chama `POST /auth/forgot-password` sem header X-Clinic-Slug; exibe mensagem de sucesso genérica independente do email existir (preventing user enumeration). Criada página `/reset-password` com leitura do `?token=` via `useSearchParams`; formulário com campos "Nova senha" e "Confirmar nova senha" com validação Zod (mín. 8 caracteres, 1 maiúscula, 1 número, 1 especial, confirmação igual); chama `POST /auth/reset-password` com `{ token, password }`; estados de sucesso, erro de token inválido/expirado e token ausente, todos com links de navegação.
 - **Impacto:** Elimina o erro 404 para usuários que já receberam emails de recuperação de senha. Fluxo completo de recuperação disponível no frontend.
+
+---
+
+### [2026-03-20] — #45 e #46 — Clínica/usuário no header e controle de acesso por perfil no frontend
+- **Arquivo(s) afetado(s):** `aesthera/apps/web/lib/auth.ts`, `aesthera/apps/web/lib/api.ts`, `aesthera/apps/web/app/(dashboard)/layout.tsx`, `aesthera/apps/web/components/user-nav.tsx` (novo), `aesthera/apps/web/lib/hooks/use-role.ts` (novo)
+- **O que foi feito:** Adicionado `decodeJwtPayload<T>()` e `getUserRole()` em `auth.ts`. Criado hook `useRole()` que extrai o perfil (`admin`/`staff`) do JWT sem chamada à API. Criado componente `UserNav` com avatar (iniciais), nome, perfil traduzido, e dropdown com "Meu perfil" e "Sair". Layout atualizado: exibe nome da clínica abaixo da marca na sidebar, `UserNav` no header direito, filtra itens de menu por role (staff não vê Cobranças, Financeiro, Relatórios, Configurações), guard de rota redireciona staff de rotas restritas para `/dashboard` com toast. Tratamento padronizado de erros 403 em `api.ts` com toast amigável em PT-BR.
+- **Impacto:** Toda sessão autenticada agora exibe o contexto da clínica e do usuário. Usuários `staff` ficam limitados visualmente e por roteamento às funcionalidades operacionais.
 
 ---
 
