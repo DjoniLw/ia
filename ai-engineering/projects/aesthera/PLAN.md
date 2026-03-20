@@ -277,6 +277,11 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - **O que foi feito:** login sem slug manual com resolução automática por e-mail, CNPJ opcional no cadastro, validação forte e lookup de CNPJ nas Configurações, tokens de transferência por e-mail para cadastro e convite, página pública de confirmação/rejeição
 - **Impacto:** autenticação e onboarding ficaram mais simples no frontend; backend passou a suportar transferência segura de acesso entre clínicas e validação centralizada de CNPJ
 
+### [2026-03-20] — #55 — Fluxo de conflito de e-mail no cadastro — distinção admin vs membro com confirmação prévia
+- **Arquivo(s) afetado(s):** aesthera/apps/api/src/shared/errors/app-error.ts, aesthera/apps/api/src/shared/errors/error-handler.ts, aesthera/apps/api/src/shared/utils/transfer-email.ts, aesthera/apps/api/src/modules/auth/auth.dto.ts, aesthera/apps/api/src/modules/auth/auth.service.ts, aesthera/apps/api/src/modules/auth/auth.routes.ts, aesthera/apps/api/src/app.ts, aesthera/apps/web/app/(auth)/register/page.tsx, ai-engineering/projects/aesthera/features/auth-refactor-cnpj-login.md
+- **O que foi feito:** Cadastro com e-mail em conflito agora não cria clínica automaticamente — retorna 409 com código `EMAIL_CONFLICT_ADMIN` ou `EMAIL_CONFLICT_MEMBER` antes de qualquer criação. Frontend exibe Dialog com conteúdo diferenciado: admin recebe alerta grave de perda de acesso + opção "Recuperar acesso"; membro recebe confirmação simples. Re-submit com `confirmTransfer: true` cria a clínica e envia e-mail de transferência (com alerta reforçado para admin). Novo endpoint `POST /auth/recover-access` envia e-mail de redefinição de senha via Redis. `AppError` estendido com campo `data` opcional para transportar metadados do erro.
+- **Impacto:** Fluxo de onboarding com conflito de e-mail ficou seguro e explícito; admin não perde acesso por engano.
+
 ---
 
 ## Como usar este plano com o Copilot

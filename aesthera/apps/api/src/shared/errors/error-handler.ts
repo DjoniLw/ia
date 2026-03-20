@@ -24,6 +24,7 @@ export function errorHandler(
     reply.status(error.statusCode).send({
       error: error.code ?? 'APP_ERROR',
       message: error.message,
+      ...(error.data ? { data: error.data } : {}),
     })
     return
   }
