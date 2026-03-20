@@ -9,12 +9,13 @@ import {
   VerifyEmailDto,
   ResendVerificationDto,
   RecoverAccessDto,
+  ResetPasswordDto,
 } from './auth.dto'
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   const authService = new AuthService(app)
 
-  // ── GET /auth/resolve-slug?email=... ────────────────────────────────────────
+  // ── GET /auth/resolve-slug?email=... ────────────────────────────────────────────
   // Returns the clinic slug for a given e-mail. PUBLIC — no tenant, no auth.
   // Responds generically (slug: null) when not found to avoid leaking account existence.
   app.get('/auth/resolve-slug', async (request, reply) => {
@@ -24,7 +25,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     reply.status(200).send(result)
   })
 
-  // ── POST /auth/register ─────────────────────────────────────────────────────
+  // ── POST /auth/register ────────────────────────────────────────────────────────────
   // Creates a new clinic + first admin user. PUBLIC — no tenant, no auth.
   app.post('/auth/register', async (request, reply) => {
     const body = RegisterClinicDto.parse(request.body)
@@ -40,7 +41,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     reply.status(200).send(result)
   })
 
-  // ── POST /auth/resend-verification ─────────────────────────────────────────
+  // ── POST /auth/resend-verification ──────────────────────────────────────────────
   // Generates a new verification token and re-sends the welcome email. PUBLIC.
   app.post('/auth/resend-verification', async (request, reply) => {
     const body = ResendVerificationDto.parse(request.body)
@@ -48,11 +49,19 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     reply.status(200).send(result)
   })
 
-  // ── POST /auth/recover-access ───────────────────────────────────────────────
+  // ── POST /auth/recover-access ─────────────────────────────────────────────────
   // Sends a password reset e-mail to the user without exposing account existence. PUBLIC.
   app.post('/auth/recover-access', async (request, reply) => {
     const body = RecoverAccessDto.parse(request.body)
     const result = await authService.recoverAccess(body.email)
+    reply.status(200).send(result)
+  })
+
+  // ── POST /auth/reset-password ─────────────────────────────────────────────────
+  // Validates the reset token from Redis and updates the user's password. PUBLIC.
+  app.post('/auth/reset-password', async (request, reply) => {
+    const body = ResetPasswordDto.parse(request.body)
+    const result = await authService.resetPassword(body.token, body.password)
     reply.status(200).send(result)
   })
 
@@ -68,7 +77,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     reply.status(200).send(result)
   })
 
-  // ── POST /auth/login ────────────────────────────────────────────────────────
+  // ── POST /auth/login ─────────────────────────────────────────────────────────────────
   // Requires X-Clinic-Slug header (sent by frontend from subdomain).
   app.post('/auth/login', { preHandler: [] }, async (request, reply) => {
     const body = LoginDto.parse(request.body)
@@ -76,7 +85,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     reply.status(200).send(result)
   })
 
-  // ── POST /auth/refresh ──────────────────────────────────────────────────────
+  // ── POST /auth/refresh ───────────────────────────────────────────────────────────────
   // Rotates access + refresh tokens. PUBLIC — no tenant, no auth.
   app.post('/auth/refresh', async (request, reply) => {
     const body = RefreshTokenDto.parse(request.body)
@@ -84,7 +93,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     reply.status(200).send(tokens)
   })
 
-  // ── POST /auth/logout ───────────────────────────────────────────────────────
+  // ── POST /auth/logout ───────────────────────────────────────────────────────────────
   // Revokes refresh token from Redis. PUBLIC — no tenant, no JWT check needed;
   // the refresh token itself is the credential that gets revoked.
   app.post('/auth/logout', async (request, reply) => {
@@ -93,7 +102,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     reply.status(200).send({ message: 'Logged out successfully' })
   })
 
-  // ── Professional auth ───────────────────────────────────────────────────────
+  // ── Professional auth ───────────────────────────────────────────────────────────────
 
   // POST /auth/professional/login — requires X-Clinic-Slug
   app.post(
