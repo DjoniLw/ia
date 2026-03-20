@@ -36,6 +36,18 @@ enum UserRole {
   staff
 }
 
+enum TransferStatus {
+  pending
+  confirmed
+  rejected
+  expired
+}
+
+enum TransferKind {
+  clinic_registration
+  user_invite
+}
+
 enum AppointmentStatus {
   draft
   confirmed
@@ -141,8 +153,8 @@ model Clinic {
   id            String       @id @default(uuid())
   slug          String       @unique              // URL identifier: slug.aesthera.com.br
   name          String
-  email         String       @unique
-  document      String?                           // CNPJ
+  email         String
+  document      String?      @unique              // CNPJ (único por empresa)
   phone         String?
   plan          ClinicPlan   @default(trial)
   status        ClinicStatus @default(active)
@@ -160,6 +172,8 @@ model Clinic {
   apiKeys          ApiKey[]
   businessHours    BusinessHour[]
   users            User[]
+  sourceTransfers  TransferToken[] @relation("TransferSourceClinic")
+  targetTransfers  TransferToken[] @relation("TransferTargetClinic")
   professionals    Professional[]
   services         Service[]
   customers        Customer[]
@@ -249,10 +263,37 @@ model User {
   updatedAt       DateTime  @updatedAt            @map("updated_at")
 
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  sourceTransfers TransferToken[] @relation("TransferSourceUser")
+  targetTransfers TransferToken[] @relation("TransferTargetUser")
 
   @@unique([clinicId, email])
   @@index([clinicId])
   @@map("users")
+}
+
+model TransferToken {
+  id            String         @id @default(uuid())
+  token         String         @unique
+  email         String
+  sourceClinicId String?       @map("source_clinic_id")
+  sourceUserId  String?        @map("source_user_id")
+  targetClinicId String        @map("target_clinic_id")
+  targetUserId  String?        @map("target_user_id")
+  role          UserRole
+  kind          TransferKind
+  expiresAt     DateTime       @map("expires_at")
+  status        TransferStatus @default(pending)
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  sourceClinic Clinic? @relation("TransferSourceClinic", fields: [sourceClinicId], references: [id], onDelete: SetNull)
+  sourceUser   User?   @relation("TransferSourceUser", fields: [sourceUserId], references: [id], onDelete: SetNull)
+  targetClinic Clinic  @relation("TransferTargetClinic", fields: [targetClinicId], references: [id], onDelete: Cascade)
+  targetUser   User?   @relation("TransferTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([email, status])
+  @@index([targetClinicId])
+  @@index([targetUserId])
+  @@map("transfer_tokens")
 }
 
 // ─── Professional ─────────────────────────────────────────────────────────────

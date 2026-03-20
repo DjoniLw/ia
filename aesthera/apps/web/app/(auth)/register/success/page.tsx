@@ -12,6 +12,7 @@ function SuccessContent() {
   const searchParams = useSearchParams()
   const slug = searchParams.get('slug') ?? ''
   const email = searchParams.get('email') ?? ''
+  const mode = searchParams.get('mode') ?? 'verification'
   // Default to true so that direct navigation or old links without this param
   // still show the "check your inbox" message rather than the warning.
   const emailSent = searchParams.get('emailSent') !== 'false'
@@ -43,14 +44,18 @@ function SuccessContent() {
     <Card>
       <CardHeader className="text-center">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-3xl dark:bg-green-900/30">
-          {emailSent ? '✉️' : '🎉'}
+          {mode === 'transfer' ? '↔️' : emailSent ? '✉️' : '🎉'}
         </div>
         <CardTitle className="text-2xl">
-          {emailSent ? 'Verifique seu e-mail' : 'Clínica cadastrada!'}
+          {mode === 'transfer' ? 'Confirme a transferência do acesso' : emailSent ? 'Verifique seu e-mail' : 'Clínica cadastrada!'}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-5 text-center">
-        {emailSent ? (
+        {mode === 'transfer' ? (
+          <p className="text-sm text-muted-foreground">
+            Enviamos um e-mail para <span className="font-medium text-foreground">{email}</span> com os links para confirmar ou recusar a transferência do seu acesso para a nova clínica.
+          </p>
+        ) : emailSent ? (
           <p className="text-sm text-muted-foreground">
             Enviamos um e-mail de confirmação para{' '}
             {email && <span className="font-medium text-foreground">{email}</span>}.
@@ -74,15 +79,15 @@ function SuccessContent() {
 
         {slug && (
           <div className="rounded-lg border bg-muted/30 px-4 py-3 text-left">
-            <p className="text-xs text-muted-foreground">Identificador da sua clínica</p>
+            <p className="text-xs text-muted-foreground">Identificador interno da clínica</p>
             <p className="mt-0.5 font-mono text-lg font-semibold text-foreground">{slug}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Guarde este identificador — você precisará dele para fazer login.
+              O sistema usará esse identificador automaticamente durante o login.
             </p>
           </div>
         )}
 
-        {email && !resent && (
+        {mode !== 'transfer' && email && !resent && (
           <Button
             variant="secondary"
             className="w-full"
@@ -99,7 +104,7 @@ function SuccessContent() {
           </p>
         )}
 
-        {emailSent && !resent && (
+        {mode !== 'transfer' && emailSent && !resent && (
           <p className="text-xs text-muted-foreground">
             Não recebeu o e-mail? Verifique a caixa de spam ou use o botão acima.
           </p>

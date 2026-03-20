@@ -46,10 +46,18 @@ export class AuthRepository {
     })
   }
 
-  findClinicByEmail(email: string) {
-    return prisma.clinic.findUnique({
-      where: { email },
+  findLatestUnverifiedClinicByEmail(email: string) {
+    return prisma.clinic.findFirst({
+      where: { email, emailVerified: false },
+      orderBy: { createdAt: 'desc' },
       select: { id: true, slug: true, name: true, emailVerified: true },
+    })
+  }
+
+  findClinicByDocument(document: string) {
+    return prisma.clinic.findUnique({
+      where: { document },
+      select: { id: true, slug: true, emailVerified: true },
     })
   }
 
@@ -123,6 +131,40 @@ export class AuthRepository {
     })
   }
 
+  createClinic(data: {
+    clinicId: string
+    slug: string
+    name: string
+    email: string
+    phone?: string
+    document?: string
+    emailVerified?: boolean
+    emailVerificationToken?: string
+    emailVerificationExpiresAt?: Date
+  }) {
+    return prisma.clinic.create({
+      data: {
+        id: data.clinicId,
+        slug: data.slug,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        document: data.document,
+        emailVerified: data.emailVerified ?? false,
+        emailVerificationToken: data.emailVerificationToken,
+        emailVerificationExpiresAt: data.emailVerificationExpiresAt,
+      },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        email: true,
+        plan: true,
+        status: true,
+      },
+    })
+  }
+
   /** Re-use an existing unverified clinic record: refresh the token and update mutable fields. */
   async updateUnverifiedClinicForReRegistration(data: {
     clinicId: string
@@ -166,6 +208,116 @@ export class AuthRepository {
         emailVerificationExpiresAt: expiresAt,
       },
       select: { id: true, slug: true, name: true },
+    })
+  }
+
+  findActiveMembershipsByEmail(email: string) {
+    return prisma.user.findMany({
+      where: {
+        email,
+        active: true,
+        clinic: {
+          status: 'active',
+          emailVerified: true,
+        },
+      },
+      orderBy: [{ lastLoginAt: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        clinicId: true,
+        name: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        lastLoginAt: true,
+        clinic: {
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            emailVerified: true,
+            status: true,
+          },
+        },
+      },
+    })
+  }
+
+  findLatestPendingTransferByEmail(email: string) {
+    return prisma.transferToken.findFirst({
+      where: { email, status: 'pending' },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, targetClinicId: true, kind: true },
+    })
+  }
+
+  findTransferByToken(token: string) {
+    return prisma.transferToken.findUnique({
+      where: { token },
+      select: {
+        id: true,
+        token: true,
+        email: true,
+        sourceClinicId: true,
+        sourceUserId: true,
+        targetClinicId: true,
+        targetUserId: true,
+        role: true,
+        kind: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+        sourceClinic: {
+          select: { id: true, name: true, slug: true },
+        },
+        targetClinic: {
+          select: { id: true, name: true, slug: true, emailVerified: true },
+        },
+        sourceUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            passwordHash: true,
+            active: true,
+          },
+        },
+        targetUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            passwordHash: true,
+            active: true,
+          },
+        },
+      },
+    })
+  }
+
+  createTransferToken(data: {
+    token: string
+    email: string
+    sourceClinicId?: string
+    sourceUserId?: string
+    targetClinicId: string
+    targetUserId?: string
+    role: 'admin' | 'staff'
+    kind: 'clinic_registration' | 'user_invite'
+    expiresAt: Date
+  }) {
+    return prisma.transferToken.create({
+      data,
+      select: {
+        id: true,
+        token: true,
+        email: true,
+        targetClinicId: true,
+        targetUserId: true,
+        role: true,
+        kind: true,
+        expiresAt: true,
+      },
     })
   }
 

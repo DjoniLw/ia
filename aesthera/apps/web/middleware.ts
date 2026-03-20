@@ -6,6 +6,7 @@ const PUBLIC_PREFIXES = [
   '/register',
   '/verify-email',
   '/accept-invite',
+  '/transfer',
   '/pay',
   '/sem-acesso',
 ]

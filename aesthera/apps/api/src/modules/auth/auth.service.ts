@@ -1,8 +1,12 @@
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
+import type { Prisma } from '@prisma/client'
 import { appConfig } from '../../config/app.config'
+import { companyConfig } from '../../config/company.config'
+import { prisma } from '../../database/prisma/client'
 import { redis } from '../../database/redis/client'
 import { logger } from '../../shared/logger/logger'
+import { buildTransferEmailHtml } from '../../shared/utils/transfer-email'
 import {
   AppError,
   ConflictError,
@@ -23,6 +27,7 @@ const MAX_FAILED_ATTEMPTS = 5
 const LOCK_TTL_SECONDS = 900 // 15 min
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60 // 7 days
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
+const TRANSFER_TOKEN_TTL_MS = 48 * 60 * 60 * 1000 // 48 hours
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +39,11 @@ function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .substring(0, 60)
+}
+
+function normalizeCnpj(value?: string | null): string | undefined {
+  const digits = value?.replace(/\D/g, '') ?? ''
+  return digits.length > 0 ? digits : undefined
 }
 
 function hashRefreshToken(raw: string): string {
@@ -94,23 +104,28 @@ export class AuthService {
   // ── Register ────────────────────────────────────────────────────────────────
 
   async registerClinic(dto: RegisterClinicDto) {
-    const existing = await authRepository.findClinicByEmail(dto.email)
-    if (existing?.emailVerified) {
-      throw new ConflictError('An account with this email already exists')
+    const clinicDocument = normalizeCnpj(dto.clinicDocument)
+    const activeMemberships = await authRepository.findActiveMembershipsByEmail(dto.email)
+    const sourceMembership = activeMemberships[0]
+    const existingUnverified = await authRepository.findLatestUnverifiedClinicByEmail(dto.email)
+
+    if (appConfig.isProduction) {
+      const pendingTransfer = await authRepository.findLatestPendingTransferByEmail(dto.email)
+      if (pendingTransfer?.kind === 'clinic_registration') {
+        throw new ConflictError('Já existe uma transferência pendente para este e-mail. Verifique sua caixa de entrada.')
+      }
     }
 
-    // Verify Redis is reachable before writing anything to the database.
-    // If Redis is unavailable, token issuance would fail AFTER the clinic is
-    // created, leaving a half-created record the user could never log into.
-    // Failing here (before any DB write) lets the user retry cleanly.
-    try {
-      await redis.ping()
-    } catch {
-      throw new AppError(
-        'Authentication service is temporarily unavailable. Please try again later.',
-        503,
-        'SERVICE_UNAVAILABLE',
-      )
+    if (!appConfig.isProduction) {
+      try {
+        await redis.ping()
+      } catch {
+        throw new AppError(
+          'Authentication service is temporarily unavailable. Please try again later.',
+          503,
+          'SERVICE_UNAVAILABLE',
+        )
+      }
     }
 
     // Generate email verification token
@@ -121,23 +136,65 @@ export class AuthService {
     let clinicId: string
     let adminId: string
 
-    if (existing && !existing.emailVerified) {
+    if (existingUnverified && !sourceMembership) {
       // Account exists but was never verified — allow the user to "re-register":
       // refresh the verification token and update their data.
       const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS)
       clinic = await authRepository.updateUnverifiedClinicForReRegistration({
-        clinicId: existing.id,
+        clinicId: existingUnverified.id,
         name: dto.clinicName,
         phone: dto.phone,
-        document: dto.clinicDocument,
+        document: clinicDocument,
         adminName: dto.adminName,
         passwordHash,
         emailVerificationToken: verificationToken,
         emailVerificationExpiresAt: verificationExpiresAt,
       })
-      clinicId = existing.id
-      const adminUser = await authRepository.findAdminUserByClinic(existing.id)
-      adminId = adminUser?.id ?? existing.id
+      clinicId = existingUnverified.id
+      const adminUser = await authRepository.findAdminUserByClinic(existingUnverified.id)
+      adminId = adminUser?.id ?? existingUnverified.id
+    } else if (appConfig.isProduction && sourceMembership) {
+      const baseSlug = slugify(dto.clinicName)
+      const slug = await this.uniqueSlug(baseSlug)
+      clinicId = generateId()
+      adminId = generateId()
+
+      clinic = await authRepository.createClinic({
+        clinicId,
+        slug,
+        name: dto.clinicName,
+        email: dto.email,
+        phone: dto.phone,
+        document: clinicDocument,
+        emailVerified: false,
+      })
+
+      const transferToken = crypto.randomUUID()
+      const expiresAt = new Date(Date.now() + TRANSFER_TOKEN_TTL_MS)
+      await authRepository.createTransferToken({
+        token: transferToken,
+        email: dto.email,
+        sourceClinicId: sourceMembership.clinicId,
+        sourceUserId: sourceMembership.id,
+        targetClinicId: clinicId,
+        role: 'admin',
+        kind: 'clinic_registration',
+        expiresAt,
+      })
+
+      await this.sendTransferEmail({
+        clinicId,
+        email: dto.email,
+        sourceClinicName: sourceMembership.clinic.name,
+        targetClinicName: dto.clinicName,
+        token: transferToken,
+      })
+
+      return {
+        clinic: { id: clinic.id, slug: clinic.slug, name: clinic.name },
+        transferPending: true as const,
+        emailVerificationSent: false,
+      }
     } else {
       // Fresh registration
       const baseSlug = slugify(dto.clinicName)
@@ -152,7 +209,7 @@ export class AuthService {
         name: dto.clinicName,
         email: dto.email,
         phone: dto.phone,
-        document: dto.clinicDocument,
+        document: clinicDocument,
         adminId,
         adminName: dto.adminName,
         adminEmail: dto.email,
@@ -231,7 +288,7 @@ export class AuthService {
   // ── Resend verification email ─────────────────────────────────────────────
 
   async resendVerification(email: string): Promise<{ sent: boolean }> {
-    const clinic = await authRepository.findClinicByEmail(email)
+    const clinic = await authRepository.findLatestUnverifiedClinicByEmail(email)
 
     // If clinic is already verified or doesn't exist, return generic response
     // to avoid leaking account existence.
@@ -300,6 +357,155 @@ export class AuthService {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
       ...tokens,
     }
+  }
+
+  // ── Resolve slug por e-mail ───────────────────────────────────────────────────
+
+  /** Retorna o slug da clínica associada ao e-mail. Resposta genérica se não encontrado. */
+  async resolveSlug(email: string): Promise<{ slug: string | null }> {
+    const memberships = await authRepository.findActiveMembershipsByEmail(email)
+    const membership = memberships[0]
+    if (!membership) return { slug: null }
+    return { slug: membership.clinic.slug }
+  }
+
+  async confirmTransfer(token: string) {
+    const transfer = await authRepository.findTransferByToken(token)
+    if (!transfer) {
+      throw new NotFoundError('Transfer token')
+    }
+
+    if (transfer.status !== 'pending') {
+      throw new ForbiddenError('Esta transferência não está mais pendente.')
+    }
+
+    if (transfer.expiresAt < new Date()) {
+      await prisma.transferToken.update({
+        where: { id: transfer.id },
+        data: { status: 'expired' },
+      })
+      throw new ForbiddenError('O link de transferência expirou.')
+    }
+
+    if (!transfer.sourceUser?.passwordHash) {
+      throw new AppError('Não foi possível concluir a transferência deste acesso.', 422, 'TRANSFER_SOURCE_INVALID')
+    }
+
+    const sourcePasswordHash = transfer.sourceUser.passwordHash
+
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (transfer.kind === 'clinic_registration') {
+        await tx.user.upsert({
+          where: { clinicId_email: { clinicId: transfer.targetClinicId, email: transfer.email } },
+          update: {
+            name: transfer.sourceUser?.name ?? transfer.email,
+            passwordHash: sourcePasswordHash,
+            role: 'admin',
+            active: true,
+            inviteToken: null,
+            inviteExpiresAt: null,
+          },
+          create: {
+            id: transfer.targetUserId ?? generateId(),
+            clinicId: transfer.targetClinicId,
+            name: transfer.sourceUser?.name ?? transfer.email,
+            email: transfer.email,
+            passwordHash: sourcePasswordHash,
+            role: 'admin',
+            active: true,
+          },
+        })
+
+        await tx.clinic.update({
+          where: { id: transfer.targetClinicId },
+          data: {
+            emailVerified: true,
+            emailVerificationToken: null,
+            emailVerificationExpiresAt: null,
+          },
+        })
+      } else {
+        if (transfer.targetUserId) {
+          await tx.user.update({
+            where: { id: transfer.targetUserId },
+            data: {
+              name: transfer.targetUser?.name ?? transfer.sourceUser?.name ?? transfer.email,
+              email: transfer.email,
+              passwordHash: sourcePasswordHash,
+              role: transfer.role,
+              active: true,
+              inviteToken: null,
+              inviteExpiresAt: null,
+            },
+          })
+        } else {
+          await tx.user.create({
+            data: {
+              id: generateId(),
+              clinicId: transfer.targetClinicId,
+              name: transfer.sourceUser?.name ?? transfer.email,
+              email: transfer.email,
+              passwordHash: sourcePasswordHash,
+              role: transfer.role,
+              active: true,
+            },
+          })
+        }
+      }
+
+      if (transfer.sourceUserId) {
+        await tx.user.update({
+          where: { id: transfer.sourceUserId },
+          data: { active: false },
+        })
+      }
+
+      await tx.transferToken.update({
+        where: { id: transfer.id },
+        data: { status: 'confirmed' },
+      })
+    })
+
+    return {
+      message: 'Transferência confirmada com sucesso.',
+      clinicSlug: transfer.targetClinic.slug,
+    }
+  }
+
+  async rejectTransfer(token: string) {
+    const transfer = await authRepository.findTransferByToken(token)
+    if (!transfer) {
+      throw new NotFoundError('Transfer token')
+    }
+
+    if (transfer.status !== 'pending') {
+      throw new ForbiddenError('Esta transferência não está mais pendente.')
+    }
+
+    if (transfer.expiresAt < new Date()) {
+      await prisma.transferToken.update({
+        where: { id: transfer.id },
+        data: { status: 'expired' },
+      })
+      throw new ForbiddenError('O link de transferência expirou.')
+    }
+
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.transferToken.update({
+        where: { id: transfer.id },
+        data: { status: 'rejected' },
+      })
+
+      if (transfer.kind === 'user_invite' && transfer.targetUserId && transfer.targetUser && !transfer.targetUser.active) {
+        await tx.user.delete({ where: { id: transfer.targetUserId } })
+      }
+    })
+
+    if (transfer.kind === 'clinic_registration') {
+      await this.notifyPendingClinicWithoutAdmin(transfer.targetClinicId, transfer.targetClinic.name)
+    }
+
+    return { message: 'Transferência recusada com sucesso.' }
   }
 
   // ── Refresh ──────────────────────────────────────────────────────────────────
@@ -464,6 +670,54 @@ export class AuthService {
       })
     } catch (err) {
       logger.error({ err, email: params.email }, 'Failed to send welcome email')
+    }
+  }
+
+  private async sendTransferEmail(params: {
+    clinicId: string
+    email: string
+    sourceClinicName: string
+    targetClinicName: string
+    token: string
+  }) {
+    const confirmUrl = `${appConfig.frontendUrl}/transfer/confirm?token=${params.token}&action=confirm`
+    const rejectUrl = `${appConfig.frontendUrl}/transfer/confirm?token=${params.token}&action=reject`
+    const html = buildTransferEmailHtml({
+      sourceClinicName: params.sourceClinicName,
+      targetClinicName: params.targetClinicName,
+      confirmUrl,
+      rejectUrl,
+    })
+
+    try {
+      await this.notifications.sendEmail({
+        clinicId: params.clinicId,
+        email: params.email,
+        subject: `${companyConfig.name}: confirme a transferência do seu acesso`,
+        htmlBody: html,
+        event: 'transfer_confirmation',
+      })
+    } catch (err) {
+      logger.error({ err, email: params.email }, 'Failed to send transfer confirmation email')
+    }
+  }
+
+  private async notifyPendingClinicWithoutAdmin(clinicId: string, clinicName: string) {
+    if (!companyConfig.supportEmail) {
+      logger.warn({ clinicName }, 'Rejected clinic transfer left a clinic pending admin and no support email is configured')
+      return
+    }
+
+    try {
+      await this.notifications.sendEmail({
+        clinicId,
+        email: companyConfig.supportEmail,
+        subject: `${companyConfig.name}: clínica sem admin após rejeição de transferência`,
+        htmlBody: `<p>A clínica <strong>${clinicName}</strong> ficou sem administrador após a rejeição de uma transferência.</p>`,
+        event: 'transfer_rejected_support',
+      })
+    } catch (err) {
+      logger.error({ err, clinicName }, 'Failed to notify support about pending clinic without admin')
     }
   }
 }

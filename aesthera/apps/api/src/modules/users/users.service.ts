@@ -1,12 +1,17 @@
 import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
+import { appConfig } from '../../config/app.config'
+import { companyConfig } from '../../config/company.config'
 import { redis } from '../../database/redis/client'
+import { logger } from '../../shared/logger/logger'
+import { buildTransferEmailHtml } from '../../shared/utils/transfer-email'
 import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
   UnauthorizedError,
 } from '../../shared/errors/app-error'
+import { NotificationsService } from '../notifications/notifications.service'
 import type {
   AcceptInviteDto,
   InviteUserDto,
@@ -20,6 +25,7 @@ const BCRYPT_COST = 12
 
 export class UsersService {
   private repo = new UsersRepository()
+  private notifications = new NotificationsService()
 
   async listUsers(clinicId: string) {
     return this.repo.findAll(clinicId)
@@ -38,6 +44,50 @@ export class UsersService {
   async inviteUser(clinicId: string, dto: InviteUserDto) {
     const existing = await this.repo.findByEmail(clinicId, dto.email)
     if (existing) throw new ConflictError('A user with this email already exists in this clinic')
+
+    if (appConfig.isProduction) {
+      const sourceMembership = await this.repo.findActiveMembershipInOtherClinic(dto.email, clinicId)
+      if (sourceMembership?.passwordHash) {
+        const targetClinic = await this.repo.findClinicById(clinicId)
+        const expiresAt = new Date(Date.now() + INVITE_TTL_HOURS * 60 * 60 * 1000)
+        const pendingUser = await this.repo.create({
+          clinicId,
+          name: dto.name,
+          email: dto.email,
+          role: dto.role,
+          inviteToken: null,
+          inviteExpiresAt: expiresAt,
+        })
+
+        const transferToken = crypto.randomUUID()
+        await this.repo.createTransferToken({
+          token: transferToken,
+          email: dto.email,
+          sourceClinicId: sourceMembership.clinicId,
+          sourceUserId: sourceMembership.id,
+          targetClinicId: clinicId,
+          targetUserId: pendingUser.id,
+          role: dto.role,
+          expiresAt,
+        })
+
+        await this.sendTransferEmail({
+          clinicId,
+          email: dto.email,
+          sourceClinicName: sourceMembership.clinic.name,
+          targetClinicName: targetClinic?.name ?? 'nova empresa',
+          token: transferToken,
+        })
+
+        return {
+          id: pendingUser.id,
+          email: pendingUser.email,
+          role: pendingUser.role,
+          transferPending: true as const,
+          message: 'Solicitação de transferência enviada por e-mail.',
+        }
+      }
+    }
 
     const rawToken = crypto.randomBytes(32).toString('hex')
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
@@ -120,5 +170,34 @@ export class UsersService {
 
     await this.repo.deactivate(clinicId, targetUserId)
     return { message: 'User deactivated' }
+  }
+
+  private async sendTransferEmail(params: {
+    clinicId: string
+    email: string
+    sourceClinicName: string
+    targetClinicName: string
+    token: string
+  }) {
+    const confirmUrl = `${appConfig.frontendUrl}/transfer/confirm?token=${params.token}&action=confirm`
+    const rejectUrl = `${appConfig.frontendUrl}/transfer/confirm?token=${params.token}&action=reject`
+    const html = buildTransferEmailHtml({
+      sourceClinicName: params.sourceClinicName,
+      targetClinicName: params.targetClinicName,
+      confirmUrl,
+      rejectUrl,
+    })
+
+    try {
+      await this.notifications.sendEmail({
+        clinicId: params.clinicId,
+        email: params.email,
+        subject: `${companyConfig.name}: confirme a transferência do seu acesso`,
+        htmlBody: html,
+        event: 'user_transfer_confirmation',
+      })
+    } catch (error) {
+      logger.error({ error, email: params.email }, 'Failed to send user transfer email')
+    }
   }
 }
