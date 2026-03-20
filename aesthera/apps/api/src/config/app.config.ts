@@ -3,7 +3,9 @@ import { env } from './env'
 export const appConfig = {
   env: env.NODE_ENV,
   port: env.PORT,
-  isProduction: env.NODE_ENV === 'production',
+  // isProduction = false apenas quando AMBIENTE_DEV=S está definida (homologação/dev no Railway).
+  // Sem a variável (padrão), o sistema opera como produção.
+  isProduction: env.AMBIENTE_DEV?.toUpperCase() !== 'S',
   isTest: env.NODE_ENV === 'test',
 
   db: {
