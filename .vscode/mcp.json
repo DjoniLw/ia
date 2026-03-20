@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "dotenv-cli",
+        "-e",
+        ".env",
+        "--",
+        "@modelcontextprotocol/server-github"
+      ]
+    }
+  }
+}

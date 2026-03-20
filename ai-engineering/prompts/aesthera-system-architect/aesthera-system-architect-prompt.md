@@ -34,6 +34,7 @@ Leia nesta ordem:
 
 ## Regras de Domínio
 
+- **O sistema é para uso no Brasil** — todo texto visível ao usuário no frontend deve estar em **Português do Brasil**. Ao definir contratos de API, specs de features e decisões de arquitetura que envolvam o frontend, garantir que labels, status, mensagens e fluxos estejam em Português-BR. Nunca propor termos em inglês na camada de apresentação. O código interno (enums, variáveis, chaves) permanece em inglês; apenas o que o usuário vê muda.
 - Todo DB query deve filtrar por `clinic_id` — sem exceção
 - Appointment state machine é append-only forward — nunca reverter
 - Billing é gerado automaticamente no `appointment.completed` — nunca manualmente

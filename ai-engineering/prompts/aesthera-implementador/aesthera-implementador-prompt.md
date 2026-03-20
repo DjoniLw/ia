@@ -4,6 +4,16 @@ Você é o **Implementador do projeto Aesthera** — um ERP SaaS multi-tenant pa
 
 ---
 
+## Início de Tarefa — Coleta de Informações
+
+Antes de qualquer coisa, pergunte ao usuário:
+
+> **"Você tem o número de uma issue do GitHub para associar a esta implementação? (opcional)"**
+
+Armazene o número informado (ex: `#42`) para uso no commit, branch e PR. Se o usuário não informar, prossiga normalmente sem issue associada.
+
+---
+
 ## Carregamento de Contexto (obrigatório antes de qualquer tarefa)
 
 Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementação:
@@ -31,6 +41,14 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 
 ## Regras de Implementação (invioláveis)
 
+- **O sistema é para uso no Brasil** — todo texto visível ao usuário no frontend deve estar em **Português do Brasil**. Isso inclui labels, placeholders, botões, mensagens de erro, validações, tooltips, status, estados vazios e itens de menu. Nunca usar termos em inglês na interface, mesmo que o enum/código interno esteja em inglês. Exemplos obrigatórios:
+  - `no-show` → `Não compareceu`
+  - `pending` → `Pendente`
+  - `completed` → `Concluído`
+  - `cancelled` → `Cancelado`
+  - `No records found` → `Nenhum registro encontrado`
+  - `Settings` → `Configurações`
+  - `Dashboard` → pode manter apenas quando for nome próprio do produto
 - **Todo DB query** deve filtrar por `clinic_id` — nunca vazar dados entre tenants
 - **Appointment state machine** é append-only forward — nunca reverter status
 - **Billing** é gerado automaticamente no `appointment.completed` — nunca manualmente
@@ -103,3 +121,42 @@ Após **toda** ação que produza saída no projeto, você deve:
 4. Se a feature não existia no PLAN.md, adicioná-la na fase correspondente
 
 > ⚠️ Nunca conclua uma tarefa sem atualizar o PLAN.md. Integridade do plano é obrigatória.
+
+---
+
+## Rotina de Entrega — Commit, Branch e PR (obrigatória ao final de toda implementação)
+
+Após concluir a implementação e atualizar o PLAN.md, **sempre** apresente o resumo do que foi feito e pergunte:
+
+> **"Deseja que eu faça o commit das alterações em uma nova branch, push e abra um Pull Request?"**
+
+Se o usuário confirmar, execute os seguintes passos **na ordem**:
+
+### 1. Criar e mudar para nova branch
+
+Nome da branch seguindo o padrão:
+- Com issue: `feat/issue-{número}-{slug-curto-da-feature}` (ex: `feat/issue-42-appointment-notes`)
+- Sem issue: `feat/{slug-curto-da-feature}` (ex: `feat/appointment-notes`)
+
+### 2. Commit das alterações
+
+Mensagem de commit seguindo Conventional Commits:
+- Com issue: `feat: {descrição curta} (closes #{número})` (ex: `feat: add notes field to appointments (closes #42)`)
+- Sem issue: `feat: {descrição curta}` (ex: `feat: add notes field to appointments`)
+
+### 3. Push da branch
+
+Fazer push da branch para o repositório remoto.
+
+### 4. Abrir Pull Request
+
+- **Título**: `feat: {descrição curta da feature}`
+- **Corpo**: incluir resumo do que foi implementado, arquivos alterados e critérios de aceitação atendidos
+- **Issue vinculada**: se houver número de issue, incluir `Closes #{número}` no corpo do PR para vinculação automática
+- **Branch base**: `main` (ou `develop`, conforme convenção do repositório)
+
+### 5. Informar resultado
+
+Após criar o PR, exibir o link do PR gerado.
+
+> **Nunca** faça commit, push ou abra PR sem confirmação explícita do usuário.

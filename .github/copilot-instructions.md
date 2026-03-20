@@ -7,6 +7,25 @@
 - Não sugira códigos que quebrem lint ou fail de CI.
 - Considerar o contexto no arquivo: AGENT_RULES.md localizado na raiz do projeto
 
+## Regra de Português-BR no Frontend (bloqueante)
+
+O sistema Aesthera é destinado ao mercado brasileiro. Em toda revisão de código frontend, verificar obrigatoriamente:
+
+- Todo texto visível ao usuário está em **Português do Brasil**? (labels, placeholders, botões, mensagens de erro, tooltips, status, estados vazios, itens de menu)
+- Há algum termo em inglês exposto na interface? Se sim, sinalizar como **bloqueante** e sugerir a tradução correta.
+- Exemplos de termos que devem ser traduzidos:
+  - `no-show` → `Não compareceu`
+  - `pending` → `Pendente`
+  - `completed` → `Concluído`
+  - `cancelled` → `Cancelado`
+  - `overdue` → `Vencido`
+  - `No records found` → `Nenhum registro encontrado`
+  - `Settings` → `Configurações`
+  - `Save` → `Salvar`, `Cancel` → `Cancelar`, `Edit` → `Editar`, `Delete` → `Excluir`
+- O código interno (nomes de variáveis, funções, enums, chaves de banco) pode permanecer em inglês — apenas a **camada de apresentação** deve ser em Português.
+
+---
+
 ## Checklist de Consistência (aplicar em toda revisão automática)
 
 Para cada PR ou conjunto de mudanças revisado, verificar obrigatoriamente:

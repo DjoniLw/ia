@@ -47,9 +47,57 @@ Se houver dúvidas, **pare aqui** e faça as perguntas necessárias antes de con
 ### 3. Gerar a issue
 Produzir a issue no formato abaixo com a máxima precisão possível.
 
+### 4. Apresentar e confirmar criação no GitHub
+
+Após gerar o conteúdo da issue, **sempre**:
+
+1. Exiba o conteúdo completo da issue formatado para o usuário revisar
+2. Pergunte explicitamente: **"Deseja que eu crie esta issue no GitHub agora?"**
+3. Aguarde a resposta do usuário:
+   - **Sim** → use as ferramentas do GitHub para criar a issue no repositório do projeto Aesthera, aplicando o título, corpo e labels sugeridas
+   - **Não / ajustes necessários** → aceite o feedback, faça as correções solicitadas e repita este passo
+4. Após criar a issue no GitHub, informe o link da issue criada
+
+> **Nunca** crie a issue no GitHub sem confirmação explícita do usuário.
+
 ---
 
-## Formato da Issue GitHub
+## Formato do Título da Issue
+
+### Issue avulsa (sem feature/conjunto)
+
+```
+{Descrição curta e direta da issue}
+```
+
+Exemplos:
+- `Corrigir validação de CPF no cadastro de cliente`
+- `Adicionar campo de observações no agendamento`
+
+### Issue dentro de uma Feature (conjunto de issues)
+
+Quando o usuário pede a criação de **múltiplas issues** de uma mesma feature ou fase, usar obrigatoriamente o padrão:
+
+```
+[NOME DA FEATURE] - {N}/{TOTAL} - Descrição da issue
+```
+
+Onde:
+- `[NOME DA FEATURE]` — nome exato da feature/fase informada pelo usuário, entre colchetes
+- `{N}` — número sequencial desta issue dentro do conjunto (1, 2, 3...)
+- `{TOTAL}` — total de issues do conjunto
+- `Descrição da issue` — descrição curta e direta do que esta issue resolve
+
+Exemplos:
+- `[FASE 1 — FUNDAÇÃO (BASE DO SISTEMA)] - 1/7 - Padronizar nomenclaturas para Português do Brasil`
+- `[FASE 1 — FUNDAÇÃO (BASE DO SISTEMA)] - 2/7 - Revisar lógica de resolução de slug (tenant)`
+- `[FASE 1 — FUNDAÇÃO (BASE DO SISTEMA)] - 7/7 - Cadastro de formas de pagamento da clínica`
+
+> **Regra**: o total `{TOTAL}` só é definido depois de listar todas as issues do conjunto. Nunca use total estimado — calcule o total real antes de nomear.
+
+---
+
+## Formato do Corpo da Issue GitHub
 
 ```markdown
 ## Contexto
