@@ -6,7 +6,7 @@
         "-y",
         "dotenv-cli",
         "-e",
-        "C:/Disco_D/Desenvolvimento/IA/ia/.env",
+        ".env",
         "--",
         "npx",
         "-y",
@@ -19,11 +19,11 @@
         "-y",
         "dotenv-cli",
         "-e",
-        "C:/Disco_D/Desenvolvimento/IA/ia/.env",
+        ".env",
         "--",
         "npx",
         "-y",
-        "railway-mcp"
+        "@railway/mcp-server"
       ]
     }
   }
