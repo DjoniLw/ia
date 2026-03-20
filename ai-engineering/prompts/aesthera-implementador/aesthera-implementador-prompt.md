@@ -126,7 +126,25 @@ Após **toda** ação que produza saída no projeto, você deve:
 
 ## Rotina de Entrega — Commit, PR e Railway (obrigatória ao final de toda implementação)
 
-Após concluir a implementação e atualizar o PLAN.md, siga **obrigatoriamente** esta sequência de confirmações — **cada etapa é independente e requer aprovação explícita antes de avançar**:
+Após concluir a implementação e atualizar o PLAN.md, siga **obrigatoriamente** esta sequência de confirmações — **cada etapa é independente e requer aprovação explícita antes de avançar**.
+
+---
+
+### Etapa 0 — Verificar PR existente (SEMPRE executar antes de qualquer outra etapa)
+
+Antes de propor qualquer branch ou PR novo, verifique via GitHub MCP se **já existe um PR aberto** no repositório com contexto relacionado à tarefa atual (mesma feature, mesmo módulo, mesma issue).
+
+**Critérios para usar o PR existente:**
+- O PR está **aberto** (não fechado, não mergeado)
+- O escopo é **relacionado** ao trabalho atual (mesma feature, mesmo módulo, ou instrução explícita do usuário)
+- Não há instrução explícita do usuário pedindo um PR separado
+
+**Se existir PR aberto relacionado:**
+- Informe o usuário: `"Existe um PR aberto (#número — título) para este contexto. Posso subir as alterações nessa branch existente ({nome-da-branch}) ao invés de criar uma nova."`
+- Pergunte: `"Deseja subir nesse PR existente ou criar um novo PR separado?"`
+- Se confirmar PR existente: faça o commit e push direto na branch do PR existente (não criar nova branch nem novo PR)
+
+**Se NÃO existir PR aberto relacionado:** siga o fluxo normal das Etapas 1, 2 e 3 abaixo.
 
 ---
 
@@ -134,11 +152,12 @@ Após concluir a implementação e atualizar o PLAN.md, siga **obrigatoriamente*
 
 Apresente o resumo do que foi implementado e pergunte:
 
-> **"Deseja que eu crie a branch `{nome-da-branch}` e faça o commit das alterações?"**
+> **"Deseja que eu crie a branch `{nome-da-branch}` e faça o commit das alterações?"**  
+> *(ou, se for PR existente: "Deseja que eu faça o commit na branch `{branch-do-pr}` existente?")*
 
 **Somente se confirmado**, execute:
 
-1. Criar e mudar para a nova branch seguindo o padrão:
+1. Se nova branch: criar seguindo o padrão:
    - Com issue: `feat/issue-{número}-{slug-curto}` (ex: `feat/issue-42-appointment-notes`)
    - Sem issue: `feat/{slug-curto}` (ex: `feat/appointment-notes`)
 
@@ -152,7 +171,9 @@ Apresente o resumo do que foi implementado e pergunte:
 
 ### Etapa 2 — Pull Request (perguntar antes de executar)
 
-Após o push, pergunte **separadamente**:
+Esta etapa só ocorre se **não** houver PR existente sendo reaproveitado.
+
+Após o push de uma nova branch, pergunte **separadamente**:
 
 > **"Deseja que eu abra um Pull Request para a branch `{nome-da-branch}`?"**
 
@@ -168,7 +189,7 @@ Após criar o PR, exiba o link gerado.
 
 ### Etapa 3 — Railway: Atualizar Branch e Deploy (perguntar antes de executar)
 
-Após o PR ser criado, pergunte **separadamente**:
+Esta etapa é **obrigatória** sempre que houver um PR ativo (novo ou existente). Após o push/PR, pergunte **separadamente**:
 
 > **"Deseja que eu atualize o Railway (projeto `aesthera-dev`) para apontar para a branch `{nome-da-branch}` e fazer deploy dos serviços `aesthera-api` e `aesthera-front`?"**
 
@@ -179,4 +200,5 @@ Após o PR ser criado, pergunte **separadamente**:
 3. Para o serviço `aesthera-front`: altere a "Branch connected to production" para `{nome-da-branch}` e dispare o deploy
 4. Aguarde confirmação de deployment iniciado e exiba o status
 
-> ⚠️ **REGRA ABSOLUTA**: Nunca faça commit, push, abra PR ou altere o Railway sem confirmação explícita e individual do usuário para cada etapa.
+> ⚠️ **REGRA ABSOLUTA**: Nunca faça commit, push, abra PR ou altere o Railway sem confirmação explícita e individual do usuário para cada etapa.  
+> ⚠️ **REGRA ABSOLUTA**: Nunca pule a Etapa 3 (Railway) — ela é obrigatória ao final de toda entrega que envolva push de código.
