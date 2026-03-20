@@ -8,6 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
 
+const TRANSFER_COOLDOWN_TOTAL = 60
+
+function transferCooldownKey(email: string) {
+  return `transfer-resend-ts:${email}`
+}
+
+function getRemainingCooldown(email: string): number {
+  if (!email || typeof window === 'undefined') return 0
+  const stored = localStorage.getItem(transferCooldownKey(email))
+  if (!stored) return 0
+  const elapsed = Math.floor((Date.now() - parseInt(stored, 10)) / 1000)
+  return Math.max(0, TRANSFER_COOLDOWN_TOTAL - elapsed)
+}
+
 function SuccessContent() {
   const searchParams = useSearchParams()
   const slug = searchParams.get('slug') ?? ''
@@ -20,11 +34,11 @@ function SuccessContent() {
   const [resending, setResending] = useState(false)
   const [resent, setResent] = useState(false)
 
-  // Transfer resend state
+  // Transfer resend state — inicializa do localStorage para resistir a reloads
   const [resendingTransfer, setResendingTransfer] = useState(false)
   const [resentTransfer, setResentTransfer] = useState(false)
   const [cooldownSeconds, setCooldownSeconds] = useState(() =>
-    mode === 'transfer' && Boolean(email) ? 60 : 0,
+    mode === 'transfer' ? getRemainingCooldown(email) : 0,
   )
 
   // Decrement cooldown every second
@@ -61,7 +75,8 @@ function SuccessContent() {
       const res = await api.post<{ sent: boolean }>('/auth/resend-transfer', { email })
       if (res.data.sent) {
         setResentTransfer(true)
-        setCooldownSeconds(60)
+        localStorage.setItem(transferCooldownKey(email), Date.now().toString())
+        setCooldownSeconds(TRANSFER_COOLDOWN_TOTAL)
         toast.success('E-mail de transferência reenviado!')
       } else {
         toast.error(

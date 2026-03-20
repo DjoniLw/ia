@@ -371,16 +371,33 @@ export class AuthService {
       return { sent: false }
     }
 
-    // Verificar cooldown no Redis
+    // Verificar se o e-mail pode ser enviado ANTES de qualquer mutação.
+    // Sem chave de e-mail configurada não há motivo para rotacionar o token.
+    const emailSent = Boolean(appConfig.email.apiKey)
+    if (!emailSent) {
+      return { sent: false }
+    }
+
+    // Verificar e adquirir cooldown de forma atômica com SET NX.
+    // SET NX retorna 'OK' somente se a chave não existia — se retornar null
+    // significa que o cooldown ainda está ativo para este e-mail.
     const cooldownKey = `transfer-resend-cooldown:${email}`
     try {
-      const ttl = await redis.ttl(cooldownKey)
-      if (ttl > 0) {
+      const acquired = await redis.set(
+        cooldownKey,
+        '1',
+        'EX',
+        TRANSFER_RESEND_COOLDOWN_SECONDS,
+        'NX',
+      )
+      if (acquired === null) {
+        const ttl = await redis.ttl(cooldownKey)
+        const secondsRemaining = ttl > 0 ? ttl : TRANSFER_RESEND_COOLDOWN_SECONDS
         throw new AppError(
-          `Aguarde ${ttl} segundos antes de reenviar.`,
+          `Aguarde ${secondsRemaining} segundos antes de reenviar.`,
           429,
           'COOLDOWN_ACTIVE',
-          { secondsRemaining: ttl },
+          { secondsRemaining },
         )
       }
     } catch (err) {
@@ -388,48 +405,41 @@ export class AuthService {
       logger.warn({ err }, 'Redis unavailable — skipping cooldown check for resend-transfer')
     }
 
-    // Invalidar token anterior
-    await prisma.transferToken.update({
-      where: { id: transfer.id },
-      data: { status: 'expired' },
-    })
-
-    // Criar novo token com prazo renovado
+    // Rotação atômica: expirar todos os tokens pendentes e criar novo em transação.
+    // Usar updateMany por email+kind para garantir que tokens duplicados também sejam expirados.
     const newToken = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + TRANSFER_TOKEN_TTL_MS)
-    await authRepository.createTransferToken({
-      token: newToken,
-      email,
-      sourceClinicId: transfer.sourceClinicId ?? undefined,
-      sourceUserId: transfer.sourceUserId ?? undefined,
-      targetClinicId: transfer.targetClinicId,
-      targetUserId: transfer.targetUserId ?? undefined,
-      role: transfer.role,
-      kind: transfer.kind,
-      expiresAt,
+
+    await prisma.$transaction(async (tx) => {
+      await tx.transferToken.updateMany({
+        where: { email, kind: transfer.kind, status: 'pending' },
+        data: { status: 'expired' },
+      })
+      await tx.transferToken.create({
+        data: {
+          token: newToken,
+          email,
+          sourceClinicId: transfer.sourceClinicId ?? undefined,
+          sourceUserId: transfer.sourceUserId ?? undefined,
+          targetClinicId: transfer.targetClinicId,
+          targetUserId: transfer.targetUserId ?? undefined,
+          role: transfer.role,
+          kind: transfer.kind,
+          expiresAt,
+        },
+      })
     })
 
-    // Enviar e-mail
-    const emailSent = Boolean(appConfig.email.apiKey)
-    if (emailSent) {
-      void this.sendTransferEmail({
-        clinicId: transfer.targetClinicId,
-        email,
-        sourceClinicName: transfer.sourceClinic?.name ?? '',
-        targetClinicName: transfer.targetClinic?.name ?? '',
-        token: newToken,
-        isAdminTransfer: transfer.sourceUser?.role === 'admin',
-      })
-    }
+    void this.sendTransferEmail({
+      clinicId: transfer.targetClinicId,
+      email,
+      sourceClinicName: transfer.sourceClinic?.name ?? '',
+      targetClinicName: transfer.targetClinic?.name ?? '',
+      token: newToken,
+      isAdminTransfer: transfer.sourceUser?.role === 'admin',
+    })
 
-    // Gravar cooldown
-    try {
-      await redis.setex(cooldownKey, TRANSFER_RESEND_COOLDOWN_SECONDS, '1')
-    } catch {
-      // Redis indisponível — cooldown não gravado
-    }
-
-    return { sent: emailSent }
+    return { sent: true }
   }
 
   // ── Login ───────────────────────────────────────────────────────────────────
