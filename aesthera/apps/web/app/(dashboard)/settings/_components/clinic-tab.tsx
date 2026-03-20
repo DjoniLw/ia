@@ -2,24 +2,18 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MaskedInputCnpj } from '@/components/ui/masked-input-cnpj'
+import { MaskedInputPhone } from '@/components/ui/masked-input-phone'
+import { MaskedInputCep } from '@/components/ui/masked-input-cep'
 import { api } from '@/lib/api'
 import { useClinic, useUpdateClinic } from '@/lib/hooks/use-settings'
-
-function applyCnpjMask(value: string): string {
-  const digits = value.replace(/\D/g, '').substring(0, 14)
-  if (digits.length <= 2) return digits
-  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`
-  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`
-  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`
-  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`
-}
 
 const clinicSchema = z.object({
   name: z.string().min(2),
@@ -49,6 +43,7 @@ export function ClinicTab() {
   const {
     register,
     handleSubmit,
+    control,
     watch,
     setValue,
     reset,
@@ -56,16 +51,18 @@ export function ClinicTab() {
   } = useForm<ClinicFormData>({ resolver: zodResolver(clinicSchema) })
 
   const document = watch('document') ?? ''
-  const documentField = register('document')
 
   useEffect(() => {
     if (clinic) {
       reset({
         name: clinic.name,
-        phone: clinic.phone ?? '',
-        document: clinic.document ?? '',
+        phone: (clinic.phone ?? '').replace(/\D/g, ''),
+        document: (clinic.document ?? '').replace(/\D/g, ''),
         timezone: clinic.timezone,
-        address: clinic.address ?? {},
+        address: {
+          ...clinic.address,
+          zip: (clinic.address?.zip ?? '').replace(/\D/g, ''),
+        },
       })
     }
   }, [clinic, reset])
@@ -89,11 +86,11 @@ export function ClinicTab() {
       const data = response.data
       const clinicName = data.nomeFantasia || data.razaoSocial || ''
       if (clinicName) setValue('name', clinicName, { shouldValidate: true })
-      if (data.telefone) setValue('phone', data.telefone, { shouldValidate: false })
+      if (data.telefone) setValue('phone', data.telefone.replace(/\D/g, ''), { shouldValidate: false })
       if (data.logradouro) setValue('address.street', data.logradouro, { shouldValidate: false })
       if (data.municipio) setValue('address.city', data.municipio, { shouldValidate: false })
       if (data.uf) setValue('address.state', data.uf, { shouldValidate: false })
-      if (data.cep) setValue('address.zip', data.cep, { shouldValidate: false })
+      if (data.cep) setValue('address.zip', data.cep.replace(/\D/g, ''), { shouldValidate: false })
 
       if (clinicName || data.telefone || data.logradouro) {
         toast.success('Dados da empresa preenchidos com base no CNPJ. Revise antes de salvar.')
@@ -139,18 +136,38 @@ export function ClinicTab() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Telefone</Label>
-              <Input {...register('phone')} placeholder="(11) 91234-5678" />
+              <Controller
+                control={control}
+                name="phone"
+                render={({ field }) => (
+                  <MaskedInputPhone
+                    ref={field.ref}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
+                )}
+              />
             </div>
             <div className="space-y-2">
               <Label>CNPJ</Label>
-              <Input
-                name={documentField.name}
-                ref={documentField.ref}
-                value={document}
-                onChange={(event) => setValue('document', applyCnpjMask(event.target.value), { shouldValidate: true })}
-                onBlur={() => void handleLookupCnpj()}
-                placeholder="00.000.000/0000-00"
-                disabled={lookingUpCnpj}
+              <Controller
+                control={control}
+                name="document"
+                render={({ field }) => (
+                  <MaskedInputCnpj
+                    ref={field.ref}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={() => {
+                      field.onBlur()
+                      void handleLookupCnpj()
+                    }}
+                    name={field.name}
+                    disabled={lookingUpCnpj}
+                  />
+                )}
               />
               {lookingUpCnpj && <p className="text-xs text-muted-foreground">Consultando Receita Federal...</p>}
               {errors.document && <p className="text-sm text-destructive">{errors.document.message}</p>}
@@ -179,7 +196,19 @@ export function ClinicTab() {
               </div>
               <div className="space-y-2">
                 <Label>CEP</Label>
-                <Input {...register('address.zip')} placeholder="00000-000" />
+                <Controller
+                  control={control}
+                  name="address.zip"
+                  render={({ field }) => (
+                    <MaskedInputCep
+                      ref={field.ref}
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                    />
+                  )}
+                />
               </div>
             </div>
           </div>

@@ -3,13 +3,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Bot, ClipboardList, FileSignature, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MaskedInputCpf } from '@/components/ui/masked-input-cpf'
+import { MaskedInputPhone } from '@/components/ui/masked-input-phone'
+import { MaskedInputCep } from '@/components/ui/masked-input-cep'
 import {
   type Customer,
   type ClinicalRecord,
@@ -24,30 +27,6 @@ import {
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { api } from '@/lib/api'
-
-// ──── Masks ────────────────────────────────────────────────────────────────────
-
-function applyCpfMask(value: string): string {
-  const d = value.replace(/\D/g, '').slice(0, 11)
-  if (d.length <= 3) return d
-  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
-  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
-}
-
-function applyPhoneMask(value: string): string {
-  const d = value.replace(/\D/g, '').slice(0, 11)
-  if (d.length <= 2) return d.length ? `(${d}` : ''
-  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
-  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
-}
-
-function applyCepMask(value: string): string {
-  const d = value.replace(/\D/g, '').slice(0, 8)
-  if (d.length <= 5) return d
-  return `${d.slice(0, 5)}-${d.slice(5)}`
-}
 
 // ──── Schema ───────────────────────────────────────────────────────────────────
 
@@ -126,9 +105,9 @@ function fromCustomer(c: Customer): Partial<CustomerFormData> {
   return {
     name: c.name,
     email: c.email ?? '',
-    phone: c.phone ?? '',
-    phone2: (meta.phone2 as string) ?? '',
-    document: c.document ?? '',
+    phone: (c.phone ?? '').replace(/\D/g, ''),
+    phone2: ((meta.phone2 as string) ?? '').replace(/\D/g, ''),
+    document: (c.document ?? '').replace(/\D/g, ''),
     rg: (meta.rg as string) ?? '',
     gender: (meta.gender as string) ?? '',
     birthDate: c.birthDate?.slice(0, 10) ?? '',
@@ -141,7 +120,7 @@ function fromCustomer(c: Customer): Partial<CustomerFormData> {
     addr_neighborhood: addr.neighborhood ?? '',
     addr_city: addr.city ?? '',
     addr_state: addr.state ?? '',
-    addr_zip: addr.zip ?? '',
+    addr_zip: (addr.zip ?? '').replace(/\D/g, ''),
     ana_skinType: ana.skinType ?? '',
     ana_allergies: ana.allergies ?? '',
     ana_medications: ana.medications ?? '',
@@ -173,8 +152,7 @@ function CustomerForm({
   const {
     register,
     handleSubmit,
-    setValue,
-    watch,
+    control,
     formState: { errors, isDirty },
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
@@ -240,20 +218,34 @@ function CustomerForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Telefone principal</Label>
-              <Input
-                {...register('phone')}
-                placeholder="(11) 99999-9999"
-                inputMode="numeric"
-                onChange={(e) => { const v = applyPhoneMask(e.target.value); e.target.value = v; setValue('phone', v) }}
+              <Controller
+                control={control}
+                name="phone"
+                render={({ field }) => (
+                  <MaskedInputPhone
+                    ref={field.ref}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
+                )}
               />
             </div>
             <div className="space-y-2">
               <Label>Telefone secundário</Label>
-              <Input
-                {...register('phone2')}
-                placeholder="(11) 99999-9999"
-                inputMode="numeric"
-                onChange={(e) => { const v = applyPhoneMask(e.target.value); e.target.value = v; setValue('phone2', v) }}
+              <Controller
+                control={control}
+                name="phone2"
+                render={({ field }) => (
+                  <MaskedInputPhone
+                    ref={field.ref}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
+                )}
               />
             </div>
           </div>
@@ -261,11 +253,18 @@ function CustomerForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>CPF</Label>
-              <Input
-                {...register('document')}
-                placeholder="000.000.000-00"
-                inputMode="numeric"
-                onChange={(e) => { const v = applyCpfMask(e.target.value); e.target.value = v; setValue('document', v) }}
+              <Controller
+                control={control}
+                name="document"
+                render={({ field }) => (
+                  <MaskedInputCpf
+                    ref={field.ref}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
+                )}
               />
             </div>
             <div className="space-y-2">
@@ -352,11 +351,18 @@ function CustomerForm({
 
           <div className="space-y-2 max-w-xs">
             <Label>CEP</Label>
-            <Input
-              {...register('addr_zip')}
-              placeholder="00000-000"
-              inputMode="numeric"
-              onChange={(e) => { const v = applyCepMask(e.target.value); e.target.value = v; setValue('addr_zip', v) }}
+            <Controller
+              control={control}
+              name="addr_zip"
+              render={({ field }) => (
+                <MaskedInputCep
+                  ref={field.ref}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                />
+              )}
             />
           </div>
         </div>
