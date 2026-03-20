@@ -30,6 +30,7 @@ export const RegisterClinicDto = z.object({
   email: z.string().email(),
   password: passwordSchema,
   phone: z.string().optional(),
+  confirmTransfer: z.boolean().optional(),
 })
 
 export const LoginDto = z.object({
@@ -61,6 +62,10 @@ export const ResendVerificationDto = z.object({
   email: z.string().email(),
 })
 
+export const RecoverAccessDto = z.object({
+  email: z.string().email(),
+})
+
 export const TransferTokenActionDto = z.object({
   token: z.string().min(1),
 })
@@ -73,5 +78,6 @@ export type RefreshTokenDto = z.infer<typeof RefreshTokenDto>
 export type ForgotPasswordDto = z.infer<typeof ForgotPasswordDto>
 export type ResetPasswordDto = z.infer<typeof ResetPasswordDto>
 export type ProfessionalLoginDto = z.infer<typeof ProfessionalLoginDto>
+export type RecoverAccessDto = z.infer<typeof RecoverAccessDto>
 export type ResendVerificationDto = z.infer<typeof ResendVerificationDto>
 export type TransferTokenActionDto = z.infer<typeof TransferTokenActionDto>

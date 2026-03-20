@@ -154,6 +154,20 @@ export class AuthService {
       const adminUser = await authRepository.findAdminUserByClinic(existingUnverified.id)
       adminId = adminUser?.id ?? existingUnverified.id
     } else if (appConfig.isProduction && sourceMembership) {
+      // If the user hasn't explicitly confirmed the transfer yet, return a
+      // conflict error so the frontend can show the appropriate dialog.
+      if (!dto.confirmTransfer) {
+        const isAdmin = sourceMembership.role === 'admin'
+        throw new AppError(
+          isAdmin
+            ? `Este e-mail já está cadastrado como administrador da clínica "${sourceMembership.clinic.name}".`
+            : `Este e-mail já pertence à clínica "${sourceMembership.clinic.name}".`,
+          409,
+          isAdmin ? 'EMAIL_CONFLICT_ADMIN' : 'EMAIL_CONFLICT_MEMBER',
+          { clinicName: sourceMembership.clinic.name },
+        )
+      }
+
       const baseSlug = slugify(dto.clinicName)
       const slug = await this.uniqueSlug(baseSlug)
       clinicId = generateId()
@@ -188,6 +202,7 @@ export class AuthService {
         sourceClinicName: sourceMembership.clinic.name,
         targetClinicName: dto.clinicName,
         token: transferToken,
+        isAdminTransfer: sourceMembership.role === 'admin',
       })
 
       return {
@@ -359,14 +374,53 @@ export class AuthService {
     }
   }
 
-  // ── Resolve slug por e-mail ───────────────────────────────────────────────────
-
-  /** Retorna o slug da clínica associada ao e-mail. Resposta genérica se não encontrado. */
+  /** Resolve slug por e-mail ───────────────────────────────────────────────────
+   * Retorna o slug da clínica associada ao e-mail. Resposta genérica se não encontrado. */
   async resolveSlug(email: string): Promise<{ slug: string | null }> {
     const memberships = await authRepository.findActiveMembershipsByEmail(email)
     const membership = memberships[0]
     if (!membership) return { slug: null }
     return { slug: membership.clinic.slug }
+  }
+
+  /**
+   * Envia um e-mail de recuperação de acesso para o usuário associado ao e-mail
+   * informado. Sempre retorna 200 sem expor se o e-mail existe ou não.
+   */
+  async recoverAccess(email: string): Promise<{ sent: boolean }> {
+    const memberships = await authRepository.findActiveMembershipsByEmail(email)
+    const membership = memberships[0]
+
+    if (!membership) {
+      return { sent: false }
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex')
+    const TTL_SECONDS = 60 * 60 // 1 hour
+
+    try {
+      await redis.setex(
+        `pwd-reset:${resetToken}`,
+        TTL_SECONDS,
+        JSON.stringify({ email, clinicId: membership.clinicId, userId: membership.id }),
+      )
+    } catch {
+      // Redis unavailable — can't issue reset token
+      return { sent: false }
+    }
+
+    const resetUrl = `${appConfig.frontendUrl}/reset-password?token=${resetToken}`
+    const emailSent = Boolean(appConfig.email.apiKey)
+
+    if (emailSent) {
+      void this.sendRecoverAccessEmail({
+        clinicId: membership.clinicId,
+        email,
+        resetUrl,
+      })
+    }
+
+    return { sent: emailSent }
   }
 
   async confirmTransfer(token: string) {
@@ -679,6 +733,7 @@ export class AuthService {
     sourceClinicName: string
     targetClinicName: string
     token: string
+    isAdminTransfer?: boolean
   }) {
     const confirmUrl = `${appConfig.frontendUrl}/transfer/confirm?token=${params.token}&action=confirm`
     const rejectUrl = `${appConfig.frontendUrl}/transfer/confirm?token=${params.token}&action=reject`
@@ -687,6 +742,7 @@ export class AuthService {
       targetClinicName: params.targetClinicName,
       confirmUrl,
       rejectUrl,
+      isAdminTransfer: params.isAdminTransfer,
     })
 
     try {
@@ -699,6 +755,46 @@ export class AuthService {
       })
     } catch (err) {
       logger.error({ err, email: params.email }, 'Failed to send transfer confirmation email')
+    }
+  }
+
+  private async sendRecoverAccessEmail(params: {
+    clinicId: string
+    email: string
+    resetUrl: string
+  }) {
+    const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
+<body style="font-family:sans-serif;background:#f9fafb;padding:32px 16px;color:#111">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;border:1px solid #e5e7eb">
+    <h1 style="font-size:22px;font-weight:600;margin-bottom:4px">Recuperação de acesso</h1>
+    <p style="color:#6b7280;margin-top:0">Aesthera — Gestão para Clínicas de Estética</p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0" />
+    <p>Recebemos uma solicitação de recuperação de acesso para este endereço de e-mail.</p>
+    <p>Clique no botão abaixo para criar uma nova senha:</p>
+    <a href="${params.resetUrl}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Criar nova senha</a>
+    <p style="margin-top:16px;font-size:12px;color:#9ca3af">
+      Ou acesse: <a href="${params.resetUrl}" style="color:#7c3aed">${params.resetUrl}</a><br />
+      Este link expira em 1 hora.
+    </p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0" />
+    <p style="font-size:12px;color:#9ca3af">Se você não solicitou esta recuperação, ignore este e-mail.</p>
+  </div>
+</body>
+</html>`
+
+    try {
+      await this.notifications.sendEmail({
+        clinicId: params.clinicId,
+        email: params.email,
+        subject: `${companyConfig.name}: recuperação de acesso`,
+        htmlBody: html,
+        event: 'password_reset',
+      })
+    } catch (err) {
+      logger.error({ err, email: params.email }, 'Failed to send recover access email')
     }
   }
 

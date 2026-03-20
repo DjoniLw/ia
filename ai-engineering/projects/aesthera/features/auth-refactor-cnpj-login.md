@@ -116,15 +116,23 @@ Esta regra se aplica em **dois cenários**:
 
 ### Cenário A — Cadastro de nova empresa com e-mail já existente
 
-**Situação atual:**
-- Se o e-mail do administrador já está cadastrado em outra empresa, o sistema retorna erro e bloqueia o cadastro
+**Atualização (issue #55 — implementado em 2026-03-20): Confirmação prévia + distinção admin vs membro**
 
-**Mudança desejada:**
-- Em vez de bloquear, o sistema deve:
-  1. Criar a nova empresa normalmente
-  2. Não associar o usuário automaticamente à nova empresa
-  3. Enviar um **e-mail de confirmação de transferência** ao endereço informado
-  4. Aguardar confirmação para fazer a associação
+O antigo fluxo criava a clínica automaticamente e enviava o e-mail de transferência sem perguntar o usuário. O novo fluxo:
+
+1. **Sem `confirmTransfer: true` no request** → retornar `409` com código específico antes de criar a clínica:
+   - `EMAIL_CONFLICT_ADMIN` (quando o usuário é admin da outra clínica) + `data: { clinicName }`
+   - `EMAIL_CONFLICT_MEMBER` (quando é staff) + `data: { clinicName }`
+2. **O frontend exibe um `Dialog`** com conteúdo diferente conforme o tipo de conflito:
+   - Admin: alerta grave sobre perda de acesso + opção "Recuperar acesso" (chama `POST /auth/recover-access`)
+   - Membro: confirmação simples de transferência
+3. **Re-submit com `confirmTransfer: true`** → criar a clínica + enviar e-mail de transferência
+   - E-mail de admin tem aviso reforçado: "Ao confirmar, você será transferido… e perderá acesso à [Clínica X]"
+
+**Novo endpoint:** `POST /auth/recover-access` — recebe `{ email }`, envia e-mail de redefinição de senha (token armazenado no Redis por 1 hora), retorna 200 sem expor existência de conta. Rota adicionada ao `PUBLIC_ROUTES`.
+
+**Situação original (antes da issue #55):**
+- Se o e-mail do administrador já estava cadastrado em outra empresa, o sistema criava a nova empresa e enviava o e-mail de transferência automaticamente
 
 ### Cenário B — Convite de usuário (Configurações > aba Usuários) com e-mail de outra empresa
 
