@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { MaskedInputCpf } from '@/components/ui/masked-input-cpf'
 import { MaskedInputPhone } from '@/components/ui/masked-input-phone'
 import { MaskedInputCep } from '@/components/ui/masked-input-cep'
+import { formatCpf, formatPhone, formatCep } from '@/lib/masks'
 import {
   type Customer,
   type ClinicalRecord,
@@ -789,9 +790,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         <>
           <div className="space-y-1.5 rounded-lg border bg-muted/20 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Dados Básicos</p>
-            <Row label="Telefone" value={customer.phone} />
-            <Row label="Telefone 2" value={meta?.phone2 as string} />
-            <Row label="CPF" value={customer.document} />
+            <Row label="Telefone" value={formatPhone(customer.phone)} />
+            <Row label="Telefone 2" value={formatPhone(meta?.phone2 as string)} />
+            <Row label="CPF" value={formatCpf(customer.document)} />
             <Row label="RG" value={meta?.rg as string} />
             <Row label="Data de Nascimento" value={customer.birthDate ? new Date(customer.birthDate).toLocaleDateString('pt-BR') : null} />
             <Row label="Gênero" value={meta?.gender as string} />
@@ -811,7 +812,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               <Row label="Bairro" value={addr?.neighborhood as string} />
               <Row label="Cidade" value={addr?.city} />
               <Row label="Estado" value={addr?.state} />
-              <Row label="CEP" value={addr?.zip} />
+              <Row label="CEP" value={formatCep(addr?.zip)} />
             </div>
           )}
 
@@ -1574,8 +1575,8 @@ export default function CustomersPage() {
                   </button>
                 </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.email ?? '—'}</td>
-                <td className="px-2 py-3 text-muted-foreground">{c.phone ?? '—'}</td>
-                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.document ?? '—'}</td>
+                <td className="px-2 py-3 text-muted-foreground">{formatPhone(c.phone) ?? '—'}</td>
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatCpf(c.document) ?? '—'}</td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.address?.city ?? '—'}</td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(c.createdAt)}</td>
                 <td className="px-2 py-3">
