@@ -213,6 +213,20 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+## FASE 1 — Fundação (Base do Sistema)
+
+> Issues criadas a partir do roadmap (#42–#49). Itens de padronização e qualidade do sistema.
+
+- [x] #42 — Padronizar nomenclaturas do sistema para Português do Brasil (`overdue: 'Vencido'` em billing/page.tsx; auditoria confirmou todos os demais textos já em PT-BR)
+- [ ] #44 — Revisar e simplificar lógica de resolução de slug (tenant)
+- [ ] #45 — Exibir clínica e usuário logado no header/sidebar
+- [ ] #46 — Controle de acesso por perfil de usuário no frontend
+- [ ] #47 — Auto-preenchimento de endereço por CEP (ViaCEP)
+- [ ] #48 — Máscaras de entrada para CPF, CNPJ, telefone e CEP
+- [ ] #49 — Cadastro e configuração de formas de pagamento da clínica
+
+---
+
 ## Fase 10 — Pendente / Não implementado
 
 > Itens identificados no código ou features que ainda não foram construídos.
