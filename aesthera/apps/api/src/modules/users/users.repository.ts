@@ -54,11 +54,60 @@ export class UsersRepository {
     name: string
     email: string
     role: 'admin' | 'staff'
-    inviteToken: string
-    inviteExpiresAt: Date
+    inviteToken?: string | null
+    inviteExpiresAt?: Date | null
   }) {
     // Invited users start as inactive; they become active after accepting the invite.
     return prisma.user.create({ data: { ...data, active: false } })
+  }
+
+  async findActiveMembershipInOtherClinic(email: string, currentClinicId: string) {
+    return prisma.user.findFirst({
+      where: {
+        email,
+        active: true,
+        clinicId: { not: currentClinicId },
+        clinic: { status: 'active', emailVerified: true },
+      },
+      orderBy: [{ lastLoginAt: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        clinicId: true,
+        name: true,
+        email: true,
+        passwordHash: true,
+        clinic: { select: { id: true, name: true, slug: true } },
+      },
+    })
+  }
+
+  async findClinicById(clinicId: string) {
+    return prisma.clinic.findUnique({
+      where: { id: clinicId },
+      select: { id: true, name: true, slug: true },
+    })
+  }
+
+  async createTransferToken(data: {
+    token: string
+    email: string
+    sourceClinicId: string
+    sourceUserId: string
+    targetClinicId: string
+    targetUserId: string
+    role: 'admin' | 'staff'
+    expiresAt: Date
+  }) {
+    return prisma.transferToken.create({
+      data: {
+        ...data,
+        kind: 'user_invite',
+      },
+    })
+  }
+
+  async deletePendingUser(userId: string) {
+    return prisma.user.delete({ where: { id: userId } })
   }
 
   async acceptInvite(userId: string, passwordHash: string) {

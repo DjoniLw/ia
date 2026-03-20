@@ -220,6 +220,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - [x] #42 — Padronizar nomenclaturas do sistema para Português do Brasil (`overdue: 'Vencido'` em billing/page.tsx; auditoria confirmou todos os demais textos já em PT-BR)
 - [x] #44 — Revisar e simplificar lógica de resolução de slug (tenant): middleware.ts com redirect `/sem-acesso` para bare localhost; tenant.middleware.ts com cache `{clinicId,status}` e erros descritivos; README com seção multi-tenant dev; clinics.md atualizado
 - [ ] #44 — Revisar e simplificar lógica de resolução de slug (tenant)
+- [x] Refatorar autenticação: login por e-mail sem slug manual, CNPJ opcional no cadastro, CNPJ validado nas Configurações e transferência de empresa por e-mail
 - [ ] #45 — Exibir clínica e usuário logado no header/sidebar
 - [ ] #46 — Controle de acesso por perfil de usuário no frontend
 - [ ] #47 — Auto-preenchimento de endereço por CEP (ViaCEP)
@@ -259,6 +260,15 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 > Fases 4 e 5 são as mais complexas e o core do produto.
 > Fases 1–3 são fundação — rápidas de fazer, essenciais para o resto funcionar.
+
+---
+
+## Histórico de Atualizações
+
+### [2026-03-20] — Refatoração de login por e-mail, CNPJ e transferência entre empresas
+- **Arquivo(s) afetado(s):** aesthera/apps/api/src/modules/auth/auth.service.ts, aesthera/apps/api/src/modules/clinics/clinics.service.ts, aesthera/apps/api/src/modules/users/users.service.ts, aesthera/apps/web/app/(auth)/login/page.tsx, aesthera/apps/web/app/(dashboard)/settings/_components/clinic-tab.tsx
+- **O que foi feito:** login sem slug manual com resolução automática por e-mail, CNPJ opcional no cadastro, validação forte e lookup de CNPJ nas Configurações, tokens de transferência por e-mail para cadastro e convite, página pública de confirmação/rejeição
+- **Impacto:** autenticação e onboarding ficaram mais simples no frontend; backend passou a suportar transferência segura de acesso entre clínicas e validação centralizada de CNPJ
 
 ---
 

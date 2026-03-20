@@ -54,6 +54,10 @@ const envSchema = z.object({
   // Base URL of the web frontend, used to build e-mail links (e.g. email verification).
   // Example: https://app.aesthera.com
   FRONTEND_URL: z.string().default('http://localhost:3001'),
+
+  // Defina AMBIENTE_DEV=S no Railway para indicar que o serviço é homologação/dev.
+  // Quando ausente ou diferente de 'S', o sistema considera ambiente de produção.
+  AMBIENTE_DEV: z.string().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>

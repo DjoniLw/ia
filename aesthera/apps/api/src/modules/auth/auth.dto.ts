@@ -14,9 +14,18 @@ const passwordSchema = z
 
 // ─── Clinic user auth ─────────────────────────────────────────────────────────
 
+const optionalCnpjSchema = z
+  .string()
+  .optional()
+  .transform((value) => {
+    const digits = value?.replace(/\D/g, '') ?? ''
+    return digits.length > 0 ? digits : undefined
+  })
+  .refine((value) => value === undefined || value.length === 14, 'CNPJ deve ter 14 dígitos')
+
 export const RegisterClinicDto = z.object({
   clinicName: z.string().min(2).max(100),
-  clinicDocument: z.string().min(14).max(18).optional(), // CNPJ
+  clinicDocument: optionalCnpjSchema,
   adminName: z.string().min(2).max(100),
   email: z.string().email(),
   password: passwordSchema,
@@ -52,6 +61,10 @@ export const ResendVerificationDto = z.object({
   email: z.string().email(),
 })
 
+export const TransferTokenActionDto = z.object({
+  token: z.string().min(1),
+})
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type RegisterClinicDto = z.infer<typeof RegisterClinicDto>
@@ -61,3 +74,4 @@ export type ForgotPasswordDto = z.infer<typeof ForgotPasswordDto>
 export type ResetPasswordDto = z.infer<typeof ResetPasswordDto>
 export type ProfessionalLoginDto = z.infer<typeof ProfessionalLoginDto>
 export type ResendVerificationDto = z.infer<typeof ResendVerificationDto>
+export type TransferTokenActionDto = z.infer<typeof TransferTokenActionDto>

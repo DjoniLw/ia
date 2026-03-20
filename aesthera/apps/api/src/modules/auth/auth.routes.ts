@@ -5,12 +5,23 @@ import {
   LoginDto,
   RefreshTokenDto,
   ProfessionalLoginDto,
+  TransferTokenActionDto,
   VerifyEmailDto,
   ResendVerificationDto,
 } from './auth.dto'
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   const authService = new AuthService(app)
+
+  // ── GET /auth/resolve-slug?email=... ────────────────────────────────────────
+  // Returns the clinic slug for a given e-mail. PUBLIC — no tenant, no auth.
+  // Responds generically (slug: null) when not found to avoid leaking account existence.
+  app.get('/auth/resolve-slug', async (request, reply) => {
+    const { email } = request.query as { email?: string }
+    if (!email) return reply.status(400).send({ message: 'E-mail obrigatório' })
+    const result = await authService.resolveSlug(email)
+    reply.status(200).send(result)
+  })
 
   // ── POST /auth/register ─────────────────────────────────────────────────────
   // Creates a new clinic + first admin user. PUBLIC — no tenant, no auth.
@@ -33,6 +44,18 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.post('/auth/resend-verification', async (request, reply) => {
     const body = ResendVerificationDto.parse(request.body)
     const result = await authService.resendVerification(body.email)
+    reply.status(200).send(result)
+  })
+
+  app.post('/auth/confirm-transfer', async (request, reply) => {
+    const query = TransferTokenActionDto.parse(request.query)
+    const result = await authService.confirmTransfer(query.token)
+    reply.status(200).send(result)
+  })
+
+  app.post('/auth/reject-transfer', async (request, reply) => {
+    const query = TransferTokenActionDto.parse(request.query)
+    const result = await authService.rejectTransfer(query.token)
     reply.status(200).send(result)
   })
 

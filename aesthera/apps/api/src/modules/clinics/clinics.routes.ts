@@ -17,6 +17,17 @@ export async function clinicsRoutes(app: FastifyInstance) {
     },
   )
 
+  app.get(
+    '/clinics/lookup-cnpj',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (request, reply) => {
+      const { cnpj } = request.query as { cnpj?: string }
+      if (!cnpj) return reply.status(400).send({ message: 'CNPJ obrigatório' })
+      const result = await service.lookupCnpj(cnpj)
+      return reply.send(result)
+    },
+  )
+
   // PATCH /clinics/me
   app.patch(
     '/clinics/me',

@@ -35,8 +35,8 @@ export function UsersTab() {
 
   async function onInvite(data: InviteData) {
     try {
-      await inviteUser(data)
-      toast.success(`Convite enviado para ${data.email}`)
+      const response = await inviteUser(data)
+      toast.success(response?.message ?? `Convite enviado para ${data.email}`)
       reset()
       setShowForm(false)
     } catch (err: unknown) {

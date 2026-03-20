@@ -15,12 +15,19 @@ export class ClinicsRepository {
       data: {
         name: data.name,
         phone: data.phone,
-        document: data.document,
+        document: data.document ?? null,
         timezone: data.timezone,
         address: data.address as object | undefined,
         settings: data.settings as object | undefined,
         updatedAt: new Date(),
       },
+    })
+  }
+
+  async findByDocument(document: string) {
+    return prisma.clinic.findUnique({
+      where: { document },
+      select: { id: true, name: true },
     })
   }
 

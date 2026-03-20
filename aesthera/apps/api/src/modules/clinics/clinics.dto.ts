@@ -1,9 +1,18 @@
 import { z } from 'zod'
 
+const optionalCnpjSchema = z
+  .string()
+  .optional()
+  .refine((value) => {
+    if (value === undefined) return true
+    const digits = value.replace(/\D/g, '')
+    return digits.length === 0 || digits.length === 14
+  }, 'CNPJ deve ter 14 dígitos')
+
 export const UpdateClinicDto = z.object({
   name: z.string().min(2).max(100).optional(),
   phone: z.string().optional(),
-  document: z.string().optional(),
+  document: optionalCnpjSchema,
   timezone: z.string().optional(),
   address: z
     .object({
