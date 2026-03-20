@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
+import { setTokens } from '@/lib/auth'
 
 // Mirrors the backend slugify function for live preview
 function slugifyPreview(name: string): string {
@@ -68,6 +69,9 @@ export default function RegisterPage() {
       const response = await api.post<{
         clinic: { slug: string; name: string; id: string }
         emailVerificationSent: boolean
+        autoVerified?: boolean
+        accessToken?: string
+        refreshToken?: string
       }>(
         '/auth/register',
         {
@@ -79,9 +83,18 @@ export default function RegisterPage() {
         },
       )
       const slug = response.data.clinic.slug
-      const emailSent = response.data.emailVerificationSent !== false
-      // Do NOT store tokens — user must confirm email first
-      router.push(`/register/success?slug=${encodeURIComponent(slug)}&email=${encodeURIComponent(data.email)}&emailSent=${emailSent}`)
+      if (response.data.autoVerified && response.data.accessToken && response.data.refreshToken) {
+        // Ambiente não-produtivo: e-mail verificado automaticamente, entra direto no painel
+        localStorage.setItem('clinic-slug', slug)
+        setTokens(response.data.accessToken, response.data.refreshToken)
+        toast.success('Clínica cadastrada com sucesso!')
+        const base = process.env.NEXT_PUBLIC_BASE_DOMAIN ?? 'localhost:3001'
+        window.location.href = `${window.location.protocol}//${slug}.${base}/dashboard`
+      } else {
+        // Produção: aguarda confirmação de e-mail
+        const emailSent = response.data.emailVerificationSent !== false
+        router.push(`/register/success?slug=${encodeURIComponent(slug)}&email=${encodeURIComponent(data.email)}&emailSent=${emailSent}`)
+      }
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??

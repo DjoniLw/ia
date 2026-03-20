@@ -162,6 +162,19 @@ export class AuthService {
       })
     }
 
+    // Em ambientes não-produtivos, verifica o e-mail automaticamente — sem envio de e-mail
+    if (!appConfig.isProduction) {
+      await authRepository.verifyClinicEmail(clinicId)
+      const tokens = await this.issueTokens(adminId, clinicId, 'admin')
+      return {
+        clinic: { id: clinic.id, slug: clinic.slug, name: clinic.name },
+        user: { id: adminId, name: dto.adminName, email: dto.email, role: 'admin' as const },
+        emailVerificationSent: false,
+        autoVerified: true as const,
+        ...tokens,
+      }
+    }
+
     // Send welcome + verification email (fire-and-forget — don't block registration)
     const emailVerificationSent = Boolean(appConfig.email.apiKey)
     if (emailVerificationSent) {
