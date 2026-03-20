@@ -218,6 +218,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 > Issues criadas a partir do roadmap (#42–#49). Itens de padronização e qualidade do sistema.
 
 - [x] #42 — Padronizar nomenclaturas do sistema para Português do Brasil (`overdue: 'Vencido'` em billing/page.tsx; auditoria confirmou todos os demais textos já em PT-BR)
+- [x] #44 — Revisar e simplificar lógica de resolução de slug (tenant): middleware.ts com redirect `/sem-acesso` para bare localhost; tenant.middleware.ts com cache `{clinicId,status}` e erros descritivos; README com seção multi-tenant dev; clinics.md atualizado
 - [ ] #44 — Revisar e simplificar lógica de resolução de slug (tenant)
 - [ ] #45 — Exibir clínica e usuário logado no header/sidebar
 - [ ] #46 — Controle de acesso por perfil de usuário no frontend

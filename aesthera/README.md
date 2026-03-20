@@ -32,6 +32,14 @@ A forma mais rápida — tudo roda na nuvem, você acessa pelo browser.
    | Variável | Valor |
    |----------|-------|
    | `NEXT_PUBLIC_API_URL` | URL pública da API (ex: `https://aesthera-api.up.railway.app`) |
+   | `NEXT_PUBLIC_BASE_DOMAIN` | *(opcional)* domínio raiz do wildcard, ex: `aesthera.com.br`. Deixe **vazio** se não tiver domínio customizado — neste caso o slug da clínica vem do `localStorage` (salvo no login). |
+
+   > **Acesso com domínio customizado (Railway custom domain):**  
+   > Se você configurar um domínio wildcard `*.aesthera.com.br` no Railway, defina `NEXT_PUBLIC_BASE_DOMAIN=aesthera.com.br`.  
+   > Cada clínica acessa via `clinica.aesthera.com.br` — o middleware extrai o slug automaticamente.  
+   >  
+   > **Sem domínio customizado (URL padrão do Railway):**  
+   > Deixe `NEXT_PUBLIC_BASE_DOMAIN` vazio. O acesso funciona via qualquer URL plana; o slug da clínica é lido do `localStorage` durante o login.
 
 7. Acesse a URL gerada pelo Railway — pronto!
 
@@ -94,6 +102,28 @@ cp .env.example .env.local
 npm install
 npm run dev                      # → http://localhost:3002
 ```
+
+---
+
+## Acesso Multi-Tenant em Desenvolvimento
+
+O Aesthera usa **subdomínio** como identificador de clínica (tenant). Em produção cada clínica acessa via `clinica.aesthera.com.br`. Em desenvolvimento local, use o padrão `*.localhost`:
+
+```
+http://sua-clinica.localhost:3002
+```
+
+> Navegadores modernos (Chrome, Edge, Firefox) resolvem `*.localhost` automaticamente para `127.0.0.1` — **nenhuma configuração adicional necessária**.
+
+### Exemplo completo
+
+1. Registre uma clínica em `http://localhost:3002/register` com slug `clinica-teste`
+2. Após o cadastro, acesse via subdomínio: `http://clinica-teste.localhost:3002`
+3. Faça login normalmente
+
+### Por que não funciona em `localhost:3002` sem subdomain?
+
+Sem subdomínio o sistema não sabe qual clínica carregar e exibe a página `/sem-acesso` com orientações. A opção alternativa é informar o slug no formulário de login — neste caso, qualquer URL plana funciona (útil para deploys no Railway/Vercel sem domínio customizado).
 
 ---
 
