@@ -10,6 +10,17 @@
         "--",
         "@modelcontextprotocol/server-github"
       ]
+    },
+    "railway": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "dotenv-cli",
+        "-e",
+        ".env",
+        "--",
+        "railway-mcp"
+      ]
     }
   }
 }
