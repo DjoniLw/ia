@@ -445,6 +445,28 @@ export class AuthService {
     return { sent: emailSent }
   }
 
+  async resetPassword(token: string, newPassword: string): Promise<{ success: boolean }> {
+    const redisKey = `pwd-reset:${token}`
+    const raw = await redis.get(redisKey)
+
+    if (!raw) {
+      throw new AppError('Token inválido ou expirado.', 400, 'INVALID_RESET_TOKEN')
+    }
+
+    let payload: { email: string; clinicId: string; userId: string }
+    try {
+      payload = JSON.parse(raw) as typeof payload
+    } catch {
+      throw new AppError('Token inválido.', 400, 'INVALID_RESET_TOKEN')
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS)
+    await authRepository.updateUserPassword(payload.userId, passwordHash)
+    await redis.del(redisKey)
+
+    return { success: true }
+  }
+
   async confirmTransfer(token: string) {
     const transfer = await authRepository.findTransferByToken(token)
     if (!transfer) {

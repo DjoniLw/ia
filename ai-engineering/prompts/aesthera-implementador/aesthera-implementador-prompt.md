@@ -58,6 +58,7 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 - **Verificação de disponibilidade** (profissional + slot) deve ocorrer dentro de uma transação DB
 - **Nunca hard-delete** sem justificativa explícita — usar soft-delete ou cascade
 - **Mudanças mínimas e isoladas** — não refatorar código não relacionado à tarefa
+- **Toda implementação deve ter testes** — novas features exigem testes unitários; alterações em código coberto exigem revisão e atualização dos testes existentes
 
 ---
 
@@ -67,9 +68,10 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 
 1. **Validar ou atualizar** a spec em `ai-engineering/projects/aesthera/features/{módulo}.md` antes de codificar
 2. **Implementar** a mudança em `aesthera/`
-3. **Executar auto-atualização** (ver seção abaixo)
+3. **Criar ou atualizar testes** (ver seção "Testes Unitários e Automatizados" abaixo)
+4. **Executar auto-atualização** (ver seção abaixo)
 
-> ⚠️ Nunca inverter essa ordem. Código sempre segue a documentação.
+> ⚠️ Nunca inverter essa ordem. Código sempre segue a documentação. Testes **nunca** são opcionais.
 
 ### Estrutura de módulo Backend (Fastify)
 ```
@@ -88,6 +90,111 @@ aesthera/apps/web/app/(dashboard)/{módulo}/
   [id]/page.tsx              ← detalhe/edição
   _components/               ← componentes específicos desta rota
 ```
+
+---
+
+## Testes Unitários e Automatizados (obrigatório)
+
+### Framework
+
+- **Backend**: Vitest (configurado em `aesthera/apps/api/vitest.config.ts`)
+- Arquivos de teste: padrão `{módulo}.service.test.ts`, co-localizados no mesmo diretório do módulo
+- Cobertura configurada para `src/**/*.ts` — o provider é `v8`
+
+### Regras obrigatórias
+
+#### Ao implementar algo novo
+- Sempre criar o arquivo `{módulo}.service.test.ts` ao criar ou estender um novo serviço
+- O arquivo de teste vai junto ao módulo: `aesthera/apps/api/src/modules/{módulo}/{módulo}.service.test.ts`
+- Cobrir obrigatoriamente: casos de sucesso, casos de erro/exceção e regras de negócio críticas
+- Usar mocks para Prisma e repositórios — nunca depender de banco real nos unit tests
+
+#### Ao alterar código existente
+- Verificar se existe arquivo `*.test.ts` para o módulo modificado
+- Se existir: **ler o arquivo de testes** e avaliar se os testes ainda refletem o comportamento esperado
+- Se o comportamento mudou: **atualizar os testes** para refletir a nova lógica
+- Se novos cenários foram criados: **adicionar novos casos de teste**
+- Se os testes quebrarem por conta de refatoração interna (não comportamento): **corrigir os mocks/setup** sem alterar as asserções de comportamento
+
+### Padrão de estrutura do arquivo de testes
+
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// 1. Hoists: mocks que precisam ser referenciados antes do vi.mock()
+const mockRepo = vi.hoisted(() => ({
+  findById: vi.fn(),
+  create: vi.fn(),
+  // ... outros métodos usados pelo serviço
+}))
+
+const mockPrisma = vi.hoisted(() => ({
+  $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
+  // ... modelos usados diretamente pelo serviço
+}))
+
+// 2. Mocks de módulos (sempre antes dos imports do módulo real)
+vi.mock('../../database/prisma/client', () => ({ prisma: mockPrisma }))
+vi.mock('./{módulo}.repository', () => ({
+  {Módulo}Repository: vi.fn(() => mockRepo),
+}))
+
+// 3. Import do módulo sendo testado (DEPOIS dos vi.mock)
+import { {Módulo}Service } from './{módulo}.service'
+
+// 4. Helpers de factory (dados de teste reutilizáveis)
+function make{Entidade}(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'id-1',
+    clinicId: 'clinic-1',
+    // ... campos obrigatórios com valores padrão
+    ...overrides,
+  }
+}
+
+// 5. Suites de teste
+describe('{Módulo}Service.{método}()', () => {
+  let service: {Módulo}Service
+
+  beforeEach(() => {
+    vi.resetAllMocks()
+    service = new {Módulo}Service()
+  })
+
+  it('deve {comportamento esperado no caso de sucesso}', async () => {
+    // arrange
+    mockRepo.findById.mockResolvedValue(make{Entidade}())
+    // act
+    const result = await service.{método}('clinic-1', 'id-1')
+    // assert
+    expect(result).toMatchObject({ /* campos esperados */ })
+  })
+
+  it('deve lançar erro quando {condição de falha}', async () => {
+    mockRepo.findById.mockResolvedValue(null)
+    await expect(service.{método}('clinic-1', 'id-inexistente'))
+      .rejects.toThrow('{mensagem de erro}')
+  })
+})
+```
+
+### O que sempre cobrir nos testes
+
+| Cenário | Obrigatório? |
+|---|---|
+| Caminho feliz (operação bem-sucedida) | ✅ Sempre |
+| Entidade não encontrada (404) | ✅ Sempre |
+| Violação de tenant (`clinic_id` errado) | ✅ Sempre que aplicável |
+| Regras de negócio críticas (ex: saldo insuficiente, status inválido) | ✅ Sempre |
+| Chamadas a serviços externos (mock verificado) | ✅ Quando aplicável |
+| Casos de validação de input | ⚠️ Quando a lógica está no service |
+
+### Não é necessário testar
+
+- Controllers/rotas (testados via e2e)
+- Schemas Zod isolados
+- Geração de IDs, timestamps e valores aleatórios
+- Componentes React (por ora — aguardar setup de vitest para web)
 
 ---
 
