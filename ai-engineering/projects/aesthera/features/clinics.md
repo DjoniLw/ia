@@ -39,29 +39,47 @@ Next.js reads subdomain from request host header
         ↓
 Sends header to backend: X-Clinic-Slug: clinicaana
         ↓
-Backend middleware: slug → clinic_id (Redis cache, TTL 5min)
+Backend middleware: slug → clinic_id (Redis cache, TTL 5min, includes status)
         ↓
 All subsequent queries scoped to that clinic_id
 ```
 
-**Fallback (login page without subdomain):**
+**Desenvolvimento local (sem DNS wildcard):**
 ```
-User accesses: aesthera.com.br/login
+Developer acesses: clinica-teste.localhost:3002
         ↓
-User enters email + slug/clinic name
+Next.js middleware extrai slug do hostname (*.localhost padrão)
         ↓
-Frontend redirects to: [slug].aesthera.com.br
+Envia header: X-Clinic-Slug: clinica-teste
         ↓
-Normal subdomain flow continues
+Fluxo normal continua
+```
+
+**Acesso sem subdomain (localhost bare ou URL plana Railway):**
+```
+User accesses: localhost:3002  (local sem subdomain)
+        ↓
+Next.js middleware detecta: nenhum subdomain
+        ↓
+Redireciona para: /sem-acesso (página de erro PT-BR com instruções)
+
+User accesses: aesthera-web.railway.app  (Railway flat URL)
+        ↓
+Next.js middleware não detecta subdomain válido, deixa passar
+        ↓
+Frontend api.ts lê slug do localStorage (salvo no login)
+        ↓
+Envia header: X-Clinic-Slug: <slug-do-localStorage>
 ```
 
 **Slug resolution middleware** (`shared/middleware/tenant.middleware.ts`):
 - Reads `X-Clinic-Slug` header (set by frontend from subdomain)
-- Looks up `clinic_id` in Redis first (key: `slug:<slug>`) — cache TTL 5min
-- On miss: queries DB `SELECT id FROM clinics WHERE slug = ? AND status != 'deleted'`
-- Stores result in Redis
+- Looks up in Redis first (key: `clinic:slug:<slug>`) — cache stores `{ clinicId, status }`, TTL 5min
+- On miss: queries DB `SELECT id, status FROM clinics WHERE slug = ?`
+- Stores `{ clinicId, status }` in Redis (status checked on every cache hit — no stale access)
 - Attaches `clinic_id` to request context
-- Returns `404` if slug not found, `403` if clinic suspended
+- Returns `404` `NOT_FOUND` if slug not found
+- Returns `403` `FORBIDDEN` with descriptive message if clinic suspended/cancelled
 
 ## Data Model
 ```
