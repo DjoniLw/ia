@@ -35,16 +35,18 @@ Refatorar o fluxo de cadastro de empresa e autenticação em quatro frentes prin
 
 ### 2a — No cadastro de empresa (tela de registro)
 
-**Situação atual:**
-- Campo `clinicDocument` (CNPJ) no `RegisterClinicDto` é **opcional** (`z.string().min(14).max(18).optional()`)
-- No Prisma: `document String?` na tabela `clinics` — sem constraint `@unique`
-- Não há validação de formato nem unicidade
+**Decisão atualizada (issue #54 — implementado em 2026-03-20):**
+O campo CNPJ foi **removido completamente** do formulário `/register`. O CNPJ deve ser informado apenas na tela de Configurações, após o primeiro acesso. Isso elimina uma barreira desnecessária no onboarding.
 
-**Mudança desejada:**
-- CNPJ **não é obrigatório** no cadastro — o campo permanece opcional na tela de registro
-- Se informado no cadastro, validar apenas o formato (`XX.XXX.XXX/XXXX-XX` ou 14 dígitos) — **sem** validar dígito verificador e **sem** consultar a Receita Federal neste momento
-- Remover qualquer validação de unicidade de CNPJ no fluxo de cadastro (a constraint `@unique` não deve ser adicionada agora — CNPJ `null` múltiplo é permitido)
-- Tela de cadastro: campo CNPJ **opcional**, com máscara `XX.XXX.XXX/XXXX-XX`
+**Estado atual (pós-implementação):**
+- Campo `clinicDocument` **não existe mais** no formulário de cadastro (`register/page.tsx`)
+- `RegisterClinicDto` no backend permanece com o campo como opcional (`optionalCnpjSchema`) — aceita `undefined` sem erro
+- No Prisma: `document String?` na tabela `clinics` — sem constraint `@unique` (sem alteração)
+- `applyCnpjMask`, `handleCnpjChange` e toda lógica relacionada foram removidos do frontend
+
+**Fora do escopo (não fazer no cadastro):**
+- Não validar CNPJ no cadastro (campo não existe mais)
+- Não adicionar constraint `@unique` no cadastro
 
 ### 2b — Nas Configurações da empresa (após login)
 
