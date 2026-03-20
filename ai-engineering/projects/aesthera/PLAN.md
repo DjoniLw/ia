@@ -279,6 +279,13 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+### [2026-03-20] — #54 — Remoção do campo CNPJ da tela de cadastro de empresa
+- **Arquivo(s) afetado(s):** aesthera/apps/web/app/(auth)/register/page.tsx, ai-engineering/projects/aesthera/features/auth-refactor-cnpj-login.md
+- **O que foi feito:** Removido completamente o campo CNPJ (label, Input, máscara, validação Zod, handlers e payload) do formulário `/register`. Backend `auth.dto.ts` já estava plenamente compatível com `undefined` no campo `clinicDocument`. Spec da feature atualizada na seção 2a para refletir a nova decisão.
+- **Impacto:** Onboarding simplificado — empresa pode ser criada sem CNPJ e preencher depois em Configurações.
+
+---
+
 ## Como usar este plano com o Copilot
 
 Ao iniciar uma fase, abra a sessão assim:

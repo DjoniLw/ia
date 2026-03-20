@@ -3,7 +3,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { ChangeEvent } from 'react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -26,15 +25,6 @@ function slugifyPreview(name: string): string {
     .substring(0, 60)
 }
 
-function applyCnpjMask(value: string): string {
-  const digits = value.replace(/\D/g, '').substring(0, 14)
-  if (digits.length <= 2) return digits
-  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`
-  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`
-  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`
-  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`
-}
-
 const passwordSchema = z
   .string()
   .min(8, 'Senha deve ter ao menos 8 caracteres')
@@ -44,10 +34,6 @@ const passwordSchema = z
 
 const registerSchema = z
   .object({
-    clinicDocument: z.string().refine((value: string) => {
-      const digits = value.replace(/\D/g, '')
-      return digits.length === 0 || digits.length === 14
-    }, 'Informe um CNPJ válido com 14 dígitos ou deixe em branco.'),
     clinicName: z.string().min(2, 'Nome da clínica deve ter ao menos 2 caracteres'),
     adminName: z.string().min(2, 'Seu nome deve ter ao menos 2 caracteres'),
     email: z.string().email('E-mail inválido'),
@@ -70,21 +56,13 @@ export default function RegisterPage() {
     register,
     handleSubmit,
     watch,
-    setValue,
     formState: { errors },
   } = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { clinicDocument: '' },
   })
 
   const clinicName = watch('clinicName') ?? ''
-  const clinicDocument = watch('clinicDocument') ?? ''
   const slugPreview = clinicName.length >= 2 ? slugifyPreview(clinicName) : ''
-  const clinicDocumentField = register('clinicDocument')
-
-  function handleCnpjChange(event: ChangeEvent<HTMLInputElement>) {
-    setValue('clinicDocument', applyCnpjMask(event.target.value), { shouldValidate: true })
-  }
 
   async function onSubmit(data: RegisterData) {
     setLoading(true)
@@ -98,7 +76,6 @@ export default function RegisterPage() {
         transferPending?: boolean
       }>('/auth/register', {
         clinicName: data.clinicName,
-        clinicDocument: data.clinicDocument || undefined,
         adminName: data.adminName,
         email: data.email,
         password: data.password,
@@ -135,22 +112,6 @@ export default function RegisterPage() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="clinicDocument">CNPJ da empresa (opcional)</Label>
-            <Input
-              id="clinicDocument"
-              name={clinicDocumentField.name}
-              ref={clinicDocumentField.ref}
-              value={clinicDocument}
-              onChange={handleCnpjChange}
-              placeholder="00.000.000/0000-00"
-            />
-            <p className="text-xs text-muted-foreground">
-              Você pode preencher depois em Configurações. Se informar agora, validaremos apenas o formato.
-            </p>
-            {errors.clinicDocument && <p className="text-sm text-destructive">{errors.clinicDocument.message}</p>}
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="clinicName">Nome da clínica</Label>
             <Input id="clinicName" placeholder="Clínica Estética" {...register('clinicName')} />
