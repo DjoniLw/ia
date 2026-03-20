@@ -199,6 +199,64 @@ O antigo fluxo criava a clínica automaticamente e enviava o e-mail de transfer�
 
 ---
 
+---
+
+## 5 — Colisão de slug com vínculo existente (issue #56)
+
+### Contexto
+
+Quando um usuário tenta cadastrar uma empresa cujo nome gera um slug já existente no sistema, o `uniqueSlug()` atual simplesmente incrementa o sufixo (`clinica-estetica` → `clinica-estetica-1`) silenciosamente. Há dois cenários que esse comportamento não cobre corretamente:
+
+- **Cenário A**: O usuário tem vínculo ativo com aquela clínica (mesmo slug + mesmo e-mail) → deve bloquear com `SLUG_LINKED_SAME_CLINIC` e oferecer recuperação de senha.
+- **Cenário B**: O slug colide com uma clínica diferente (e-mail não vinculado a ela) → `uniqueSlug()` gera slug alternativo normalmente.
+
+### Ordem de verificações em `registerClinic()`
+
+1. Verificar conflito de e-mail → emite `EMAIL_CONFLICT_ADMIN` ou `EMAIL_CONFLICT_MEMBER` (issue #55)
+2. Verificar colisão de slug com vínculo na mesma clínica → emite `SLUG_LINKED_SAME_CLINIC` (issue #56)
+3. Gerar slug único com `uniqueSlug()` e prosseguir
+
+### Backend — `auth.service.ts`
+
+Em qualquer branch que alcança `uniqueSlug()`, adicionar antes:
+
+```typescript
+const baseSlug = slugify(dto.clinicName)
+const existingClinicForSlug = await authRepository.findClinicBySlug(baseSlug)
+if (existingClinicForSlug && sourceMembership?.clinicId === existingClinicForSlug.id) {
+  throw new AppError(
+    `Você já possui vínculo com a empresa "${existingClinicForSlug.name}", que tem o mesmo identificador que você está tentando cadastrar.`,
+    409,
+    'SLUG_LINKED_SAME_CLINIC',
+    { clinicName: existingClinicForSlug.name },
+  )
+}
+const slug = await this.uniqueSlug(baseSlug)
+```
+
+### Backend — `auth.repository.ts`
+
+Adicionar `name: true` ao select de `findClinicBySlug()`:
+
+```typescript
+findClinicBySlug(slug: string) {
+  return prisma.clinic.findUnique({
+    where: { slug },
+    select: { id: true, name: true, status: true, emailVerified: true },
+  })
+}
+```
+
+### Frontend — `register/page.tsx`
+
+No `catch` do `onSubmit`, tratar `409` com código `SLUG_LINKED_SAME_CLINIC`:
+- Exibir diálogo com: "Você já possui vínculo com a empresa [X], que tem o mesmo identificador que você está tentando cadastrar. Deseja recuperar o acesso à sua conta?"
+- Opção **"Recuperar acesso"** → chama `POST /auth/recover-access`, fecha diálogo, exibe toast de confirmação
+- Opção **"Cancelar"** → fecha diálogo
+- Não oferecer "continuar cadastrando"
+
+---
+
 ## Ordem de implementação sugerida
 
 1. `company.config.ts` (sem dependências)
@@ -212,3 +270,4 @@ O antigo fluxo criava a clínica automaticamente e enviava o e-mail de transfer�
 9. Endpoints públicos `confirm-transfer` e `reject-transfer`
 10. Página frontend `app/(auth)/transfer/confirm/page.tsx`
 11. Template de e-mail de transferência
+12. Colisão de slug com vínculo existente (`SLUG_LINKED_SAME_CLINIC`) — issue #56

@@ -35,7 +35,7 @@ export class AuthRepository {
   findClinicBySlug(slug: string) {
     return prisma.clinic.findUnique({
       where: { slug },
-      select: { id: true, status: true, emailVerified: true },
+      select: { id: true, name: true, status: true, emailVerified: true },
     })
   }
 
