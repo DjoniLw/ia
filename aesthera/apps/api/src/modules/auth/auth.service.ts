@@ -160,7 +160,7 @@ export class AuthService {
         const isAdmin = sourceMembership.role === 'admin'
         throw new AppError(
           isAdmin
-            ? `Este e-mail já é administrador da clínica "${sourceMembership.clinic.name}".`
+            ? `Este e-mail já está cadastrado como administrador da clínica "${sourceMembership.clinic.name}".`
             : `Este e-mail já pertence à clínica "${sourceMembership.clinic.name}".`,
           409,
           isAdmin ? 'EMAIL_CONFLICT_ADMIN' : 'EMAIL_CONFLICT_MEMBER',
