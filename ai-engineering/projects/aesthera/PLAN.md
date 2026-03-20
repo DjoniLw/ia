@@ -266,6 +266,13 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-20] — Treinamento do agente aesthera-issue-writer: completude, impacto e testes
+- **Arquivo(s) afetado(s):** `ai-engineering/prompts/aesthera-issue-writer/aesthera-issue-writer-prompt.md`
+- **O que foi feito:** Adicionadas três novas regras ao agente: (1) **Regra de Completude** — nunca criar navegação/link sem a página de destino inclusa no escopo; (2) **Análise de Impacto** — identificar e documentar todos os módulos/arquivos afetados por uma mudança; (3) **Regras de Testes** — critérios claros de quando exigir, sugerir ou omitir testes unitários/automatizados. Template da issue atualizado com novas seções "Impacto em Outros Módulos" e "Testes". Checklist de consistência atualizado com os três novos pontos de validação.
+- **Impacto:** Agente `aesthera-issue-writer` — issues geradas são mais completas, consistentes e seguras para o implementador executar sem surpresas.
+
+---
+
 ### [2026-03-20] — Treinamento do agente aesthera-issue-writer: exportação de issues como arquivo local
 - **Arquivo(s) afetado(s):** `ai-engineering/prompts/aesthera-issue-writer/aesthera-issue-writer-prompt.md`, `.gitignore`
 - **O que foi feito:** Adicionada opção de salvar issues geradas como arquivo Markdown local em `outputs/tasks/{001-nome-da-issue}.md`. O agente agora pergunta ao usuário, após gerar a issue, se deseja criar no GitHub e/ou salvar localmente — as duas opções são independentes. Adicionado frontmatter YAML com metadados (título, módulo, tipo, data, status). A pasta `outputs/` foi adicionada ao `.gitignore` raiz para não versionar esses arquivos.

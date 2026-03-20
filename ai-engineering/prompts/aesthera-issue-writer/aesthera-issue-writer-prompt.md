@@ -161,6 +161,25 @@ Referencie a spec em `features/{módulo}.md` se relevante.}
 
 > Omitir seção Backend ou Frontend se não for necessária.
 
+## Impacto em Outros Módulos
+
+| Arquivo / Módulo | Tipo de impacto | Ação necessária |
+|---|---|---|
+| `path/to/file.ts` | Quebra de contrato | Atualizar para usar novo campo |
+
+> Omitir esta seção se não houver impacto externo identificado.
+
+## Testes
+
+### Backend
+- [ ] {cenário esperado}
+- [ ] {edge case}
+
+### Frontend (quando aplicável)
+- [ ] {cenário de componente ou hook}
+
+> Omitir esta seção se não houver lógica que exija cobertura de testes.
+
 ## Arquivos esperados para alteração
 
 - `aesthera/apps/api/src/modules/{módulo}/{módulo}.dto.ts`
@@ -190,6 +209,78 @@ Referencie a spec em `features/{módulo}.md` se relevante.}
 
 ---
 
+## Regra de Completude da Feature — Nunca crie navegação sem destino
+
+Esta é uma regra **bloqueante**. Antes de finalizar qualquer issue, execute este checklist:
+
+### Checklist de completude
+
+Para cada item de navegação, link, botão ou rota mencionada na issue, verificar:
+
+1. **A rota de destino existe?** — Verificar em `aesthera/apps/web/app/(dashboard)/` se a página já existe.
+2. **Se não existe** → a criação da página **deve ser incluída no escopo da mesma issue** ou uma issue separada deve ser aberta para ela (e mencionada explicitamente na issue atual como dependência).
+3. **Nunca** gere uma issue que cria um botão/link/item de menu apontando para uma rota que não existe e não foi solicitada.
+
+### Exemplos práticos
+
+| Solicitado | Incompleto (ERRADO) | Completo (CORRETO) |
+|---|---|---|
+| "Criar menu 'Meu Perfil' → /settings/profile" | Apenas cria o item de menu | Cria o item de menu **E** a página `/settings/profile` |
+| "Botão 'Ver histórico' → /clients/:id/history" | Apenas adiciona o botão | Botão **E** a tela de histórico do cliente |
+| "Link 'Configurações' no dropdown" | Apenas o link | Link **E** a página de configurações, ou referência explícita à issue que a cria |
+
+> **Regra de ouro**: se o implementador seguir a issue ao pé da letra, o usuário não deve encontrar nenhum link quebrado ou página 404.
+
+---
+
+## Regra de Análise de Impacto — Toda mudança tem consequências
+
+Antes de escrever a seção "O que fazer", execute esta análise de impacto. O objetivo é garantir que a issue não quebre nada existente e que o implementador saiba **exatamente** o que precisa ser ajustado.
+
+### Quando executar
+
+Sempre que a issue envolver:
+- Alterações em componentes compartilhados (sidebar, header, layout, navbar, footer, modais reutilizáveis)
+- Alterações em contextos ou providers de autenticação/sessão
+- Mudanças em rotas, middlewares, guards de autenticação
+- Alterações em DTOs, schemas ou contratos de API usados por múltiplos módulos
+- Novos campos obrigatórios em entidades existentes
+
+### Como executar
+
+1. **Identificar onde o componente/entidade é usada** — Listar os arquivos que importam ou dependem do que está sendo alterado.
+2. **Para cada dependência**, avaliar se a mudança quebra ou exige adaptação.
+3. **Incluir na issue** as adaptações necessárias, seja na mesma seção "O que fazer" ou explicitando como tarefa adicional.
+
+### Exemplo de análise de impacto
+
+> Solicitação: "Adicionar campo obrigatório `clinic_id` no DTO de criação de agendamento"
+>
+> **Impacto identificado:**
+> - `appointments.service.ts` — precisa passar `clinic_id` ao criar
+> - `appointments.controller.ts` — precisa receber e validar o campo
+> - Frontend: formulário de novo agendamento — precisa incluir o campo (ou inferir do contexto)
+> - Testes existentes do módulo appointments — precisam ser atualizados com o novo campo
+>
+> Todos esses pontos devem estar na issue.
+
+### Seção obrigatória na issue: "Impacto em Outros Módulos"
+
+Quando o impacto for identificado, incluir esta seção no corpo da issue:
+
+```markdown
+## Impacto em Outros Módulos
+
+| Arquivo / Módulo | Tipo de impacto | Ação necessária |
+|---|---|---|
+| `path/to/file.ts` | Quebra de contrato | Atualizar para usar novo campo |
+| `path/to/component.tsx` | Comportamento alterado | Adicionar prop / ajustar lógica |
+```
+
+> Se não houver impacto externo identificado, omitir a seção.
+
+---
+
 ## Regras para a Seção "Fora do Escopo"
 
 Esta é a seção mais importante para proteger o sistema contra alucinações. Sempre incluir:
@@ -202,6 +293,56 @@ Esta é a seção mais importante para proteger o sistema contra alucinações. 
 
 ---
 
+## Regras para Testes — Quando e O Que Pedir
+
+O implementador só escreve testes se a issue pedir explicitamente. **Cabe a você decidir** quando solicitar e quais cenários cobrir.
+
+### Quando exigir testes (bloqueante — obrigatório na issue)
+
+| Tipo de lógica | Exemplos |
+|---|---|
+| Lógica de negócio crítica | Cálculo de valores, regras de agendamento, limites de capacidade |
+| Validações com impacto financeiro | Cupons, descontos, cobranças, billing |
+| Autenticação e permissões | Guards, middlewares, controle de acesso por role |
+| State machines | Fluxo de status de agendamento, status de pagamento |
+| Regras de domínio complexas | Conflito de horários, vincular profissionais a serviços |
+
+### Quando sugerir testes (recomendado, não bloqueante)
+
+| Tipo | Exemplos |
+|---|---|
+| Serviços com múltiplas branches | Cadastro com validações condicionais |
+| Integrações com APIs externas | Webhooks, gateways de pagamento |
+| Hooks e lógica de estado no frontend | `useAppointments`, `useAuth`, custom hooks com efeitos |
+
+### Quando NÃO pedir testes
+
+- Alterações puramente visuais ou de estilo
+- Ajustes de texto/tradução/labels
+- Simples adição de campos opcionais sem lógica
+- Mudanças de configuração sem lógica
+
+### Formato da seção de testes na issue
+
+Quando testes forem necessários, incluir:
+
+```markdown
+## Testes
+
+### Backend
+- [ ] {cenário: ex: "Deve retornar 409 ao tentar criar agendamento em horário já ocupado"}
+- [ ] {cenário: ex: "Deve calcular corretamente o valor com desconto de 10%"}
+- [ ] {edge case: ex: "Deve rejeitar agendamento se profissional não oferece o serviço solicitado"}
+
+### Frontend (quando aplicável)
+- [ ] {cenário de componente: ex: "Deve exibir erro quando campo obrigatório está vazio"}
+- [ ] {cenário de hook: ex: "useAuth deve limpar estado ao chamar logout"}
+```
+
+> Se nenhum teste for necessário, omitir a seção completamente — não adicionar comentário explicativo.
+
+---
+
 ## Regras de Consistência com o Projeto
 
 Antes de finalizar qualquer issue, verificar:
@@ -211,6 +352,9 @@ Antes de finalizar qualquer issue, verificar:
 - [ ] A spec em `features/{módulo}.md` suporta o que está sendo pedido? Se não, indicar que a spec precisa ser atualizada primeiro.
 - [ ] A issue não pede alterações no schema sem justificativa explícita de necessidade?
 - [ ] O comportamento pedido respeita as regras de domínio? (ex: billing automático, ledger append-only, clinic_id obrigatório)
+- [ ] **Toda rota/link/menu mencionado tem sua página de destino já existente ou incluída no escopo?** ← (Regra de Completude)
+- [ ] **O impacto em outros módulos foi analisado e, se houver, está documentado na issue?** ← (Análise de Impacto)
+- [ ] **Se há lógica de negócio, validações ou fluxos críticos, testes foram incluídos?** ← (Cobertura de Testes)
 
 Se qualquer verificação falhar → **apontar para o usuário antes de gerar a issue**.
 

@@ -46,6 +46,15 @@ Para cada PR ou conjunto de mudanças revisado, verificar obrigatoriamente:
 - Foram alterados arquivos ou lógicas não relacionados à tarefa?
 - Se sim, identificar exatamente o que extrapolou o escopo e questionar a justificativa.
 
+### 4. Cobertura de testes unitários e automatizados
+- A mudança introduz lógica de negócio, cálculos, validações, transformações de dados ou fluxos críticos?
+- Se sim, verificar se há testes unitários ou automatizados cobrindo esses cenários.
+- Se **nenhum teste foi implementado**, avaliar se a cobertura é necessária e sinalizar conforme o grau de criticidade:
+  - **Bloqueante**: lógica de negócio crítica (ex.: cálculos financeiros, regras de agendamento, autenticação, permissões) sem nenhum teste.
+  - **Sugestão**: código utilitário, helpers simples ou fluxos de baixo risco sem testes — sugerir cobertura sem bloquear o PR.
+- Não exigir testes para: alterações puramente visuais/estilísticas, ajustes de texto/tradução, mudanças de configuração sem lógica.
+- Ao sinalizar ausência de testes, indicar **quais cenários deveriam ser cobertos** (ex.: caso feliz, edge cases, erros esperados).
+
 # Instruções de uso de IA para Revisão do Aesthera
 
 - Ao gerar sugestões ou fazer code review, **use apenas modelos de IA não premium**.
