@@ -47,18 +47,58 @@ Se houver dúvidas, **pare aqui** e faça as perguntas necessárias antes de con
 ### 3. Gerar a issue
 Produzir a issue no formato abaixo com a máxima precisão possível.
 
-### 4. Apresentar e confirmar criação no GitHub
+### 4. Apresentar, confirmar e exportar
 
 Após gerar o conteúdo da issue, **sempre**:
 
 1. Exiba o conteúdo completo da issue formatado para o usuário revisar
-2. Pergunte explicitamente: **"Deseja que eu crie esta issue no GitHub agora?"**
-3. Aguarde a resposta do usuário:
-   - **Sim** → use as ferramentas do GitHub para criar a issue no repositório do projeto Aesthera, aplicando o título, corpo e labels sugeridas
-   - **Não / ajustes necessários** → aceite o feedback, faça as correções solicitadas e repita este passo
-4. Após criar a issue no GitHub, informe o link da issue criada
+2. Pergunte explicitamente as duas opções de exportação, podendo escolher uma ou ambas:
+   - **"Deseja que eu crie esta issue no GitHub agora?"**
+   - **"Deseja salvar esta issue como arquivo local em `outputs/tasks/`?"**
+3. Aguarde a resposta do usuário e execute as ações confirmadas:
+   - **Criar no GitHub** → use as ferramentas do GitHub para criar a issue no repositório do projeto Aesthera, aplicando o título, corpo e labels sugeridas. Após criar, informe o link da issue criada.
+   - **Salvar como arquivo local** → crie o arquivo em `outputs/tasks/` seguindo as regras abaixo.
+   - **Ajustes necessários** → aceite o feedback, faça as correções solicitadas e repita este passo.
+4. As duas opções são independentes — o usuário pode escolher uma, ambas ou nenhuma.
 
-> **Nunca** crie a issue no GitHub sem confirmação explícita do usuário.
+> **Nunca** crie a issue no GitHub ou salve o arquivo sem confirmação explícita do usuário.
+
+---
+
+### Regras para Salvamento de Arquivo Local
+
+Quando o usuário solicitar salvar como arquivo local:
+
+**Caminho obrigatório:** `outputs/tasks/{NOME}.md` na raiz do workspace
+
+**Formato do nome do arquivo:**
+- Derivar do título da issue: converter para `kebab-case`, remover caracteres especiais, truncar se necessário
+- Prefixar com número sequencial de 3 dígitos: `001-`, `002-`, etc.
+- Para conjuntos de issues da mesma feature, usar o mesmo prefixo numérico sequencial entre si
+- Exemplos:
+  - `001-corrigir-validacao-cpf-cadastro-cliente.md`
+  - `002-adicionar-campo-observacoes-agendamento.md`
+  - `003-fase1-padronizar-nomenclaturas-ptbr.md`
+
+**Conteúdo do arquivo:**
+- Manter exatamente o mesmo conteúdo gerado para a issue GitHub
+- Adicionar um cabeçalho YAML frontmatter com metadados:
+
+```markdown
+---
+titulo: {título da issue}
+módulo: {módulo afetado}
+tipo: {feature | enhancement | bug}
+data: {data de geração no formato DD/MM/YYYY}
+status: pendente
+---
+```
+
+**Procedimento:**
+1. Verificar se a pasta `outputs/tasks/` existe; se não existir, criá-la
+2. Verificar os arquivos existentes para definir o próximo número sequencial
+3. Criar o arquivo com o conteúdo completo
+4. Confirmar ao usuário o caminho completo do arquivo criado
 
 ---
 

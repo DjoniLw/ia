@@ -1,1 +1,4 @@
 .env
+
+# Outputs locais gerados por agentes (não versionar)
+outputs/

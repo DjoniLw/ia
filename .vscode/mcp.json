@@ -6,8 +6,10 @@
         "-y",
         "dotenv-cli",
         "-e",
-        ".env",
+        "C:/Disco_D/Desenvolvimento/IA/ia/.env",
         "--",
+        "npx",
+        "-y",
         "@modelcontextprotocol/server-github"
       ]
     },
@@ -17,8 +19,10 @@
         "-y",
         "dotenv-cli",
         "-e",
-        ".env",
+        "C:/Disco_D/Desenvolvimento/IA/ia/.env",
         "--",
+        "npx",
+        "-y",
         "railway-mcp"
       ]
     }
