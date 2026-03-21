@@ -266,6 +266,11 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-20] — #47 — Ajustes pós-code-review do PR de CEP
+- **Arquivo(s) afetado(s):** `aesthera/apps/web/lib/hooks/use-cep-lookup.ts`, `aesthera/apps/web/lib/hooks/use-resources.ts`, `ai-engineering/projects/aesthera/features/clinics.md`
+- **O que foi feito:** Eliminada condição de corrida no hook do ViaCEP com cancelamento de requisição anterior e descarte de respostas obsoletas. Criados tipos de input específicos para create/update de profissionais, impedindo `address: null` no frontend. Corrigida indentação do bloco de modelo em `clinics.md`.
+- **Impacto:** Robustez do auto-preenchimento por CEP no frontend e alinhamento de tipagem entre frontend e backend para profissionais.
+
 ### [2026-03-20] — #47 — Auto-preenchimento de endereço por CEP (ViaCEP)
 - **Arquivo(s) afetado(s):** `aesthera/apps/web/lib/hooks/use-cep-lookup.ts`, `aesthera/apps/web/app/(dashboard)/customers/page.tsx`, `aesthera/apps/web/app/(dashboard)/settings/_components/clinic-tab.tsx`, `aesthera/apps/web/app/(dashboard)/professionals/page.tsx`, `aesthera/apps/web/lib/hooks/use-resources.ts`, `aesthera/apps/web/lib/hooks/use-settings.ts`, `aesthera/apps/api/prisma/schema.prisma`, `aesthera/apps/api/prisma/migrations/20260320_professionals_address_via_cep/migration.sql`, `aesthera/apps/api/src/modules/professionals/professionals.dto.ts`, `aesthera/apps/api/src/modules/professionals/professionals.service.test.ts`, `ai-engineering/projects/aesthera/features/customers.md`, `ai-engineering/projects/aesthera/features/professionals.md`, `ai-engineering/projects/aesthera/features/clinics.md`
 - **O que foi feito:** Criado hook reutilizável `useCepLookup()` com integração ViaCEP e tratamento de CEP inválido, CEP inexistente e erro de rede. Integrado auto-preenchimento de endereço nos formulários de clientes, configurações da clínica e profissionais, com loader inline e campos ainda editáveis. Estendido o módulo de profissionais para persistir `address` em JSONB e adicionados testes unitários do service para criação/atualização com endereço.
