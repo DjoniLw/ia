@@ -193,7 +193,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 ### Backend
 - [x] Módulo Equipment: CRUD de equipamentos + vínculo com agendamentos (`AppointmentEquipment`)
 - [x] Módulo Rooms: CRUD de salas de atendimento + vínculo com agendamentos
-- [x] Módulo Supplies: CRUD de insumos + estoque + `minStock` + vínculo com serviços (`ServiceSupply`)
+- [x] Módulo Supplies: CRUD de insumos + estoque + `minStock` + vínculo com serviços (`ServiceSupply`) + compras de insumos com fator de conversão e estorno de estoque no cancelamento (`SupplyPurchase`)
 - [x] Módulo Wallet: vouchers, créditos, cashback, saldo de pacote — com log de transações append-only
 - [x] Módulo Promotions: códigos de desconto (PERCENTAGE / FIXED) com janela de validade, `maxUses`, `minAmount` e filtro por serviço
 - [x] Módulo Packages: pacotes de serviços com pré-geração de sessões + resgate + integração com Wallet
@@ -202,6 +202,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - [x] Página Equipamentos: lista + criar/editar + toggle ativo
 - [x] Página Salas: lista + criar/editar + toggle ativo
 - [x] Página Insumos: lista com badge de estoque + criar/editar + alerta de estoque baixo
+- [x] Página Compras de Insumos: filtros por período/insumo/fornecedor + preview de conversão/estoque + cancelamento com feedback de erro
 - [x] Página Carteira (por cliente): lista de entradas + criar voucher/crédito + ajuste de saldo
 - [x] Página Promoções: lista + criar/editar + contador de usos + validar código
 - [x] Página Pacotes: lista + criar/editar + comprar pacote + ver sessões do cliente

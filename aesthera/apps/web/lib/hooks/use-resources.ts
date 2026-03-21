@@ -529,6 +529,22 @@ export interface ServiceSupply {
   supply: Supply
 }
 
+export interface SupplyPurchase {
+  id: string
+  supplyId: string
+  supplierName: string | null
+  purchaseUnit: string
+  purchaseQty: number
+  conversionFactor: number
+  stockIncrement: number
+  unitCost: number
+  totalCost: number
+  notes: string | null
+  purchasedAt: string
+  createdAt: string
+  supply: Pick<Supply, 'id' | 'name' | 'unit' | 'stock' | 'minStock' | 'active'>
+}
+
 export function useSupplies(params?: Record<string, string>) {
   return useQuery<{ items: Supply[]; total: number; page: number; limit: number }>({
     queryKey: ['supplies', params],
@@ -576,6 +592,44 @@ export function useAssignServiceSupplies(serviceId: string) {
       api.put(`/services/${serviceId}/supplies`, { supplies }).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['service-supplies', serviceId] })
+    },
+  })
+}
+
+export function useSupplyPurchases(params?: Record<string, string>) {
+  return useQuery<{ items: SupplyPurchase[]; total: number; page: number; limit: number }>({
+    queryKey: ['supply-purchases', params],
+    queryFn: () => api.get('/supply-purchases', { params }).then((r) => r.data),
+  })
+}
+
+export function useCreateSupplyPurchase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: {
+      supplyId: string
+      supplierName?: string | null
+      purchaseUnit: string
+      purchaseQty: number
+      conversionFactor: number
+      unitCost: number
+      notes?: string | null
+      purchasedAt: string
+    }) => api.post('/supply-purchases', data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['supply-purchases'] })
+      qc.invalidateQueries({ queryKey: ['supplies'] })
+    },
+  })
+}
+
+export function useDeleteSupplyPurchase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/supply-purchases/${id}`).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['supply-purchases'] })
+      qc.invalidateQueries({ queryKey: ['supplies'] })
     },
   })
 }
