@@ -225,7 +225,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - [x] #45 — Exibir clínica e usuário logado no header/sidebar
 - [x] #46 — Controle de acesso por perfil de usuário no frontend
 - [ ] #47 — Auto-preenchimento de endereço por CEP (ViaCEP)
-- [ ] #48 — Máscaras de entrada para CPF, CNPJ, telefone e CEP
+- [x] #48 — Máscaras de entrada para CPF, CNPJ, telefone e CEP
 - [ ] #49 — Cadastro e configuração de formas de pagamento da clínica
 
 ---
@@ -265,6 +265,13 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 ---
 
 ## Histórico de Atualizações
+
+### [2026-03-20] — #48 — Máscaras de entrada para CPF, CNPJ, telefone e CEP
+- **Arquivo(s) afetado(s):** `aesthera/apps/web/package.json`, `components/ui/masked-input-cpf.tsx`, `components/ui/masked-input-cnpj.tsx`, `components/ui/masked-input-phone.tsx`, `components/ui/masked-input-cep.tsx`, `app/(dashboard)/customers/page.tsx`, `app/(dashboard)/settings/_components/clinic-tab.tsx`, `app/(dashboard)/professionals/page.tsx`
+- **O que foi feito:** Adicionada dependência `react-imask ^7.6.1`. Criados 4 componentes reutilizáveis de campo mascarado para CPF (`000.000.000-00`), CNPJ (`00.000.000/0000-00`), telefone (dinâmico fixo/celular) e CEP (`00000-000`). Componentes integrados com React Hook Form via `Controller`. Valor armazenado e enviado ao backend sempre sem máscara (apenas dígitos). Funções de máscara manuais (`applyCpfMask`, `applyPhoneMask`, `applyCepMask`, `applyCnpjMask`) removidas dos arquivos de página. Normalização de dados legados adicionada em `fromCustomer` e no `reset()` da clínica.
+- **Impacto:** UX — campos de CPF, CNPJ, telefone e CEP agora exibem máscara durante digitação em todos os formulários de clientes, clínica e profissionais.
+
+---
 
 ### [2026-03-20] — Treinamento do agente aesthera-issue-writer: completude, impacto e testes
 - **Arquivo(s) afetado(s):** `ai-engineering/prompts/aesthera-issue-writer/aesthera-issue-writer-prompt.md`

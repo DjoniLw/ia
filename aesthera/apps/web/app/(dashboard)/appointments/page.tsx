@@ -19,6 +19,7 @@ import {
 } from '@/lib/hooks/use-appointments'
 import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
 import { useCustomers, useGetCustomer, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
+import { formatCpf, formatPhone } from '@/lib/masks'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -438,7 +439,7 @@ function CreateAppointmentForm({
                   }}
                 >
                   <span className="font-medium">{c.name}</span>
-                  {c.phone && <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>}
+                  {c.phone && <span className="ml-2 text-xs text-muted-foreground">{formatPhone(c.phone)}</span>}
                 </button>
               ))}
             </div>
@@ -1085,8 +1086,8 @@ function CustomerQuickView({ customerId, onClose }: { customerId: string; onClos
           <div className="space-y-3">
             {field('Nome', customer.name)}
             {field('E-mail', customer.email)}
-            {field('Telefone', customer.phone)}
-            {field('CPF', customer.document)}
+            {field('Telefone', formatPhone(customer.phone))}
+            {field('CPF', formatCpf(customer.document))}
             {customer.birthDate && field('Data de nascimento', new Date(customer.birthDate).toLocaleDateString('pt-BR'))}
             {customer.address?.city && field('Cidade', [customer.address.city, customer.address.state].filter(Boolean).join(' – '))}
             {field('Observações', customer.notes)}
