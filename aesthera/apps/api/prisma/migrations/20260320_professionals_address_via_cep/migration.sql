@@ -1,0 +1,2 @@
+ALTER TABLE "professionals"
+ADD COLUMN IF NOT EXISTS "address" JSONB;
