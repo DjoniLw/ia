@@ -18,6 +18,7 @@ export interface Professional {
   email: string
   phone: string | null
   speciality: string | null
+  address?: CustomerAddress | null
   active: boolean
   allServices: boolean
   createdAt: string
@@ -131,7 +132,7 @@ export function useProfessionals(params?: Record<string, string>) {
 export function useCreateProfessional() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: Pick<Professional, 'name' | 'email' | 'phone' | 'speciality'>) =>
+    mutationFn: (data: Pick<Professional, 'name' | 'email' | 'phone' | 'speciality' | 'address'>) =>
       api.post('/professionals', data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['professionals'] }),
   })

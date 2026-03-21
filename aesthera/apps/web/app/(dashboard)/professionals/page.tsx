@@ -5,12 +5,14 @@ import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { Pencil, Trash2, UserRound, ListChecks } from 'lucide-react'
+import { Loader2, Pencil, Trash2, UserRound, ListChecks } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MaskedInputCep } from '@/components/ui/masked-input-cep'
 import { MaskedInputPhone } from '@/components/ui/masked-input-phone'
+import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
 import {
   type Professional,
   type Service,
@@ -32,8 +34,55 @@ const professionalSchema = z.object({
   email: z.string().email('E-mail inválido'),
   phone: z.string().optional(),
   speciality: z.string().optional(),
+  addr_street: z.string().optional(),
+  addr_number: z.string().optional(),
+  addr_complement: z.string().optional(),
+  addr_neighborhood: z.string().optional(),
+  addr_city: z.string().optional(),
+  addr_state: z.string().optional(),
+  addr_zip: z.string().optional(),
 })
 type ProfessionalFormData = z.infer<typeof professionalSchema>
+
+function toProfessionalPayload(formData: ProfessionalFormData) {
+  const address = {
+    street: formData.addr_street || undefined,
+    number: formData.addr_number || undefined,
+    complement: formData.addr_complement || undefined,
+    neighborhood: formData.addr_neighborhood || undefined,
+    city: formData.addr_city || undefined,
+    state: formData.addr_state || undefined,
+    zip: formData.addr_zip || undefined,
+  }
+
+  const hasAddress = Object.values(address).some(Boolean)
+
+  return {
+    name: formData.name,
+    email: formData.email,
+    phone: formData.phone ?? null,
+    speciality: formData.speciality ?? null,
+    address: hasAddress ? address : undefined,
+  }
+}
+
+function fromProfessional(professional: Professional): Partial<ProfessionalFormData> {
+  const address = professional.address ?? {}
+
+  return {
+    name: professional.name,
+    email: professional.email,
+    phone: (professional.phone ?? '').replace(/\D/g, '') || undefined,
+    speciality: professional.speciality ?? undefined,
+    addr_street: address.street ?? '',
+    addr_number: address.number ?? '',
+    addr_complement: address.complement ?? '',
+    addr_neighborhood: address.neighborhood ?? '',
+    addr_city: address.city ?? '',
+    addr_state: address.state ?? '',
+    addr_zip: (address.zip ?? '').replace(/\D/g, ''),
+  }
+}
 
 // ──── ProfessionalForm ─────────────────────────────────────────────────────────
 
@@ -52,11 +101,14 @@ function ProfessionalForm({
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<ProfessionalFormData>({
     resolver: zodResolver(professionalSchema),
     defaultValues,
   })
+
+  const { lookup: lookupCep, isLoading: loadingCep, notFound: cepNotFound, reset: resetCep } = useCepLookup()
 
   useEffect(() => { onDirtyChange?.(isDirty) }, [isDirty, onDirtyChange])
 
@@ -94,6 +146,97 @@ function ProfessionalForm({
       <div className="space-y-2">
         <Label>Especialidade</Label>
         <Input {...register('speciality')} placeholder="Esteticista, Dermatologista…" />
+      </div>
+
+      <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+        <div>
+          <p className="text-sm font-medium">Endereço</p>
+          <p className="text-xs text-muted-foreground">O CEP pode preencher os campos automaticamente.</p>
+        </div>
+
+        <div className="space-y-2 max-w-xs">
+          <Label>CEP</Label>
+          <Controller
+            control={control}
+            name="addr_zip"
+            render={({ field }) => (
+              <div className="relative">
+                <MaskedInputCep
+                  ref={field.ref}
+                  value={field.value}
+                  disabled={loadingCep}
+                  onChange={(value) => {
+                    field.onChange(value)
+                    if (value.length < 8) {
+                      resetCep()
+                      return
+                    }
+
+                    void lookupCep(value).then((address) => {
+                      if (!address) return
+                      setValue('addr_street', address.logradouro, { shouldDirty: true })
+                      setValue('addr_neighborhood', address.bairro, { shouldDirty: true })
+                      setValue('addr_city', address.localidade, { shouldDirty: true })
+                      setValue('addr_state', address.uf, { shouldDirty: true })
+                    })
+                  }}
+                  onBlur={() => {
+                    field.onBlur()
+                    const digits = (field.value ?? '').replace(/\D/g, '')
+                    if (digits.length !== 8) return
+
+                    void lookupCep(digits).then((address) => {
+                      if (!address) return
+                      setValue('addr_street', address.logradouro, { shouldDirty: true })
+                      setValue('addr_neighborhood', address.bairro, { shouldDirty: true })
+                      setValue('addr_city', address.localidade, { shouldDirty: true })
+                      setValue('addr_state', address.uf, { shouldDirty: true })
+                    })
+                  }}
+                  name={field.name}
+                />
+                {loadingCep && <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
+            )}
+          />
+          {cepNotFound && <p className="text-xs text-destructive">CEP não encontrado</p>}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="sm:col-span-2 space-y-2">
+            <Label>Logradouro</Label>
+            <Input {...register('addr_street')} placeholder="Rua das Flores" />
+          </div>
+          <div className="space-y-2">
+            <Label>Número</Label>
+            <Input {...register('addr_number')} placeholder="123" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Complemento</Label>
+            <Input {...register('addr_complement')} placeholder="Sala 2" />
+          </div>
+          <div className="space-y-2">
+            <Label>Bairro</Label>
+            <Input {...register('addr_neighborhood')} placeholder="Centro" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="sm:col-span-2 space-y-2">
+            <Label>Cidade</Label>
+            <Input {...register('addr_city')} placeholder="São Paulo" />
+          </div>
+          <div className="space-y-2">
+            <Label>Estado</Label>
+            <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('addr_state')}>
+              <option value="">UF</option>
+              {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map((uf) => <option key={uf}>{uf}</option>)}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
@@ -242,11 +385,7 @@ export default function ProfessionalsPage() {
 
   async function handleCreate(formData: ProfessionalFormData) {
     try {
-      await createProfessional.mutateAsync({
-        ...formData,
-        phone: formData.phone ?? null,
-        speciality: formData.speciality ?? null,
-      })
+      await createProfessional.mutateAsync(toProfessionalPayload(formData))
       toast.success('Profissional criado')
       setCreating(false)
     } catch (err: unknown) {
@@ -257,11 +396,7 @@ export default function ProfessionalsPage() {
 
   async function handleUpdate(formData: ProfessionalFormData) {
     try {
-      await updateProfessional.mutateAsync({
-        ...formData,
-        phone: formData.phone ?? null,
-        speciality: formData.speciality ?? null,
-      })
+      await updateProfessional.mutateAsync(toProfessionalPayload(formData))
       toast.success('Profissional atualizado')
       setEditing(null)
     } catch (err: unknown) {
@@ -405,11 +540,7 @@ export default function ProfessionalsPage() {
           <DialogTitle>Editar Profissional</DialogTitle>
           <div className="mt-4">
             <ProfessionalForm
-              defaultValues={{
-                ...editing,
-                phone: (editing.phone ?? '').replace(/\D/g, '') || undefined,
-                speciality: editing.speciality ?? undefined,
-              }}
+              defaultValues={fromProfessional(editing)}
               onSave={handleUpdate}
               isPending={updateProfessional.isPending}
               onDirtyChange={setFormDirty}

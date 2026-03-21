@@ -305,6 +305,7 @@ model Professional {
   email       String
   phone       String?
   speciality  String?
+  address     Json?
   avatarUrl   String?                        @map("avatar_url")
   active      Boolean   @default(true)
   allServices Boolean   @default(false)      @map("all_services") // when true, professional performs all services (including future ones)

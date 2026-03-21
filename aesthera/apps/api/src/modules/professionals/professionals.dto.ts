@@ -1,10 +1,22 @@
 import { z } from 'zod'
 
+const AddressSchema = z.object({
+  street: z.string().optional(),
+  number: z.string().optional(),
+  complement: z.string().optional(),
+  neighborhood: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
+  country: z.string().optional(),
+}).optional()
+
 export const CreateProfessionalDto = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
   phone: z.string().nullish(),
   speciality: z.string().nullish(),
+  address: AddressSchema,
 })
 export type CreateProfessionalDto = z.infer<typeof CreateProfessionalDto>
 

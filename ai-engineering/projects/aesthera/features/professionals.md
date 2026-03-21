@@ -38,6 +38,7 @@ Professional {
   email          STRING NOT NULL
   phone          STRING?
   speciality     STRING?
+  address        JSONB?                  -- street, number, complement, neighborhood, city, state, zip
   avatar_url     STRING?
   active         BOOLEAN DEFAULT true
   deleted_at     TIMESTAMP?
@@ -75,5 +76,12 @@ ProfessionalService {
 - Auth module (professional login)
 - Notifications module (invite email)
 
+## Frontend — Cadastro/Edição
+- Formulário inclui bloco de endereço com CEP, logradouro, número, complemento, bairro, cidade e UF
+- O campo de CEP usa ViaCEP para auto-preenchimento ao completar 8 dígitos ou ao perder foco
+- Campos preenchidos automaticamente continuam editáveis
+- Quando não encontrado, exibe mensagem inline `CEP não encontrado`
+- Em falha de rede, exibe toast em PT-BR orientando preenchimento manual
+
 ## Status
-[ ] Planned  [ ] In Progress  [ ] Done
+[ ] Planned  [ ] In Progress  [x] Done

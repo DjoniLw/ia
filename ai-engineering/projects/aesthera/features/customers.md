@@ -83,6 +83,12 @@ GET /customers/:id/history
 "Histórico" tab      → appointments timeline + product purchases
 ```
 
+## Frontend — Auto-preenchimento por CEP
+- O campo de CEP dispara consulta ao ViaCEP ao completar 8 dígitos ou ao perder foco
+- Quando encontrado, preenche logradouro, bairro, cidade e UF sem bloquear edição manual
+- Quando não encontrado, exibe mensagem inline `CEP não encontrado`
+- Em falha de rede, exibe toast em PT-BR orientando preenchimento manual
+
 ## Frontend — Birthday Widget (Dashboard)
 - Shows on dashboard if any birthdays in next 7 days
 - Today's birthdays shown with 🎂 icon + highlight
@@ -94,6 +100,7 @@ GET /customers/:id/history
 ## Changelog
 | Date | Change |
 |------|--------|
+| 2026-03 | Added ViaCEP auto-fill on customer address form with inline not-found state and network error toast |
 | 2026-03 | Initial CRUD with address + anamnesis (multi-tab form) |
 | 2026-03 | Added `GET /customers/birthdays` endpoint + dashboard widget |
 | 2026-03 | Added `GET /customers/:id/history` endpoint + "Histórico" tab in detail panel |
