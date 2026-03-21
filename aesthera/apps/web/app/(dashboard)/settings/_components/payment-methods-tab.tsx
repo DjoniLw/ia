@@ -37,7 +37,7 @@ const paymentMethodSchema = z
       .refine((value) => [2, 3, 6].includes(value), 'Selecione um número de parcelas válido.'),
   })
   .superRefine((data, ctx) => {
-    if (!data.pixEnabled && !data.boletoEnabled && !data.cardEnabled && !data.duplicataEnabled) {
+    if (!data.pixEnabled && !data.boletoEnabled && !data.cardEnabled) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['pixEnabled'],
@@ -50,6 +50,14 @@ const paymentMethodSchema = z
         code: z.ZodIssueCode.custom,
         path: ['installmentsEnabled'],
         message: 'Parcelamento só pode ser ativado quando o cartão estiver habilitado.',
+      })
+    }
+
+    if (data.duplicataEnabled && !data.pixEnabled && !data.boletoEnabled) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['duplicataEnabled'],
+        message: 'Duplicata só pode ser ativada quando PIX ou boleto estiverem habilitados.',
       })
     }
   })
@@ -296,6 +304,10 @@ export function PaymentMethodsTab() {
               />
               Habilitar duplicata
             </label>
+
+            {errors.duplicataEnabled && (
+              <p className="text-destructive text-sm">{errors.duplicataEnabled.message}</p>
+            )}
 
             {duplicataEnabled && (
               <div className="grid gap-4 md:grid-cols-2">

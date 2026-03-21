@@ -62,6 +62,17 @@ export class ClinicsRepository {
   async findPaymentMethodConfig(clinicId: string) {
     return prisma.paymentMethodConfig.findUnique({
       where: { clinicId },
+      select: {
+        pixEnabled: true,
+        boletoEnabled: true,
+        cardEnabled: true,
+        installmentsEnabled: true,
+        installmentsMaxMonths: true,
+        installmentsMinAmount: true,
+        duplicataEnabled: true,
+        duplicataDaysInterval: true,
+        duplicataMaxInstallments: true,
+      },
     })
   }
 

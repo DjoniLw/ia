@@ -105,7 +105,23 @@ describe('ClinicsService.updatePaymentMethodConfig()', () => {
         installmentsEnabled: false,
         installmentsMaxMonths: 12,
         installmentsMinAmount: 10000,
-        duplicataEnabled: false,
+        duplicataEnabled: true,
+        duplicataDaysInterval: 30,
+        duplicataMaxInstallments: 6,
+      }),
+    ).rejects.toBeInstanceOf(AppError)
+  })
+
+  it('deve rejeitar duplicata sem PIX ou boleto habilitados', async () => {
+    await expect(
+      service.updatePaymentMethodConfig('clinic-1', {
+        pixEnabled: false,
+        boletoEnabled: false,
+        cardEnabled: true,
+        installmentsEnabled: false,
+        installmentsMaxMonths: 12,
+        installmentsMinAmount: 10000,
+        duplicataEnabled: true,
         duplicataDaysInterval: 30,
         duplicataMaxInstallments: 6,
       }),

@@ -50,13 +50,13 @@ export class ClinicsService {
 
   async getMe(clinicId: string) {
     const clinic = await this.repo.findById(clinicId)
-    if (!clinic) throw new NotFoundError('Clinic not found')
+    if (!clinic) throw new NotFoundError('Clinic')
     return clinic
   }
 
   async updateMe(clinicId: string, data: UpdateClinicDto) {
     const clinic = await this.repo.findById(clinicId)
-    if (!clinic) throw new NotFoundError('Clinic not found')
+    if (!clinic) throw new NotFoundError('Clinic')
 
     const document = normalizeCnpj(data.document)
     if (data.document !== undefined) {
@@ -106,13 +106,13 @@ export class ClinicsService {
 
   async setBusinessHours(clinicId: string, dto: SetBusinessHoursDto) {
     const clinic = await this.repo.findById(clinicId)
-    if (!clinic) throw new NotFoundError('Clinic not found')
+    if (!clinic) throw new NotFoundError('Clinic')
     return this.repo.setBusinessHours(clinicId, dto.hours)
   }
 
   async getPaymentMethodConfig(clinicId: string) {
     const clinic = await this.repo.findById(clinicId)
-    if (!clinic) throw new NotFoundError('Clinic not found')
+    if (!clinic) throw new NotFoundError('Clinic')
 
     const config = await this.repo.findPaymentMethodConfig(clinicId)
     return normalizePaymentMethodConfig(config)
@@ -120,10 +120,18 @@ export class ClinicsService {
 
   async updatePaymentMethodConfig(clinicId: string, dto: UpdatePaymentMethodConfigDto) {
     const clinic = await this.repo.findById(clinicId)
-    if (!clinic) throw new NotFoundError('Clinic not found')
+    if (!clinic) throw new NotFoundError('Clinic')
 
-    if (!dto.pixEnabled && !dto.boletoEnabled && !dto.cardEnabled && !dto.duplicataEnabled) {
+    if (!dto.pixEnabled && !dto.boletoEnabled && !dto.cardEnabled) {
       throw new AppError('Ative ao menos uma forma de pagamento.', 422, 'PAYMENT_METHOD_REQUIRED')
+    }
+
+    if (dto.duplicataEnabled && !dto.pixEnabled && !dto.boletoEnabled) {
+      throw new AppError(
+        'Duplicata só pode ser ativada quando PIX ou boleto estiverem habilitados.',
+        422,
+        'DUPLICATA_REQUIRES_PIX_OR_BOLETO',
+      )
     }
 
     if (dto.installmentsEnabled && !dto.cardEnabled) {

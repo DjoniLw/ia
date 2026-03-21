@@ -1044,7 +1044,7 @@ function AiIntegrationsTab() {
               2
             </span>
             <span>
-              Clique em <strong>Create API Key</strong> e copie a chave gerada (começa com{' '}
+              Clique em <strong>Criar chave de API</strong> e copie a chave gerada (começa com{' '}
               <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">AIza…</code>).
             </span>
           </li>

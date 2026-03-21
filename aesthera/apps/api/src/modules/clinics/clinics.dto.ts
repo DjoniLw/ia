@@ -51,17 +51,26 @@ export const UpdatePaymentMethodConfigDto = z.object({
   boletoEnabled: z.boolean(),
   cardEnabled: z.boolean(),
   installmentsEnabled: z.boolean(),
-  installmentsMaxMonths: z
-    .enum(INSTALLMENTS_MAX_MONTH_OPTIONS.map(String) as [string, ...string[]])
-    .transform(Number),
+  installmentsMaxMonths: z.coerce
+    .number()
+    .int()
+    .refine((value) => INSTALLMENTS_MAX_MONTH_OPTIONS.includes(value), {
+      message: 'Valor inválido para parcelas máximas',
+    }),
   installmentsMinAmount: z.number().int().min(100),
   duplicataEnabled: z.boolean(),
-  duplicataDaysInterval: z
-    .enum(DUPLICATA_DAYS_INTERVAL_OPTIONS.map(String) as [string, ...string[]])
-    .transform(Number),
-  duplicataMaxInstallments: z
-    .enum(DUPLICATA_MAX_INSTALLMENT_OPTIONS.map(String) as [string, ...string[]])
-    .transform(Number),
+  duplicataDaysInterval: z.coerce
+    .number()
+    .int()
+    .refine((value) => DUPLICATA_DAYS_INTERVAL_OPTIONS.includes(value), {
+      message: 'Valor inválido para intervalo de dias da duplicata',
+    }),
+  duplicataMaxInstallments: z.coerce
+    .number()
+    .int()
+    .refine((value) => DUPLICATA_MAX_INSTALLMENT_OPTIONS.includes(value), {
+      message: 'Valor inválido para número máximo de parcelas da duplicata',
+    }),
 })
 
 export type UpdatePaymentMethodConfigDto = z.infer<typeof UpdatePaymentMethodConfigDto>
