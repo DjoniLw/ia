@@ -18,9 +18,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: aesthera/apps/api/package-lock.json
 
-      - name: Instalar dependências
-        run: npm install
+      - name: Instalar dependências (API)
+        working-directory: aesthera/apps/api
+        run: npm ci
 
-      - name: Rodar testes
+      - name: Rodar testes (API)
+        working-directory: aesthera/apps/api
         run: npm test
