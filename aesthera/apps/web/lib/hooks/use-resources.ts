@@ -18,11 +18,30 @@ export interface Professional {
   email: string
   phone: string | null
   speciality: string | null
+  address?: CustomerAddress | null
   active: boolean
   allServices: boolean
   createdAt: string
   services?: Array<{ service: Service }>
   workingHours?: WorkingHour[]
+}
+
+export interface ProfessionalInput {
+  name: string
+  email: string
+  phone?: string | null
+  speciality?: string | null
+  address?: CustomerAddress
+}
+
+export interface ProfessionalUpdateInput {
+  name?: string
+  email?: string
+  phone?: string | null
+  speciality?: string | null
+  address?: CustomerAddress
+  active?: boolean
+  allServices?: boolean
 }
 
 export interface WorkingHour {
@@ -131,7 +150,7 @@ export function useProfessionals(params?: Record<string, string>) {
 export function useCreateProfessional() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: Pick<Professional, 'name' | 'email' | 'phone' | 'speciality'>) =>
+    mutationFn: (data: ProfessionalInput) =>
       api.post('/professionals', data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['professionals'] }),
   })
@@ -140,7 +159,7 @@ export function useCreateProfessional() {
 export function useUpdateProfessional(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: Partial<Professional>) =>
+    mutationFn: (data: ProfessionalUpdateInput) =>
       api.patch(`/professionals/${id}`, data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['professionals'] }),
   })

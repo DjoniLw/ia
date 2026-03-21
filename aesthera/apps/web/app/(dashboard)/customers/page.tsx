@@ -27,6 +27,7 @@ import {
   useUpdateCustomer,
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
+import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
 import { api } from '@/lib/api'
 
 // ──── Schema ───────────────────────────────────────────────────────────────────
@@ -154,11 +155,14 @@ function CustomerForm({
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema),
     defaultValues,
   })
+
+  const { lookup: lookupCep, isLoading: loadingCep, notFound: cepNotFound, reset: resetCep } = useCepLookup()
 
   useEffect(() => { onDirtyChange?.(isDirty) }, [isDirty, onDirtyChange])
 
@@ -314,6 +318,51 @@ function CustomerForm({
       {/* Address tab */}
       {tab === 'address' && (
         <div className="space-y-4">
+          <div className="space-y-2 max-w-xs">
+            <Label>CEP</Label>
+            <Controller
+              control={control}
+              name="addr_zip"
+              render={({ field }) => (
+                <div className="relative">
+                  <MaskedInputCep
+                    ref={field.ref}
+                    value={field.value}
+                    disabled={loadingCep}
+                    onChange={(v) => {
+                      field.onChange(v)
+                      if (v.length < 8) { resetCep(); return }
+                      void lookupCep(v).then((addr) => {
+                        if (!addr) return
+                        setValue('addr_street', addr.logradouro, { shouldDirty: true })
+                        setValue('addr_neighborhood', addr.bairro, { shouldDirty: true })
+                        setValue('addr_city', addr.localidade, { shouldDirty: true })
+                        setValue('addr_state', addr.uf, { shouldDirty: true })
+                      })
+                    }}
+                    onBlur={(e) => {
+                      field.onBlur()
+                      const digits = (field.value ?? '').replace(/\D/g, '')
+                      if (digits.length !== 8) return
+                      void lookupCep(digits).then((addr) => {
+                        if (!addr) return
+                        setValue('addr_street', addr.logradouro, { shouldDirty: true })
+                        setValue('addr_neighborhood', addr.bairro, { shouldDirty: true })
+                        setValue('addr_city', addr.localidade, { shouldDirty: true })
+                        setValue('addr_state', addr.uf, { shouldDirty: true })
+                      })
+                    }}
+                    name={field.name}
+                  />
+                  {loadingCep && (
+                    <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+              )}
+            />
+            {cepNotFound && <p className="text-xs text-destructive">CEP não encontrado</p>}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2 space-y-2">
               <Label>Logradouro</Label>
@@ -348,23 +397,6 @@ function CustomerForm({
                 {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map((uf) => <option key={uf}>{uf}</option>)}
               </select>
             </div>
-          </div>
-
-          <div className="space-y-2 max-w-xs">
-            <Label>CEP</Label>
-            <Controller
-              control={control}
-              name="addr_zip"
-              render={({ field }) => (
-                <MaskedInputCep
-                  ref={field.ref}
-                  value={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  name={field.name}
-                />
-              )}
-            />
           </div>
         </div>
       )}

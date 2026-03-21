@@ -43,6 +43,7 @@ interface Clinic {
   status: string
   address: {
     street?: string
+    neighborhood?: string
     city?: string
     state?: string
     zip?: string

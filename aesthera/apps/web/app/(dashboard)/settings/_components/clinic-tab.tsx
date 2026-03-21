@@ -12,8 +12,10 @@ import { Label } from '@/components/ui/label'
 import { MaskedInputCnpj } from '@/components/ui/masked-input-cnpj'
 import { MaskedInputPhone } from '@/components/ui/masked-input-phone'
 import { MaskedInputCep } from '@/components/ui/masked-input-cep'
+import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useClinic, useUpdateClinic } from '@/lib/hooks/use-settings'
+import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
 
 const clinicSchema = z.object({
   name: z.string().min(2),
@@ -26,6 +28,7 @@ const clinicSchema = z.object({
   address: z
     .object({
       street: z.string().optional(),
+      neighborhood: z.string().optional(),
       city: z.string().optional(),
       state: z.string().optional(),
       zip: z.string().optional(),
@@ -39,6 +42,7 @@ export function ClinicTab() {
   const { data: clinic, isLoading } = useClinic()
   const { mutateAsync: updateClinic, isPending } = useUpdateClinic()
   const [lookingUpCnpj, setLookingUpCnpj] = useState(false)
+  const { lookup: lookupCep, isLoading: loadingCep, notFound: cepNotFound, reset: resetCep } = useCepLookup()
 
   const {
     register,
@@ -182,9 +186,57 @@ export function ClinicTab() {
           <div className="space-y-1">
             <p className="text-sm font-medium">Endereço</p>
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>CEP</Label>
+                <Controller
+                  control={control}
+                  name="address.zip"
+                  render={({ field }) => (
+                    <div className="relative">
+                      <MaskedInputCep
+                        ref={field.ref}
+                        value={field.value}
+                        disabled={loadingCep}
+                        onChange={(v) => {
+                          field.onChange(v)
+                          if (v.length < 8) { resetCep(); return }
+                          void lookupCep(v).then((addr) => {
+                            if (!addr) return
+                            setValue('address.street', addr.logradouro, { shouldDirty: true })
+                            setValue('address.neighborhood', addr.bairro, { shouldDirty: true })
+                            setValue('address.city', addr.localidade, { shouldDirty: true })
+                            setValue('address.state', addr.uf, { shouldDirty: true })
+                          })
+                        }}
+                        onBlur={(e) => {
+                          field.onBlur()
+                          const digits = (field.value ?? '').replace(/\D/g, '')
+                          if (digits.length !== 8) return
+                          void lookupCep(digits).then((addr) => {
+                            if (!addr) return
+                            setValue('address.street', addr.logradouro, { shouldDirty: true })
+                            setValue('address.neighborhood', addr.bairro, { shouldDirty: true })
+                            setValue('address.city', addr.localidade, { shouldDirty: true })
+                            setValue('address.state', addr.uf, { shouldDirty: true })
+                          })
+                        }}
+                        name={field.name}
+                      />
+                      {loadingCep && (
+                        <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                  )}
+                />
+                {cepNotFound && <p className="text-xs text-destructive">CEP não encontrado</p>}
+              </div>
               <div className="col-span-2 space-y-2">
                 <Label>Rua / Logradouro</Label>
                 <Input {...register('address.street')} />
+              </div>
+              <div className="space-y-2">
+                <Label>Bairro</Label>
+                <Input {...register('address.neighborhood')} placeholder="Centro" />
               </div>
               <div className="space-y-2">
                 <Label>Cidade</Label>
@@ -193,22 +245,6 @@ export function ClinicTab() {
               <div className="space-y-2">
                 <Label>Estado</Label>
                 <Input {...register('address.state')} placeholder="SP" />
-              </div>
-              <div className="space-y-2">
-                <Label>CEP</Label>
-                <Controller
-                  control={control}
-                  name="address.zip"
-                  render={({ field }) => (
-                    <MaskedInputCep
-                      ref={field.ref}
-                      value={field.value}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      name={field.name}
-                    />
-                  )}
-                />
               </div>
             </div>
           </div>

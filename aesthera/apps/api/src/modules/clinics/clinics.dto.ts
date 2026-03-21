@@ -17,6 +17,7 @@ export const UpdateClinicDto = z.object({
   address: z
     .object({
       street: z.string().optional(),
+      neighborhood: z.string().optional(),
       city: z.string().optional(),
       state: z.string().optional(),
       zip: z.string().optional(),

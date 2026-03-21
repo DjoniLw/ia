@@ -90,7 +90,7 @@ Clinic {
   email          STRING UNIQUE NOT NULL
   document       STRING UNIQUE NOT NULL   -- CNPJ
   phone          STRING?
-  address        JSONB?                   -- street, city, state, zip
+        address        JSONB?                   -- street, neighborhood, city, state, zip
   plan           ENUM(free, starter, pro) DEFAULT free
   status         ENUM(active, suspended, deleted) DEFAULT active
   email_verified BOOLEAN DEFAULT false
@@ -126,6 +126,12 @@ ApiKey {
 ## Dependencies
 - Auth module
 - All other modules depend on this (clinic_id as tenant key)
+
+## Frontend — Configurações da clínica
+- A aba Clínica permite consulta de CNPJ para preenchimento inicial e consulta de CEP via ViaCEP para completar endereço
+- O CEP preenche logradouro, bairro, cidade e UF ao completar 8 dígitos ou ao perder foco
+- Em CEP inexistente, exibe mensagem inline em PT-BR
+- Em falha de rede do ViaCEP, exibe toast orientando preenchimento manual
 
 ## Status
 [ ] Planned  [ ] In Progress  [ ] Done

@@ -31,7 +31,7 @@ export const MaskedInputCnpj = forwardRef<HTMLInputElement, MaskedInputCnpjProps
       inputRef={ref as any}
       name={name}
       onBlur={onBlur}
-      onAccept={(val) => onChange?.(val as string)}
+      onAccept={(val: unknown) => onChange?.(val as string)}
       placeholder={placeholder}
       disabled={disabled}
       inputMode="numeric"

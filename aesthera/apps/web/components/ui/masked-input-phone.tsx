@@ -48,7 +48,7 @@ export const MaskedInputPhone = forwardRef<HTMLInputElement, MaskedInputPhonePro
       inputRef={ref as any}
       name={name}
       onBlur={onBlur}
-      onAccept={(val) => onChange?.(val as string)}
+      onAccept={(val: unknown) => onChange?.(val as string)}
       placeholder={placeholder}
       disabled={disabled}
       inputMode="tel"
