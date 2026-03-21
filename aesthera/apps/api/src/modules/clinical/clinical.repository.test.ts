@@ -24,45 +24,38 @@ describe('ClinicalRepository.update()', () => {
     repo = new ClinicalRepository()
   })
 
-  it('deve incluir clinicId no where clause ao atualizar', async () => {
-    const record = {
-      id: 'rec-001',
-      clinicId: 'clinic-abc',
-      title: 'Atualizado',
-      content: 'Conteúdo',
-      type: 'note',
-      professional: null,
-    }
-    mockPrisma.clinicalRecord.update.mockResolvedValue(record)
+  it('deve verificar o clinicId via findFirst antes de atualizar', async () => {
+    const existing = { id: 'rec-001', clinicId: 'clinic-abc' }
+    const updated = { ...existing, title: 'Atualizado', professional: null }
+    mockPrisma.clinicalRecord.findFirst.mockResolvedValue(existing)
+    mockPrisma.clinicalRecord.update.mockResolvedValue(updated)
 
     await repo.update('clinic-abc', 'rec-001', { title: 'Atualizado' })
 
+    // Garante que findFirst filtra por clinicId (isolamento cross-tenant)
+    expect(mockPrisma.clinicalRecord.findFirst).toHaveBeenCalledWith({
+      where: { id: 'rec-001', clinicId: 'clinic-abc' },
+    })
+    // Garante que update usa somente o @id único
     expect(mockPrisma.clinicalRecord.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'rec-001', clinicId: 'clinic-abc' },
-      }),
+      expect.objectContaining({ where: { id: 'rec-001' } }),
     )
   })
 
-  it('deve falhar (RecordNotFound) ao tentar atualizar prontuário de outra clínica', async () => {
-    const prismaError = Object.assign(new Error('Record not found'), {
-      code: 'P2025',
-    })
-    mockPrisma.clinicalRecord.update.mockRejectedValue(prismaError)
+  it('deve lançar NotFoundError ao tentar atualizar prontuário de outra clínica', async () => {
+    // findFirst retorna null — o registro não existe para este tenant
+    mockPrisma.clinicalRecord.findFirst.mockResolvedValue(null)
 
     await expect(
       repo.update('clinic-intruso', 'rec-001', { title: 'Hack' }),
-    ).rejects.toMatchObject({ code: 'P2025' })
+    ).rejects.toMatchObject({ message: expect.stringContaining('ClinicalRecord') })
 
-    // Garantia: o where sempre inclui clinicId
-    expect(mockPrisma.clinicalRecord.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'rec-001', clinicId: 'clinic-intruso' },
-      }),
-    )
+    // Jamais deve chamar update quando não encontrado
+    expect(mockPrisma.clinicalRecord.update).not.toHaveBeenCalled()
   })
 
   it('deve atualizar normalmente com clinicId correto e id válido', async () => {
+    const existing = { id: 'rec-002', clinicId: 'clinic-xyz' }
     const updated = {
       id: 'rec-002',
       clinicId: 'clinic-xyz',
@@ -71,6 +64,7 @@ describe('ClinicalRepository.update()', () => {
       type: 'note',
       professional: { id: 'prof-1', name: 'Dr. Ana' },
     }
+    mockPrisma.clinicalRecord.findFirst.mockResolvedValue(existing)
     mockPrisma.clinicalRecord.update.mockResolvedValue(updated)
 
     const result = await repo.update('clinic-xyz', 'rec-002', {
@@ -81,3 +75,4 @@ describe('ClinicalRepository.update()', () => {
     expect(result).toEqual(updated)
   })
 })
+
