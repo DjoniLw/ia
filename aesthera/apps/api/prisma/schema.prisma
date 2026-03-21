@@ -190,6 +190,7 @@ model Clinic {
   equipment        Equipment[]
   rooms            Room[]
   supplies         Supply[]
+  supplyPurchases  SupplyPurchase[]
   walletEntries    WalletEntry[]
   promotions       Promotion[]
   servicePackages  ServicePackage[]
@@ -741,6 +742,7 @@ model Supply {
 
   clinic   Clinic          @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   services ServiceSupply[]
+  purchases SupplyPurchase[]
 
   @@index([clinicId])
   @@map("supplies")
@@ -762,6 +764,29 @@ model ServiceSupply {
   @@id([serviceId, supplyId])
   @@index([clinicId])
   @@map("service_supplies")
+}
+
+model SupplyPurchase {
+  id               String   @id @default(uuid())
+  clinicId         String                         @map("clinic_id")
+  supplyId         String                         @map("supply_id")
+  supplierName     String?                        @map("supplier_name")
+  purchaseUnit     String                         @map("purchase_unit")
+  purchaseQty      Float                          @map("purchase_qty")
+  conversionFactor Float                          @map("conversion_factor")
+  stockIncrement   Int                            @map("stock_increment")
+  unitCost         Int                            @map("unit_cost")
+  totalCost        Int                            @map("total_cost")
+  notes            String?
+  purchasedAt      DateTime                       @map("purchased_at")
+  createdAt        DateTime @default(now())      @map("created_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  supply Supply @relation(fields: [supplyId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId])
+  @@index([supplyId])
+  @@map("supply_purchases")
 }
 
 // ─── Equipment ────────────────────────────────────────────────────────────────
