@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  DUPLICATA_DAYS_INTERVAL_OPTIONS,
+  DUPLICATA_MAX_INSTALLMENT_OPTIONS,
+  INSTALLMENTS_MAX_MONTH_OPTIONS,
+} from './payment-method-config'
 
 const optionalCnpjSchema = z
   .string()
@@ -40,3 +45,36 @@ export const SetBusinessHoursDto = z.object({
 })
 
 export type SetBusinessHoursDto = z.infer<typeof SetBusinessHoursDto>
+
+function isAllowedNumber(options: readonly number[], value: number) {
+  return options.includes(value)
+}
+
+export const UpdatePaymentMethodConfigDto = z.object({
+  pixEnabled: z.boolean(),
+  boletoEnabled: z.boolean(),
+  cardEnabled: z.boolean(),
+  installmentsEnabled: z.boolean(),
+  installmentsMaxMonths: z.coerce
+    .number()
+    .int()
+    .refine((value) => isAllowedNumber(INSTALLMENTS_MAX_MONTH_OPTIONS, value), {
+      message: 'Valor inválido para parcelas máximas',
+    }),
+  installmentsMinAmount: z.number().int().min(100),
+  duplicataEnabled: z.boolean(),
+  duplicataDaysInterval: z.coerce
+    .number()
+    .int()
+    .refine((value) => isAllowedNumber(DUPLICATA_DAYS_INTERVAL_OPTIONS, value), {
+      message: 'Valor inválido para intervalo de dias da duplicata',
+    }),
+  duplicataMaxInstallments: z.coerce
+    .number()
+    .int()
+    .refine((value) => isAllowedNumber(DUPLICATA_MAX_INSTALLMENT_OPTIONS, value), {
+      message: 'Valor inválido para número máximo de parcelas da duplicata',
+    }),
+})
+
+export type UpdatePaymentMethodConfigDto = z.infer<typeof UpdatePaymentMethodConfigDto>

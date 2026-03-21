@@ -226,7 +226,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - [x] #46 — Controle de acesso por perfil de usuário no frontend
 - [x] #47 — Auto-preenchimento de endereço por CEP (ViaCEP)
 - [x] #48 — Máscaras de entrada para CPF, CNPJ, telefone e CEP
-- [ ] #49 — Cadastro e configuração de formas de pagamento da clínica
+- [x] #49 — Cadastro e configuração de formas de pagamento da clínica
 
 ---
 
@@ -265,6 +265,11 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 ---
 
 ## Histórico de Atualizações
+
+### [2026-03-20] — #49 — Cadastro e configuração de formas de pagamento da clínica
+- **Arquivo(s) afetado(s):** `aesthera/apps/api/prisma/schema.prisma`, `aesthera/apps/api/prisma/migrations/20260320_payment_method_config/migration.sql`, `aesthera/apps/api/src/modules/clinics/payment-method-config.ts`, `aesthera/apps/api/src/modules/clinics/clinics.dto.ts`, `aesthera/apps/api/src/modules/clinics/clinics.repository.ts`, `aesthera/apps/api/src/modules/clinics/clinics.routes.ts`, `aesthera/apps/api/src/modules/clinics/clinics.service.ts`, `aesthera/apps/api/src/modules/clinics/clinics.service.test.ts`, `aesthera/apps/api/src/modules/billing/billing.service.ts`, `aesthera/apps/api/src/modules/billing/billing.service.test.ts`, `aesthera/apps/api/src/modules/payments/payments.service.ts`, `aesthera/apps/api/src/modules/appointments/appointments.service.ts`, `aesthera/apps/web/lib/hooks/use-settings.ts`, `aesthera/apps/web/app/(dashboard)/settings/_components/payment-methods-tab.tsx`, `aesthera/apps/web/app/(dashboard)/settings/page.tsx`, `ai-engineering/projects/aesthera/features/clinics.md`, `ai-engineering/projects/aesthera/features/billing.md`
+- **O que foi feito:** Criado o modelo `PaymentMethodConfig` com migration Prisma, endpoints `GET/PUT /clinics/me/payment-methods`, validações de negócio para ao menos uma forma ativa e parcelamento dependente de cartão, centralização da criação de billing usando a configuração da clínica, fallback seguro do método de pagamento para gateway, nova aba `Formas de pagamento` em `/settings` e testes unitários cobrindo defaults, validações e geração de cobrança.
+- **Impacto:** Clínica agora consegue configurar meios de pagamento e regras de parcelamento/duplicata; novas cobranças passam a refletir a configuração persistida por tenant.
 
 ### [2026-03-20] — #47 — Ajustes pós-code-review do PR de CEP
 - **Arquivo(s) afetado(s):** `aesthera/apps/web/lib/hooks/use-cep-lookup.ts`, `aesthera/apps/web/lib/hooks/use-resources.ts`, `ai-engineering/projects/aesthera/features/clinics.md`

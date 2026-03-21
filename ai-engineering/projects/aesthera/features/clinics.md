@@ -10,6 +10,8 @@ A clinic represents one business unit — a single location/branch.
 | POST | /clinics | No | Register new clinic (onboarding) |
 | GET | /clinics/me | Clinic JWT | Get own clinic profile |
 | PATCH | /clinics/me | Clinic JWT | Update clinic info |
+| GET | /clinics/me/payment-methods | Clinic JWT | Get clinic payment methods config |
+| PUT | /clinics/me/payment-methods | Clinic JWT | Update clinic payment methods config |
 | DELETE | /clinics/me | Clinic JWT | Soft-delete clinic |
 | GET | /clinics/me/business-hours | Clinic JWT | Get working hours config |
 | PUT | /clinics/me/business-hours | Clinic JWT | Set working hours |
@@ -28,6 +30,11 @@ A clinic represents one business unit — a single location/branch.
 - Suspended clinics: no new appointments, payments rejected
 - Deletion is soft — data retained 90 days before purge
 - A clinic can have multiple API keys (production, staging, etc.)
+- Payment methods are configured per clinic via `PaymentMethodConfig`
+- Default payment methods for clinics without config: PIX, boleto and card enabled; installments and duplicata disabled
+- At least one payment method must remain active in the configuration
+- Installments can only be enabled when card is enabled
+- Duplicata stores only billing policy data in this phase; gateway / boleto generation remains out of scope
 
 ## Tenant Resolution (subdomain strategy)
 The frontend runs on `*.aesthera.com.br` (DNS wildcard).
@@ -121,6 +128,22 @@ ApiKey {
   last_used_at   TIMESTAMP?
   created_at     TIMESTAMP
 }
+
+PaymentMethodConfig {
+        id                           UUID PK
+        clinic_id                    UUID FK → Clinic UNIQUE
+        pix_enabled                  BOOLEAN DEFAULT true
+        boleto_enabled               BOOLEAN DEFAULT true
+        card_enabled                 BOOLEAN DEFAULT true
+        installments_enabled         BOOLEAN DEFAULT false
+        installments_max_months      INTEGER DEFAULT 12
+        installments_min_amount      INTEGER DEFAULT 10000   -- BRL cents
+        duplicata_enabled            BOOLEAN DEFAULT false
+        duplicata_days_interval      INTEGER DEFAULT 30
+        duplicata_max_installments   INTEGER DEFAULT 6
+        created_at                   TIMESTAMP
+        updated_at                   TIMESTAMP
+}
 ```
 
 ## Dependencies
@@ -132,6 +155,9 @@ ApiKey {
 - O CEP preenche logradouro, bairro, cidade e UF ao completar 8 dígitos ou ao perder foco
 - Em CEP inexistente, exibe mensagem inline em PT-BR
 - Em falha de rede do ViaCEP, exibe toast orientando preenchimento manual
+- A aba Formas de Pagamento permite habilitar PIX, boleto, cartão, parcelamento e duplicata
+- A seção de parcelamento só aparece quando cartão está ativo
+- O botão salvar valida que pelo menos uma forma de pagamento esteja ativa
 
 ## Status
 [ ] Planned  [ ] In Progress  [ ] Done

@@ -1,5 +1,6 @@
 import type { UpdateClinicDto } from './clinics.dto'
 import { prisma } from '../../database/prisma/client'
+import type { PaymentMethodConfigShape } from './payment-method-config'
 
 export class ClinicsRepository {
   async findById(clinicId: string) {
@@ -56,5 +57,36 @@ export class ClinicsRepository {
         }),
       ),
     )
+  }
+
+  async findPaymentMethodConfig(clinicId: string) {
+    return prisma.paymentMethodConfig.findUnique({
+      where: { clinicId },
+      select: {
+        pixEnabled: true,
+        boletoEnabled: true,
+        cardEnabled: true,
+        installmentsEnabled: true,
+        installmentsMaxMonths: true,
+        installmentsMinAmount: true,
+        duplicataEnabled: true,
+        duplicataDaysInterval: true,
+        duplicataMaxInstallments: true,
+      },
+    })
+  }
+
+  async upsertPaymentMethodConfig(clinicId: string, data: PaymentMethodConfigShape) {
+    return prisma.paymentMethodConfig.upsert({
+      where: { clinicId },
+      create: {
+        clinicId,
+        ...data,
+      },
+      update: {
+        ...data,
+        updatedAt: new Date(),
+      },
+    })
   }
 }

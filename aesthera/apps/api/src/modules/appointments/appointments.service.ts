@@ -11,6 +11,7 @@ import type {
 } from './appointments.dto'
 import { AppointmentsRepository } from './appointments.repository'
 import { PackagesRepository } from '../packages/packages.repository'
+import { BillingService } from '../billing/billing.service'
 
 // HH:MM → minutes from midnight
 function timeToMinutes(t: string): number {
@@ -37,6 +38,7 @@ function hashToInt32(s: string): number {
 export class AppointmentsService {
   private repo = new AppointmentsRepository()
   private pkgRepo = new PackagesRepository()
+  private billingService = new BillingService()
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
 
@@ -82,7 +84,11 @@ export class AppointmentsService {
         for (const svcId of serviceIds) {
           const hasService = await this.repo.checkProfessionalHasService(dto.professionalId, svcId)
           if (!hasService) {
-            throw new AppError('Professional is not assigned to this service', 400, 'SERVICE_NOT_ASSIGNED')
+            throw new AppError(
+              'Professional is not assigned to this service',
+              400,
+              'SERVICE_NOT_ASSIGNED',
+            )
           }
         }
 
@@ -95,16 +101,29 @@ export class AppointmentsService {
         // Compute totals from all services
         const serviceMap = new Map(services.map((s) => [s.id, s]))
         const totalDuration = services.reduce((sum: number, s) => sum + s.durationMinutes, 0)
-        const totalPrice = dto.price ?? dto.services.reduce((sum: number, s) => {
-          const svcPrice = s.price ?? serviceMap.get(s.serviceId)?.price ?? 0
-          return sum + svcPrice
-        }, 0)
+        const totalPrice =
+          dto.price ??
+          dto.services.reduce((sum: number, s) => {
+            const svcPrice = s.price ?? serviceMap.get(s.serviceId)?.price ?? 0
+            return sum + svcPrice
+          }, 0)
 
         // Check availability with computed total duration
-        await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, totalDuration, dateStr)
+        await this.assertSlotAvailable(
+          clinicId,
+          dto.professionalId,
+          scheduledDate,
+          totalDuration,
+          dateStr,
+        )
 
         if (dto.equipmentIds && dto.equipmentIds.length > 0) {
-          await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, totalDuration)
+          await this.assertEquipmentAvailable(
+            clinicId,
+            dto.equipmentIds,
+            scheduledDate,
+            totalDuration,
+          )
         }
 
         if (dto.roomId) {
@@ -142,7 +161,10 @@ export class AppointmentsService {
 
         if (dto.equipmentIds && dto.equipmentIds.length > 0) {
           await tx.appointmentEquipment.createMany({
-            data: dto.equipmentIds.map((equipmentId: string) => ({ appointmentId: appointment.id, equipmentId })),
+            data: dto.equipmentIds.map((equipmentId: string) => ({
+              appointmentId: appointment.id,
+              equipmentId,
+            })),
             skipDuplicates: true,
           })
         }
@@ -169,7 +191,11 @@ export class AppointmentsService {
 
       const hasService = await this.repo.checkProfessionalHasService(dto.professionalId, serviceId)
       if (!hasService) {
-        throw new AppError('Professional is not assigned to this service', 400, 'SERVICE_NOT_ASSIGNED')
+        throw new AppError(
+          'Professional is not assigned to this service',
+          400,
+          'SERVICE_NOT_ASSIGNED',
+        )
       }
 
       const customer = await tx.customer.findFirst({
@@ -178,10 +204,21 @@ export class AppointmentsService {
       if (!customer) throw new NotFoundError('Customer')
 
       const durationMinutes = service.durationMinutes
-      await this.assertSlotAvailable(clinicId, dto.professionalId, scheduledDate, durationMinutes, dateStr)
+      await this.assertSlotAvailable(
+        clinicId,
+        dto.professionalId,
+        scheduledDate,
+        durationMinutes,
+        dateStr,
+      )
 
       if (dto.equipmentIds && dto.equipmentIds.length > 0) {
-        await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, durationMinutes)
+        await this.assertEquipmentAvailable(
+          clinicId,
+          dto.equipmentIds,
+          scheduledDate,
+          durationMinutes,
+        )
       }
 
       if (dto.roomId) {
@@ -197,7 +234,10 @@ export class AppointmentsService {
 
       if (dto.equipmentIds && dto.equipmentIds.length > 0) {
         await prisma.appointmentEquipment.createMany({
-          data: dto.equipmentIds.map((equipmentId) => ({ appointmentId: appointment.id, equipmentId })),
+          data: dto.equipmentIds.map((equipmentId) => ({
+            appointmentId: appointment.id,
+            equipmentId,
+          })),
           skipDuplicates: true,
         })
       }
@@ -213,16 +253,33 @@ export class AppointmentsService {
   async update(clinicId: string, id: string, dto: UpdateAppointmentDto) {
     const a = await this.get(clinicId, id)
     if (!['draft', 'confirmed'].includes(a.status)) {
-      throw new AppError('Only draft or confirmed appointments can be rescheduled', 400, 'INVALID_STATUS')
+      throw new AppError(
+        'Only draft or confirmed appointments can be rescheduled',
+        400,
+        'INVALID_STATUS',
+      )
     }
 
     if (dto.scheduledAt) {
       const scheduledDate = new Date(dto.scheduledAt)
       const dateStr = scheduledDate.toISOString().slice(0, 10)
-      await this.assertSlotAvailable(clinicId, a.professionalId, scheduledDate, a.durationMinutes, dateStr, id)
+      await this.assertSlotAvailable(
+        clinicId,
+        a.professionalId,
+        scheduledDate,
+        a.durationMinutes,
+        dateStr,
+        id,
+      )
 
       if (dto.equipmentIds && dto.equipmentIds.length > 0) {
-        await this.assertEquipmentAvailable(clinicId, dto.equipmentIds, scheduledDate, a.durationMinutes, id)
+        await this.assertEquipmentAvailable(
+          clinicId,
+          dto.equipmentIds,
+          scheduledDate,
+          a.durationMinutes,
+          id,
+        )
       }
 
       if (dto.roomId) {
@@ -289,7 +346,7 @@ export class AppointmentsService {
         : completed.price
 
     // Auto-create billing (idempotent)
-    await this.createBillingForAppointment({ ...completed, price: billingPrice })
+    await this.billingService.createForAppointment({ ...completed, price: billingPrice })
 
     return completed
   }
@@ -297,7 +354,11 @@ export class AppointmentsService {
   async cancel(clinicId: string, id: string, dto: CancelAppointmentDto) {
     const a = await this.get(clinicId, id)
     if (!['draft', 'confirmed'].includes(a.status)) {
-      throw new AppError('Only draft or confirmed appointments can be cancelled', 400, 'INVALID_STATUS')
+      throw new AppError(
+        'Only draft or confirmed appointments can be cancelled',
+        400,
+        'INVALID_STATUS',
+      )
     }
 
     // Unreserve any linked package session so it becomes available again
@@ -315,7 +376,11 @@ export class AppointmentsService {
   async noShow(clinicId: string, id: string) {
     const a = await this.get(clinicId, id)
     if (a.status !== 'in_progress') {
-      throw new AppError('Only in-progress appointments can be marked as no-show', 400, 'INVALID_STATUS')
+      throw new AppError(
+        'Only in-progress appointments can be marked as no-show',
+        400,
+        'INVALID_STATUS',
+      )
     }
     return this.repo.transition(clinicId, id, 'no_show')
   }
@@ -407,7 +472,7 @@ export class AppointmentsService {
         service: a.service?.name ?? '',
         price: a.price,
         notes: a.notes,
-        room: (a as Record<string, unknown>).room as { id: string; name: string } | null ?? null,
+        room: ((a as Record<string, unknown>).room as { id: string; name: string } | null) ?? null,
         equipment: (a.equipment as Array<{ equipment: { id: string; name: string } }>).map(
           (e) => e.equipment,
         ),
@@ -615,11 +680,10 @@ export class AppointmentsService {
     ])
 
     const occupied = [
-      ...appointments
-        .map((a: { scheduledAt: Date; durationMinutes: number }) => ({
-          start: dateToMinutes(a.scheduledAt),
-          end: dateToMinutes(a.scheduledAt) + a.durationMinutes,
-        })),
+      ...appointments.map((a: { scheduledAt: Date; durationMinutes: number }) => ({
+        start: dateToMinutes(a.scheduledAt),
+        end: dateToMinutes(a.scheduledAt) + a.durationMinutes,
+      })),
       ...blockedSlots.map((b: { startTime: string; endTime: string }) => ({
         start: timeToMinutes(b.startTime),
         end: timeToMinutes(b.endTime),
@@ -630,37 +694,5 @@ export class AppointmentsService {
     if (conflict) {
       throw new AppError('Time slot is not available', 409, 'SLOT_UNAVAILABLE')
     }
-  }
-
-  private async createBillingForAppointment(appointment: {
-    id: string
-    clinicId: string
-    customerId: string
-    price: number
-    scheduledAt: Date
-  }) {
-    // Idempotent: skip if already exists
-    const existing = await prisma.billing.findUnique({
-      where: { appointmentId: appointment.id },
-    })
-    if (existing) return existing
-
-    const dueDate = new Date(appointment.scheduledAt)
-    dueDate.setUTCDate(dueDate.getUTCDate() + 3)
-
-    const paymentToken = crypto.randomUUID().replace(/-/g, '')
-
-    return prisma.billing.create({
-      data: {
-        clinicId: appointment.clinicId,
-        customerId: appointment.customerId,
-        appointmentId: appointment.id,
-        amount: appointment.price,
-        status: 'pending',
-        paymentMethods: ['pix', 'boleto', 'card'],
-        paymentToken,
-        dueDate,
-      },
-    })
   }
 }
