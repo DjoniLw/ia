@@ -157,7 +157,6 @@ describe('SupplyPurchasesService.delete()', () => {
       where: {
         id: 'supply-1',
         clinicId: 'clinic-1',
-        deletedAt: null,
         stock: { gte: 500 },
       },
       data: { stock: { decrement: 500 } },
@@ -176,5 +175,32 @@ describe('SupplyPurchasesService.delete()', () => {
       statusCode: 409,
     })
     expect(mockTx.supplyPurchase.delete).not.toHaveBeenCalled()
+  })
+
+  it('permite cancelar compra de insumo soft-deletado quando ainda existe saldo', async () => {
+    mockTx.supplyPurchase.findFirst.mockResolvedValue(makePurchase({ supply: makeSupply({ deletedAt: new Date() }) }))
+    mockTx.supply.updateMany.mockResolvedValue({ count: 1 })
+    mockTx.supplyPurchase.delete.mockResolvedValue(makePurchase())
+
+    await service.delete('clinic-1', 'purchase-1')
+
+    expect(mockTx.supply.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'supply-1',
+        clinicId: 'clinic-1',
+        stock: { gte: 500 },
+      },
+      data: { stock: { decrement: 500 } },
+    })
+  })
+
+  it('retorna mensagem em pt-br quando a compra não existe', async () => {
+    mockTx.supplyPurchase.findFirst.mockResolvedValue(null)
+
+    await expect(service.delete('clinic-1', 'purchase-404')).rejects.toMatchObject({
+      code: 'SUPPLY_PURCHASE_NOT_FOUND',
+      statusCode: 404,
+      message: 'Compra de insumo não encontrada.',
+    })
   })
 })

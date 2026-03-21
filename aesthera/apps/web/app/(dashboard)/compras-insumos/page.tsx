@@ -45,8 +45,10 @@ function parseCurrencyInput(value: string) {
 
 function currentMonthRange() {
   const now = new Date()
-  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
-  const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const from = new Date(year, month, 1).toISOString().slice(0, 10)
+  const to = new Date(year, month + 1, 0).toISOString().slice(0, 10)
   return { from, to }
 }
 
@@ -168,7 +170,7 @@ function PurchaseForm({
             Unidade de uso: {selectedSupply.unit} · Estoque atual: {selectedSupply.stock} {selectedSupply.unit}
           </p>
         ) : (
-          <p className="text-xs text-muted-foreground">Selecione um insumo existente para habilitar o preview.</p>
+          <p className="text-xs text-muted-foreground">Selecione um insumo existente para habilitar a prévia.</p>
         )}
       </div>
 
@@ -239,15 +241,15 @@ function PurchaseForm({
 
       <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 text-sm">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">Preview de conversão</span>
+          <span className="text-muted-foreground">Prévia da conversão</span>
           <span className="font-medium text-foreground">
             {purchaseUnit.trim() && selectedSupply
               ? `1 ${purchaseUnit.trim()} = ${formatNumber(conversionValue)} ${selectedSupply.unit}`
-              : 'Preencha unidade de compra e insumo'}
+              : 'Preencha a unidade de compra e selecione um insumo'}
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">Preview de estoque</span>
+          <span className="text-muted-foreground">Prévia do estoque</span>
           <span className="font-medium text-foreground">
             {selectedSupply
               ? `Estoque atual: ${selectedSupply.stock} ${selectedSupply.unit} → Após compra: ${selectedSupply.stock + stockIncrement} ${selectedSupply.unit}`

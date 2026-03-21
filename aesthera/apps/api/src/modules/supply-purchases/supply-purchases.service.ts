@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma/client'
-import { AppError, NotFoundError } from '../../shared/errors/app-error'
+import { AppError } from '../../shared/errors/app-error'
 import type { CreateSupplyPurchaseDto, ListSupplyPurchasesQuery } from './supply-purchases.dto'
 
 const PURCHASE_INCLUDE = {
@@ -14,6 +14,14 @@ const PURCHASE_INCLUDE = {
     },
   },
 } as const
+
+function purchaseNotFoundError() {
+  return new AppError('Compra de insumo não encontrada.', 404, 'SUPPLY_PURCHASE_NOT_FOUND')
+}
+
+function supplyNotFoundError() {
+  return new AppError('Insumo não encontrado.', 404, 'SUPPLY_NOT_FOUND')
+}
 
 export class SupplyPurchasesService {
   async list(clinicId: string, q: ListSupplyPurchasesQuery) {
@@ -50,7 +58,7 @@ export class SupplyPurchasesService {
       include: PURCHASE_INCLUDE,
     })
 
-    if (!purchase) throw new NotFoundError('Supply purchase')
+    if (!purchase) throw purchaseNotFoundError()
     return purchase
   }
 
@@ -60,7 +68,7 @@ export class SupplyPurchasesService {
         where: { id: dto.supplyId, clinicId, deletedAt: null },
       })
 
-      if (!supply) throw new NotFoundError('Supply')
+      if (!supply) throw supplyNotFoundError()
 
       const stockIncrement = Math.floor(dto.purchaseQty * dto.conversionFactor)
       const totalCost = Math.round(dto.unitCost * dto.purchaseQty)
@@ -96,13 +104,12 @@ export class SupplyPurchasesService {
         include: { supply: { select: { id: true, name: true, unit: true } } },
       })
 
-      if (!purchase) throw new NotFoundError('Supply purchase')
+      if (!purchase) throw purchaseNotFoundError()
 
       const reversal = await tx.supply.updateMany({
         where: {
           id: purchase.supplyId,
           clinicId,
-          deletedAt: null,
           stock: { gte: purchase.stockIncrement },
         },
         data: { stock: { decrement: purchase.stockIncrement } },
