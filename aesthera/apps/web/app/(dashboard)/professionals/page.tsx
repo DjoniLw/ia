@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Pencil, Trash2, UserRound, ListChecks } from 'lucide-react'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MaskedInputPhone } from '@/components/ui/masked-input-phone'
 import {
   type Professional,
   type Service,
@@ -50,6 +51,7 @@ function ProfessionalForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isDirty },
   } = useForm<ProfessionalFormData>({
     resolver: zodResolver(professionalSchema),
@@ -74,7 +76,19 @@ function ProfessionalForm({
 
       <div className="space-y-2">
         <Label>Telefone</Label>
-        <Input {...register('phone')} placeholder="+55 11 99999-9999" />
+        <Controller
+          control={control}
+          name="phone"
+          render={({ field }) => (
+            <MaskedInputPhone
+              ref={field.ref}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              name={field.name}
+            />
+          )}
+        />
       </div>
 
       <div className="space-y-2">
@@ -393,7 +407,7 @@ export default function ProfessionalsPage() {
             <ProfessionalForm
               defaultValues={{
                 ...editing,
-                phone: editing.phone ?? undefined,
+                phone: (editing.phone ?? '').replace(/\D/g, '') || undefined,
                 speciality: editing.speciality ?? undefined,
               }}
               onSave={handleUpdate}
