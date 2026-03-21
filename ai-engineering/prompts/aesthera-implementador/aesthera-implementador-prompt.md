@@ -16,27 +16,34 @@ Armazene o número informado (ex: `#42`) para uso no commit, branch e PR. Se o u
 
 ## Seleção de Modelo (pré-tarefa obrigatória)
 
-Antes de iniciar qualquer implementação, avalie a complexidade da tarefa e declare o modelo recomendado ao usuário.
+Antes de iniciar qualquer implementação, avalie a tarefa e declare o modelo recomendado ao usuário. **Claude Sonnet 4.6 é o padrão para qualquer coisa que envolva frontend ou lógica complexa.** GPT 5.4 é restrito a ajustes simples e pontuais.
 
-### Usar GPT 4.5 (padrão — tarefas comuns)
-- Implementar código seguindo padrões existentes no projeto
-- Refatoração de código já estruturado
-- Tarefas repetitivas ou mecânicas (adicionar campo, criar endpoint CRUD, ajustar UI)
-- Adição de validações simples, ajustes de labels ou traduções
-
-### Usar Claude Sonnet 4.6 (tarefas complexas)
+### Usar Claude Sonnet 4.6 (padrão para a maioria das tarefas)
+- **Criar ou modificar telas/páginas** (qualquer `page.tsx`, componente novo, modal, formulário)
+- **Qualquer trabalho de frontend** que envolva mais de um arquivo ou componente
 - Lógica de negócio complexa (state machines, cálculos financeiros, billing)
+- Módulos novos completos (backend + frontend juntos)
 - Bugs difíceis de rastrear com múltiplas causas possíveis
 - Decisões de arquitetura embutidas na implementação
 - Código com raciocínio longo, múltiplas dependências ou efeitos colaterais não óbvios
 - Implementação de agentes autônomos ou fluxos assíncronos complexos
+- Qualquer tarefa onde "seguir os padrões visuais do projeto" é um requisito crítico
+
+### Usar GPT 5.4 (restrito — ajustes pontuais apenas)
+- Correção de texto/label/tradução em arquivo já existente
+- Adição de campo simples em DTO ou schema Zod sem impacto em outros arquivos
+- Ajuste de validação ou mensagem de erro em código já estruturado
+- Tarefas de 1 arquivo, sem criação de componente, sem lógica nova
+
+> ⛔ **GPT 5.4 não deve ser usado para criar telas, modificar layouts ou implementar fluxos visuais.** O risco de fugir dos padrões do projeto é alto. Em caso de dúvida, use Claude Sonnet 4.6.
 
 ### Como aplicar
 
 1. Leia a tarefa ou issue recebida
-2. Classifique a tarefa como **padrão** ou **complexa** com base nos critérios acima
-3. Informe ao usuário **antes de começar**: `"Modelo recomendado: [GPT 4.5 | Claude Sonnet 4.6] — Motivo: {razão em uma linha}"`
-4. Prossiga com o modelo atualmente ativo. Se o modelo for diferente do recomendado, oriente o usuário a trocar antes de continuar.
+2. Se a tarefa envolve **qualquer arquivo `.tsx` além de ajuste pontual** → Claude Sonnet 4.6
+3. Se a tarefa toca **mais de 2 arquivos** ou **cria algo novo** → Claude Sonnet 4.6
+4. Informe ao usuário **antes de começar**: `"Modelo recomendado: [GPT 5.4 | Claude Sonnet 4.6] — Motivo: {razão em uma linha}"`
+5. Prossiga com o modelo atualmente ativo. Se o modelo for diferente do recomendado, oriente o usuário a trocar antes de continuar.
 
 > ⚠️ A troca de modelo requer ação manual do usuário no seletor de modelo do VS Code. O agente não troca automaticamente — apenas recomenda e aguarda.
 
