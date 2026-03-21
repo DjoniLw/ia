@@ -338,6 +338,13 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+### [2026-03-21] — Treinamento dos agentes issue-writer e implementador: prevenção de regressão de padrões UI
+- **Arquivo(s) afetado(s):** `ai-engineering/prompts/aesthera-issue-writer/aesthera-issue-writer-prompt.md`, `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`, `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+- **O que foi feito:** Treinamento motivado por dois problemas identificados: (1) feature de ajuste de máscaras em grades acabou alterando filtros do cadastro de cliente que já estavam corretos; (2) tela de estoque criada com barra de filtros desalinhada e botão gravar sempre desabilitado. Mudanças aplicadas: **Issue Writer** — adicionada etapa obrigatória "Leitura Preventiva de Código Existente" antes de escrever issues que tocam telas existentes; adicionada "Regra de Preservação de Padrões UI" na seção Fora do Escopo; fortalecido checklist de consistência com dois novos pontos de verificação. **Implementador** — adicionada "Mapeamento de Zona Estável" obrigatório antes de qualquer edição em arquivo existente; adicionada "Regra de Escopo Rígido" para tasks de máscara/formatação; adicionado "Checklist de Conformidade UI" completo a ser executado antes de marcar task como concluída; reforçada regra de mudanças mínimas com referência à lista de arquivos da issue. **Code Review Learnings** — populado com 5 padrões concretos aprendidos dos problemas reportados.
+- **Impacto:** Agentes `aesthera-issue-writer` e `aesthera-implementador` — prevenção proativa de: regressão de padrões UI em telas existentes, alteração de escopo indevido em tasks de formatação, botão salvar sempre desabilitado, barra de filtros desalinhada em telas novas.
+
+---
+
 ### [2026-03-20] — Treinamento do agente aesthera-implementador: obrigatoriedade de testes unitários
 - **Arquivo(s) afetado(s):** `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`
 - **O que foi feito:** Adicionada regra obrigatória de testes nas "Regras de Implementação". Fluxo de trabalho atualizado com passo 3 "Criar ou atualizar testes". Adicionada seção completa "Testes Unitários e Automatizados" com: framework (Vitest), localização dos arquivos (`{módulo}.service.test.ts` co-localizado), regras para código novo (sempre criar) e código existente (verificar + atualizar testes afetados), padrão de estrutura de arquivo de test com `vi.hoisted`/`vi.mock`, tabela de cenários obrigatórios e o que não testar por ora.

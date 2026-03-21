@@ -93,7 +93,7 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 - **Notificações** WhatsApp e email são sempre assíncronas (fila BullMQ)
 - **Verificação de disponibilidade** (profissional + slot) deve ocorrer dentro de uma transação DB
 - **Nunca hard-delete** sem justificativa explícita — usar soft-delete ou cascade
-- **Mudanças mínimas e isoladas** — não refatorar código não relacionado à tarefa
+- **Mudanças mínimas e isoladas** — não refatorar código não relacionado à tarefa. Somente os arquivos listados em "Arquivos esperados para alteração" da issue podem ser modificados. Qualquer necessidade de alterar arquivo fora dessa lista deve ser reportada ao usuário antes de prosseguir.
 - **Toda implementação deve ter testes** — novas features exigem testes unitários; alterações em código coberto exigem revisão e atualização dos testes existentes
 
 ---
@@ -117,11 +117,39 @@ Este agente executa **uma vez por etapa** e aguarda validação explícita do us
 ### Para toda implementação:
 
 1. **Validar ou atualizar** a spec em `ai-engineering/projects/aesthera/features/{módulo}.md` antes de codificar
-2. **Implementar** a mudança em `aesthera/`
-3. **Criar ou atualizar testes** (ver seção "Testes Unitários e Automatizados" abaixo)
-4. **Executar auto-atualização** (ver seção abaixo)
+2. **Mapear zonas estáveis** (ver seção "Mapeamento de Zona Estável" abaixo) — obrigatório quando a task toca arquivos existentes
+3. **Implementar** a mudança em `aesthera/`
+4. **Executar Checklist de Conformidade UI** (ver seção abaixo) — obrigatório para qualquer arquivo `.tsx` criado ou modificado
+5. **Criar ou atualizar testes** (ver seção "Testes Unitários e Automatizados" abaixo)
+6. **Executar auto-atualização** (ver seção abaixo)
 
 > ⚠️ Nunca inverter essa ordem. Código sempre segue a documentação. Testes **nunca** são opcionais.
+
+---
+
+## Mapeamento de Zona Estável (obrigatório ao modificar arquivos existentes)
+
+Antes de implementar qualquer mudança em um arquivo **que já existe**, você deve:
+
+1. **Ler o arquivo completo** — não apenas o trecho que será alterado
+2. **Identificar e listar as "zonas estáveis"** — partes que estão corretas e NÃO devem ser tocadas:
+   - Barras de filtros que já seguem o padrão `flex flex-wrap items-center gap-2`
+   - Campos de pesquisa com classes `h-8 w-48 text-sm` já configurados
+   - Lógica de `disabled` em botões salvar/gravar já funcional
+   - Labels, placeholders e textos já em PT-BR
+   - Imports e hooks já configurados corretamente
+3. **Alterar somente o que a issue pede explicitamente**
+4. **Se perceber que para implementar o pedido precisaria alterar uma zona estável**: PARAR e notificar o usuário antes de prosseguir
+
+### Regra de Escopo Rígido — Masks e Formatação
+
+Quando a task é **adicionar máscara ou formatação a campos específicos**, a regra é absoluta:
+
+> Os ÚNICOS blocos de código que podem ser alterados são os `<FormField>` / `<Input>` específicos que ganharão a máscara. **Nada mais muda** — nem o layout ao redor, nem a barra de filtros, nem outros campos, nem o botão salvar.
+
+Se ao aplicar a máscara surgir a necessidade de alterar o layout do formulário ou da página, **parar e perguntar ao usuário** — isso indica que o escopo original não previa essa alteração.
+
+---
 
 ### Estrutura de módulo Backend (Fastify)
 ```
@@ -140,6 +168,41 @@ aesthera/apps/web/app/(dashboard)/{módulo}/
   [id]/page.tsx              ← detalhe/edição
   _components/               ← componentes específicos desta rota
 ```
+
+---
+
+## Checklist de Conformidade UI (obrigatório para todo arquivo .tsx criado ou modificado)
+
+Antes de marcar qualquer task como concluída, execute este checklist em **cada arquivo `.tsx`** que foi criado ou modificado:
+
+### Filtros e Pesquisa
+- [ ] Barra de filtros usa `className="flex flex-wrap items-center gap-2"` — **não usar** `flex gap-4`, `space-x-2` ou variações
+- [ ] Campo de pesquisa usa `className="h-8 w-48 text-sm"` — não alterar se já estava correto
+- [ ] Filtragem por status usa os pills padrão do template (botões com `bg-primary` / `border` conforme seleção)
+- [ ] Debounce de 250ms na pesquisa textual quando há chamada de API (ver padrão em `ui-standards.md` seção 4)
+
+### Botão Salvar / Gravar
+- [ ] O botão salvar NÃO está sempre desabilitado — verificar a lógica `disabled`
+- [ ] A lógica de `disabled` usa apenas `isPending` (ao aguardar resposta da API) e/ou validação do formulário (`!isValid`)
+- [ ] Se o formulário usa React Hook Form: `disabled={isPending || !form.formState.isValid}` — **nunca** adicionar `&& isDirty` em formulários de cadastro novo (pois form novo começa sem dados = dirty seria false)
+- [ ] Formulários de **edição** podem usar `disabled={isPending || !isDirty}` se faz sentido não salvar sem mudanças
+
+### Layout e Estrutura
+- [ ] Campos relacionados agrupados com `className="space-y-4"` ou `className="grid grid-cols-2 gap-4"`
+- [ ] Botões de ação no rodapé: `className="flex justify-end gap-2 pt-2"`
+- [ ] Estado vazio (`<EmptyState>`) presente quando lista pode estar vazia
+- [ ] Ações de linha usam botões icon-only com `variant="ghost" size="sm"`
+
+### Textos e Acessibilidade
+- [ ] Todos os labels, placeholders, botões, mensagens de erro e tooltips estão em **PT-BR**
+- [ ] Nenhum termo em inglês exposto ao usuário (ver lista de traduções obrigatórias em `AGENT_RULES.md`)
+- [ ] Status badges seguem o padrão de cores do `ui-standards.md` seção 6
+
+### Conformidade com a Tela
+- [ ] Os padrões listados pelo issue writer na seção "Fora do Escopo" foram respeitados
+- [ ] Itens da seção "Zonas Estáveis" mapeados não foram alterados
+
+> ❌ **Se qualquer item acima falhar**: corrigir antes de avançar para commit. Não marcar a task como concluída com itens pendentes do checklist.
 
 ---
 

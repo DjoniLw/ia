@@ -96,6 +96,22 @@ Antes de montar a issue, tenho algumas perguntas de escopo:
 - Consultar `PLAN.md` para ver o que já foi implementado
 - Identificar se é nova funcionalidade, extensão de algo existente, ou correção
 - **Executar a Análise de Dependências** acima — identificar se o pedido cria dados que serão consumidos em outro módulo
+- **Se a task envolve telas ou componentes existentes: executar a Leitura Preventiva abaixo**
+
+### 1.5 Leitura Preventiva de Código Existente (obrigatório quando a task toca telas/componentes já implementados)
+
+Quando a task envolver **ajuste, correção ou extensão de uma tela existente** (qualquer `.tsx` além de criação do zero):
+
+1. **Leia os arquivos existentes** que serão modificados em `aesthera/apps/web/`
+2. **Mapeie o que está funcionando corretamente** — especialmente:
+   - Barra de filtros (layout, classes, campos de pesquisa)
+   - Botões (estados enabled/disabled, lógica de envio)
+   - Fields/labels/placeholders que já seguem o padrão
+   - Componentes reutilizados (shadcn/ui, imports, hooks)
+3. **Inclua na seção "Fora do Escopo"** da issue todos os padrões funcionais mapeados que NÃO devem ser alterados
+4. **Seja explícito e nomeie os elementos**: em vez de "não alterar o layout", escreva "não alterar a barra de filtros (`div.flex.flex-wrap...`) do cadastro de cliente — já está no padrão correto"
+
+> ⚠️ Esta etapa previne que o implementador altere acidentalmente partes funcionais ao trabalhar em ajustes pontuais. A issue deve deixar claro o que é "zona estável".
 
 ### 2. Validar ou questionar
 Se houver dúvidas de escopo, dependências não confirmadas ou fluxo incompleto identificado na análise acima, **pare aqui** e faça as perguntas necessárias antes de continuar. Agrupe todas as perguntas em uma única mensagem.
@@ -411,6 +427,19 @@ Esta é a seção mais importante para proteger o sistema contra alucinações. 
 - Schema migrations que não foram pedidas
 - Alterações em testes de módulos não relacionados
 
+### Regra de Preservação de Padrões UI (especial — sempre aplicar)
+
+Toda issue que toca uma tela existente **deve** listar explicitamente na seção "Fora do Escopo" os padrões que já estão corretos e não podem ser alterados. Exemplos obrigatórios a verificar e proteger:
+
+| Padrão | Por que proteger | Como nomear na seção |
+|---|---|---|
+| Barra de filtros já alinhada | `flex flex-wrap items-center gap-2` pode ser sobrescrito acidentalmente | "Não alterar a barra de filtros da tela X — já segue o padrão `ui-standards.md`" |
+| Campos de pesquisa com `h-8 w-48 text-sm` | Ajuste de máscara em campo vizinho pode remover as classes | "Não alterar classes de `<Input>` de busca já implementados" |
+| Botão salvar com lógica `disabled` correta | Alterar o form pode quebrar o estado enabled/disabled | "Não alterar a lógica de `disabled` do botão de salvar" |
+| Labels/placeholders em PT-BR | Alterar campo pode trocar texto | "Manter todos os labels e placeholders existentes sem alteração" |
+
+> ⛔ **Regra crítica para tasks de ajuste de formatação/máscaras**: Quando a task é adicionar máscara ou formatar campos, os ÚNICOS arquivos/blocos que podem ser alterados são os campos específicos que ganharão a máscara. Tudo ao redor (layout, filtros adjacentes, botões, outros campos) é zona estável e deve aparecer explicitamente na seção "Fora do Escopo".
+
 ---
 
 ## Regras para Testes — Quando e O Que Pedir
@@ -475,6 +504,8 @@ Antes de finalizar qualquer issue, verificar:
 - [ ] **Toda rota/link/menu mencionado tem sua página de destino já existente ou incluída no escopo?** ← (Regra de Completude)
 - [ ] **O impacto em outros módulos foi analisado e, se houver, está documentado na issue?** ← (Análise de Impacto)
 - [ ] **Se há lógica de negócio, validações ou fluxos críticos, testes foram incluídos?** ← (Cobertura de Testes)
+- [ ] **Se a task toca tela existente: os padrões funcionais já corretos (filtros, botões, labels) foram lidos e protegidos na seção "Fora do Escopo"?** ← (Leitura Preventiva + Preservação de Padrões UI)
+- [ ] **A seção "Fora do Escopo" está completa e específica — não genérica?** (ex: nomeou o arquivo e o elemento específico que não deve ser alterado)
 
 Se qualquer verificação falhar → **apontar para o usuário antes de gerar a issue**.
 
