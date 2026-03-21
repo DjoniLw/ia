@@ -2,8 +2,13 @@ import { appConfig } from '../../config/app.config'
 import { companyConfig } from '../../config/company.config'
 import { logger } from '../../shared/logger/logger'
 import { AppError, ConflictError, NotFoundError } from '../../shared/errors/app-error'
-import type { SetBusinessHoursDto, UpdateClinicDto } from './clinics.dto'
+import type {
+  SetBusinessHoursDto,
+  UpdateClinicDto,
+  UpdatePaymentMethodConfigDto,
+} from './clinics.dto'
 import { ClinicsRepository } from './clinics.repository'
+import { normalizePaymentMethodConfig } from './payment-method-config'
 
 function normalizeCnpj(value?: string | null): string | undefined {
   const digits = value?.replace(/\D/g, '') ?? ''
@@ -62,7 +67,9 @@ export class ClinicsService {
 
         const existingClinic = await this.repo.findByDocument(document)
         if (existingClinic && existingClinic.id !== clinicId) {
-          throw new ConflictError(`Este CNPJ já está cadastrado em outra empresa. Em caso de dúvidas, entre em contato com ${supportContactText()}.`)
+          throw new ConflictError(
+            `Este CNPJ já está cadastrado em outra empresa. Em caso de dúvidas, entre em contato com ${supportContactText()}.`,
+          )
         }
 
         if (appConfig.isProduction) {
@@ -103,17 +110,50 @@ export class ClinicsService {
     return this.repo.setBusinessHours(clinicId, dto.hours)
   }
 
-  private async lookupBrasilApi(cnpj: string): Promise<Record<string, unknown> | 'not_found' | null> {
+  async getPaymentMethodConfig(clinicId: string) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic not found')
+
+    const config = await this.repo.findPaymentMethodConfig(clinicId)
+    return normalizePaymentMethodConfig(config)
+  }
+
+  async updatePaymentMethodConfig(clinicId: string, dto: UpdatePaymentMethodConfigDto) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic not found')
+
+    if (!dto.pixEnabled && !dto.boletoEnabled && !dto.cardEnabled && !dto.duplicataEnabled) {
+      throw new AppError('Ative ao menos uma forma de pagamento.', 422, 'PAYMENT_METHOD_REQUIRED')
+    }
+
+    if (dto.installmentsEnabled && !dto.cardEnabled) {
+      throw new AppError(
+        'Parcelamento só pode ser ativado quando o cartão estiver habilitado.',
+        422,
+        'INSTALLMENTS_REQUIRES_CARD',
+      )
+    }
+
+    const config = normalizePaymentMethodConfig(dto)
+    return this.repo.upsertPaymentMethodConfig(clinicId, config)
+  }
+
+  private async lookupBrasilApi(
+    cnpj: string,
+  ): Promise<Record<string, unknown> | 'not_found' | null> {
     // TODO: A BrasilAPI confirma apenas dados públicos do CNPJ, não a titularidade da empresa.
     try {
       const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`)
       if (response.status === 404) return 'not_found'
       if (!response.ok) {
-        logger.warn({ cnpj, status: response.status }, 'BrasilAPI indisponível durante consulta de CNPJ')
+        logger.warn(
+          { cnpj, status: response.status },
+          'BrasilAPI indisponível durante consulta de CNPJ',
+        )
         return null
       }
 
-      const data = await response.json() as Record<string, unknown>
+      const data = (await response.json()) as Record<string, unknown>
       return {
         razaoSocial: data.razao_social ?? '',
         nomeFantasia: data.nome_fantasia ?? '',

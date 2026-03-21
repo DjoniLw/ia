@@ -1,9 +1,14 @@
 import { AppError, NotFoundError } from '../../shared/errors/app-error'
+import { prisma } from '../../database/prisma/client'
 import type { CancelBillingDto, ListBillingQuery, ReceivePaymentDto } from './billing.dto'
 import { BillingRepository } from './billing.repository'
 import { LedgerService } from '../ledger/ledger.service'
 import { WalletService } from '../wallet/wallet.service'
 import { PromotionsService } from '../promotions/promotions.service'
+import {
+  buildBillingPaymentMethods,
+  normalizePaymentMethodConfig,
+} from '../clinics/payment-method-config'
 
 const ledger = new LedgerService()
 const wallet = new WalletService()
@@ -11,6 +16,43 @@ const promotions = new PromotionsService()
 
 export class BillingService {
   private repo = new BillingRepository()
+
+  async createForAppointment(appointment: {
+    id: string
+    clinicId: string
+    customerId: string
+    price: number
+    scheduledAt: Date
+  }) {
+    const existing = await prisma.billing.findUnique({
+      where: { appointmentId: appointment.id },
+    })
+    if (existing) return existing
+
+    const config = normalizePaymentMethodConfig(
+      await prisma.paymentMethodConfig.findUnique({
+        where: { clinicId: appointment.clinicId },
+      }),
+    )
+
+    const dueDate = new Date(appointment.scheduledAt)
+    dueDate.setUTCDate(dueDate.getUTCDate() + 3)
+
+    const paymentToken = crypto.randomUUID().replace(/-/g, '')
+
+    return prisma.billing.create({
+      data: {
+        clinicId: appointment.clinicId,
+        customerId: appointment.customerId,
+        appointmentId: appointment.id,
+        amount: appointment.price,
+        status: 'pending',
+        paymentMethods: buildBillingPaymentMethods(config),
+        paymentToken,
+        dueDate,
+      },
+    })
+  }
 
   async list(clinicId: string, q: ListBillingQuery) {
     return this.repo.findAll(clinicId, q)
@@ -33,7 +75,11 @@ export class BillingService {
   async markPaid(clinicId: string, id: string) {
     const billing = await this.get(clinicId, id)
     if (!['pending', 'overdue'].includes(billing.status)) {
-      throw new AppError('Only pending or overdue billing can be marked as paid', 400, 'INVALID_STATUS')
+      throw new AppError(
+        'Only pending or overdue billing can be marked as paid',
+        400,
+        'INVALID_STATUS',
+      )
     }
     const updated = await this.repo.updateStatus(clinicId, id, 'paid', { paidAt: new Date() })
 
@@ -57,7 +103,11 @@ export class BillingService {
   async receivePayment(clinicId: string, id: string, dto: ReceivePaymentDto) {
     const billing = await this.get(clinicId, id)
     if (!['pending', 'overdue'].includes(billing.status)) {
-      throw new AppError('Somente cobranças pendentes ou em atraso podem ser recebidas', 400, 'INVALID_STATUS')
+      throw new AppError(
+        'Somente cobranças pendentes ou em atraso podem ser recebidas',
+        400,
+        'INVALID_STATUS',
+      )
     }
 
     if (dto.method === 'voucher') {
@@ -95,7 +145,11 @@ export class BillingService {
 
     // Cash / PIX / Card
     if (dto.receivedAmount < billing.amount) {
-      throw new AppError('Valor recebido é menor que o valor da cobrança', 400, 'INSUFFICIENT_AMOUNT')
+      throw new AppError(
+        'Valor recebido é menor que o valor da cobrança',
+        400,
+        'INSUFFICIENT_AMOUNT',
+      )
     }
 
     // Apply promotion discount if provided
@@ -113,7 +167,11 @@ export class BillingService {
     const effectiveAmount = Math.max(0, billing.amount - discountAmount)
 
     if (dto.receivedAmount < effectiveAmount) {
-      throw new AppError('Valor recebido é menor que o valor com desconto', 400, 'INSUFFICIENT_AMOUNT')
+      throw new AppError(
+        'Valor recebido é menor que o valor com desconto',
+        400,
+        'INSUFFICIENT_AMOUNT',
+      )
     }
 
     const updated = await this.repo.updateStatus(clinicId, id, 'paid', { paidAt: new Date() })

@@ -37,7 +37,14 @@ export class PaymentsService {
     const existing = await prisma.payment.findFirst({ where: { billingId } })
     if (existing) return existing
 
-    const method = billing.paymentMethods[0] as 'pix' | 'boleto' | 'card' ?? 'pix'
+    const preferredMethod = billing.paymentMethods.find((method) =>
+      ['pix', 'boleto', 'card'].includes(method),
+    )
+    const method = (preferredMethod ??
+      (billing.paymentMethods.includes('duplicata') ? 'boleto' : 'pix')) as
+      | 'pix'
+      | 'boleto'
+      | 'card'
     const gateway = createGateway(method)
 
     const intent = await gateway.createIntent({
@@ -54,7 +61,7 @@ export class PaymentsService {
       clinicId: billing.clinicId,
       billingId: billing.id,
       customerId: billing.customerId,
-      gateway: gateway.name === 'mock' ? 'mercadopago' : gateway.name as 'stripe' | 'mercadopago',
+      gateway: gateway.name === 'mock' ? 'mercadopago' : (gateway.name as 'stripe' | 'mercadopago'),
       method,
       amount: billing.amount,
       gatewayPaymentId: intent.gatewayPaymentId,

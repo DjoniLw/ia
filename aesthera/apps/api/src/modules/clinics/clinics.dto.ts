@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  DUPLICATA_DAYS_INTERVAL_OPTIONS,
+  DUPLICATA_MAX_INSTALLMENT_OPTIONS,
+  INSTALLMENTS_MAX_MONTH_OPTIONS,
+} from './payment-method-config'
 
 const optionalCnpjSchema = z
   .string()
@@ -40,3 +45,23 @@ export const SetBusinessHoursDto = z.object({
 })
 
 export type SetBusinessHoursDto = z.infer<typeof SetBusinessHoursDto>
+
+export const UpdatePaymentMethodConfigDto = z.object({
+  pixEnabled: z.boolean(),
+  boletoEnabled: z.boolean(),
+  cardEnabled: z.boolean(),
+  installmentsEnabled: z.boolean(),
+  installmentsMaxMonths: z
+    .enum(INSTALLMENTS_MAX_MONTH_OPTIONS.map(String) as [string, ...string[]])
+    .transform(Number),
+  installmentsMinAmount: z.number().int().min(100),
+  duplicataEnabled: z.boolean(),
+  duplicataDaysInterval: z
+    .enum(DUPLICATA_DAYS_INTERVAL_OPTIONS.map(String) as [string, ...string[]])
+    .transform(Number),
+  duplicataMaxInstallments: z
+    .enum(DUPLICATA_MAX_INSTALLMENT_OPTIONS.map(String) as [string, ...string[]])
+    .transform(Number),
+})
+
+export type UpdatePaymentMethodConfigDto = z.infer<typeof UpdatePaymentMethodConfigDto>

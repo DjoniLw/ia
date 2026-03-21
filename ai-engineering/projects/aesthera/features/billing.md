@@ -20,7 +20,9 @@ It links to a payment and tracks the payment lifecycle.
 ## Business Rules
 - Billing is created automatically when `appointment.completed` event fires
 - Amount defaults to appointment price (copied from service at booking time)
-- Payment methods: configured per clinic (default: all — PIX, boleto, card)
+- Payment methods: configured per clinic (default: PIX, boleto and card enabled)
+- If installments are enabled, billings also expose `installments` in `payment_methods`
+- If duplicata is enabled, billings also expose `duplicata` in `payment_methods`
 - On creation: payment link generated, sent to customer via WhatsApp + email
 - Only `pending` or `overdue` billing can be cancelled
 - `paid` billing is immutable
@@ -55,7 +57,7 @@ Billing {
   appointment_id   UUID FK → Appointment UNIQUE
   amount           INTEGER NOT NULL         -- BRL cents
   status           ENUM(pending, paid, overdue, cancelled) DEFAULT pending
-  payment_methods  STRING[]                 -- ['pix', 'boleto', 'card']
+  payment_methods  STRING[]                 -- ['pix', 'boleto', 'card', 'installments', 'duplicata']
   payment_link     STRING?                  -- generated URL
   payment_token    STRING UNIQUE            -- token for public payment page
   due_date         DATE NOT NULL            -- defaults to appointment_date + 3 days
@@ -78,6 +80,7 @@ Billing {
 ## Dependencies
 - Appointments module (trigger source)
 - Customers module (recipient)
+- Clinics module (payment methods configuration)
 - Payments module (payment processing, link generation)
 - Notifications module (payment link via WhatsApp + email)
 - Ledger module (records financial entry on `billing.paid`)
