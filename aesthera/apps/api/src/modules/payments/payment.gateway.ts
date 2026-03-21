@@ -1,3 +1,6 @@
+import { createHmac, timingSafeEqual } from 'node:crypto'
+import { appConfig } from '../../config/app.config'
+
 /**
  * Payment Gateway abstraction.
  * Real implementations (Stripe, MercadoPago) plug in here.
@@ -24,7 +27,7 @@ export interface PaymentIntentResult {
 export interface PaymentGateway {
   name: 'stripe' | 'mercadopago' | 'mock'
   createIntent(input: CreatePaymentIntentInput): Promise<PaymentIntentResult>
-  verifyWebhookSignature(payload: string, signature: string): boolean
+  verifyWebhookSignature(rawBody: Buffer, signature: string, requestId?: string): boolean
 }
 
 // ── Mock gateway (dev / no credentials) ──────────────────────────────────────
@@ -46,7 +49,7 @@ export class MockGateway implements PaymentGateway {
     }
   }
 
-  verifyWebhookSignature(_payload: string, _signature: string): boolean {
+  verifyWebhookSignature(_rawBody: Buffer, _signature: string): boolean {
     return true // Mock always valid
   }
 }
@@ -58,8 +61,34 @@ export class StripeGateway implements PaymentGateway {
   async createIntent(_input: CreatePaymentIntentInput): Promise<PaymentIntentResult> {
     throw new Error('Stripe credentials not configured')
   }
-  verifyWebhookSignature(_payload: string, _signature: string): boolean {
-    return false
+
+  /**
+   * Validates Stripe webhook signature using HMAC-SHA256.
+   * The Stripe-Signature header format: t=<timestamp>,v1=<hex-signature>
+   * Signed payload: "<timestamp>.<rawBody>"
+   */
+  verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
+    const secret = appConfig.stripe.webhookSecret
+    if (!secret) return false
+
+    const parts: Record<string, string> = {}
+    for (const part of signature.split(',')) {
+      const idx = part.indexOf('=')
+      if (idx !== -1) parts[part.slice(0, idx)] = part.slice(idx + 1)
+    }
+
+    const timestamp = parts['t']
+    const expectedSig = parts['v1']
+    if (!timestamp || !expectedSig) return false
+
+    const signedPayload = `${timestamp}.${rawBody.toString('utf-8')}`
+    const computed = createHmac('sha256', secret).update(signedPayload).digest('hex')
+
+    try {
+      return timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(expectedSig, 'hex'))
+    } catch {
+      return false
+    }
   }
 }
 
@@ -69,8 +98,42 @@ export class MercadoPagoGateway implements PaymentGateway {
   async createIntent(_input: CreatePaymentIntentInput): Promise<PaymentIntentResult> {
     throw new Error('MercadoPago credentials not configured')
   }
-  verifyWebhookSignature(_payload: string, _signature: string): boolean {
-    return false
+
+  /**
+   * Validates MercadoPago webhook signature using HMAC-SHA256.
+   * The x-signature header format: ts=<timestamp>,v1=<hex-signature>
+   * Signed payload: "id:<dataId>;request-id:<requestId>;ts:<timestamp>;"
+   */
+  verifyWebhookSignature(rawBody: Buffer, signature: string, requestId = ''): boolean {
+    const secret = appConfig.mercadopago.webhookSecret
+    if (!secret) return false
+
+    const parts: Record<string, string> = {}
+    for (const part of signature.split(',')) {
+      const idx = part.indexOf('=')
+      if (idx !== -1) parts[part.slice(0, idx)] = part.slice(idx + 1)
+    }
+
+    const timestamp = parts['ts']
+    const expectedSig = parts['v1']
+    if (!timestamp || !expectedSig) return false
+
+    let dataId = ''
+    try {
+      const body = JSON.parse(rawBody.toString('utf-8')) as { data?: { id?: unknown } }
+      dataId = String(body?.data?.id ?? '')
+    } catch {
+      return false
+    }
+
+    const signedPayload = `id:${dataId};request-id:${requestId};ts:${timestamp};`
+    const computed = createHmac('sha256', secret).update(signedPayload).digest('hex')
+
+    try {
+      return timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(expectedSig, 'hex'))
+    } catch {
+      return false
+    }
   }
 }
 

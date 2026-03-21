@@ -2,7 +2,8 @@ import { AppError, NotFoundError } from '../../shared/errors/app-error'
 import { createDomainEvent } from '../../shared/events/domain-event'
 import { eventBus } from '../../shared/events/event-bus'
 import { prisma } from '../../database/prisma/client'
-import { createGateway } from './payment.gateway'
+import { appConfig } from '../../config/app.config'
+import { createGateway, StripeGateway, MercadoPagoGateway } from './payment.gateway'
 import { PaymentsRepository } from './payments.repository'
 import type { ListPaymentsQuery } from './payments.dto'
 
@@ -112,11 +113,29 @@ export class PaymentsService {
     return updated
   }
 
-  async handleStripeWebhook(_payload: string, _signature: string) {
+  async handleStripeWebhook(rawBody: Buffer, signature: string): Promise<{ received: true }> {
+    if (!appConfig.stripe.webhookSecret) {
+      throw new AppError('Stripe webhook não configurado', 503, 'WEBHOOK_NOT_CONFIGURED')
+    }
+    const gateway = new StripeGateway()
+    if (!gateway.verifyWebhookSignature(rawBody, signature)) {
+      throw new AppError('Assinatura Stripe inválida', 400, 'INVALID_SIGNATURE')
+    }
     return { received: true }
   }
 
-  async handleMercadoPagoWebhook(_payload: string, _signature: string) {
+  async handleMercadoPagoWebhook(
+    rawBody: Buffer,
+    signature: string,
+    requestId: string,
+  ): Promise<{ received: true }> {
+    if (!appConfig.mercadopago.webhookSecret) {
+      throw new AppError('MercadoPago webhook não configurado', 503, 'WEBHOOK_NOT_CONFIGURED')
+    }
+    const gateway = new MercadoPagoGateway()
+    if (!gateway.verifyWebhookSignature(rawBody, signature, requestId)) {
+      throw new AppError('Assinatura MercadoPago inválida', 400, 'INVALID_SIGNATURE')
+    }
     return { received: true }
   }
 

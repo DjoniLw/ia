@@ -48,9 +48,9 @@ export class ClinicalRepository {
     })
   }
 
-  async update(_clinicId: string, id: string, data: UpdateClinicalRecordDto) {
+  async update(clinicId: string, id: string, data: UpdateClinicalRecordDto) {
     return prisma.clinicalRecord.update({
-      where: { id },
+      where: { id, clinicId }, // garantir isolamento por clínica (prevenir IDOR cross-tenant)
       data: {
         ...(data.title !== undefined && { title: data.title }),
         ...(data.content !== undefined && { content: data.content }),
