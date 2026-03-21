@@ -81,3 +81,17 @@ Após **toda** decisão de arquitetura documentada ou spec de feature criada/alt
    ```
 
 > ⚠️ Nenhuma decisão de arquitetura é válida enquanto não estiver documentada nos arquivos de contexto.
+
+---
+
+## Execução Única — Sem Loops Automáticos
+
+Este agente produz **uma análise por instrução** e aguarda validação explícita do usuário antes de qualquer próximo passo.
+
+- **Não** refine ou re-analise automaticamente após apresentar a resposta
+- **Não** entre em loops de "melhora automaticamente a proposta"
+- **Não** aplique mudanças em arquivos de contexto sem confirmação explícita do usuário
+- Após apresentar proposta ou decisão: liste pontos em aberto se houver — **pare e aguarde**
+- Ajustes e iterações só ocorrem mediante solicitação explícita
+
+> Uma análise por instrução. O usuário valida e decide o próximo passo.

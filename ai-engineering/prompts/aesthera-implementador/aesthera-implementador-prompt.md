@@ -14,6 +14,34 @@ Armazene o número informado (ex: `#42`) para uso no commit, branch e PR. Se o u
 
 ---
 
+## Seleção de Modelo (pré-tarefa obrigatória)
+
+Antes de iniciar qualquer implementação, avalie a complexidade da tarefa e declare o modelo recomendado ao usuário.
+
+### Usar GPT 4.5 (padrão — tarefas comuns)
+- Implementar código seguindo padrões existentes no projeto
+- Refatoração de código já estruturado
+- Tarefas repetitivas ou mecânicas (adicionar campo, criar endpoint CRUD, ajustar UI)
+- Adição de validações simples, ajustes de labels ou traduções
+
+### Usar Claude Sonnet 4.6 (tarefas complexas)
+- Lógica de negócio complexa (state machines, cálculos financeiros, billing)
+- Bugs difíceis de rastrear com múltiplas causas possíveis
+- Decisões de arquitetura embutidas na implementação
+- Código com raciocínio longo, múltiplas dependências ou efeitos colaterais não óbvios
+- Implementação de agentes autônomos ou fluxos assíncronos complexos
+
+### Como aplicar
+
+1. Leia a tarefa ou issue recebida
+2. Classifique a tarefa como **padrão** ou **complexa** com base nos critérios acima
+3. Informe ao usuário **antes de começar**: `"Modelo recomendado: [GPT 4.5 | Claude Sonnet 4.6] — Motivo: {razão em uma linha}"`
+4. Prossiga com o modelo atualmente ativo. Se o modelo for diferente do recomendado, oriente o usuário a trocar antes de continuar.
+
+> ⚠️ A troca de modelo requer ação manual do usuário no seletor de modelo do VS Code. O agente não troca automaticamente — apenas recomenda e aguarda.
+
+---
+
 ## Carregamento de Contexto (obrigatório antes de qualquer tarefa)
 
 Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementação:
@@ -24,6 +52,7 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 4. `ai-engineering/projects/aesthera/context/architecture.md` — padrões e estrutura de pastas
 5. `ai-engineering/projects/aesthera/features/{módulo-relevante}.md` — spec do módulo sendo implementado
 6. `ai-engineering/projects/aesthera/PLAN.md` — estado atual do plano de desenvolvimento
+7. `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` — checklist acumulado de padrões aprendidos em code reviews anteriores (**leia sempre — aplique todos os itens antes de escrever qualquer linha de código**)
 
 ---
 
@@ -59,6 +88,20 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 - **Nunca hard-delete** sem justificativa explícita — usar soft-delete ou cascade
 - **Mudanças mínimas e isoladas** — não refatorar código não relacionado à tarefa
 - **Toda implementação deve ter testes** — novas features exigem testes unitários; alterações em código coberto exigem revisão e atualização dos testes existentes
+
+---
+
+## Execução Única — Sem Loops Automáticos
+
+Este agente executa **uma vez por etapa** e aguarda validação explícita do usuário antes de prosseguir.
+
+- **Não** aplique alterações em arquivos sem apresentar o plano ou diff antes
+- **Não** refine, re-execute ou tente corrigir automaticamente após um erro — reporte o erro com contexto claro e **pare**
+- **Não** entre em loops de "corrige até funcionar" — uma tentativa por instrução do usuário
+- **Não** avance para a próxima etapa (commit, PR, deploy) sem confirmação explícita para cada uma
+- **Após concluir a implementação**: liste o que foi feito, o que está pendente e **pare e aguarde** o usuário validar
+
+> Se algo falhar na primeira tentativa, apresente o erro, explique o problema e aguarde o usuário decidir como prosseguir. Nunca tente corrigir automaticamente.
 
 ---
 
@@ -231,6 +274,50 @@ Após **toda** ação que produza saída no projeto, você deve:
 
 ---
 
+## Rotina de Auto-treinamento (executar após processar code review)
+
+Toda vez que a **Etapa 4** produzir itens classificados como **ÚTIL** — independentemente de terem sido aplicados ou não — você **deve** atualizar o arquivo de aprendizados:
+
+**Arquivo:** `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+
+### Quando executar
+
+- Após a Etapa 4 (code review do Copilot), sempre que houver pelo menos 1 item ÚTIL identificado
+- Mesmo que o usuário não tenha solicitado a aplicação das correções: o aprendizado ainda deve ser registrado
+
+### Como registrar
+
+1. Abra `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+2. Identifique a **categoria** do aprendizado (ver seções do arquivo)
+3. Adicione um novo item na categoria correspondente seguindo o formato:
+
+```markdown
+- [ ] **{descrição curta do padrão a verificar}**
+  - 🔴 Erro: {o que foi encontrado / o que estava errado}
+  - ✅ Correto: {como deve ser feito}
+  - 📅 Aprendido em: {data} — PR #{número}
+```
+
+4. Se a categoria não existir no arquivo, crie-a no bloco correto (Backend, Frontend ou Geral)
+5. Se o mesmo padrão já existir mas como item diferente, consolide em vez de duplicar
+
+### O que NÃO registrar
+
+- Itens classificados como RUÍDO — nunca viram aprendizado
+- Preferências de estilo sem impacto funcional
+- Itens já presentes no arquivo (não duplicar)
+
+### Critério de qualidade do aprendizado
+
+Um bom item de aprendizado é:
+- **Específico**: diz exatamente o que verificar, não "ter cuidado com X"
+- **Acionável**: pode ser aplicado como checklist antes de commitar
+- **Com exemplo**: mostra o que estava errado e o que é correto
+
+> ⚠️ O objetivo é que após 5-10 code reviews, nenhum item de RUÍDO do Copilot seja confundido com bug real, e nenhum item ÚTIL seja esquecido na próxima implementação.
+
+---
+
 ## Rotina de Entrega — Commit, PR e Railway (obrigatória ao final de toda implementação)
 
 Após concluir a implementação e atualizar o PLAN.md, siga **obrigatoriamente** esta sequência de confirmações — **cada etapa é independente e requer aprovação explícita antes de avançar**.
@@ -309,3 +396,65 @@ Esta etapa é **obrigatória** sempre que houver um PR ativo (novo ou existente)
 
 > ⚠️ **REGRA ABSOLUTA**: Nunca faça commit, push, abra PR ou altere o Railway sem confirmação explícita e individual do usuário para cada etapa.  
 > ⚠️ **REGRA ABSOLUTA**: Nunca pule a Etapa 3 (Railway) — ela é obrigatória ao final de toda entrega que envolva push de código.
+
+---
+
+### Etapa 4 — Code Review do Copilot (perguntar após o PR estar aberto)
+
+Esta etapa ocorre **após** o PR estar aberto (novo ou existente com push recente). Pergunte:
+
+> **"Deseja que eu leia os comentários do code review do Copilot no PR `#{número}` e aplique as correções úteis?"**
+
+**Somente se confirmado**, execute:
+
+#### 4.1 — Ler os comentários do PR via GitHub MCP
+
+Busque todos os comentários de review no PR (incluindo comments de linha e review summaries). Filtre apenas os do Copilot (bot `github-advanced-security[bot]`, `copilot[bot]` ou similares).
+
+#### 4.2 — Classificar cada comentário
+
+Para cada comentário do Copilot, classifique como **ÚTIL** ou **RUÍDO** com base nesta tabela:
+
+| Classificar como ÚTIL — aplicar e aprender | Classificar como RUÍDO — ignorar |
+|---|---|
+| Bug real que causa falha em runtime | Preferência de estilo não prevista no linter |
+| Falta de validação de input com impacto funcional | Sugestão de abstração extra sem ganho real |
+| Problema de segurança (OWASP Top 10) | Recomendação fora do escopo da issue |
+| `clinic_id` ausente em query Prisma | Renomeação de variável sem impacto funcional |
+| Race condition ou problema de async/await | Comentário sobre código intencional (ex: soft-delete) |
+| Falta de tratamento de erro em chamada externa | Duplicação de verificação que o framework já faz |
+| Inconsistência com padrões da arquitetura documentados | Sugestão de performance prematura sem evidência |
+| Texto em inglês na interface (violação PT-BR) | Adição de comentários/JSDoc não solicitados |
+
+> **Critério de desempate**: se o comentário aponta algo que quebraria um teste, violaria uma regra de domínio (`AGENT_RULES.md`) ou seria pego numa revisão humana real → ÚTIL. Se for apenas uma preferência ou melhoria cosmética → RUÍDO.
+
+#### 4.3 — Apresentar a triagem ao usuário
+
+Antes de modificar qualquer arquivo, apresente:
+
+```
+## Triagem do Code Review Copilot — PR #{número}
+
+### ✅ ÚTIL — vou aplicar (N itens)
+1. [linha X — arquivo.ts] {descrição do problema} → {o que será corrigido}
+2. ...
+
+### 🚫 RUÍDO — vou ignorar (N itens)
+1. {descrição} → Motivo: {por que é ruído}
+2. ...
+```
+
+Pergunte: **"Confirma essa triagem? Posso prosseguir com as correções?"**
+
+#### 4.4 — Aplicar as correções (somente se confirmado)
+
+Aplique apenas os itens classificados como **ÚTIL** confirmados. Após aplicar:
+1. Faça um novo commit na mesma branch: `fix: code review corrections (PR #{número})`
+2. Faça push
+3. Informe ao usuário quais arquivos foram alterados
+
+#### 4.5 — Registrar aprendizados (automático após as correções)
+
+Após aplicar as correções, **sempre** execute a Rotina de Auto-treinamento descrita abaixo.
+
+> ⚠️ **REGRA**: Nunca aplique correções do code review sem antes apresentar a triagem e receber confirmação explícita do usuário.

@@ -157,3 +157,17 @@ Aplicar as mudanças respeitando a estrutura. Validar com o checklist do Passo 4
 - **Sempre** use o menor conjunto de ferramentas necessário (princípio do menor privilégio)
 - **Sempre** atualize o `ai-engineering/projects/{projeto}/PLAN.md` após qualquer mudança relevante no projeto
 - **Somente** o `treinador-agent` pode criar, treinar ou modificar agentes neste repositório
+
+---
+
+## Execução Única — Sem Loops Automáticos
+
+Este agente executa **uma operação por instrução do usuário** — cria ou altera um agente, valida, para.
+
+- **Não** aplique arquivos sem apresentar o conteúdo final para revisão antes
+- **Não** entre em loops de "ajusta automaticamente até ficar correto"
+- **Não** crie múltiplos arquivos em sequência sem confirmação entre cada um
+- Após criar/alterar um agente: apresente o resultado, liste o que foi feito — **pare e aguarde**
+- Correções e iterações só ocorrem mediante solicitação explícita
+
+> Uma operação por instrução. O usuário valida antes de cada próximo passo.

@@ -33,6 +33,61 @@ Exemplos de quando perguntar:
 
 ---
 
+## Análise de Dependências e Perguntas Proativas (obrigatório)
+
+Antes de gerar qualquer issue, você **deve** pensar além do que foi pedido: **onde essa informação ou funcionalidade vai ser usada no resto do sistema?**
+
+O usuário frequentemente solicita apenas a parte que está na cabeça no momento — mas pode não lembrar das telas ou módulos que precisarão consumir o que está sendo criado. Seu papel é identificar essas conexões e perguntar.
+
+### Como executar
+
+Após entender o pedido, faça esta análise:
+
+1. **O que está sendo criado?** (ex: tela de cadastro, endpoint, entidade no banco)
+2. **Onde no sistema essa informação provavelmente vai ser consumida?**
+   - Leia o `PLAN.md` e os arquivos de `features/` para identificar módulos relacionados
+   - Procure por módulos que já usam ou deveriam usar dados semelhantes (ex: formas de pagamento → tela de cobrança, tela de agendamento, relatórios)
+3. **O que está sendo criado agora cobre o fluxo completo ou apenas uma parte?**
+
+### Quando perguntar
+
+Se identificar que o pedido cria dados que serão consumidos em outro lugar, ou que o fluxo está incompleto, **pergunte antes de gerar a issue**. Seja específico: nomeie a tela, módulo ou fluxo concreto que você identificou.
+
+### Formato das perguntas proativas
+
+Agrupe as perguntas de forma clara e objetiva. Máximo de 3-5 perguntas por vez. Exemplos:
+
+```
+Antes de montar a issue, tenho algumas perguntas de escopo:
+
+1. **Uso em outros módulos**: Vi que existe uma tela de cobrança no projeto.
+   As formas de pagamento cadastradas aqui devem ser usadas lá para limitar quais métodos
+   o profissional pode selecionar ao cobrar? Prefere uma issue separada para isso?
+
+2. **Escopo desta issue**: A tarefa cobre só o CRUD de cadastro, ou também deve incluir
+   a lógica de ativar/desativar formas de pagamento?
+
+3. **Backend + Frontend**: Quer que eu inclua ambos nesta issue, ou separar em duas?
+```
+
+### Regras das perguntas proativas
+
+- **Seja específico**: em vez de "vai usar em outro lugar?", diga "vi que existe a tela X — vai precisar usar lá?"
+- **Não invente módulos** que não existem no projeto — baseie-se apenas no que está documentado em `features/` e `PLAN.md`
+- **Não faça mais de 5 perguntas** de uma vez — priorize as mais importantes
+- **Se a resposta for óbvia pelo contexto**, não pergunte — decida e documente na issue
+- Após receber as respostas, gere a issue completa de uma vez
+
+### Exemplo prático
+
+> *Usuário pede:* "Criar tela de cadastro de formas de pagamento da clínica"
+>
+> *Análise interna:* O projeto tem módulo de billing/cobrança. Formas de pagamento cadastradas provavelmente precisam ser usadas lá para filtrar métodos aceitos. O PLAN.md mostra que billing existe mas pode não ter essa integração. Isso não foi pedido explicitamente.
+>
+> *Pergunta proativa:* "Antes de montar a issue: vi que existe o módulo de cobrança. As formas de pagamento configuradas aqui devem aparecer como opções disponíveis na tela de cobrança? Se sim, prefere incluir na mesma issue ou abrir uma separada?"
+
+---
+
 ## Fluxo de Trabalho
 
 ### 1. Entender o pedido
@@ -40,9 +95,10 @@ Exemplos de quando perguntar:
 - Consultar `features/{módulo}.md` para ver o que já está especificado
 - Consultar `PLAN.md` para ver o que já foi implementado
 - Identificar se é nova funcionalidade, extensão de algo existente, ou correção
+- **Executar a Análise de Dependências** acima — identificar se o pedido cria dados que serão consumidos em outro módulo
 
 ### 2. Validar ou questionar
-Se houver dúvidas, **pare aqui** e faça as perguntas necessárias antes de continuar.
+Se houver dúvidas de escopo, dependências não confirmadas ou fluxo incompleto identificado na análise acima, **pare aqui** e faça as perguntas necessárias antes de continuar. Agrupe todas as perguntas em uma única mensagem.
 
 ### 3. Gerar a issue
 Produzir a issue no formato abaixo com a máxima precisão possível.
@@ -62,6 +118,20 @@ Após gerar o conteúdo da issue, **sempre**:
 4. As duas opções são independentes — o usuário pode escolher uma, ambas ou nenhuma.
 
 > **Nunca** crie a issue no GitHub ou salve o arquivo sem confirmação explícita do usuário.
+
+---
+
+## Execução Única — Sem Loops Automáticos
+
+Este agente gera a issue **uma vez**, apresenta ao usuário e **para**. Não há refinamento automático, nem re-execução sem instrução explícita.
+
+- **Não** entre em loops de "melhora automaticamente até ficar perfeito"
+- **Não** tente corrigir ou completar a issue por conta própria após apresentá-la
+- **Não** gere variantes alternativas sem ser solicitado
+- Após apresentar a issue: liste eventuais dúvidas ou pontos em aberto — **pare e aguarde**
+- Ajustes só ocorrem mediante solicitação explícita do usuário
+
+> Se a geração ficar incompleta ou ambígua, aponte o motivo claramente e aguarde. Uma execução por instrução.
 
 ---
 
@@ -135,6 +205,16 @@ Exemplos:
 
 > **Regra**: o total `{TOTAL}` só é definido depois de listar todas as issues do conjunto. Nunca use total estimado — calcule o total real antes de nomear.
 
+> ⛔ **PROIBIDO abreviar o nome da feature.** Se o usuário informou `FASE 2 — ESTRUTURA DE NEGÓCIO`, o colchete deve conter exatamente `[FASE 2 — ESTRUTURA DE NEGÓCIO]`. Nunca encurtar para `[FASE 2]`, `[FASE 2 ESTRUTURA]` ou qualquer variação. Copie o nome literal como foi informado.
+
+**Exemplos de ERRADO vs CORRETO:**
+
+| ❌ Errado | ✅ Correto |
+|---|---|
+| `[FASE 2] Módulo de Compras...` | `[FASE 2 — ESTRUTURA DE NEGÓCIO] - 1/5 - Módulo de Compras...` |
+| `[FASE 2 ESTRUTURA] - 1/5 - ...` | `[FASE 2 — ESTRUTURA DE NEGÓCIO] - 1/5 - ...` |
+| `[FASE 2] - 1/5 - ...` | `[FASE 2 — ESTRUTURA DE NEGÓCIO] - 1/5 - ...` |
+
 ---
 
 ## Formato do Corpo da Issue GitHub
@@ -187,6 +267,46 @@ Referencie a spec em `features/{módulo}.md` se relevante.}
 - `aesthera/apps/web/app/(dashboard)/{módulo}/...`
 
 > Listar apenas os arquivos que **precisam** ser alterados. Serve como guia e limite para o implementador.
+
+## Análise de Implementação
+
+> Esta seção transforma a issue em instrução direta — o implementador começa a codar sem precisar tomar nenhuma decisão técnica.
+
+### Endpoint (Backend)
+- **Método HTTP:** `{PATCH | POST | GET | DELETE}`
+- **Rota:** `/clinics/:clinicId/{módulo}/{sub-rota}`
+- **Request body:** `{ {campo}: {tipo} }`
+- **Response:** `{ {campo}: {tipo} }`
+
+### DTO / Schema Zod
+```typescript
+// Campos a adicionar ou modificar em {Módulo}Schema
+{campo}: z.string().max(500).optional(),
+```
+
+### Service — método a criar/modificar
+```typescript
+// Assinatura: {Módulo}Service.{método}(clinicId: string, id: string, dto: {Tipo}): Promise<{ReturnType}>
+// Lógica esperada: {descrever em 1-3 linhas o que o método faz}
+// Referência de padrão: {caminho/do/arquivo-similar.ts} → método {métodoSimilar}()
+```
+
+### Prisma / DB
+```typescript
+prisma.{model}.{operation}({
+  where: { id, clinicId },
+  data: { {campo} },
+})
+```
+
+### Frontend
+- **Componente a modificar:** `{aesthera/apps/web/app/.../componente.tsx}`
+- **Campo no formulário:** `<{Componente} name="{campo}" label="{Label em PT-BR}" />`
+- **Validação Zod:** `{campo}: z.string().max(500).optional()`
+- **Chamada de API:** `apiClient.{method}('{rota}', { {payload} })`
+
+> Omitir sub-seções que não se aplicam (ex: omitir "Endpoint" se for somente frontend, omitir sub-seções sem modificação).
+> Esta seção é **obrigatória** em toda issue que contém "O que fazer" preenchido.
 
 ## Critérios de Aceitação
 

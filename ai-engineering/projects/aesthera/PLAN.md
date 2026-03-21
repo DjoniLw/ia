@@ -337,6 +337,42 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - **O que foi feito:** Adicionada regra obrigatória de testes nas "Regras de Implementação". Fluxo de trabalho atualizado com passo 3 "Criar ou atualizar testes". Adicionada seção completa "Testes Unitários e Automatizados" com: framework (Vitest), localização dos arquivos (`{módulo}.service.test.ts` co-localizado), regras para código novo (sempre criar) e código existente (verificar + atualizar testes afetados), padrão de estrutura de arquivo de test com `vi.hoisted`/`vi.mock`, tabela de cenários obrigatórios e o que não testar por ora.
 - **Impacto:** Agente `aesthera-implementador` — toda implementação nova ou alteração em código coberto agora exige criação/revisão de testes. Alinha com o `vitest.config.ts` existente e o teste de referência `wallet.service.test.ts`.
 
+### [2026-03-20] — Treinamento de agentes: economia de requests e execução única
+
+- **Arquivo(s) afetado(s):**
+  - `.github/agents/aesthera-implementador.agent.md`
+  - `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`
+  - `ai-engineering/prompts/aesthera-issue-writer/aesthera-issue-writer-prompt.md`
+  - `ai-engineering/prompts/aesthera-system-architect/aesthera-system-architect-prompt.md`
+  - `ai-engineering/prompts/treinador/treinador-agent-prompt.md`
+- **O que foi feito:**
+  - `aesthera-implementador.agent.md`: modelo padrão alterado de `Claude Sonnet 4.6` para `gpt-4.5`
+  - `aesthera-implementador-prompt.md`: adicionada seção "Seleção de Modelo (pré-tarefa obrigatória)" — o agente avalia a complexidade antes de começar e recomenda GPT 4.5 (tarefas padrão) ou Claude Sonnet 4.6 (lógica complexa, bugs difíceis, arquitetura, agentes); adicionada seção "Execução Única — Sem Loops Automáticos"
+  - `aesthera-issue-writer-prompt.md`: adicionada seção "Análise de Implementação" ao formato da issue — o agente pré-define endpoint, DTO/Zod, assinatura de service, query Prisma e campos de frontend para que o implementador comece sem decisões técnicas; adicionada seção "Execução Única — Sem Loops Automáticos"
+  - `aesthera-system-architect-prompt.md`: adicionada seção "Execução Única — Sem Loops Automáticos"
+  - `treinador-agent-prompt.md`: adicionada seção "Execução Única — Sem Loops Automáticos"
+- **Impacto:** Todos os agentes agora operam no modo "executa uma vez, apresenta, para". Auto-apply e loops de refinamento automático estão desativados em todos os agentes. O implementador usa GPT 4.5 por padrão, com troca manual para Claude Sonnet 4.6 quando a tarefa for complexa.
+
+### [2026-03-20] — Treinamento do implementador: ciclo de code review → auto-aprendizado
+
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`
+  - `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` (**criado**)
+- **O que foi feito:**
+  - Carregamento de contexto: adicionado item 7 — leitura obrigatória de `code-review-learnings.md` antes de qualquer implementação
+  - Adicionada **Etapa 4 — Code Review do Copilot**: após PR aberto, o agente pergunta se o usuário quer que leia os comentários do Copilot no PR; faz triagem classificando cada item como ÚTIL ou RUÍDO (com tabela de critérios); apresenta a triagem para confirmação; aplica apenas o confirmado; commita as correções na mesma branch
+  - Adicionada **Rotina de Auto-treinamento**: após processar a Etapa 4, o agente registra automaticamente os aprendizados ÚTEIS em `code-review-learnings.md` com formato padronizado (erro → correto → PR de origem)
+  - Criado `code-review-learnings.md` com estrutura de categorias (Backend: segurança/multi-tenancy, validação, async, Prisma; Frontend: PT-BR, formulários, componentes; Geral: testes, arquitetura)
+- **Impacto:** O implementador passa a acumular conhecimento a cada code review. Com o tempo, os erros que o Copilot apontaria já serão prevenidos antes do commit, eliminando falsos positivos e reduzindo ciclos de correção.
+
+---
+
+### [2026-03-20] — Treinamento do issue-writer: perguntas proativas de dependência de módulo
+
+- **Arquivo(s) afetado(s):** `ai-engineering/prompts/aesthera-issue-writer/aesthera-issue-writer-prompt.md`
+- **O que foi feito:** Adicionada seção "Análise de Dependências e Perguntas Proativas" — o agente agora, após entender o pedido, analisa onde a informação/funcionalidade criada será consumida no restante do sistema (usando `features/` e `PLAN.md`). Se identificar fluxos incompletos ou módulos relacionados que não foram mencionados, faz perguntas específicas e nomeadas antes de gerar a issue. O passo 1 e 2 do fluxo de trabalho foram atualizados para incluir essa análise. Exemplo documentado no prompt: cadastro de formas de pagamento → pergunta proativa sobre integração com tela de cobrança.
+- **Impacto:** Issues geradas passam a cobrir o fluxo completo em vez de apenas a parte solicitada. Reduz o risco de criar funcionalidades orfãs (cadastros sem consumidores, links sem destino).
+
 ---
 
 ## Como usar este plano com o Copilot
