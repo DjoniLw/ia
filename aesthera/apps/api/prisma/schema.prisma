@@ -171,6 +171,7 @@ model Clinic {
   auth             ClinicAuth?
   apiKeys          ApiKey[]
   businessHours    BusinessHour[]
+  paymentMethodConfig PaymentMethodConfig?
   users            User[]
   sourceTransfers  TransferToken[] @relation("TransferSourceClinic")
   targetTransfers  TransferToken[] @relation("TransferTargetClinic")
@@ -226,6 +227,26 @@ model BusinessHour {
 
   @@unique([clinicId, dayOfWeek])
   @@map("business_hours")
+}
+
+model PaymentMethodConfig {
+  id                       String   @id @default(uuid())
+  clinicId                 String   @unique               @map("clinic_id")
+  pixEnabled               Boolean  @default(true)        @map("pix_enabled")
+  boletoEnabled            Boolean  @default(true)        @map("boleto_enabled")
+  cardEnabled              Boolean  @default(true)        @map("card_enabled")
+  installmentsEnabled      Boolean  @default(false)       @map("installments_enabled")
+  installmentsMaxMonths    Int      @default(12)          @map("installments_max_months")
+  installmentsMinAmount    Int      @default(10000)       @map("installments_min_amount")
+  duplicataEnabled         Boolean  @default(false)       @map("duplicata_enabled")
+  duplicataDaysInterval    Int      @default(30)          @map("duplicata_days_interval")
+  duplicataMaxInstallments Int      @default(6)           @map("duplicata_max_installments")
+  createdAt                DateTime @default(now())       @map("created_at")
+  updatedAt                DateTime @updatedAt            @map("updated_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@map("payment_method_configs")
 }
 
 // ─── API Key ─────────────────────────────────────────────────────────────────
@@ -509,7 +530,7 @@ model Billing {
   appointmentId  String        @unique              @map("appointment_id") // 1:1 with Appointment
   amount         Int                                // BRL cents
   status         BillingStatus @default(pending)
-  paymentMethods String[]                           @map("payment_methods") // ['pix','boleto','card']
+  paymentMethods String[]                           @map("payment_methods") // ['pix','boleto','card','installments','duplicata']
   paymentLink    String?                            @map("payment_link")
   paymentToken   String        @unique              @map("payment_token")   // public payment page token
   dueDate        DateTime      @db.Date             @map("due_date")
