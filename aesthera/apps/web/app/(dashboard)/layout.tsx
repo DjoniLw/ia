@@ -30,7 +30,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChatPanel } from '@/components/chat-panel'
 import { toast } from 'sonner'
 
@@ -68,8 +68,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role = useRole()
   const { data: clinic } = useClinic()
 
-  // screenPermissions is read once per mount (JWT payload, client-side only)
-  const screenPermissions = typeof window !== 'undefined' ? getUserScreenPermissions() : []
+  // screenPermissions: memoized to ensure stable reference (avoids useEffect churn)
+  const screenPermissions = useMemo(
+    () => (typeof window !== 'undefined' ? getUserScreenPermissions() : []),
+    [],
+  )
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -77,20 +80,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return
     }
     if (role === 'staff') {
-      const isAdminRestricted = ADMIN_ONLY_PATHS.some(
-        (p) => pathname === p || pathname.startsWith(p + '/'),
-      )
-      if (isAdminRestricted) {
-        toast.warning('Você não tem permissão para acessar esta página.')
-        router.replace('/dashboard')
-        return
-      }
-      // Granular permission check: if screenPermissions is populated, only allow listed routes
       if (screenPermissions.length > 0) {
+        // Allowlist é autoridade principal: governa todos os paths (incluindo os adminOnly)
         const isAllowed =
           pathname === '/dashboard' ||
+          pathname.startsWith('/settings/profile') ||
           screenPermissions.some((p) => pathname === p || pathname.startsWith(p + '/'))
         if (!isAllowed) {
+          toast.warning('Você não tem permissão para acessar esta página.')
+          router.replace('/dashboard')
+        }
+      } else {
+        // Sem permissões granulares: bloqueia paths adminOnly, exceto /settings/profile
+        const isAdminRestricted =
+          ADMIN_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/')) &&
+          !pathname.startsWith('/settings/profile')
+        if (isAdminRestricted) {
           toast.warning('Você não tem permissão para acessar esta página.')
           router.replace('/dashboard')
         }
@@ -105,14 +110,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const visibleNavItems = role === 'staff'
     ? navItems.filter((item) => {
-        if (item.adminOnly) return false
-        // If screenPermissions is populated, further restrict to only listed routes
         if (screenPermissions.length > 0) {
+          // Allowlist governa: exibe dashboard + rotas explicitamente concedidas
           return item.href === '/dashboard' || screenPermissions.includes(item.href)
         }
-        return true
+        // Sem permissões granulares: oculta itens adminOnly
+        return !item.adminOnly
       })
     : navItems
+
+  // Verificação síncrona de autorização — evita flash de conteúdo protegido antes do useEffect
+  const isScreenAllowed = useMemo(() => {
+    if (!role) return true
+    if (role === 'admin') return true
+    if (screenPermissions.length > 0) {
+      return (
+        pathname === '/dashboard' ||
+        pathname.startsWith('/settings/profile') ||
+        screenPermissions.some((p) => pathname === p || pathname.startsWith(p + '/'))
+      )
+    }
+    const isAdminPath =
+      ADMIN_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/')) &&
+      !pathname.startsWith('/settings/profile')
+    return !isAdminPath
+  }, [role, pathname, screenPermissions])
 
   const currentPage = navItems.find((n) => n.href === pathname)
 
@@ -214,7 +236,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 md:p-6">{isScreenAllowed ? children : null}</main>
       </div>
 
       {/* AI Chat Panel */}

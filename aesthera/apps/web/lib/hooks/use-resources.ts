@@ -308,10 +308,11 @@ export function useSellProduct() {
   })
 }
 
-export function useProductSales(params?: Record<string, string>) {
+export function useProductSales(params?: Record<string, string>, options?: { enabled?: boolean }) {
   return useQuery<Paginated<ProductSale>>({
     queryKey: ['product-sales', params],
     queryFn: () => api.get('/products/sales', { params }).then((r) => r.data),
+    ...options,
   })
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -52,11 +52,18 @@ export default function ProfilePage() {
 
   const profileForm = useForm<ProfileData>({
     resolver: zodResolver(profileSchema),
-    values: { name: user?.name ?? '' },
+    mode: 'onChange',
+    defaultValues: { name: '' },
   })
+
+  useEffect(() => {
+    if (user?.name) profileForm.reset({ name: user.name })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.name])
 
   const passwordForm = useForm<PasswordData>({
     resolver: zodResolver(passwordSchema),
+    mode: 'onChange',
     defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
   })
 

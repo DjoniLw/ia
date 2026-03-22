@@ -77,10 +77,11 @@ export function useLedger(params?: Record<string, string | number>) {
   })
 }
 
-export function useLedgerSummary(params?: { from?: string; to?: string }) {
+export function useLedgerSummary(params?: { from?: string; to?: string }, options?: { enabled?: boolean }) {
   return useQuery<LedgerSummary>({
     queryKey: ['ledger-summary', params],
     queryFn: () => api.get('/ledger/summary', { params }).then((r) => r.data),
+    ...options,
   })
 }
 

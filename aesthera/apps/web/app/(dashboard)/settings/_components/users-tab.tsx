@@ -49,6 +49,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     label: 'Estoque',
     routes: [
       { href: '/supplies', label: 'Insumos' },
+      { href: '/compras-insumos', label: 'Compras de Insumos' },
       { href: '/products', label: 'Produtos' },
     ],
   },

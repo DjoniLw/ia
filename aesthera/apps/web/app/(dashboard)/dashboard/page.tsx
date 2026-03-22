@@ -49,12 +49,12 @@ export default function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10)
   const role = useRole()
   const isAdmin = role === 'admin'
-  const summary = useLedgerSummary({ from, to })
-  const todaySummary = useLedgerSummary({ from: today, to: today })
+  const summary = useLedgerSummary({ from, to }, { enabled: isAdmin })
+  const todaySummary = useLedgerSummary({ from: today, to: today }, { enabled: isAdmin })
   const todayAppts = useTodayAppointments()
-  const pendingBilling = useBilling({ status: 'pending' })
-  const overdueBilling = useBilling({ status: 'overdue', limit: '5' })
-  const monthSales = useProductSales({ from, to, limit: '1' })
+  const pendingBilling = useBilling({ status: 'pending' }, { enabled: isAdmin })
+  const overdueBilling = useBilling({ status: 'overdue', limit: '5' }, { enabled: isAdmin })
+  const monthSales = useProductSales({ from, to, limit: '1' }, { enabled: isAdmin })
 
   const [briefing, setBriefing] = useState<string | null>(null)
   const [briefingLoading, setBriefingLoading] = useState(false)
