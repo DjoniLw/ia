@@ -1,4 +1,8 @@
+import { randomUUID } from 'node:crypto'
+import { Prisma } from '@prisma/client'
 import { ConflictError, NotFoundError } from '../../shared/errors/app-error'
+import { createAuditLog } from '../../shared/audit'
+import { prisma } from '../../database/prisma/client'
 import type { CreateCustomerDto, ListCustomersQuery, UpdateCustomerDto } from './customers.dto'
 import { CustomersRepository } from './customers.repository'
 
@@ -36,5 +40,52 @@ export class CustomersService {
     await this.get(clinicId, id)
     await this.repo.softDelete(clinicId, id)
     return { message: 'Customer deleted' }
+  }
+
+  /**
+   * Anonimiza os dados pessoais de um cliente em conformidade com a LGPD Art. 18.
+   *
+   * Operação atômica (transação Prisma):
+   * - Substitui todos os campos PII por valores anônimos
+   * - Exclui fisicamente os prontuários clínicos (dados de saúde — categoria especial)
+   * - Preserva registros de Appointment e Billing para auditoria fiscal
+   */
+  async anonymize(
+    clinicId: string,
+    customerId: string,
+    actorId: string,
+    ip?: string,
+  ): Promise<void> {
+    const customer = await this.repo.findById(clinicId, customerId)
+    if (!customer) throw new NotFoundError('Cliente não encontrado')
+
+    await prisma.$transaction(async (tx) => {
+      // Excluir prontuários clínicos (dados de saúde — não podem ser mantidos mesmo anonimizados)
+      await tx.clinicalRecord.deleteMany({ where: { customerId, clinicId } })
+
+      // Anonimizar todos os campos PII do cliente
+      await tx.customer.update({
+        where: { id: customerId },
+        data: {
+          name: 'Cliente Anonimizado',
+          email: `anon-${randomUUID()}@anonimizado.internal`,
+          phone: '00000000000',
+          document: null,
+          birthDate: null,
+          address: Prisma.DbNull,
+          notes: null,
+          metadata: Prisma.DbNull,
+          externalId: null,
+        },
+      })
+    })
+
+    await createAuditLog({
+      clinicId,
+      userId: actorId,
+      action: 'customer.anonymized',
+      entityId: customerId,
+      ip,
+    })
   }
 }
