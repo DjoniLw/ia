@@ -5,6 +5,7 @@ import { CalendarDays, Cake, TrendingUp, AlertCircle, CheckCircle, Clock, Loader
 import { useLedgerSummary, useTodayAppointments } from '@/lib/hooks/use-financial'
 import { useCustomerBirthdays, useProductSales } from '@/lib/hooks/use-resources'
 import { useBilling } from '@/lib/hooks/use-appointments'
+import { useRole } from '@/lib/hooks/use-role'
 import { api } from '@/lib/api'
 
 function formatCurrency(cents: number) {
@@ -41,9 +42,13 @@ function monthRange() {
   return { from, to }
 }
 
+const FINANCIAL_LABELS = ['Receita Hoje', 'Receita do Mês', 'A Receber', 'Vendas (Mês)']
+
 export default function DashboardPage() {
   const { from, to } = monthRange()
   const today = new Date().toISOString().slice(0, 10)
+  const role = useRole()
+  const isAdmin = role === 'admin'
   const summary = useLedgerSummary({ from, to })
   const todaySummary = useLedgerSummary({ from: today, to: today })
   const todayAppts = useTodayAppointments()
@@ -143,6 +148,10 @@ export default function DashboardPage() {
     },
   ]
 
+  const visibleStats = isAdmin
+    ? stats
+    : stats.filter((s) => !FINANCIAL_LABELS.includes(s.label))
+
   return (
     <div className="space-y-6">
       <div>
@@ -154,7 +163,7 @@ export default function DashboardPage() {
 
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {stats.map(({ label, value, icon: Icon, color, bg }) => (
+        {visibleStats.map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="rounded-xl border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-muted-foreground">{label}</p>
@@ -167,6 +176,7 @@ export default function DashboardPage() {
         ))}
       </div>
       {/* Briefing IA */}
+      {isAdmin && (
       <div className="rounded-xl border bg-card p-5 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="rounded-lg bg-violet-50 p-2 dark:bg-violet-950/20">
@@ -204,6 +214,7 @@ export default function DashboardPage() {
           <p className="mt-4 text-sm text-muted-foreground">Clique em "Gerar briefing" para ver um resumo inteligente do seu dia.</p>
         )}
       </div>
+      )}
 
       {/* Briefing + Ocupação row */}
       <div className="grid gap-4 lg:grid-cols-2">

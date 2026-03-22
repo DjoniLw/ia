@@ -473,7 +473,7 @@ export class AuthService {
     await clearLockout(user.id)
     void authRepository.updateUserLastLogin(user.id)
 
-    const tokens = await this.issueTokens(user.id, user.clinicId, user.role)
+    const tokens = await this.issueTokens(user.id, user.clinicId, user.role, user.screenPermissions)
 
     return {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
@@ -711,7 +711,19 @@ export class AuthService {
     // Rotate: revoke old token
     await redis.del(key)
 
-    return this.issueTokens(userId, clinicId, role)
+    // Fetch current screenPermissions from DB to include in the new token.
+    // Note: for professional tokens, screenPermissions is not applicable.
+    let screenPermissions: string[] = []
+    if (role === 'staff') {
+      const { prisma } = await import('../../database/prisma/client')
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { screenPermissions: true },
+      })
+      screenPermissions = user?.screenPermissions ?? []
+    }
+
+    return this.issueTokens(userId, clinicId, role, screenPermissions)
   }
 
   // ── Logout ───────────────────────────────────────────────────────────────────
@@ -770,9 +782,12 @@ export class AuthService {
     userId: string,
     clinicId: string,
     role: 'admin' | 'staff' | 'professional',
+    screenPermissions: string[] = [],
   ) {
     const accessToken = this.app.jwt.sign(
-      { clinicId, role },
+      // v1 limitation: when an admin changes a user's screenPermissions, the current
+      // JWT keeps the old permissions until the next login (no forced invalidation).
+      { clinicId, role, screenPermissions },
       { sub: userId, expiresIn: appConfig.jwt.expiresIn },
     )
 

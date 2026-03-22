@@ -2,6 +2,7 @@
 
 import { isAuthenticated } from '@/lib/auth'
 import { useRole } from '@/lib/hooks/use-role'
+import { getUserScreenPermissions } from '@/lib/auth'
 import { useClinic } from '@/lib/hooks/use-settings'
 import { UserNav } from '@/components/user-nav'
 import {
@@ -67,21 +68,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role = useRole()
   const { data: clinic } = useClinic()
 
+  // screenPermissions is read once per mount (JWT payload, client-side only)
+  const screenPermissions = typeof window !== 'undefined' ? getUserScreenPermissions() : []
+
   useEffect(() => {
     if (!isAuthenticated()) {
       router.replace('/login')
       return
     }
     if (role === 'staff') {
-      const isRestricted = ADMIN_ONLY_PATHS.some(
+      const isAdminRestricted = ADMIN_ONLY_PATHS.some(
         (p) => pathname === p || pathname.startsWith(p + '/'),
       )
-      if (isRestricted) {
+      if (isAdminRestricted) {
         toast.warning('Você não tem permissão para acessar esta página.')
         router.replace('/dashboard')
+        return
+      }
+      // Granular permission check: if screenPermissions is populated, only allow listed routes
+      if (screenPermissions.length > 0) {
+        const isAllowed =
+          pathname === '/dashboard' ||
+          screenPermissions.some((p) => pathname === p || pathname.startsWith(p + '/'))
+        if (!isAllowed) {
+          toast.warning('Você não tem permissão para acessar esta página.')
+          router.replace('/dashboard')
+        }
       }
     }
-  }, [role, pathname, router])
+  }, [role, pathname, router, screenPermissions])
 
   // Fechar sidebar ao trocar de rota (navegação mobile)
   useEffect(() => {
@@ -89,7 +104,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [pathname])
 
   const visibleNavItems = role === 'staff'
-    ? navItems.filter((item) => !item.adminOnly)
+    ? navItems.filter((item) => {
+        if (item.adminOnly) return false
+        // If screenPermissions is populated, further restrict to only listed routes
+        if (screenPermissions.length > 0) {
+          return item.href === '/dashboard' || screenPermissions.includes(item.href)
+        }
+        return true
+      })
     : navItems
 
   const currentPage = navItems.find((n) => n.href === pathname)

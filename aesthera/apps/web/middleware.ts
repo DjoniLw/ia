@@ -17,6 +17,11 @@ function isPublicPath(pathname: string): boolean {
   )
 }
 
+// NOTE(#73): screenPermissions route enforcement is done client-side in layout.tsx,
+// because the auth tokens are stored in localStorage and are not accessible in
+// Next.js Edge middleware. The layout.tsx useEffect handles both adminOnly and
+// granular screenPermissions checks before rendering any protected page.
+
 export function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') ?? ''
   const response = NextResponse.next()

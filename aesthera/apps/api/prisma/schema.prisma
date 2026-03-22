@@ -279,6 +279,7 @@ model User {
   passwordHash    String?                         @map("password_hash") // null until invite accepted
   role            UserRole  @default(staff)
   active          Boolean   @default(true)
+  screenPermissions String[] @default([])         @map("screen_permissions")
   inviteToken     String?   @unique               @map("invite_token")
   inviteExpiresAt DateTime?                       @map("invite_expires_at")
   lastLoginAt     DateTime?                       @map("last_login_at")
