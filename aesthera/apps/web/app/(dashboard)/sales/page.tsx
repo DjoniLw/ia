@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2, Package, Plus, ShoppingCart } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -35,7 +35,7 @@ const saleSchema = z.object({
   productId: z.string().min(1, 'Selecione um produto'),
   customerId: z.string().optional(),
   quantity: z.coerce.number().int().positive('Quantidade deve ser maior que 0'),
-  discount: z.coerce.number().int().min(0).default(0),
+  discount: z.coerce.number().min(0).default(0),
   paymentMethod: z.enum(['cash', 'pix', 'card', 'transfer']).optional(),
   notes: z.string().optional(),
 })
@@ -64,7 +64,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
 
   const selectedProduct = products?.items.find((p) => p.id === selectedProductId)
   const unitPrice = selectedProduct?.price ?? 0
-  const total = Math.max(0, unitPrice * quantity - discount)
+  const total = Math.max(0, unitPrice * quantity - Math.round((discount || 0) * 100))
 
   async function onSubmit(data: SaleFormData) {
     try {
@@ -72,7 +72,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
         productId: data.productId,
         customerId: data.customerId || null,
         quantity: data.quantity,
-        discount: data.discount || 0,
+        discount: Math.min(Math.round((data.discount || 0) * 100), unitPrice * data.quantity),
         paymentMethod: data.paymentMethod || null,
         notes: data.notes || null,
       })
@@ -116,6 +116,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
         <div className="space-y-2">
           <Label>Desconto (R$)</Label>
           <Input type="number" min="0" step="0.01" {...register('discount')} />
+          {errors.discount && <p className="text-xs text-destructive">{errors.discount.message}</p>}
         </div>
       </div>
 
@@ -128,7 +129,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
           {discount > 0 && (
             <div className="flex justify-between text-red-600">
               <span>Desconto</span>
-              <span>- {formatCurrency(discount)}</span>
+              <span>- {formatCurrency(Math.round((discount || 0) * 100))}</span>
             </div>
           )}
           <div className="mt-1 flex justify-between border-t pt-1 font-semibold">
@@ -186,13 +187,25 @@ export default function SalesPage() {
   const [newSale, setNewSale] = useState(false)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const now = new Date()
   const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
   const [from, setFrom] = useState(defaultFrom)
   const [to, setTo] = useState(defaultTo)
 
-  const params: Record<string, string> = { page: String(page), limit: '20', from, to }
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 250)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  const params: Record<string, string> = {
+    page: String(page),
+    limit: '20',
+    from,
+    to,
+    ...(debouncedSearch && { search: debouncedSearch }),
+  }
 
   const { data, isLoading } = useProductSales(params)
 
@@ -246,6 +259,15 @@ export default function SalesPage() {
             value={to}
             onChange={(e) => { setTo(e.target.value); setPage(1) }}
             className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground">Buscar</label>
+          <Input
+            placeholder="Buscar por produto ou cliente…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            className="h-8 w-48 text-sm"
           />
         </div>
       </div>

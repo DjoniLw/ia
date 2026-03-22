@@ -22,8 +22,14 @@ const CHANNEL_LABEL: Record<string, string> = {
 
 const EVENT_LABEL: Record<string, string> = {
   'appointment.confirmed': 'Agendamento confirmado',
+  'appointment.reminder.d1': 'Lembrete de agendamento (D-1)',
+  'appointment.cancelled': 'Agendamento cancelado',
+  'appointment.completed': 'Atendimento concluído',
   'billing.created': 'Cobrança gerada',
+  'billing.overdue': 'Cobrança vencida',
   'payment.succeeded': 'Pagamento recebido',
+  'payment.failed': 'Falha no pagamento',
+  'payment.link.sent': 'Link de pagamento enviado',
 }
 
 const STATUS_CONFIG: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
@@ -67,10 +73,10 @@ function NotificationRow({ log }: { log: NotificationLog }) {
       <td className="px-5 py-3 text-muted-foreground">{formatDate(log.createdAt)}</td>
       <td className="hidden sm:table-cell px-5 py-3">
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          {CHANNEL_LABEL[log.type] ?? log.type}
+          {CHANNEL_LABEL[log.type] ?? 'Desconhecido'}
         </span>
       </td>
-      <td className="px-5 py-3 text-sm text-foreground">{EVENT_LABEL[log.event] ?? log.event}</td>
+      <td className="px-5 py-3 text-sm text-foreground">{EVENT_LABEL[log.event] ?? 'Evento desconhecido'}</td>
       <td className="hidden sm:table-cell px-5 py-3">
         <div>
           <p className="text-sm text-foreground">{log.customer?.name ?? '—'}</p>
