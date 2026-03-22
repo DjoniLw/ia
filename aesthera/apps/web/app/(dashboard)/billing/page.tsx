@@ -183,14 +183,14 @@ export default function BillingPage() {
       <div className="rounded-lg border bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/30 text-muted-foreground">
-              <th className="py-3 pl-4 pr-2 text-left text-xs font-medium">Cliente</th>
-              <th className="hidden sm:table-cell px-2 py-3 text-left text-xs font-medium">Serviço</th>
-              <th className="hidden sm:table-cell px-2 py-3 text-left text-xs font-medium">Agendamento</th>
-              <th className="px-2 py-3 text-left text-xs font-medium">Valor</th>
-              <th className="hidden sm:table-cell px-2 py-3 text-left text-xs font-medium">Vencimento</th>
-              <th className="px-2 py-3 text-left text-xs font-medium">Status</th>
-              <th className="px-2 py-3 text-right text-xs font-medium">Ações</th>
+            <tr className="border-b bg-muted/30">
+              <th className="py-3 pl-4 pr-2 text-left text-xs font-medium text-muted-foreground">Cliente</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Serviço</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Agendamento</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Valor</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Vencimento</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Ações</th>
             </tr>
           </thead>
           <tbody>
