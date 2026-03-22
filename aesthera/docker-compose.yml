@@ -47,7 +47,7 @@ services:
       DATABASE_URL: postgresql://aesthera:aesthera@postgres:5432/aesthera_dev
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-change_me_jwt_secret_at_least_32_characters_long}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_refresh_secret_at_least_32_chars}
+      # JWT_REFRESH_SECRET removido: refresh tokens sao opacos via Redis, nao JWT assinados
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}

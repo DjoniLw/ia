@@ -32,7 +32,7 @@ export async function clinicalRoutes(app: FastifyInstance) {
   app.patch('/clinical-records/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const existing = await repo.findById(req.clinicId, id)
-    if (!existing) throw new NotFoundError('Clinical record not found')
+    if (!existing) throw new NotFoundError('ClinicalRecord')
     const dto = UpdateClinicalRecordDto.parse(req.body)
     const updated = await repo.update(req.clinicId, id, dto)
     await createAuditLog({

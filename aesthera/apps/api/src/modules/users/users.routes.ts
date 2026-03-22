@@ -4,6 +4,7 @@ import { roleGuard } from '../../shared/guards/role.guard'
 import { tenantMiddleware } from '../../shared/middleware/tenant.middleware'
 import { AcceptInviteDto, InviteUserDto, UpdateMeDto, UpdateUserDto } from './users.dto'
 import { UsersService } from './users.service'
+import { createAuditLog } from '../../shared/audit'
 
 export async function usersRoutes(app: FastifyInstance) {
   const service = new UsersService()
@@ -72,6 +73,19 @@ export async function usersRoutes(app: FastifyInstance) {
       const { id } = request.params as { id: string }
       const dto = UpdateUserDto.parse(request.body)
       const user = await service.updateUser(request.clinicId, id, dto)
+
+      // Audit log: registra especificamente mudança de role (ação sensível)
+      if (dto.role !== undefined) {
+        await createAuditLog({
+          clinicId: request.clinicId,
+          userId: request.user.sub,
+          action: 'user.role_changed',
+          entityId: id,
+          metadata: { newRole: dto.role },
+          ip: request.ip,
+        })
+      }
+
       return reply.send(user)
     },
   )

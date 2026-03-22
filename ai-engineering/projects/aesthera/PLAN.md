@@ -267,6 +267,14 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-21] — #86 #87 #88 — LGPD anonimização, audit log estruturado e limpeza de env JWT
+- **Arquivo(s) afetado(s):** `aesthera/apps/api/prisma/schema.prisma`, `aesthera/apps/api/prisma/migrations/20260321215233_add_audit_log/migration.sql`, `aesthera/apps/api/src/shared/audit.ts`, `aesthera/apps/api/src/config/env.ts`, `aesthera/apps/api/src/config/app.config.ts`, `aesthera/apps/api/.env.example`, `aesthera/apps/api/src/modules/clinical/clinical.routes.ts`, `aesthera/apps/api/src/modules/payments/payments.service.ts`, `aesthera/apps/api/src/modules/customers/customers.service.ts`, `aesthera/apps/api/src/modules/customers/customers.routes.ts`, `aesthera/apps/api/src/modules/users/users.routes.ts`
+- **O que foi feito:**
+  - `#88`: Removido `JWT_REFRESH_SECRET` do schema Zod (`env.ts`), do `app.config.ts` e do `.env.example`. Documentado que refresh tokens são opacos gerenciados via Redis (hash SHA-256), não JWT assinados.
+  - `#87`: Criado modelo `AuditLog` no schema Prisma com migration SQL. Helper `createAuditLog()` disponível em `src/shared/audit.ts`. Instrumentadas as ações críticas: criação/atualização de prontuário clínico, confirmação de pagamento e mudança de role de usuário. Cada log contém `clinicId`, `userId`, `action`, `entityId`, `ip`, `createdAt`.
+  - `#86`: `DELETE /customers/:id` requer role `admin` e executa anonimização LGPD atômica via `prisma.$transaction`: exclui `ClinicalRecord` fisicamente e substitui todos os campos PII por valores anônimos. Preserva `Appointment` e `Billing` para auditoria fiscal. Retorna `204 No Content`.
+- **Impacto:** Conformidade LGPD Art. 18 para dados de saúde; trilha de auditoria para investigação forense; configuração de ambiente limpa sem variável órfã.
+
 ### [2026-03-21] — #82 #83 #84 #85 — Correções de segurança: anti-prompt-injection, PII, mock payment, rate limiting auth
 - **Arquivo(s) afetado(s):** `aesthera/apps/api/src/modules/ai/ai.service.ts`, `aesthera/apps/api/src/modules/payments/payments.routes.ts`, `aesthera/apps/api/src/modules/auth/auth.routes.ts`, `aesthera/apps/api/src/modules/ai/ai.service.test.ts`, `aesthera/apps/api/src/modules/payments/payments.routes.test.ts`, `aesthera/apps/api/src/modules/auth/auth.routes.test.ts`
 - **O que foi feito:**

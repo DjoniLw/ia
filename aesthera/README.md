@@ -24,7 +24,6 @@ A forma mais rápida — tudo roda na nuvem, você acessa pelo browser.
    | `DATABASE_URL` | (copiado do serviço PostgreSQL no Railway) |
    | `REDIS_URL` | (copiado do serviço Redis no Railway) |
    | `JWT_SECRET` | string aleatória ≥ 32 chars |
-   | `JWT_REFRESH_SECRET` | outra string aleatória ≥ 32 chars |
    | `PORT` | `3000` |
 
 6. Para o **frontend web**, crie um segundo serviço apontando para `apps/web/` e adicione:

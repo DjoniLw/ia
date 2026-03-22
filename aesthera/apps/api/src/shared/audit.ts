@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../database/prisma/client'
 
 /**
@@ -19,7 +20,7 @@ export async function createAuditLog(params: {
   userId: string
   action: string
   entityId?: string
-  metadata?: Record<string, unknown>
+  metadata?: Prisma.InputJsonValue
   ip?: string
 }): Promise<void> {
   try {

@@ -56,16 +56,17 @@ export class CustomersService {
     actorId: string,
     ip?: string,
   ): Promise<void> {
-    const customer = await this.repo.findById(clinicId, customerId)
-    if (!customer) throw new NotFoundError('Cliente não encontrado')
-
     await prisma.$transaction(async (tx) => {
+      // Verificar existência dentro da transação para garantir atomicidade e isolamento multi-tenant
+      const customer = await tx.customer.findFirst({ where: { id: customerId, clinicId } })
+      if (!customer) throw new NotFoundError('Customer')
+
       // Excluir prontuários clínicos (dados de saúde — não podem ser mantidos mesmo anonimizados)
       await tx.clinicalRecord.deleteMany({ where: { customerId, clinicId } })
 
-      // Anonimizar todos os campos PII do cliente
-      await tx.customer.update({
-        where: { id: customerId },
+      // Anonimizar todos os campos PII — where inclui clinicId para reforçar isolamento
+      await tx.customer.updateMany({
+        where: { id: customerId, clinicId },
         data: {
           name: 'Cliente Anonimizado',
           email: `anon-${randomUUID()}@anonimizado.internal`,
