@@ -14,6 +14,7 @@ export class AuthRepository {
         passwordHash: true,
         role: true,
         active: true,
+        screenPermissions: true,
       },
     })
   }

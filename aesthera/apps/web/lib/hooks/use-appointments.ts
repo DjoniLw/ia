@@ -274,10 +274,11 @@ export function useAppointmentTransition(id: string) {
 
 // ──── Billing ─────────────────────────────────────────────────────────────────
 
-export function useBilling(params?: Record<string, string>) {
+export function useBilling(params?: Record<string, string>, options?: { enabled?: boolean }) {
   return useQuery<Paginated<Billing>>({
     queryKey: ['billing', params],
     queryFn: () => api.get('/billing', { params }).then((r) => r.data),
+    ...options,
   })
 }
 

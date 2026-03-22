@@ -86,6 +86,18 @@ export async function usersRoutes(app: FastifyInstance) {
         })
       }
 
+      // Audit log: registra mudança de permissões granulares
+      if (dto.screenPermissions !== undefined) {
+        await createAuditLog({
+          clinicId: request.clinicId,
+          userId: request.user.sub,
+          action: 'user.permissions_changed',
+          entityId: id,
+          metadata: { screenPermissions: dto.screenPermissions },
+          ip: request.ip,
+        })
+      }
+
       return reply.send(user)
     },
   )

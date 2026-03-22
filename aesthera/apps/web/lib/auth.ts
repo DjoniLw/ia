@@ -61,3 +61,11 @@ export function getUserRole(): UserRole | null {
   const payload = decodeJwtPayload<{ role?: UserRole }>(token)
   return payload?.role ?? null
 }
+
+export function getUserScreenPermissions(): string[] {
+  const token = getAccessToken()
+  if (!token) return []
+  const payload = decodeJwtPayload<{ screenPermissions?: unknown }>(token)
+  if (!Array.isArray(payload?.screenPermissions)) return []
+  return payload.screenPermissions.filter((p): p is string => typeof p === 'string')
+}

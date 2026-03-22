@@ -2,63 +2,22 @@
 
 import { isAuthenticated } from '@/lib/auth'
 import { useRole } from '@/lib/hooks/use-role'
+import { getUserScreenPermissions } from '@/lib/auth'
 import { useClinic } from '@/lib/hooks/use-settings'
 import { UserNav } from '@/components/user-nav'
 import {
-  BarChart3,
-  Bell,
-  CalendarDays,
-  CreditCard,
-  FileText,
-  Home,
-  Layers,
   Menu,
-  Package,
-  PackageOpen,
   Scissors,
-  Settings,
-  ShoppingBag,
-  ShoppingCart,
-  Tag,
-  UserCheck,
-  Users,
-  Wallet,
-  Wrench,
-  DoorOpen,
   X,
 } from 'lucide-react'
+import { navItems, GROUP_ORDER, ADMIN_ONLY_PATHS } from '@/lib/nav-items'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChatPanel } from '@/components/chat-panel'
 import { toast } from 'sonner'
 
-const navItems = [
-  { href: '/dashboard', label: 'Início', icon: Home, adminOnly: false, group: 'Operacional' },
-  { href: '/appointments', label: 'Agendamentos', icon: CalendarDays, adminOnly: false, group: 'Operacional' },
-  { href: '/services', label: 'Serviços', icon: Scissors, adminOnly: false, group: 'Operacional' },
-  { href: '/professionals', label: 'Profissionais', icon: UserCheck, adminOnly: false, group: 'Operacional' },
-  { href: '/customers', label: 'Clientes', icon: Users, adminOnly: false, group: 'Operacional' },
-  { href: '/equipment', label: 'Equipamentos', icon: Wrench, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/rooms', label: 'Salas', icon: DoorOpen, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/supplies', label: 'Insumos', icon: PackageOpen, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/compras-insumos', label: 'Compras de Insumos', icon: ShoppingBag, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/products', label: 'Produtos', icon: Package, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/sales', label: 'Vendas', icon: ShoppingCart, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/carteira', label: 'Carteira', icon: Wallet, adminOnly: false, group: 'Fidelização' },
-  { href: '/promotions', label: 'Promoções', icon: Tag, adminOnly: false, group: 'Fidelização' },
-  { href: '/packages', label: 'Pacotes', icon: Layers, adminOnly: false, group: 'Fidelização' },
-  { href: '/billing', label: 'Cobranças', icon: CreditCard, adminOnly: true, group: 'Financeiro' },
-  { href: '/financial', label: 'Financeiro', icon: BarChart3, adminOnly: true, group: 'Financeiro' },
-  { href: '/reports', label: 'Relatórios', icon: FileText, adminOnly: true, group: 'Financeiro' },
-  { href: '/notifications', label: 'Notificações', icon: Bell, adminOnly: false, group: 'Sistema' },
-  { href: '/settings', label: 'Configurações', icon: Settings, adminOnly: true, group: 'Sistema' },
-]
-
-// Derivado de navItems — fonte única de verdade
-const ADMIN_ONLY_PATHS = navItems.filter((i) => i.adminOnly).map((i) => i.href)
-
-const GROUP_ORDER = ['Operacional', 'Loja & Insumos', 'Fidelização', 'Financeiro', 'Sistema']
+// navItems, GROUP_ORDER e ADMIN_ONLY_PATHS importados de @/lib/nav-items
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -67,21 +26,40 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const role = useRole()
   const { data: clinic } = useClinic()
 
+  // screenPermissions: memoized to ensure stable reference (avoids useEffect churn)
+  const screenPermissions = useMemo(
+    () => (typeof window !== 'undefined' ? getUserScreenPermissions() : []),
+    [],
+  )
+
   useEffect(() => {
     if (!isAuthenticated()) {
       router.replace('/login')
       return
     }
     if (role === 'staff') {
-      const isRestricted = ADMIN_ONLY_PATHS.some(
-        (p) => pathname === p || pathname.startsWith(p + '/'),
-      )
-      if (isRestricted) {
-        toast.warning('Você não tem permissão para acessar esta página.')
-        router.replace('/dashboard')
+      if (screenPermissions.length > 0) {
+        // Allowlist é autoridade principal: governa todos os paths (incluindo os adminOnly)
+        const isAllowed =
+          pathname === '/dashboard' ||
+          pathname.startsWith('/settings/profile') ||
+          screenPermissions.some((p) => pathname === p || pathname.startsWith(p + '/'))
+        if (!isAllowed) {
+          toast.warning('Você não tem permissão para acessar esta página.')
+          router.replace('/dashboard')
+        }
+      } else {
+        // Sem permissões granulares: bloqueia paths adminOnly, exceto /settings/profile
+        const isAdminRestricted =
+          ADMIN_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/')) &&
+          !pathname.startsWith('/settings/profile')
+        if (isAdminRestricted) {
+          toast.warning('Você não tem permissão para acessar esta página.')
+          router.replace('/dashboard')
+        }
       }
     }
-  }, [role, pathname, router])
+  }, [role, pathname, router, screenPermissions])
 
   // Fechar sidebar ao trocar de rota (navegação mobile)
   useEffect(() => {
@@ -89,8 +67,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [pathname])
 
   const visibleNavItems = role === 'staff'
-    ? navItems.filter((item) => !item.adminOnly)
+    ? navItems.filter((item) => {
+        if (screenPermissions.length > 0) {
+          // Allowlist governa: exibe dashboard + rotas explicitamente concedidas
+          return item.href === '/dashboard' || screenPermissions.includes(item.href)
+        }
+        // Sem permissões granulares: oculta itens adminOnly
+        return !item.adminOnly
+      })
     : navItems
+
+  // Verificação síncrona de autorização — evita flash de conteúdo protegido antes do useEffect
+  const isScreenAllowed = useMemo(() => {
+    if (!role) return true
+    if (role === 'admin') return true
+    if (screenPermissions.length > 0) {
+      return (
+        pathname === '/dashboard' ||
+        pathname.startsWith('/settings/profile') ||
+        screenPermissions.some((p) => pathname === p || pathname.startsWith(p + '/'))
+      )
+    }
+    const isAdminPath =
+      ADMIN_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/')) &&
+      !pathname.startsWith('/settings/profile')
+    return !isAdminPath
+  }, [role, pathname, screenPermissions])
 
   const currentPage = navItems.find((n) => n.href === pathname)
 
@@ -192,7 +194,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 md:p-6">{isScreenAllowed ? children : null}</main>
       </div>
 
       {/* AI Chat Panel */}

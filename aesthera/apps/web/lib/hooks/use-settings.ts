@@ -81,6 +81,7 @@ interface User {
   email: string
   role: 'admin' | 'staff'
   active: boolean
+  screenPermissions: string[]
   lastLoginAt: string | null
   createdAt: string
 }
@@ -224,6 +225,15 @@ export function useDeactivateUser() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (userId: string) => api.delete(`/users/${userId}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  })
+}
+
+export function useUpdateUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, data }: { userId: string; data: { screenPermissions?: string[] } }) =>
+      api.patch(`/users/${userId}`, data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
   })
 }

@@ -16,6 +16,9 @@ export type AcceptInviteDto = z.infer<typeof AcceptInviteDto>
 export const UpdateUserDto = z.object({
   name: z.string().min(2).max(100).optional(),
   role: z.enum(['admin', 'staff']).optional(),
+  screenPermissions: z
+    .array(z.string().startsWith('/'))
+    .optional(),
 })
 export type UpdateUserDto = z.infer<typeof UpdateUserDto>
 

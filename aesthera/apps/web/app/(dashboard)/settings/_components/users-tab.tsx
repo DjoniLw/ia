@@ -10,7 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useDeactivateUser, useInviteUser, useUsers } from '@/lib/hooks/use-settings'
+import { useDeactivateUser, useInviteUser, useUpdateUser, useUsers } from '@/lib/hooks/use-settings'
+import { PERMISSION_GROUPS } from '@/lib/nav-items'
 
 const inviteSchema = z.object({
   name: z.string().min(2),
@@ -21,12 +22,143 @@ type InviteData = z.infer<typeof inviteSchema>
 
 const ROLE_LABELS = { admin: 'Administrador', staff: 'Recepcionista' }
 
+// PERMISSION_GROUPS importado de @/lib/nav-items — derivado automaticamente do menu
+
+// ── ScreenPermissionsEditor ───────────────────────────────────────────────────
+
+interface ScreenPermissionsEditorProps {
+  userId: string
+  initialPermissions: string[]
+  onClose: () => void
+}
+
+function ScreenPermissionsEditor({
+  userId,
+  initialPermissions,
+  onClose,
+}: ScreenPermissionsEditorProps) {
+  const [selected, setSelected] = useState<Set<string>>(new Set(initialPermissions))
+  const { mutateAsync: updateUser, isPending } = useUpdateUser()
+
+  function toggleRoute(href: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(href)) next.delete(href)
+      else next.add(href)
+      return next
+    })
+  }
+
+  function toggleGroup(routes: { href: string }[]) {
+    const hrefs = routes.map((r) => r.href)
+    const allSelected = hrefs.every((h) => selected.has(h))
+    setSelected((prev) => {
+      const next = new Set(prev)
+      hrefs.forEach((h) => (allSelected ? next.delete(h) : next.add(h)))
+      return next
+    })
+  }
+
+  async function handleSave() {
+    const permissions = [...selected]
+    try {
+      await updateUser({ userId, data: { screenPermissions: permissions } })
+      toast.success('Permissões salvas com sucesso')
+      onClose()
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Erro ao salvar permissões'
+      toast.error(msg)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Selecione quais telas este usuário pode acessar. <strong>/dashboard</strong> é sempre
+        visível.
+        {selected.size === 0 && (
+          <span className="ml-1 text-amber-600">
+            Nenhuma seleção = acesso padrão por perfil (sem restrição extra).
+          </span>
+        )}
+      </p>
+
+      <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
+        {/* Dashboard — sempre marcado */}
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="flex items-center gap-2">
+            <input type="checkbox" checked disabled readOnly className="h-4 w-4" />
+            <span className="text-sm font-medium text-muted-foreground">
+              Início (/dashboard) — sempre visível
+            </span>
+          </div>
+        </div>
+
+        {PERMISSION_GROUPS.map((group) => {
+          const allSelected = group.routes.every((r) => selected.has(r.href))
+          const someSelected = group.routes.some((r) => selected.has(r.href))
+          return (
+            <div key={group.label} className="rounded-lg border p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected && !allSelected
+                  }}
+                  onChange={() => toggleGroup(group.routes)}
+                  className="h-4 w-4 cursor-pointer"
+                />
+                <span className="text-sm font-semibold text-foreground">{group.label}</span>
+              </div>
+              <div className="ml-6 space-y-1">
+                {group.routes.map((route) => (
+                  <label key={route.href} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(route.href)}
+                      onChange={() => toggleRoute(route.href)}
+                      className="h-4 w-4 cursor-pointer"
+                    />
+                    <span className="text-sm text-foreground">{route.label}</span>
+                    <span className="text-xs text-muted-foreground">{route.href}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex justify-end gap-2 border-t pt-4">
+        <Button variant="outline" onClick={onClose} disabled={isPending}>
+          Cancelar
+        </Button>
+        <Button onClick={() => void handleSave()} disabled={isPending}>
+          {isPending ? 'Salvando...' : 'Salvar permissões'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ── UsersTab ──────────────────────────────────────────────────────────────────
+
+interface EditingPermissions {
+  userId: string
+  userName: string
+  permissions: string[]
+}
+
 export function UsersTab() {
   const { data: users, isLoading } = useUsers()
   const { mutateAsync: inviteUser, isPending: inviting } = useInviteUser()
   const { mutateAsync: deactivate } = useDeactivateUser()
   const [showForm, setShowForm] = useState(false)
   const [deactivating, setDeactivating] = useState<{ id: string; name: string } | null>(null)
+  const [editingPermissions, setEditingPermissions] = useState<EditingPermissions | null>(null)
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<InviteData>({
     resolver: zodResolver(inviteSchema),
@@ -116,6 +248,21 @@ export function UsersTab() {
                     <span className="text-xs rounded-full px-2 py-0.5 bg-secondary text-secondary-foreground font-medium">
                       {ROLE_LABELS[user.role]}
                     </span>
+                    {user.role === 'staff' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setEditingPermissions({
+                            userId: user.id,
+                            userName: user.name,
+                            permissions: user.screenPermissions ?? [],
+                          })
+                        }
+                      >
+                        Permissões
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -148,6 +295,19 @@ export function UsersTab() {
                 Desativar
               </Button>
             </div>
+          </div>
+        </Dialog>
+      )}
+
+      {editingPermissions && (
+        <Dialog open onClose={() => setEditingPermissions(null)}>
+          <DialogTitle>Permissões de telas — {editingPermissions.userName}</DialogTitle>
+          <div className="mt-4">
+            <ScreenPermissionsEditor
+              userId={editingPermissions.userId}
+              initialPermissions={editingPermissions.permissions}
+              onClose={() => setEditingPermissions(null)}
+            />
           </div>
         </Dialog>
       )}

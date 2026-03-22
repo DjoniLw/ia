@@ -11,6 +11,7 @@ export class UsersRepository {
         email: true,
         role: true,
         active: true,
+        screenPermissions: true,
         lastLoginAt: true,
         inviteExpiresAt: true,
         createdAt: true,
@@ -27,6 +28,7 @@ export class UsersRepository {
         email: true,
         role: true,
         active: true,
+        screenPermissions: true,
         lastLoginAt: true,
         createdAt: true,
       },
@@ -125,7 +127,7 @@ export class UsersRepository {
   async update(
     clinicId: string,
     userId: string,
-    data: { name?: string; role?: 'admin' | 'staff' },
+    data: { name?: string; role?: 'admin' | 'staff'; screenPermissions?: string[] },
   ) {
     return prisma.user.update({ where: { id: userId, clinicId }, data })
   }
