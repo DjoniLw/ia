@@ -62,10 +62,14 @@ export class StripeGateway implements PaymentGateway {
     throw new Error('Stripe credentials not configured')
   }
 
+  /** Janela de tolerância para replay attack (segundos). Alinhado com o padrão Stripe (300s). */
+  static readonly TIMESTAMP_TOLERANCE_S = 300
+
   /**
    * Validates Stripe webhook signature using HMAC-SHA256.
    * The Stripe-Signature header format: t=<timestamp>,v1=<hex-signature>
    * Signed payload: "<timestamp>.<rawBody>"
+   * Rejects requests with timestamp older than TIMESTAMP_TOLERANCE_S (replay attack protection).
    */
   verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
     const secret = appConfig.stripe.webhookSecret
@@ -80,6 +84,10 @@ export class StripeGateway implements PaymentGateway {
     const timestamp = parts['t']
     const expectedSig = parts['v1']
     if (!timestamp || !expectedSig) return false
+
+    // Proteção contra replay attack: rejeita payloads com timestamp muito antigo
+    const nowS = Math.floor(Date.now() / 1000)
+    if (Math.abs(nowS - Number(timestamp)) > StripeGateway.TIMESTAMP_TOLERANCE_S) return false
 
     const signedPayload = `${timestamp}.${rawBody.toString('utf-8')}`
     const computed = createHmac('sha256', secret).update(signedPayload).digest('hex')
