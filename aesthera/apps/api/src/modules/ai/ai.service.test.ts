@@ -72,8 +72,7 @@ describe('AiService — getAppointmentsToday (issue #83)', () => {
       },
     ])
 
-    // Acesso direto ao método privado via cast para testar o retorno
-    const result = await (service as any).getAppointmentsToday(CLINIC_ID)
+    const result = await service.getAppointmentsToday(CLINIC_ID)
 
     expect(result).toHaveLength(1)
     expect(result[0]).not.toHaveProperty('phone')
@@ -89,7 +88,7 @@ describe('AiService — getAppointmentsToday (issue #83)', () => {
   it('não deve solicitar phone na query do Prisma', async () => {
     mockPrisma.appointment.findMany.mockResolvedValue([])
 
-    await (service as any).getAppointmentsToday(CLINIC_ID)
+    await service.getAppointmentsToday(CLINIC_ID)
 
     const callArgs = mockPrisma.appointment.findMany.mock.calls[0][0]
     expect(callArgs.include.customer.select).not.toHaveProperty('phone')
@@ -117,7 +116,7 @@ describe('AiService — getOverdueBilling (issue #83)', () => {
       },
     ])
 
-    const result = await (service as any).getOverdueBilling(CLINIC_ID, 10)
+    const result = await service.getOverdueBilling(CLINIC_ID, 10)
 
     expect(result).toHaveLength(1)
     expect(result[0]).not.toHaveProperty('phone')
@@ -133,7 +132,7 @@ describe('AiService — getOverdueBilling (issue #83)', () => {
   it('não deve solicitar phone nem email na query do Prisma', async () => {
     mockPrisma.billing.findMany.mockResolvedValue([])
 
-    await (service as any).getOverdueBilling(CLINIC_ID, 5)
+    await service.getOverdueBilling(CLINIC_ID, 5)
 
     const callArgs = mockPrisma.billing.findMany.mock.calls[0][0]
     const customerSelect = callArgs.include.customer.select

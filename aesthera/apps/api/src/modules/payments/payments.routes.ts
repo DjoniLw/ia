@@ -26,7 +26,7 @@ export async function paymentsRoutes(app: FastifyInstance) {
   // ── Mock gateway: confirm payment (dev only) ──────────────────────────────────
   app.post('/payments/mock/pay/:gatewayPaymentId', async (req, reply) => {
     if (appConfig.isProduction) {
-      return reply.status(404).send({ message: 'Not found' })
+      return reply.status(404).send()
     }
     const { gatewayPaymentId } = req.params as { gatewayPaymentId: string }
     return reply.send(await svc.confirmMockPayment(gatewayPaymentId))

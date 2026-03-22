@@ -59,7 +59,7 @@ describe('paymentsRoutes — endpoint mock (issue #84)', () => {
     expect(mockSvc.confirmMockPayment).not.toHaveBeenCalled()
   })
 
-  it('deve confirmar pagamento quando appConfig.isProduction é false (dev/staging)', async () => {
+  it('deve confirmar pagamento quando appConfig.isProduction é false (ambiente de desenvolvimento)', async () => {
     mockAppConfig.isProduction = false
 
     const app = Fastify()
@@ -82,18 +82,20 @@ describe('paymentsRoutes — endpoint mock (issue #84)', () => {
     const originalNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'production' // simula staging com NODE_ENV=production
 
-    const app = Fastify()
-    await app.register(paymentsRoutes)
-    await app.ready()
+    try {
+      const app = Fastify()
+      await app.register(paymentsRoutes)
+      await app.ready()
 
-    const res = await app.inject({
-      method: 'POST',
-      url: '/payments/mock/pay/gateway-id-789',
-    })
+      const res = await app.inject({
+        method: 'POST',
+        url: '/payments/mock/pay/gateway-id-789',
+      })
 
-    // Deve funcionar pois appConfig.isProduction = false (AMBIENTE_DEV=S)
-    expect(res.statusCode).toBe(200)
-
-    process.env.NODE_ENV = originalNodeEnv
+      // Deve funcionar pois appConfig.isProduction = false (AMBIENTE_DEV=S)
+      expect(res.statusCode).toBe(200)
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
   })
 })
