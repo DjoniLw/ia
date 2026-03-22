@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import {
   useWallet,
   useWalletOverview,
@@ -432,7 +431,8 @@ export default function CarteiraPage() {
   if (typeFilter) byCustomerParams.type = typeFilter
   if (selectedCustomerId) byCustomerParams.customerId = selectedCustomerId
   const { data: byCustomerData, isLoading: byCustomerLoading } = useWallet(
-    viewMode === 'by-customer' && selectedCustomerId ? byCustomerParams : undefined,
+    byCustomerParams,
+    viewMode === 'by-customer' && !!selectedCustomerId,
   )
 
   const isLoading = viewMode === 'overview' ? overviewLoading : byCustomerLoading
@@ -584,7 +584,7 @@ export default function CarteiraPage() {
       ) : viewMode === 'overview' ? (
         <>
           <OverviewTable items={displayItems} onAdjust={setAdjustEntry} />
-          {total > 20 && (
+          {overviewData && total > overviewData.limit && (
             <p className="text-center text-xs text-muted-foreground">
               Exibindo {displayItems.length} de {total} entradas
             </p>

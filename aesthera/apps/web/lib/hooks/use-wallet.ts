@@ -58,10 +58,11 @@ interface Paginated<T> {
 
 // ──── Hooks ───────────────────────────────────────────────────────────────────
 
-export function useWallet(params?: Record<string, string>) {
+export function useWallet(params?: Record<string, string>, enabled = true) {
   return useQuery<Paginated<WalletEntry>>({
     queryKey: ['wallet', params],
     queryFn: () => api.get('/wallet', { params }).then((r) => r.data),
+    enabled,
   })
 }
 

@@ -12,6 +12,7 @@ interface SelectContextValue {
   handleSelect: (value: string, label: string) => void
   registerLabel: (value: string, label: string) => void
   labelsMap: React.RefObject<Map<string, string>>
+  contentId: string
 }
 
 const SelectContext = React.createContext<SelectContextValue | null>(null)
@@ -37,6 +38,8 @@ export function Select({ value, onValueChange, defaultValue = '', children }: Se
   const [open, setOpen] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const labelsMap = React.useRef<Map<string, string>>(new Map())
+  const uid = React.useId()
+  const contentId = `select-content-${uid.replace(/:/g, '')}`
 
   const resolvedValue = isControlled ? (value ?? '') : internalValue
 
@@ -78,7 +81,7 @@ export function Select({ value, onValueChange, defaultValue = '', children }: Se
 
   return (
     <SelectContext.Provider
-      value={{ value: resolvedValue, open, setOpen, handleSelect, registerLabel, labelsMap }}
+      value={{ value: resolvedValue, open, setOpen, handleSelect, registerLabel, labelsMap, contentId }}
     >
       <div ref={containerRef} className="relative">
         {children}
@@ -95,11 +98,14 @@ interface SelectTriggerProps {
 }
 
 export function SelectTrigger({ children, className }: SelectTriggerProps) {
-  const { open, setOpen } = useSelectCtx()
+  const { open, setOpen, contentId } = useSelectCtx()
   return (
     <button
       type="button"
+      role="combobox"
       aria-expanded={open}
+      aria-haspopup="listbox"
+      aria-controls={contentId}
       onClick={() => setOpen((v) => !v)}
       className={cn(
         'flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
@@ -138,10 +144,12 @@ interface SelectContentProps {
 }
 
 export function SelectContent({ children, className }: SelectContentProps) {
-  const { open } = useSelectCtx()
+  const { open, contentId } = useSelectCtx()
   if (!open) return null
   return (
     <div
+      id={contentId}
+      role="listbox"
       className={cn(
         'absolute z-50 mt-1 w-full rounded-md border bg-card shadow-lg',
         className,
@@ -168,11 +176,13 @@ export function SelectItem({ value, children, className }: SelectItemProps) {
   // Register label on mount so SelectValue can resolve it
   React.useEffect(() => {
     ctx.registerLabel(value, label)
-  }, [value, label, ctx])
+  }, [value, label, ctx.registerLabel])
 
   return (
     <button
       type="button"
+      role="option"
+      aria-selected={isSelected}
       onClick={() => ctx.handleSelect(value, label)}
       className={cn(
         'relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none',

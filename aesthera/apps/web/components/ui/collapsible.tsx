@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 interface CollapsibleContextValue {
   open: boolean
   setOpen: (v: boolean | ((prev: boolean) => boolean)) => void
+  contentId: string
 }
 
 const CollapsibleContext = React.createContext<CollapsibleContextValue | null>(null)
@@ -37,6 +38,8 @@ export function Collapsible({
   const isControlled = open !== undefined
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen)
   const resolvedOpen = isControlled ? (open ?? false) : internalOpen
+  const uid = React.useId()
+  const contentId = `collapsible-content-${uid.replace(/:/g, '')}`
 
   const setOpen = React.useCallback(
     (v: boolean | ((prev: boolean) => boolean)) => {
@@ -48,7 +51,7 @@ export function Collapsible({
   )
 
   return (
-    <CollapsibleContext.Provider value={{ open: resolvedOpen, setOpen }}>
+    <CollapsibleContext.Provider value={{ open: resolvedOpen, setOpen, contentId }}>
       <div className={cn(className)}>{children}</div>
     </CollapsibleContext.Provider>
   )
@@ -62,10 +65,12 @@ interface CollapsibleTriggerProps {
 }
 
 export function CollapsibleTrigger({ children, className }: CollapsibleTriggerProps) {
-  const { setOpen } = useCollapsibleCtx()
+  const { open, setOpen, contentId } = useCollapsibleCtx()
   return (
     <button
       type="button"
+      aria-expanded={open}
+      aria-controls={contentId}
       onClick={() => setOpen((v) => !v)}
       className={cn('w-full text-left', className)}
     >
@@ -82,7 +87,7 @@ interface CollapsibleContentProps {
 }
 
 export function CollapsibleContent({ children, className }: CollapsibleContentProps) {
-  const { open } = useCollapsibleCtx()
+  const { open, contentId } = useCollapsibleCtx()
   if (!open) return null
-  return <div className={cn(className)}>{children}</div>
+  return <div id={contentId} className={cn(className)}>{children}</div>
 }
