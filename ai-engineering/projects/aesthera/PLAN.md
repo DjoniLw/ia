@@ -204,6 +204,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - [x] Página Insumos: lista com badge de estoque + criar/editar + alerta de estoque baixo
 - [x] Página Compras de Insumos: filtros por período/insumo/fornecedor + preview de conversão/estoque + cancelamento com feedback de erro
 - [x] Página Carteira (por cliente): lista de entradas + criar voucher/crédito + ajuste de saldo
+- [x] Visão geral da carteira: toggle "Visão geral" / "Por cliente", tabela paginada, busca por cliente, filtros reutilizados
 - [x] Página Promoções: lista + criar/editar + contador de usos + validar código
 - [x] Página Pacotes: lista + criar/editar + comprar pacote + ver sessões do cliente
 
@@ -266,6 +267,20 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 ---
 
 ## Histórico de Atualizações
+
+### [2026-03-21] — #98 #99 #100 — UX Review: carteira dual-view, select shadcn/ui em clientes, campos fiscais colapsáveis
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/app/(dashboard)/carteira/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/products/page.tsx`
+  - `aesthera/apps/web/components/ui/select.tsx` *(novo)*
+  - `aesthera/apps/web/components/ui/collapsible.tsx` *(novo)*
+  - `aesthera/apps/web/lib/hooks/use-wallet.ts`
+- **O que foi feito:**
+  - `#98`: Página Carteira agora oferece dois modos via toggle: **"Visão geral"** (tabela paginada com colunas Cliente/Tipo/Saldo/Status/Vencimento, busca client-side por nome) e **"Por cliente"** (seletor de cliente + view de cards com histórico de transações). Hook `useWalletOverview` adicionado em `use-wallet.ts`.
+  - `#99`: Campo "Gênero" no formulário de clientes substituído de `<select>` nativo pelo componente `Select` do design system (custom, sem Radix UI) via `<Controller>`. Componente `select.tsx` criado com API compatível com shadcn/ui.
+  - `#100`: Campos fiscais NCM, CEST e CFOP agrupados em seção colapsável "Dados fiscais (opcional)" no formulário de produtos. Componente `collapsible.tsx` criado. Estado inicial: fechado. Chevron animado indica estado aberto/fechado.
+- **Impacto:** Administradores conseguem verificar overview da carteira sem selecionar cliente por vez; formulário de clientes visualmente consistente; formulário de produtos com menor carga cognitiva para usuários não-contábeis.
 
 ### [2026-03-22] — #93 #94 #95 #96 #97 — UX Review: ícones, KPI, busca, link, cabeçalhos de tabela
 - **Arquivo(s) afetado(s):** `aesthera/apps/web/app/(dashboard)/layout.tsx`, `aesthera/apps/web/app/(dashboard)/dashboard/page.tsx`, `aesthera/apps/api/src/modules/billing/billing.dto.ts`, `aesthera/apps/api/src/modules/billing/billing.repository.ts`, `aesthera/apps/web/app/(dashboard)/billing/page.tsx`, `aesthera/apps/web/app/(dashboard)/sales/page.tsx`, `aesthera/apps/web/app/(dashboard)/notifications/page.tsx`, `aesthera/apps/web/app/(dashboard)/financial/page.tsx`, `aesthera/apps/web/app/(dashboard)/promotions/page.tsx`, `aesthera/apps/web/app/(dashboard)/reports/page.tsx`, `aesthera/apps/web/app/(dashboard)/compras-insumos/page.tsx`, `aesthera/docs/ui-standards.md`, `aesthera/apps/web/lib/hooks/use-appointments.ts`

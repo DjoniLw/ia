@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import {
   useWallet,
+  useWalletOverview,
   useCreateWalletEntry,
   useAdjustWalletEntry,
   type WalletEntry,
@@ -328,19 +329,122 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
   )
 }
 
+// ──── Overview Table ──────────────────────────────────────────────────────────
+
+function OverviewTable({
+  items,
+  onAdjust,
+}: {
+  items: WalletEntry[]
+  onAdjust: (entry: WalletEntry) => void
+}) {
+  if (!items.length) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-xl border bg-card py-16 text-center">
+        <Wallet className="h-10 w-10 text-muted-foreground/30" />
+        <p className="text-sm font-medium text-muted-foreground">
+          Nenhuma entrada encontrada
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="rounded-xl border bg-card overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b text-left text-xs text-muted-foreground">
+            <th className="px-4 py-2.5 font-medium">Cliente</th>
+            <th className="px-4 py-2.5 font-medium">Tipo</th>
+            <th className="px-4 py-2.5 font-medium">Saldo</th>
+            <th className="px-4 py-2.5 font-medium">Status</th>
+            <th className="px-4 py-2.5 font-medium">Vencimento</th>
+            <th className="px-4 py-2.5 font-medium"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((entry) => (
+            <tr key={entry.id} className="border-b last:border-0 hover:bg-accent/30 transition-colors">
+              <td className="px-4 py-2.5">
+                <span className="font-medium text-foreground">{entry.customer.name}</span>
+                <span className="ml-2 font-mono text-xs text-muted-foreground">{entry.code}</span>
+              </td>
+              <td className="px-4 py-2.5">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[entry.type]}`}>
+                  {TYPE_LABEL[entry.type]}
+                </span>
+              </td>
+              <td className="px-4 py-2.5 font-semibold text-green-600">
+                {formatCurrency(entry.balance)}
+              </td>
+              <td className="px-4 py-2.5">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[entry.status]}`}>
+                  {STATUS_LABEL[entry.status]}
+                </span>
+              </td>
+              <td className="px-4 py-2.5 text-muted-foreground">
+                {formatDate(entry.expirationDate)}
+              </td>
+              <td className="px-4 py-2.5">
+                {entry.status === 'ACTIVE' && (
+                  <button
+                    type="button"
+                    onClick={() => onAdjust(entry)}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Ajustar
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CarteiraPage() {
+  const [viewMode, setViewMode] = useState<'overview' | 'by-customer'>('overview')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<string>('')
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [selectedCustomerId, setSelectedCustomerId] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [adjustEntry, setAdjustEntry] = useState<WalletEntry | null>(null)
 
-  const params: Record<string, string> = {}
-  if (statusFilter) params.status = statusFilter
-  if (typeFilter) params.type = typeFilter
+  const { data: customersData } = useCustomers({ limit: '200' })
 
-  const { data, isLoading } = useWallet(Object.keys(params).length ? params : undefined)
+  // Visão geral
+  const overviewParams: Record<string, string> = {}
+  if (statusFilter) overviewParams.status = statusFilter
+  if (typeFilter) overviewParams.type = typeFilter
+  const { data: overviewData, isLoading: overviewLoading } = useWalletOverview(
+    Object.keys(overviewParams).length ? overviewParams : undefined,
+    viewMode === 'overview',
+  )
+
+  // Por cliente
+  const byCustomerParams: Record<string, string> = {}
+  if (statusFilter) byCustomerParams.status = statusFilter
+  if (typeFilter) byCustomerParams.type = typeFilter
+  if (selectedCustomerId) byCustomerParams.customerId = selectedCustomerId
+  const { data: byCustomerData, isLoading: byCustomerLoading } = useWallet(
+    byCustomerParams,
+    viewMode === 'by-customer' && !!selectedCustomerId,
+  )
+
+  const isLoading = viewMode === 'overview' ? overviewLoading : byCustomerLoading
+  const rawItems = viewMode === 'overview' ? (overviewData?.items ?? []) : (byCustomerData?.items ?? [])
+  const total = viewMode === 'overview' ? (overviewData?.total ?? 0) : (byCustomerData?.total ?? 0)
+
+  // Filtro client-side por nome na visão geral
+  const displayItems = viewMode === 'overview' && customerSearch
+    ? rawItems.filter((e) =>
+        e.customer.name.toLowerCase().includes(customerSearch.toLowerCase()),
+      )
+    : rawItems
 
   const statusOptions = [
     { value: '', label: 'Todos' },
@@ -373,8 +477,39 @@ export default function CarteiraPage() {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      {/* Modo de visualização */}
+      <div className="flex rounded-lg border overflow-hidden w-fit">
+        <button
+          type="button"
+          onClick={() => setViewMode('overview')}
+          className={[
+            'flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors',
+            viewMode === 'overview'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-card text-muted-foreground hover:bg-accent',
+          ].join(' ')}
+        >
+          <LayoutList className="h-4 w-4" />
+          Visão geral
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('by-customer')}
+          className={[
+            'flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors',
+            viewMode === 'by-customer'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-card text-muted-foreground hover:bg-accent',
+          ].join(' ')}
+        >
+          <Users className="h-4 w-4" />
+          Por cliente
+        </button>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Status pills — comuns aos dois modos */}
         <div className="flex gap-1">
           {statusOptions.map((s) => (
             <button
@@ -391,105 +526,158 @@ export default function CarteiraPage() {
             </button>
           ))}
         </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-        >
+
+        {/* Tipo */}
+        <div className="flex gap-1">
           {typeOptions.map((t) => (
-            <option key={t.value} value={t.value}>
+            <button
+              key={t.value}
+              onClick={() => setTypeFilter(t.value)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                typeFilter === t.value
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
               {t.label}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
+
+        {/* Visão geral — busca por cliente */}
+        {viewMode === 'overview' && (
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              placeholder="Buscar por cliente…"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        )}
+
+        {/* Por cliente — seletor de cliente */}
+        {viewMode === 'by-customer' && (
+          <select
+            value={selectedCustomerId}
+            onChange={(e) => setSelectedCustomerId(e.target.value)}
+            className="h-8 rounded-full border border-input bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">Selecione um cliente…</option>
+            {customersData?.items?.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
-      {/* Content */}
+      {/* Conteúdo */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : !data?.items.length ? (
+      ) : viewMode === 'overview' ? (
+        <>
+          <OverviewTable items={displayItems} onAdjust={setAdjustEntry} />
+          {overviewData && total > overviewData.limit && (
+            <p className="text-center text-xs text-muted-foreground">
+              Exibindo {displayItems.length} de {total} entradas
+            </p>
+          )}
+        </>
+      ) : !selectedCustomerId ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border bg-card py-16 text-center">
+          <Users className="h-10 w-10 text-muted-foreground/30" />
+          <p className="text-sm font-medium text-muted-foreground">
+            Selecione um cliente para ver suas entradas
+          </p>
+        </div>
+      ) : !displayItems.length ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border bg-card py-16 text-center">
           <Wallet className="h-10 w-10 text-muted-foreground/30" />
           <p className="text-sm font-medium text-muted-foreground">
-            Nenhuma entrada na carteira encontrada
+            Nenhuma entrada encontrada para este cliente
           </p>
           <Button variant="ghost" size="sm" onClick={() => setCreateOpen(true)}>
             Criar primeiro voucher
           </Button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {data.items.map((entry) => (
-            <div key={entry.id} className="rounded-xl border bg-card p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                {/* Left */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm font-bold text-foreground">
-                      {entry.code}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[entry.type]}`}
-                    >
-                      {TYPE_LABEL[entry.type]}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[entry.status]}`}
-                    >
-                      {STATUS_LABEL[entry.status]}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm font-medium text-foreground">{entry.customer.name}</p>
-                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                    <span>Origem: {ORIGIN_LABEL[entry.originType as WalletOriginType]}</span>
-                    {entry.originReference && (
-                      <span>Ref: {entry.originReference.slice(0, 8)}…</span>
+        <>
+          <div className="space-y-3">
+            {displayItems.map((entry) => (
+              <div key={entry.id} className="rounded-xl border bg-card p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  {/* Left */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm font-bold text-foreground">
+                        {entry.code}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[entry.type]}`}
+                      >
+                        {TYPE_LABEL[entry.type]}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[entry.status]}`}
+                      >
+                        {STATUS_LABEL[entry.status]}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm font-medium text-foreground">{entry.customer.name}</p>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>Origem: {ORIGIN_LABEL[entry.originType as WalletOriginType]}</span>
+                      {entry.originReference && (
+                        <span>Ref: {entry.originReference.slice(0, 8)}…</span>
+                      )}
+                      <span>Criado em {formatDate(entry.createdAt)}</span>
+                      {entry.expirationDate && (
+                        <span>Expira em {formatDate(entry.expirationDate)}</span>
+                      )}
+                    </div>
+                    {entry.notes && (
+                      <p className="mt-1 text-xs text-muted-foreground italic">{entry.notes}</p>
                     )}
-                    <span>Criado em {formatDate(entry.createdAt)}</span>
-                    {entry.expirationDate && (
-                      <span>Expira em {formatDate(entry.expirationDate)}</span>
-                    )}
+                    <TransactionHistory entry={entry} />
                   </div>
-                  {entry.notes && (
-                    <p className="mt-1 text-xs text-muted-foreground italic">{entry.notes}</p>
-                  )}
-                  <TransactionHistory entry={entry} />
-                </div>
 
-                {/* Right — balance */}
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Saldo</p>
-                  <p className="text-xl font-bold text-green-600">
-                    {formatCurrency(entry.balance)}
-                  </p>
-                  {entry.originalValue !== entry.balance && (
-                    <p className="text-xs text-muted-foreground">
-                      de {formatCurrency(entry.originalValue)}
+                  {/* Right — balance */}
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Saldo</p>
+                    <p className="text-xl font-bold text-green-600">
+                      {formatCurrency(entry.balance)}
                     </p>
-                  )}
-                  {entry.status === 'ACTIVE' && (
-                    <button
-                      type="button"
-                      onClick={() => setAdjustEntry(entry)}
-                      className="mt-2 text-xs font-medium text-primary hover:underline"
-                    >
-                      Ajustar
-                    </button>
-                  )}
+                    {entry.originalValue !== entry.balance && (
+                      <p className="text-xs text-muted-foreground">
+                        de {formatCurrency(entry.originalValue)}
+                      </p>
+                    )}
+                    {entry.status === 'ACTIVE' && (
+                      <button
+                        type="button"
+                        onClick={() => setAdjustEntry(entry)}
+                        className="mt-2 text-xs font-medium text-primary hover:underline"
+                      >
+                        Ajustar
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {data && data.total > data.limit && (
-        <p className="text-center text-xs text-muted-foreground">
-          Exibindo {data.items.length} de {data.total} entradas
-        </p>
+            ))}
+          </div>
+          {byCustomerData && byCustomerData.total > byCustomerData.limit && (
+            <p className="text-center text-xs text-muted-foreground">
+              Exibindo {displayItems.length} de {byCustomerData.total} entradas
+            </p>
+          )}
+        </>
       )}
 
       {/* Modals */}

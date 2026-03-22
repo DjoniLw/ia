@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { MaskedInputCpf } from '@/components/ui/masked-input-cpf'
 import { MaskedInputPhone } from '@/components/ui/masked-input-phone'
 import { MaskedInputCep } from '@/components/ui/masked-input-cep'
@@ -210,13 +217,23 @@ function CustomerForm({
             </div>
             <div className="space-y-2">
               <Label>Gênero</Label>
-              <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('gender')}>
-                <option value="">Selecione…</option>
-                <option>Feminino</option>
-                <option>Masculino</option>
-                <option>Não binário</option>
-                <option>Prefiro não informar</option>
-              </select>
+              <Controller
+                control={control}
+                name="gender"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Feminino">Feminino</SelectItem>
+                      <SelectItem value="Masculino">Masculino</SelectItem>
+                      <SelectItem value="Não binário">Não binário</SelectItem>
+                      <SelectItem value="Prefiro não informar">Prefiro não informar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
           </div>
 
