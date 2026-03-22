@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { appConfig } from '../../config/app.config'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { ListPaymentsQuery } from './payments.dto'
 import { PaymentsService } from './payments.service'
@@ -24,8 +25,8 @@ export async function paymentsRoutes(app: FastifyInstance) {
 
   // ── Mock gateway: confirm payment (dev only) ──────────────────────────────────
   app.post('/payments/mock/pay/:gatewayPaymentId', async (req, reply) => {
-    if (process.env.NODE_ENV === 'production') {
-      return reply.status(404).send({ message: 'Not found' })
+    if (appConfig.isProduction) {
+      return reply.status(404).send()
     }
     const { gatewayPaymentId } = req.params as { gatewayPaymentId: string }
     return reply.send(await svc.confirmMockPayment(gatewayPaymentId))
