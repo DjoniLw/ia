@@ -40,11 +40,20 @@ import { AiService } from './ai.service'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+interface AiServicePrivate {
+  getAppointmentsToday(clinicId: string): Promise<unknown[]>
+  getOverdueBilling(clinicId: string, limit: number): Promise<unknown[]>
+  streamChat(
+    clinicId: string,
+    userMessage: string,
+    sessionId: string,
+    onChunk: (chunk: string) => void,
+    onToolCall?: (toolName: string) => void,
+  ): Promise<void>
+}
+
 function makeService() {
-  return new AiService() as AiService & {
-    getAppointmentsToday(clinicId: string): Promise<unknown[]>
-    getOverdueBilling(clinicId: string, limit: number): Promise<unknown[]>
-  }
+  return new AiService() as unknown as AiServicePrivate
 }
 
 const CLINIC_ID = 'clinic-uuid-001'
