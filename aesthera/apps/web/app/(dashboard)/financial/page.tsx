@@ -212,7 +212,7 @@ export default function FinancialPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
                   <th className="px-5 py-3">Data</th>
                   <th className="px-5 py-3">Tipo</th>
                   <th className="hidden sm:table-cell px-5 py-3">Descrição</th>

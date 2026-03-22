@@ -3,6 +3,7 @@ import { z } from 'zod'
 export const ListBillingQuery = z.object({
   customerId: z.string().uuid().optional(),
   appointmentId: z.string().uuid().optional(),
+  customerName: z.string().optional(),
   status: z.enum(['pending', 'paid', 'overdue', 'cancelled']).optional(),
   dueDateFrom: z.string().optional(),
   dueDateTo: z.string().optional(),

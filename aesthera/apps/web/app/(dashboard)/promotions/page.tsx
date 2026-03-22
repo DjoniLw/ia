@@ -383,7 +383,7 @@ export default function PromotionsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
                   <th className="px-4 py-3">Nome / Código</th>
                   <th className="hidden sm:table-cell px-4 py-3">Desconto</th>
                   <th className="hidden md:table-cell px-4 py-3">Usos</th>

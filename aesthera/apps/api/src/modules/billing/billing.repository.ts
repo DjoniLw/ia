@@ -20,6 +20,9 @@ export class BillingRepository {
     if (q.customerId) where.customerId = q.customerId
     if (q.appointmentId) where.appointmentId = q.appointmentId
     if (q.status) where.status = q.status
+    if (q.customerName) {
+      where.customer = { name: { contains: q.customerName, mode: 'insensitive' } }
+    }
 
     if (q.dueDateFrom || q.dueDateTo) {
       const range: Record<string, Date> = {}
