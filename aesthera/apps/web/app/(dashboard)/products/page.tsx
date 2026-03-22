@@ -1,12 +1,17 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Package, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
+import { AlertCircle, ChevronDown, Package, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -68,6 +73,8 @@ function ProductForm({
     resolver: zodResolver(productSchema),
     defaultValues,
   })
+
+  const [fiscalOpen, setFiscalOpen] = useState(false)
 
   useEffect(() => { onDirtyChange?.(isDirty) }, [isDirty, onDirtyChange])
 
@@ -146,20 +153,28 @@ function ProductForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className="space-y-2">
-          <Label>NCM</Label>
-          <Input {...register('ncm')} placeholder="00000000" maxLength={10} />
-        </div>
-        <div className="space-y-2">
-          <Label>CEST</Label>
-          <Input {...register('cest')} placeholder="0000000" maxLength={9} />
-        </div>
-        <div className="space-y-2">
-          <Label>CFOP</Label>
-          <Input {...register('cfop')} placeholder="5102" maxLength={5} />
-        </div>
-      </div>
+      <Collapsible open={fiscalOpen} onOpenChange={setFiscalOpen}>
+        <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-1">
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${fiscalOpen ? 'rotate-0' : '-rotate-90'}`}
+          />
+          Dados fiscais (opcional)
+        </CollapsibleTrigger>
+        <CollapsibleContent className="grid grid-cols-3 gap-3 pt-3">
+          <div className="space-y-2">
+            <Label>NCM</Label>
+            <Input {...register('ncm')} placeholder="00000000" maxLength={10} />
+          </div>
+          <div className="space-y-2">
+            <Label>CEST</Label>
+            <Input {...register('cest')} placeholder="0000000" maxLength={9} />
+          </div>
+          <div className="space-y-2">
+            <Label>CFOP</Label>
+            <Input {...register('cfop')} placeholder="5102" maxLength={5} />
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={isPending}>

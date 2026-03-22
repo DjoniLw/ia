@@ -65,6 +65,14 @@ export function useWallet(params?: Record<string, string>) {
   })
 }
 
+export function useWalletOverview(params?: Record<string, string>, enabled = true) {
+  return useQuery<Paginated<WalletEntry>>({
+    queryKey: ['wallet', 'overview', params],
+    queryFn: () => api.get('/wallet', { params }).then((r) => r.data),
+    enabled,
+  })
+}
+
 export function useActiveVouchers(customerId: string, enabled: boolean) {
   return useQuery<Paginated<WalletEntry>>({
     queryKey: ['wallet', { customerId, status: 'ACTIVE' }],
