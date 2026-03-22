@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
+import { roleGuard } from '../../shared/guards/role.guard'
 import { CreateCustomerDto, ListCustomersQuery, UpdateCustomerDto } from './customers.dto'
 import { CustomersService } from './customers.service'
 import { prisma } from '../../database/prisma/client'
@@ -122,8 +123,20 @@ export async function customersRoutes(app: FastifyInstance) {
     return reply.send(await svc.update(req.clinicId, id, dto))
   })
 
-  app.delete('/customers/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
-    const { id } = req.params as { id: string }
-    return reply.send(await svc.delete(req.clinicId, id))
-  })
+  /**
+   * DELETE /customers/:id
+   * Anonimiza os dados pessoais do cliente (LGPD Art. 18).
+   * Exclui fisicamente prontuários clínicos e substitui PII por valores anônimos.
+   * Preserva agendamentos e cobranças para auditoria fiscal.
+   * Requer role admin.
+   */
+  app.delete(
+    '/customers/:id',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      await svc.anonymize(req.clinicId, id, req.user.sub, req.ip)
+      return reply.status(204).send()
+    },
+  )
 }

@@ -18,7 +18,7 @@ export const appConfig = {
 
   jwt: {
     secret: env.JWT_SECRET,
-    refreshSecret: env.JWT_REFRESH_SECRET,
+    // refreshSecret removido: refresh tokens são opacos (hash SHA-256 no Redis), não JWT assinados
     expiresIn: env.JWT_EXPIRES_IN,
     refreshExpiresIn: env.JWT_REFRESH_EXPIRES_IN,
   },

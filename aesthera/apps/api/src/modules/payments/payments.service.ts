@@ -5,6 +5,7 @@ import { prisma } from '../../database/prisma/client'
 import { appConfig } from '../../config/app.config'
 import { createGateway, StripeGateway, MercadoPagoGateway } from './payment.gateway'
 import { PaymentsRepository } from './payments.repository'
+import { createAuditLog } from '../../shared/audit'
 import type { ListPaymentsQuery } from './payments.dto'
 
 export class PaymentsService {
@@ -109,6 +110,18 @@ export class PaymentsService {
         amount: payment.amount,
       }),
     )
+
+    await createAuditLog({
+      clinicId: payment.clinicId,
+      userId: 'system',
+      action: 'payment.confirmed',
+      entityId: payment.id,
+      metadata: {
+        billingId: payment.billingId,
+        amount: payment.amount,
+        gateway: payment.gateway,
+      },
+    })
 
     return updated
   }
