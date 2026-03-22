@@ -195,6 +195,7 @@ model Clinic {
   promotions       Promotion[]
   servicePackages  ServicePackage[]
   customerPackages CustomerPackage[]
+  auditLogs        AuditLog[]
 
   @@map("clinics")
 }
@@ -1016,4 +1017,25 @@ model CustomerPackageSession {
 
   @@index([clinicId])
   @@map("customer_package_sessions")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+// Append-only compliance record for critical actions (LGPD / security).
+// Records who (userId) performed what (action) on which entity (entityId),
+// from where (ip), and when (createdAt).
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  clinicId  String   @map("clinic_id")
+  userId    String   @map("user_id")
+  action    String
+  entityId  String?  @map("entity_id")
+  metadata  Json?
+  ip        String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, createdAt])
+  @@map("audit_logs")
 }
