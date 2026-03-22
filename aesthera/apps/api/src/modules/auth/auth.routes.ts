@@ -28,7 +28,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // ── POST /auth/register ────────────────────────────────────────────────────────────
   // Creates a new clinic + first admin user. PUBLIC — no tenant, no auth.
-  app.post('/auth/register', async (request, reply) => {
+  app.post('/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
     const body = RegisterClinicDto.parse(request.body)
     const result = await authService.registerClinic(body)
     reply.status(201).send(result)
@@ -44,7 +44,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // ── POST /auth/resend-verification ──────────────────────────────────────────────
   // Generates a new verification token and re-sends the welcome email. PUBLIC.
-  app.post('/auth/resend-verification', async (request, reply) => {
+  app.post('/auth/resend-verification', { config: { rateLimit: { max: 3, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const body = ResendVerificationDto.parse(request.body)
     const result = await authService.resendVerification(body.email)
     reply.status(200).send(result)
@@ -58,7 +58,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   })
   // ── POST /auth/recover-access ─────────────────────────────────────────────────
   // Sends a password reset e-mail to the user without exposing account existence. PUBLIC.
-  app.post('/auth/recover-access', async (request, reply) => {
+  app.post('/auth/recover-access', { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const body = RecoverAccessDto.parse(request.body)
     const result = await authService.recoverAccess(body.email)
     reply.status(200).send(result)
@@ -86,7 +86,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // ── POST /auth/login ─────────────────────────────────────────────────────────────────
   // Requires X-Clinic-Slug header (sent by frontend from subdomain).
-  app.post('/auth/login', { preHandler: [] }, async (request, reply) => {
+  app.post('/auth/login', { preHandler: [], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = LoginDto.parse(request.body)
     const result = await authService.login(request.clinicId, body)
     reply.status(200).send(result)
