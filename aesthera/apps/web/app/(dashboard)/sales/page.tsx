@@ -72,7 +72,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
         productId: data.productId,
         customerId: data.customerId || null,
         quantity: data.quantity,
-        discount: Math.round((data.discount || 0) * 100),
+        discount: Math.min(Math.round((data.discount || 0) * 100), unitPrice * data.quantity),
         paymentMethod: data.paymentMethod || null,
         notes: data.notes || null,
       })
@@ -129,7 +129,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
           {discount > 0 && (
             <div className="flex justify-between text-red-600">
               <span>Desconto</span>
-              <span>- {formatCurrency(discount)}</span>
+              <span>- {formatCurrency(Math.round((discount || 0) * 100))}</span>
             </div>
           )}
           <div className="mt-1 flex justify-between border-t pt-1 font-semibold">
@@ -204,7 +204,7 @@ export default function SalesPage() {
     limit: '20',
     from,
     to,
-    ...(debouncedSearch && { productName: debouncedSearch }),
+    ...(debouncedSearch && { search: debouncedSearch }),
   }
 
   const { data, isLoading } = useProductSales(params)
