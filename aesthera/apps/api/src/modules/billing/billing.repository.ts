@@ -20,6 +20,9 @@ export class BillingRepository {
     if (q.customerId) where.customerId = q.customerId
     if (q.appointmentId) where.appointmentId = q.appointmentId
     if (q.status) where.status = q.status
+    if (q.customerName) {
+      where.customer = { name: { contains: q.customerName, mode: 'insensitive' } }
+    }
 
     if (q.dueDateFrom || q.dueDateTo) {
       const range: Record<string, Date> = {}
@@ -29,7 +32,7 @@ export class BillingRepository {
     }
 
     const skip = (q.page - 1) * q.limit
-    const [items, total] = await Promise.all([
+    const [items, total, aggregate] = await Promise.all([
       prisma.billing.findMany({
         where,
         include: billingInclude,
@@ -38,8 +41,9 @@ export class BillingRepository {
         take: q.limit,
       }),
       prisma.billing.count({ where }),
+      prisma.billing.aggregate({ where, _sum: { amount: true } }),
     ])
-    return { items, total, page: q.page, limit: q.limit }
+    return { items, total, page: q.page, limit: q.limit, totalAmount: aggregate._sum.amount ?? 0 }
   }
 
   async findById(clinicId: string, id: string) {

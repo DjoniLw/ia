@@ -267,6 +267,25 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-22] — #93 #94 #95 #96 #97 — UX Review: ícones, KPI, busca, link, cabeçalhos de tabela
+- **Arquivo(s) afetado(s):** `aesthera/apps/web/app/(dashboard)/layout.tsx`, `aesthera/apps/web/app/(dashboard)/dashboard/page.tsx`, `aesthera/apps/api/src/modules/billing/billing.dto.ts`, `aesthera/apps/api/src/modules/billing/billing.repository.ts`, `aesthera/apps/web/app/(dashboard)/billing/page.tsx`, `aesthera/apps/web/app/(dashboard)/sales/page.tsx`, `aesthera/apps/web/app/(dashboard)/notifications/page.tsx`, `aesthera/apps/web/app/(dashboard)/financial/page.tsx`, `aesthera/apps/web/app/(dashboard)/promotions/page.tsx`, `aesthera/apps/web/app/(dashboard)/reports/page.tsx`, `aesthera/apps/web/app/(dashboard)/compras-insumos/page.tsx`, `aesthera/docs/ui-standards.md`, `aesthera/apps/web/lib/hooks/use-appointments.ts`
+- **O que foi feito:**
+  - `#93`: Ícone `Layers` substituindo `Package` no item `/packages` da sidebar — elimina colisão visual com `/products`.
+  - `#94`: KPI "A Receber" no dashboard agora exibe valor monetário real via `prisma.billing.aggregate({ _sum: { amount: true } })` retornado como `totalAmount` na resposta de `GET /billing` — elimina subestimação por paginação.
+  - `#95`: Busca por cliente em Cobranças: campo com debounce 250ms no frontend; `customerName: z.string().trim().min(1).optional()` no DTO (com trim e min(1) para evitar busca vazia por espaços); filtro ILIKE por `customer.name` no repositório.
+  - `#96`: Ação de link de pagamento renomeada para "Ver link" com ícone `ExternalLink` — clareza de que abre URL externa.
+  - `#97`: `uppercase tracking-wide` removido de todos os `<tr>` de cabeçalho de tabela; `text-xs font-medium text-muted-foreground` padronizado em todos os `<th>`; padrão documentado na seção 2.5 de `ui-standards.md`.
+- **Impacto:** Consistência visual da sidebar; KPI financeiro preciso independente do volume de cobranças; busca por cliente em Cobranças funcional; intenção do link de pagamento clara; tipografia de tabelas padronizada em todo o frontend.
+
+### [2026-03-21] — #89 #90 #91 #92 — UX Review: busca em Vendas, notificações PT-BR, desconto, sidebar agrupada
+- **Arquivo(s) afetado(s):** `aesthera/apps/api/src/modules/products/products.dto.ts`, `aesthera/apps/api/src/modules/products/products.repository.ts`, `aesthera/apps/web/app/(dashboard)/sales/page.tsx`, `aesthera/apps/web/app/(dashboard)/notifications/page.tsx`, `aesthera/apps/web/app/(dashboard)/carteira/page.tsx`, `aesthera/apps/web/app/(dashboard)/layout.tsx`
+- **O que foi feito:**
+  - `#89`: Busca em Vendas conectada a query params: campo debounced `search` (OR `product.name` | `customer.name` ILIKE) no backend; preview de desconto e conversão para centavos corrigidos após Copilot review.
+  - `#90`: `EVENT_LABEL` expandido para cobrir todos os 9 eventos de notificação em PT-BR; fallback seguro para eventos desconhecidos.
+  - `#91`: Schema Zod do desconto corrigido: removido `.int()`, adicionado `.min(0).max(999999)`; desconto limitado com `Math.min(discountCents, unitPrice * quantity)` para evitar total negativo.
+  - `#92`: Sidebar agrupada com `GROUP_ORDER` e rótulos de seção (Agenda, Financeiro, Estoque, Configurações).
+- **Impacto:** Busca em Vendas funcional por produto e cliente; notificações exibem eventos em PT-BR; desconto nunca excede subtotal; sidebar organizada com grupos visuais.
+
 ### [2026-03-21] — #86 #87 #88 — LGPD anonimização, audit log estruturado e limpeza de env JWT
 - **Arquivo(s) afetado(s):** `aesthera/apps/api/prisma/schema.prisma`, `aesthera/apps/api/prisma/migrations/20260321215233_add_audit_log/migration.sql`, `aesthera/apps/api/src/shared/audit.ts`, `aesthera/apps/api/src/config/env.ts`, `aesthera/apps/api/src/config/app.config.ts`, `aesthera/apps/api/.env.example`, `aesthera/apps/api/src/modules/clinical/clinical.routes.ts`, `aesthera/apps/api/src/modules/payments/payments.service.ts`, `aesthera/apps/api/src/modules/customers/customers.service.ts`, `aesthera/apps/api/src/modules/customers/customers.routes.ts`, `aesthera/apps/api/src/modules/users/users.routes.ts`
 - **O que foi feito:**

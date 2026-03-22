@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { PaymentModal } from '@/components/payment-modal'
 import { type BillingStatus, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
 
@@ -118,7 +120,19 @@ function BillingActions({ billing }: { billing: Billing }) {
 
 export default function BillingPage() {
   const [statusFilter, setStatusFilter] = useState<BillingStatus | ''>('')
-  const { data, isLoading } = useBilling(statusFilter ? { status: statusFilter } : undefined)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerSearchDebounced, setCustomerSearchDebounced] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCustomerSearchDebounced(customerSearch), 250)
+    return () => clearTimeout(timer)
+  }, [customerSearch])
+
+  const params: Record<string, string> = {
+    ...(statusFilter && { status: statusFilter }),
+    ...(customerSearchDebounced && { customerName: customerSearchDebounced }),
+  }
+  const { data, isLoading } = useBilling(Object.keys(params).length ? params : undefined)
 
   const statuses: Array<{ value: BillingStatus | ''; label: string }> = [
     { value: '', label: 'Todos' },
@@ -140,7 +154,8 @@ export default function BillingPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex gap-2">
         {statuses.map((s) => (
           <button
             key={s.value}
@@ -155,20 +170,27 @@ export default function BillingPage() {
             {s.label}
           </button>
         ))}
+        </div>
+        <Input
+          placeholder="Buscar por cliente…"
+          value={customerSearch}
+          onChange={(e) => setCustomerSearch(e.target.value)}
+          className="h-8 w-48 text-sm"
+        />
       </div>
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b text-muted-foreground">
-              <th className="py-3 pl-4 pr-2 text-left font-medium">Cliente</th>
-              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Serviço</th>
-              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Agendamento</th>
-              <th className="px-2 py-3 text-left font-medium">Valor</th>
-              <th className="hidden sm:table-cell px-2 py-3 text-left font-medium">Vencimento</th>
-              <th className="px-2 py-3 text-left font-medium">Status</th>
-              <th className="px-2 py-3 text-right font-medium">Ações</th>
+            <tr className="border-b bg-muted/30">
+              <th className="py-3 pl-4 pr-2 text-left text-xs font-medium text-muted-foreground">Cliente</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Serviço</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Agendamento</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Valor</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Vencimento</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -212,9 +234,10 @@ export default function BillingPage() {
                         href={b.paymentLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded px-2 py-1 text-xs font-medium text-primary hover:underline"
+                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary hover:underline"
                       >
-                        Link
+                        <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                        Ver link
                       </a>
                     )}
                     <BillingActions billing={b} />

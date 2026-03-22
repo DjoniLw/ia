@@ -47,7 +47,7 @@ export default function DashboardPage() {
   const summary = useLedgerSummary({ from, to })
   const todaySummary = useLedgerSummary({ from: today, to: today })
   const todayAppts = useTodayAppointments()
-  const pendingBilling = useBilling({ status: 'pending', limit: '1' })
+  const pendingBilling = useBilling({ status: 'pending' })
   const overdueBilling = useBilling({ status: 'overdue', limit: '5' })
   const monthSales = useProductSales({ from, to, limit: '1' })
 
@@ -136,7 +136,7 @@ export default function DashboardPage() {
     },
     {
       label: 'A Receber',
-      value: pendingBilling.isLoading ? '...' : String(pendingBilling.data?.total ?? 0),
+      value: pendingBilling.isLoading ? '...' : formatCurrency(pendingBilling.data?.totalAmount ?? 0),
       icon: TrendingDown,
       color: 'text-red-600',
       bg: 'bg-red-50 dark:bg-red-950/20',

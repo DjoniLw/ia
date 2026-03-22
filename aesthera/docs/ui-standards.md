@@ -99,6 +99,24 @@ Always use icon-only buttons (follow the Equipment screen pattern):
 
 > Never use `window.confirm()`. Always use the `<Dialog>` component.
 
+### 2.5 Cabeçalho de Tabela
+
+Padrão para `<th>` em todas as telas:
+
+```tsx
+<th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
+  Nome da Coluna
+</th>
+```
+
+No `<tr>` de cabeçalho, usar:
+
+```tsx
+<tr className="border-b bg-muted/30 text-muted-foreground">
+```
+
+> **Não usar** `uppercase` ou `tracking-wide` em cabeçalhos de tabela. O peso visual adequado já vem de `text-xs font-medium`.
+
 ---
 
 ## 3. Forms

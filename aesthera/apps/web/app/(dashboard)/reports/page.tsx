@@ -241,7 +241,7 @@ export default function ReportsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
                         <th className="px-5 py-3">Nome</th>
                         <th className="px-5 py-3">Telefone</th>
                         <th className="hidden sm:table-cell px-5 py-3">Email</th>
@@ -359,7 +359,7 @@ export default function ReportsPage() {
                   <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
                         <th className="px-5 py-3">Produto</th>
                         <th className="px-5 py-3 text-right">Qtd vendida</th>
                         <th className="px-5 py-3 text-right">Receita</th>
@@ -451,7 +451,7 @@ export default function ReportsPage() {
                   <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
                         <th className="px-5 py-3">Serviço</th>
                         <th className="hidden sm:table-cell px-5 py-3">Categoria</th>
                         <th className="px-5 py-3 text-right">Qtd</th>
@@ -562,7 +562,7 @@ export default function ReportsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/30 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
                         <th className="px-5 py-3">Produto</th>
                         <th className="hidden sm:table-cell px-5 py-3">Categoria</th>
                         <th className="hidden sm:table-cell px-5 py-3">SKU</th>

@@ -443,14 +443,14 @@ export default function SupplyPurchasesPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium">Data</th>
-                    <th className="px-4 py-3 text-left font-medium">Insumo</th>
-                    <th className="px-4 py-3 text-left font-medium">Fornecedor</th>
-                    <th className="px-4 py-3 text-left font-medium">Quantidade comprada</th>
-                    <th className="px-4 py-3 text-left font-medium">Fator de conversão</th>
-                    <th className="px-4 py-3 text-left font-medium">Estoque incrementado</th>
-                    <th className="px-4 py-3 text-right font-medium">Custo total</th>
-                    <th className="px-4 py-3 text-right font-medium">Ações</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Data</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Insumo</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Fornecedor</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Quantidade comprada</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Fator de conversão</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Estoque incrementado</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Custo total</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
