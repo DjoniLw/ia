@@ -282,6 +282,45 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - `#100`: Campos fiscais NCM, CEST e CFOP agrupados em seção colapsável "Dados fiscais (opcional)" no formulário de produtos. Componente `collapsible.tsx` criado. Estado inicial: fechado. Chevron animado indica estado aberto/fechado.
 - **Impacto:** Administradores conseguem verificar overview da carteira sem selecionar cliente por vez; formulário de clientes visualmente consistente; formulário de produtos com menor carga cognitiva para usuários não-contábeis.
 
+### [2026-03-22] — Criação do agente aesthera-pipeline (orquestrador do fluxo completo)
+- **Arquivo(s) afetado(s):**
+  - `.github/agents/aesthera-pipeline.agent.md` *(novo)*
+  - `ai-engineering/prompts/aesthera-pipeline/aesthera-pipeline-prompt.md` *(novo)*
+  - `ai-engineering/projects/aesthera/DEVELOPMENT-FLOW.md` *(atualizado)*
+- **O que foi feito:** Criado agente orquestrador `aesthera-pipeline` que recebe uma ideia do usuário, classifica automaticamente o trilho (complexo ou simples), e executa a cadeia completa de agentes em sequência: PO → UX + Security + Arquiteto → Consolidador → Issue-Writer. Entrega a issue pronta no GitHub sem intervenção manual entre etapas.
+- **Impacto:** O usuário agora tem um único ponto de entrada para o desenvolvimento de features. Zero fricção entre as etapas do pipeline.
+
+### [2026-03-22] — Criação do agente aesthera-consolidador + fluxo de dois trilhos
+- **Arquivo(s) afetado(s):**
+  - `.github/agents/aesthera-consolidador.agent.md` *(novo)*
+  - `ai-engineering/prompts/aesthera-consolidador/aesthera-consolidador-prompt.md` *(novo)*
+  - `ai-engineering/projects/aesthera/DEVELOPMENT-FLOW.md` *(novo)*
+  - `ai-engineering/prompts/ux-reviewer/ux-reviewer-prompt.md` *(atualizado)*
+  - `ai-engineering/prompts/aesthera-product-owner/aesthera-product-owner-prompt.md` *(atualizado)*
+- **O que foi feito:** Criado agente `aesthera-consolidador` que recebe doc.md + revisões de UX, Security e Arquiteto e produz `spec_final.md` pronta para o issue-writer. Documentado fluxo de dois trilhos em `DEVELOPMENT-FLOW.md`: fluxo complexo (PO → revisões em paralelo → consolidador → issue-writer) e fluxo simples (direto para issue-writer). UX reviewer atualizado para também revisar specs pré-desenvolvimento (`doc.md`) com checklist próprio. Product Owner atualizado para referenciar o fluxo e salvar o doc.md no local correto.
+- **Impacto:** Pipeline completo de desenvolvimento shift-left implementado. Features críticas agora passam por validação de produto, UX, segurança e arquitetura antes de qualquer linha de código.
+
+### [2026-03-22] — Treinamento do agente aesthera-system-architect: base de conhecimento técnica + auto-treinamento
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-system-architect/system-architect-knowledge.md` *(novo)*
+  - `ai-engineering/prompts/aesthera-system-architect/aesthera-system-architect-prompt.md` *(atualizado)*
+- **O que foi feito:** Criado arquivo de base de conhecimento técnica (`system-architect-knowledge.md`) com: stack definitiva com versões, todos os enums do schema Prisma, tabela completa de modelos com notas-chave de cada tabela, guards de autenticação, fluxo de dados completo, fluxo appointment→billing→payment→ledger, padrões de comunicação entre módulos, estrutura de pastas do backend, decisões de arquitetura registradas e módulos pendentes. Prompt atualizado com: (1) inicialização obrigatória — agente lê a base de conhecimento antes de qualquer tarefa; (2) rotina de auto-treinamento — agente atualiza a base após cada decisão de arquitetura, alteração de schema ou padrão estabelecido.
+- **Impacto:** Agente system-architect agora tem memória técnica persistente do sistema e se auto-treina a cada sessão, prevenindo contradições com decisões anteriores e garantindo consistência com o schema atual.
+
+### [2026-03-22] — Treinamento do agente aesthera-product-owner: base de conhecimento + auto-treinamento
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-product-owner/product-owner-knowledge.md` *(novo)*
+  - `ai-engineering/prompts/aesthera-product-owner/aesthera-product-owner-prompt.md` *(atualizado)*
+- **O que foi feito:** Criado arquivo de base de conhecimento (`product-owner-knowledge.md`) com estado atual completo do sistema: tabela de módulos com status, perfis de usuário e permissões, regras de negócio centrais, convenções de UI e arquitetura resumida. Prompt atualizado com: (1) rotina de inicialização obrigatória — agente lê a base de conhecimento antes de qualquer tarefa; (2) rotina de auto-treinamento — agente atualiza a base de conhecimento após cada spec criada, decisão de produto ou regra de negócio definida.
+- **Impacto:** Agente product-owner agora tem memória persistente do sistema e se auto-treina a cada sessão produtiva, prevenindo specs duplicadas e garantindo consistência com o estado atual do código.
+
+### [2026-03-22] — Criação do agente aesthera-product-owner
+- **Arquivo(s) afetado(s):**
+  - `.github/agents/aesthera-product-owner.agent.md` *(novo)*
+  - `ai-engineering/prompts/aesthera-product-owner/aesthera-product-owner-prompt.md` *(novo)*
+- **O que foi feito:** Criado agente Product Owner especialista em clínicas estéticas. Transforma ideias simples em especificações completas com fluxo de usuário, regras de negócio, estados, exceções e estrutura para implementação. Inclui rotina de auto-atualização do PLAN.md.
+- **Impacto:** Novo agente disponível para o projeto Aesthera. Complementa o fluxo issue-writer → implementador com uma etapa de refinamento de produto antes do desenvolvimento.
+
 ### [2026-03-22] — #93 #94 #95 #96 #97 — UX Review: ícones, KPI, busca, link, cabeçalhos de tabela
 - **Arquivo(s) afetado(s):** `aesthera/apps/web/app/(dashboard)/layout.tsx`, `aesthera/apps/web/app/(dashboard)/dashboard/page.tsx`, `aesthera/apps/api/src/modules/billing/billing.dto.ts`, `aesthera/apps/api/src/modules/billing/billing.repository.ts`, `aesthera/apps/web/app/(dashboard)/billing/page.tsx`, `aesthera/apps/web/app/(dashboard)/sales/page.tsx`, `aesthera/apps/web/app/(dashboard)/notifications/page.tsx`, `aesthera/apps/web/app/(dashboard)/financial/page.tsx`, `aesthera/apps/web/app/(dashboard)/promotions/page.tsx`, `aesthera/apps/web/app/(dashboard)/reports/page.tsx`, `aesthera/apps/web/app/(dashboard)/compras-insumos/page.tsx`, `aesthera/docs/ui-standards.md`, `aesthera/apps/web/lib/hooks/use-appointments.ts`
 - **O que foi feito:**
