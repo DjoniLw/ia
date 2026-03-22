@@ -63,6 +63,7 @@ export type CreateSaleDto = z.infer<typeof CreateSaleDto>
 export const ListSalesQuery = z.object({
   productId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
+  productName: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),

@@ -33,29 +33,31 @@ import { ChatPanel } from '@/components/chat-panel'
 import { toast } from 'sonner'
 
 const navItems = [
-  { href: '/dashboard', label: 'Início', icon: Home, adminOnly: false },
-  { href: '/appointments', label: 'Agendamentos', icon: CalendarDays, adminOnly: false },
-  { href: '/services', label: 'Serviços', icon: Scissors, adminOnly: false },
-  { href: '/professionals', label: 'Profissionais', icon: UserCheck, adminOnly: false },
-  { href: '/customers', label: 'Clientes', icon: Users, adminOnly: false },
-  { href: '/equipment', label: 'Equipamentos', icon: Wrench, adminOnly: false },
-  { href: '/rooms', label: 'Salas', icon: DoorOpen, adminOnly: false },
-  { href: '/supplies', label: 'Insumos', icon: PackageOpen, adminOnly: false },
-  { href: '/compras-insumos', label: 'Compras de Insumos', icon: ShoppingBag, adminOnly: false },
-  { href: '/products', label: 'Produtos', icon: Package, adminOnly: false },
-  { href: '/sales', label: 'Vendas', icon: ShoppingCart, adminOnly: false },
-  { href: '/billing', label: 'Cobranças', icon: CreditCard, adminOnly: true },
-  { href: '/carteira', label: 'Carteira', icon: Wallet, adminOnly: false },
-  { href: '/promotions', label: 'Promoções', icon: Tag, adminOnly: false },
-  { href: '/packages', label: 'Pacotes', icon: Package, adminOnly: false },
-  { href: '/financial', label: 'Financeiro', icon: BarChart3, adminOnly: true },
-  { href: '/reports', label: 'Relatórios', icon: FileText, adminOnly: true },
-  { href: '/notifications', label: 'Notificações', icon: Bell, adminOnly: false },
-  { href: '/settings', label: 'Configurações', icon: Settings, adminOnly: true },
+  { href: '/dashboard', label: 'Início', icon: Home, adminOnly: false, group: 'Operacional' },
+  { href: '/appointments', label: 'Agendamentos', icon: CalendarDays, adminOnly: false, group: 'Operacional' },
+  { href: '/services', label: 'Serviços', icon: Scissors, adminOnly: false, group: 'Operacional' },
+  { href: '/professionals', label: 'Profissionais', icon: UserCheck, adminOnly: false, group: 'Operacional' },
+  { href: '/customers', label: 'Clientes', icon: Users, adminOnly: false, group: 'Operacional' },
+  { href: '/equipment', label: 'Equipamentos', icon: Wrench, adminOnly: false, group: 'Loja & Insumos' },
+  { href: '/rooms', label: 'Salas', icon: DoorOpen, adminOnly: false, group: 'Loja & Insumos' },
+  { href: '/supplies', label: 'Insumos', icon: PackageOpen, adminOnly: false, group: 'Loja & Insumos' },
+  { href: '/compras-insumos', label: 'Compras de Insumos', icon: ShoppingBag, adminOnly: false, group: 'Loja & Insumos' },
+  { href: '/products', label: 'Produtos', icon: Package, adminOnly: false, group: 'Loja & Insumos' },
+  { href: '/sales', label: 'Vendas', icon: ShoppingCart, adminOnly: false, group: 'Loja & Insumos' },
+  { href: '/carteira', label: 'Carteira', icon: Wallet, adminOnly: false, group: 'Fidelização' },
+  { href: '/promotions', label: 'Promoções', icon: Tag, adminOnly: false, group: 'Fidelização' },
+  { href: '/packages', label: 'Pacotes', icon: Package, adminOnly: false, group: 'Fidelização' },
+  { href: '/billing', label: 'Cobranças', icon: CreditCard, adminOnly: true, group: 'Financeiro' },
+  { href: '/financial', label: 'Financeiro', icon: BarChart3, adminOnly: true, group: 'Financeiro' },
+  { href: '/reports', label: 'Relatórios', icon: FileText, adminOnly: true, group: 'Financeiro' },
+  { href: '/notifications', label: 'Notificações', icon: Bell, adminOnly: false, group: 'Sistema' },
+  { href: '/settings', label: 'Configurações', icon: Settings, adminOnly: true, group: 'Sistema' },
 ]
 
 // Derivado de navItems — fonte única de verdade
 const ADMIN_ONLY_PATHS = navItems.filter((i) => i.adminOnly).map((i) => i.href)
+
+const GROUP_ORDER = ['Operacional', 'Loja & Insumos', 'Fidelização', 'Financeiro', 'Sistema']
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -129,23 +131,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-          {visibleNavItems.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+        <nav className="flex-1 overflow-y-auto p-3">
+          {GROUP_ORDER.map((group) => {
+            const items = visibleNavItems.filter((item) => item.group === group)
+            if (!items.length) return null
             return (
-              <Link
-                key={href}
-                href={href}
-                className={[
-                  'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all',
-                  isActive
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-neutral-600 hover:bg-accent hover:text-accent-foreground',
-                ].join(' ')}
-              >
-                <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? '' : 'opacity-70'}`} />
-                {label}
-              </Link>
+              <div key={group} className="mb-1">
+                <p className="px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                  {group}
+                </p>
+                <div className="space-y-0.5">
+                  {items.map(({ href, label, icon: Icon }) => {
+                    const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        className={[
+                          'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all',
+                          isActive
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-neutral-600 hover:bg-accent hover:text-accent-foreground',
+                        ].join(' ')}
+                      >
+                        <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? '' : 'opacity-70'}`} />
+                        {label}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
             )
           })}
         </nav>

@@ -94,7 +94,7 @@ function TransactionHistory({ entry }: { entry: WalletEntry }) {
             >
               <div className="flex items-center gap-2">
                 <span className="font-medium text-foreground">
-                  {TRANSACTION_LABEL[t.type] ?? t.type}
+                  {TRANSACTION_LABEL[t.type] ?? 'Desconhecido'}
                 </span>
                 {t.description && (
                   <span className="text-muted-foreground">{t.description}</span>

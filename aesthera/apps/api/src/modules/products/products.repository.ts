@@ -93,6 +93,7 @@ export class ProductsRepository {
       clinicId,
       ...(q.productId && { productId: q.productId }),
       ...(q.customerId && { customerId: q.customerId }),
+      ...(q.productName && { product: { name: { contains: q.productName, mode: 'insensitive' as const } } }),
       ...((q.from || q.to) && {
         soldAt: {
           ...(q.from && { gte: new Date(q.from + 'T00:00:00Z') }),
