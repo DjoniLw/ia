@@ -11,6 +11,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useDeactivateUser, useInviteUser, useUpdateUser, useUsers } from '@/lib/hooks/use-settings'
+import { PERMISSION_GROUPS } from '@/lib/nav-items'
 
 const inviteSchema = z.object({
   name: z.string().min(2),
@@ -21,60 +22,7 @@ type InviteData = z.infer<typeof inviteSchema>
 
 const ROLE_LABELS = { admin: 'Administrador', staff: 'Recepcionista' }
 
-// ── Grupos de rotas para editor de permissões ─────────────────────────────────
-
-interface PermissionGroup {
-  label: string
-  routes: { href: string; label: string }[]
-}
-
-const PERMISSION_GROUPS: PermissionGroup[] = [
-  {
-    label: 'Atendimento',
-    routes: [
-      { href: '/appointments', label: 'Agendamentos' },
-      { href: '/services', label: 'Serviços' },
-      { href: '/professionals', label: 'Profissionais' },
-      { href: '/customers', label: 'Clientes' },
-    ],
-  },
-  {
-    label: 'Espaço',
-    routes: [
-      { href: '/rooms', label: 'Salas' },
-      { href: '/equipment', label: 'Equipamentos' },
-    ],
-  },
-  {
-    label: 'Estoque',
-    routes: [
-      { href: '/supplies', label: 'Insumos' },
-      { href: '/compras-insumos', label: 'Compras de Insumos' },
-      { href: '/products', label: 'Produtos' },
-    ],
-  },
-  {
-    label: 'Vendas',
-    routes: [
-      { href: '/sales', label: 'Vendas' },
-      { href: '/promotions', label: 'Promoções' },
-      { href: '/packages', label: 'Pacotes' },
-      { href: '/carteira', label: 'Carteira' },
-    ],
-  },
-  {
-    label: 'Financeiro',
-    routes: [
-      { href: '/billing', label: 'Cobranças' },
-      { href: '/financial', label: 'Financeiro' },
-      { href: '/reports', label: 'Relatórios' },
-    ],
-  },
-  {
-    label: 'Comunicação',
-    routes: [{ href: '/notifications', label: 'Notificações' }],
-  },
-]
+// PERMISSION_GROUPS importado de @/lib/nav-items — derivado automaticamente do menu
 
 // ── ScreenPermissionsEditor ───────────────────────────────────────────────────
 

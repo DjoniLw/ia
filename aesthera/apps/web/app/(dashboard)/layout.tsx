@@ -6,60 +6,18 @@ import { getUserScreenPermissions } from '@/lib/auth'
 import { useClinic } from '@/lib/hooks/use-settings'
 import { UserNav } from '@/components/user-nav'
 import {
-  BarChart3,
-  Bell,
-  CalendarDays,
-  CreditCard,
-  FileText,
-  Home,
-  Layers,
   Menu,
-  Package,
-  PackageOpen,
   Scissors,
-  Settings,
-  ShoppingBag,
-  ShoppingCart,
-  Tag,
-  UserCheck,
-  Users,
-  Wallet,
-  Wrench,
-  DoorOpen,
   X,
 } from 'lucide-react'
+import { navItems, GROUP_ORDER, ADMIN_ONLY_PATHS } from '@/lib/nav-items'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { ChatPanel } from '@/components/chat-panel'
 import { toast } from 'sonner'
 
-const navItems = [
-  { href: '/dashboard', label: 'Início', icon: Home, adminOnly: false, group: 'Operacional' },
-  { href: '/appointments', label: 'Agendamentos', icon: CalendarDays, adminOnly: false, group: 'Operacional' },
-  { href: '/services', label: 'Serviços', icon: Scissors, adminOnly: false, group: 'Operacional' },
-  { href: '/professionals', label: 'Profissionais', icon: UserCheck, adminOnly: false, group: 'Operacional' },
-  { href: '/customers', label: 'Clientes', icon: Users, adminOnly: false, group: 'Operacional' },
-  { href: '/equipment', label: 'Equipamentos', icon: Wrench, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/rooms', label: 'Salas', icon: DoorOpen, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/supplies', label: 'Insumos', icon: PackageOpen, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/compras-insumos', label: 'Compras de Insumos', icon: ShoppingBag, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/products', label: 'Produtos', icon: Package, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/sales', label: 'Vendas', icon: ShoppingCart, adminOnly: false, group: 'Loja & Insumos' },
-  { href: '/carteira', label: 'Carteira', icon: Wallet, adminOnly: false, group: 'Fidelização' },
-  { href: '/promotions', label: 'Promoções', icon: Tag, adminOnly: false, group: 'Fidelização' },
-  { href: '/packages', label: 'Pacotes', icon: Layers, adminOnly: false, group: 'Fidelização' },
-  { href: '/billing', label: 'Cobranças', icon: CreditCard, adminOnly: true, group: 'Financeiro' },
-  { href: '/financial', label: 'Financeiro', icon: BarChart3, adminOnly: true, group: 'Financeiro' },
-  { href: '/reports', label: 'Relatórios', icon: FileText, adminOnly: true, group: 'Financeiro' },
-  { href: '/notifications', label: 'Notificações', icon: Bell, adminOnly: false, group: 'Sistema' },
-  { href: '/settings', label: 'Configurações', icon: Settings, adminOnly: true, group: 'Sistema' },
-]
-
-// Derivado de navItems — fonte única de verdade
-const ADMIN_ONLY_PATHS = navItems.filter((i) => i.adminOnly).map((i) => i.href)
-
-const GROUP_ORDER = ['Operacional', 'Loja & Insumos', 'Fidelização', 'Financeiro', 'Sistema']
+// navItems, GROUP_ORDER e ADMIN_ONLY_PATHS importados de @/lib/nav-items
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
