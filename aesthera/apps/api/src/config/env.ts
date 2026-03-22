@@ -2,12 +2,12 @@ import 'dotenv/config'
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 
-// ── Fallback secrets (used when JWT_SECRET / JWT_REFRESH_SECRET are not set) ──
-// These are generated fresh on every cold start, so tokens issued without
-// explicit secrets will be invalidated on restart.  Always set explicit secrets
-// in production via Railway environment variables.
+// ── Fallback secret (used when JWT_SECRET is not set) ──────────────────────
+// Generated fresh on every cold start — tokens will be invalidated on restart.
+// Always set JWT_SECRET explicitly in production via Railway environment variables.
+// NOTE: Refresh tokens are opaque tokens managed via Redis (NOT JWT-signed).
+// Therefore, JWT_REFRESH_SECRET is not needed and does not exist in this project.
 const _fallbackJwtSecret = randomBytes(64).toString('hex')
-const _fallbackJwtRefreshSecret = randomBytes(64).toString('hex')
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -26,7 +26,6 @@ const envSchema = z.object({
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
 
   JWT_SECRET: z.string().min(32).default(_fallbackJwtSecret),
-  JWT_REFRESH_SECRET: z.string().min(32).default(_fallbackJwtRefreshSecret),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
@@ -93,18 +92,6 @@ function loadEnv(): Env {
     )
     console.warn(
       '   Set JWT_SECRET in Railway environment variables to fix this.',
-    )
-  }
-
-  if (!process.env.JWT_REFRESH_SECRET) {
-    console.warn(
-      '⚠️  JWT_REFRESH_SECRET is not set — using a random ephemeral secret.',
-    )
-    console.warn(
-      '   ⛔ INSECURE: All issued refresh tokens will be invalidated on every restart.',
-    )
-    console.warn(
-      '   Set JWT_REFRESH_SECRET in Railway environment variables to fix this.',
     )
   }
 
