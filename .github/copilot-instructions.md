@@ -55,6 +55,41 @@ Para cada PR ou conjunto de mudanças revisado, verificar obrigatoriamente:
 - Não exigir testes para: alterações puramente visuais/estilísticas, ajustes de texto/tradução, mudanças de configuração sem lógica.
 - Ao sinalizar ausência de testes, indicar **quais cenários deveriam ser cobertos** (ex.: caso feliz, edge cases, erros esperados).
 
+---
+
+## Sugestão de Auto-treinamento do Implementador
+
+Durante o code review, ao identificar um **padrão relevante**, sinalize no final da revisão sugerindo que o `treinador-agent` registre o aprendizado no arquivo `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`.
+
+### Quando sugerir o auto-treinamento
+
+Sugira sempre que a revisão identificar:
+
+- **Anti-padrão recorrente** — erro que provavelmente será repetido (ex.: `disabled={!isDirty}` em formulário de cadastro novo)
+- **Violação de padrão visual** — uso incorreto de classes CSS, layout de filtros, estrutura de componente fora do padrão
+- **Erro de escopo** — alteração de arquivos não relacionados à task
+- **Violação de multi-tenancy ou segurança** — ausência de `organizationId` em queries, dados expostos sem filtro de tenant
+- **Boa prática ignorada** — padrão correto identificado na revisão que deveria ser replicado
+
+### O que NÃO merece registro
+
+- Correções de texto/tradução pontuais sem padrão generalizável
+- Erros de typo ou formatação simples
+- Problemas de negócio específicos demais para serem reaproveitados
+
+### Formato da sugestão
+
+Ao final de toda revisão que identificar um item treinável, inclua:
+
+> 💡 **Sugestão de treinamento do implementador:**
+> Este erro/padrão pode ser registrado no `code-review-learnings.md` para prevenir reincidência.
+> Para registrar, use o **`treinador-agent`** com a instrução:
+> _"Adicione ao `code-review-learnings.md` do implementador: [descrição do padrão, anti-padrão encontrado, e a forma correta]"_
+
+> ⚠️ Apenas o `treinador-agent` tem autoridade para modificar arquivos de prompt e learnings. Não altere esses arquivos diretamente durante uma revisão.
+
+---
+
 # Instruções de uso de IA para Revisão do Aesthera
 
 - Ao gerar sugestões ou fazer code review, **use apenas modelos de IA não premium**.
