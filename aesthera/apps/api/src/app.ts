@@ -31,6 +31,15 @@ import { packagesRoutes } from './modules/packages/packages.routes'
 import './domain-event-handlers'
 
 export async function buildApp(): Promise<FastifyInstance> {
+  // Guard: recusa inicialização em produção com CORS aberto (wildcard).
+  // appConfig.cors.origin === true é o equivalente a CORS_ORIGIN='*' no Fastify.
+  if (appConfig.isProduction && appConfig.cors.origin === true) {
+    console.error(
+      '❌ CORS_ORIGIN deve ser configurado explicitamente em produção. Recusando inicialização.',
+    )
+    process.exit(1)
+  }
+
   const app = Fastify({
     logger: {
       level: appConfig.isProduction ? 'info' : 'debug',
@@ -79,6 +88,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     '/auth/refresh',
     '/auth/logout',
     '/auth/recover-access',
+    '/payments/webhooks/stripe',      // Stripe não envia X-Clinic-Slug
+    '/payments/webhooks/mercadopago', // MercadoPago não envia X-Clinic-Slug
   ])
 
   app.addHook('preHandler', async (request, reply) => {
@@ -88,6 +99,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     // MISSING_TENANT.
     const url = request.routeOptions.url
     if (!url || PUBLIC_ROUTES.has(url)) return
+    // /pay/:token usa URL dinâmica — acessível sem X-Clinic-Slug (token-based)
+    if (url.startsWith('/pay/')) return
     await tenantMiddleware(request, reply)
   })
 

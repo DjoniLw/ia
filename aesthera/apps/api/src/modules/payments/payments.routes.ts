@@ -32,15 +32,26 @@ export async function paymentsRoutes(app: FastifyInstance) {
   })
 
   // ── Webhooks (public — signature-verified internally) ────────────────────────
-  app.post('/payments/webhooks/stripe', async (req, reply) => {
-    const sig = (req.headers['stripe-signature'] as string) ?? ''
-    await svc.handleStripeWebhook(JSON.stringify(req.body), sig)
-    return reply.send({ received: true })
-  })
+  // Raw body is required for HMAC signature validation (Stripe and MercadoPago
+  // sign the original bytes, not the JSON-parsed representation).
+  app.register(async function webhookScope(fastify) {
+    fastify.addContentTypeParser(
+      'application/json',
+      { parseAs: 'buffer' },
+      (_req, body, done) => done(null, body),
+    )
 
-  app.post('/payments/webhooks/mercadopago', async (req, reply) => {
-    const sig = (req.headers['x-signature'] as string) ?? ''
-    await svc.handleMercadoPagoWebhook(JSON.stringify(req.body), sig)
-    return reply.send({ received: true })
+    fastify.post('/payments/webhooks/stripe', async (req, reply) => {
+      const rawBody = req.body as Buffer
+      const sig = (req.headers['stripe-signature'] as string) ?? ''
+      return reply.send(await svc.handleStripeWebhook(rawBody, sig))
+    })
+
+    fastify.post('/payments/webhooks/mercadopago', async (req, reply) => {
+      const rawBody = req.body as Buffer
+      const sig = (req.headers['x-signature'] as string) ?? ''
+      const requestId = (req.headers['x-request-id'] as string) ?? ''
+      return reply.send(await svc.handleMercadoPagoWebhook(rawBody, sig, requestId))
+    })
   })
 }

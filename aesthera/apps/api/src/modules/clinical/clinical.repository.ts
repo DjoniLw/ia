@@ -1,3 +1,4 @@
+import { NotFoundError } from '../../shared/errors/app-error'
 import { prisma } from '../../database/prisma/client'
 import type { CreateClinicalRecordDto, ListClinicalRecordsQuery, UpdateClinicalRecordDto } from './clinical.dto'
 
@@ -48,7 +49,13 @@ export class ClinicalRepository {
     })
   }
 
-  async update(_clinicId: string, id: string, data: UpdateClinicalRecordDto) {
+  async update(clinicId: string, id: string, data: UpdateClinicalRecordDto) {
+    // Verificar existência dentro do tenant antes de atualizar.
+    // Prisma update() aceita apenas WhereUniqueInput (somente @id),
+    // por isso usamos findFirst + update para garantir isolamento cross-tenant (IDOR).
+    const existing = await prisma.clinicalRecord.findFirst({ where: { id, clinicId } })
+    if (!existing) throw new NotFoundError('ClinicalRecord')
+
     return prisma.clinicalRecord.update({
       where: { id },
       data: {
