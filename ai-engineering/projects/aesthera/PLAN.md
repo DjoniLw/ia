@@ -232,6 +232,16 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+## FASE 2 — Financeiro Avançado
+
+> Issues criadas a partir do roadmap (#64–#66). Contas a Pagar, Recebimento Manual e tratamento de excedente.
+
+- [x] #64 — Módulo Contas a Pagar: `AccountsPayable` CRUD backend + cron OVERDUE + integração Ledger (débito) + auto-criação a partir de `SupplyPurchase` + página `/contas-a-pagar` com cards de resumo, filtros e tabela
+- [x] #65 — Recebimento Manual com Múltiplas Formas de Pagamento: `ManualReceipt` + `ManualReceiptLine` + `POST /billing/:id/receive` + modal `ReceiveManualModal` substituindo `PaymentModal` em Cobranças
+- [x] #66 — Troco e Excedente no Recebimento: campo `overpaymentHandling` (discriminated union `cash_change | wallet_credit | wallet_voucher`) no endpoint e no modal — quando `totalPaid > billing.amount` o usuário escolhe como tratar o excedente
+
+---
+
 ## Fase 10 — Pendente / Não implementado
 
 > Itens identificados no código ou features que ainda não foram construídos.
@@ -267,6 +277,31 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 ---
 
 ## Histórico de Atualizações
+
+### [2026-03-23] — #64 #65 #66 — Contas a Pagar, Recebimento Manual e Troco/Excedente
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(enum `AccountsPayableStatus`, modelos `AccountsPayable`, `ManualReceipt`, `ManualReceiptLine`)*
+  - `aesthera/apps/api/prisma/migrations/20260323230147_feat_accounts_payable_manual_receipts/migration.sql` *(novo)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.dto.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.repository.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.service.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.routes.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.dto.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.service.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.routes.ts` *(novo)*
+  - `aesthera/apps/api/src/app.ts` *(registrados novos módulos)*
+  - `aesthera/apps/api/src/modules/supply-purchases/supply-purchases.service.ts` *(auto-criação de AP)*
+  - `aesthera/apps/web/lib/hooks/use-accounts-payable.ts` *(novo)*
+  - `aesthera/apps/web/lib/hooks/use-appointments.ts` *(hook `useCreateManualReceipt`)*
+  - `aesthera/apps/web/lib/nav-items.ts` *(item `/contas-a-pagar`)*
+  - `aesthera/apps/web/app/(dashboard)/contas-a-pagar/page.tsx` *(novo)*
+  - `aesthera/apps/web/components/receive-manual-modal.tsx` *(novo)*
+  - `aesthera/apps/web/app/(dashboard)/billing/page.tsx` *(usa `ReceiveManualModal`)*
+- **O que foi feito:**
+  - `#64`: Módulo `AccountsPayable` backend completo (CRUD, marcar pago/cancelado, cron OVERDUE, resumo); integração com Ledger (entrada de débito ao pagar); `SupplyPurchase.create()` cria automaticamente um AP vinculado; página `/contas-a-pagar` com 3 cards de resumo (Total Pendente, Total Vencido, Pago no Mês), filtros por fornecedor/status/período, tabela com badge de origem, diálogos de nova conta e registrar pagamento.
+  - `#65`: Endpoint `POST /billing/:id/receive` que aceita múltiplas linhas de pagamento (`ManualReceiptLine`) com método e valor por linha; cria `ManualReceipt` + linhas em transação atômica, debita entradas de carteira usadas como pagamento, gera entradas de crédito no Ledger; modal `ReceiveManualModal` com linhas dinâmicas e exibição em tempo real do total pago vs. valor da cobrança.
+  - `#66`: Quando `totalPaid > billing.amount`, campo `overpaymentHandling` é obrigatório. Opções: `cash_change` (apenas anota o troco), `wallet_credit` (cria entrada de crédito na carteira), `wallet_voucher` (cria voucher nominal ao cliente). Seção dinâmica no modal exibe opções de rádio somente quando há excedente.
+- **Impacto:** Clínicas podem controlar suas contas a pagar (geradas manualmente ou automaticamente via compras de insumos). Recebimentos de cobranças passam a aceitar qualquer combinação de formas de pagamento em vez de apenas um método, com tratamento adequado de troco e crédito/voucher quando o cliente paga a mais.
 
 ### [2026-03-21] — #98 #99 #100 — UX Review: carteira dual-view, select shadcn/ui em clientes, campos fiscais colapsáveis
 - **Arquivo(s) afetado(s):**

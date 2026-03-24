@@ -297,3 +297,53 @@ export function useMarkBillingPaid(id: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
   })
 }
+
+// ──── Manual Receipts (Recebimento Manual) ────────────────────────────────────
+
+export type ManualReceiptPaymentMethod =
+  | 'cash'
+  | 'pix'
+  | 'card'
+  | 'transfer'
+  | 'wallet_credit'
+  | 'wallet_voucher'
+
+export interface ManualReceiptLine {
+  paymentMethod: ManualReceiptPaymentMethod
+  amount: number
+  walletEntryId?: string
+}
+
+export type OverpaymentHandlingType = 'cash_change' | 'wallet_credit' | 'wallet_voucher'
+
+export interface CreateManualReceiptPayload {
+  receivedAt?: string
+  notes?: string
+  lines: ManualReceiptLine[]
+  overpaymentHandling?: { type: OverpaymentHandlingType }
+}
+
+export interface ManualReceiptResult {
+  receipt: {
+    id: string
+    billingId: string
+    totalPaid: number
+    receivedAt: string
+    notes: string | null
+    lines: Array<{
+      id: string
+      paymentMethod: string
+      amount: number
+      walletEntryId: string | null
+    }>
+  }
+  walletEntry: { code: string; balance: number } | null
+}
+
+export function useCreateManualReceipt(billingId: string) {
+  const qc = useQueryClient()
+  return useMutation<ManualReceiptResult, Error, CreateManualReceiptPayload>({
+    mutationFn: (data) => api.post(`/billing/${billingId}/receive`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
+  })
+}
