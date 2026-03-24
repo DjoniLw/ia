@@ -282,6 +282,13 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - `#100`: Campos fiscais NCM, CEST e CFOP agrupados em seção colapsável "Dados fiscais (opcional)" no formulário de produtos. Componente `collapsible.tsx` criado. Estado inicial: fechado. Chevron animado indica estado aberto/fechado.
 - **Impacto:** Administradores conseguem verificar overview da carteira sem selecionar cliente por vez; formulário de clientes visualmente consistente; formulário de produtos com menor carga cognitiva para usuários não-contábeis.
 
+### [2026-03-23] — GAP-R10 — Validação de roomId obrigatório em appointments.service.create()
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/appointments/appointments.service.ts`
+  - `ai-engineering/projects/aesthera/features/appointments.md`
+- **O que foi feito:** Adicionada guard explícita `if (!dto.roomId)` no método `create()` do `AppointmentsService`, lançando `AppError('Sala é obrigatória para confirmar o agendamento', 400, 'ROOM_REQUIRED')` antes do início da transação DB. A spec `appointments.md` foi atualizada com a regra R10 formalizada.
+- **Impacto:** A criação de agendamentos sem `roomId` passa a ser rejeitada com erro 400. O teste `[GAP-R10]` existente em `appointments.service.test.ts` precisa ser atualizado pelo `test-guardian` para esperar o erro em vez do comportamento permissivo anterior.
+
 ### [2026-03-23] — Criação do agente test-guardian (guardião de testes e regras de negócio)
 - **Arquivo(s) afetado(s):**
   - `.github/agents/test-guardian.agent.md` *(novo)*

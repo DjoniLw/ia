@@ -78,6 +78,7 @@ draft → confirmed → in_progress → completed
 - A `BlockedSlot` can be a one-time block (specific date) or recurring (e.g. every day 12–13h)
 - Blocked slots prevent new bookings in that window — existing appointments are not auto-cancelled
 - **Notification timing**: confirmation WhatsApp + email is sent on `appointment.confirmed` (NOT on `draft` creation). D-1 reminder job is scheduled at confirmation time.
+- **R10 — Sala obrigatória**: `roomId` é obrigatório em toda criação de agendamento. Se não fornecido, o serviço lança `AppError('Sala é obrigatória para confirmar o agendamento', 400, 'ROOM_REQUIRED')`. A verificação ocorre antes da transação DB.
 
 ## Query Filters (GET /appointments)
 - `professional_id`

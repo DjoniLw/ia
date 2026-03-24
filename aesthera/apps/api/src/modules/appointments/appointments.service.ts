@@ -56,6 +56,11 @@ export class AppointmentsService {
     const scheduledDate = new Date(dto.scheduledAt)
     const dateStr = scheduledDate.toISOString().slice(0, 10)
 
+    // R10 — Sala obrigatória
+    if (!dto.roomId) {
+      throw new AppError('Sala é obrigatória para confirmar o agendamento', 400, 'ROOM_REQUIRED')
+    }
+
     // Use Postgres advisory lock to prevent double-booking
     const lockId = hashToInt32(dto.professionalId + dateStr)
 
