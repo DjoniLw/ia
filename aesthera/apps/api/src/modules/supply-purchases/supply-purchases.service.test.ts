@@ -24,6 +24,12 @@ vi.mock('../../database/prisma/client', () => ({
   },
 }))
 
+vi.mock('../accounts-payable/accounts-payable.service', () => ({
+  AccountsPayableService: vi.fn(function AccountsPayableService() {
+    return { createFromSupplyPurchase: vi.fn().mockResolvedValue(undefined) }
+  }),
+}))
+
 import { SupplyPurchasesService } from './supply-purchases.service'
 
 function makeSupply(overrides: Record<string, unknown> = {}) {
