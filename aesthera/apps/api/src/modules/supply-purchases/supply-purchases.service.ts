@@ -78,7 +78,7 @@ export class SupplyPurchasesService {
         data: { stock: { increment: stockIncrement } },
       })
 
-      return tx.supplyPurchase.create({
+      const purchase = await tx.supplyPurchase.create({
         data: {
           clinicId,
           supplyId: supply.id,
@@ -94,6 +94,23 @@ export class SupplyPurchasesService {
         },
         include: PURCHASE_INCLUDE,
       })
+
+      // Auto-create AccountsPayable entry inside the same transaction (due date = purchase date)
+      await tx.accountsPayable.create({
+        data: {
+          clinicId,
+          description: `Compra de Insumo — ${supply.name}`,
+          supplierName: purchase.supplierName ?? null,
+          category: 'Insumos',
+          amount: purchase.totalCost,
+          dueDate: purchase.purchasedAt,
+          status: 'PENDING',
+          originType: 'supply_purchase',
+          originReference: purchase.id,
+        },
+      })
+
+      return purchase
     })
   }
 

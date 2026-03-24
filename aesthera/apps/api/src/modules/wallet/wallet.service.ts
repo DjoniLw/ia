@@ -158,12 +158,13 @@ export class WalletService {
     walletEntryId: string,
     amount: number,
     billingId: string,
+    providedTx?: Tx,
   ): Promise<{
     entry: Awaited<ReturnType<WalletRepository['findById']>>
     newEntry: Awaited<ReturnType<WalletRepository['findById']>> | null
     remaining: number
   }> {
-    return prisma.$transaction(async (tx) => {
+    const run = async (tx: Tx) => {
       const entry = await this.repo.findByIdForUpdate(tx, clinicId, walletEntryId)
       if (!entry) throw new NotFoundError('WalletEntry')
 
@@ -225,6 +226,8 @@ export class WalletService {
       }
 
       return { entry: updatedEntry, newEntry, remaining: 0 }
-    })
+    }
+
+    return providedTx ? run(providedTx) : prisma.$transaction(run)
   }
 }

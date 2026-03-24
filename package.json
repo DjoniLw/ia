@@ -1,5 +1,5 @@
 {
   "scripts": {
-    "test": "jest"
+    "test": "cd aesthera/apps/api && npx vitest run"
   }
 }

@@ -232,6 +232,16 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+## FASE 2 — Financeiro Avançado
+
+> Issues criadas a partir do roadmap (#64–#66). Contas a Pagar, Recebimento Manual e tratamento de excedente.
+
+- [x] #64 — Módulo Contas a Pagar: `AccountsPayable` CRUD backend + cron OVERDUE + integração Ledger (débito) + auto-criação a partir de `SupplyPurchase` + página `/contas-a-pagar` com cards de resumo, filtros e tabela
+- [x] #65 — Recebimento Manual com Múltiplas Formas de Pagamento: `ManualReceipt` + `ManualReceiptLine` + `POST /billing/:id/receive` + modal `ReceiveManualModal` substituindo `PaymentModal` em Cobranças
+- [x] #66 — Troco e Excedente no Recebimento: campo `overpaymentHandling` (discriminated union `cash_change | wallet_credit | wallet_voucher`) no endpoint e no modal — quando `totalPaid > billing.amount` o usuário escolhe como tratar o excedente
+
+---
+
 ## Fase 10 — Pendente / Não implementado
 
 > Itens identificados no código ou features que ainda não foram construídos.
@@ -267,6 +277,52 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 ---
 
 ## Histórico de Atualizações
+
+### [2026-03-24] — PR #108 Code Review — Correções de atomicidade, multi-tenancy, validações e testes
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(`@db.Date` em `AccountsPayable.dueDate`; FK `ManualReceiptLine → WalletEntry` com `@@index` composto)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.dto.ts` *(regex `^\d{4}-\d{2}-\d{2}$` em `from`/`to`)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.repository.ts` *(`updateMany + findFirst` com `clinicId` em `update/markPaid/markCancelled`; `clinicId` obrigatório em `markOverdueBatch`)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.service.ts` *(`pay()` em `prisma.$transaction`; `runOverdueCron(clinicId)` exige clinicId)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.routes.ts` *(cron passa `req.clinicId`)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.dto.ts` *(`ManualReceiptLineDto` como `discriminatedUnion` — `walletEntryId` obrigatório apenas para `wallet_credit`/`wallet_voucher`)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.service.ts` *(`paidAt` usa `dto.receivedAt`; P2002 → 409; `wallet.use()` e `ledger.createCreditEntry()` recebem `tx`)*
+  - `aesthera/apps/api/src/modules/ledger/ledger.repository.ts` *(`Tx` exportado; `tx?` em `create()`)*
+  - `aesthera/apps/api/src/modules/ledger/ledger.service.ts` *(`tx?` em `createCreditEntry/createDebitEntry`)*
+  - `aesthera/apps/api/src/modules/wallet/wallet.service.ts` *(`providedTx?` em `use()` — padrão `run` pattern)*
+  - `aesthera/apps/api/src/modules/supply-purchases/supply-purchases.service.ts` *(AP criado inline em `prisma.$transaction` em vez de via serviço externo)*
+  - `aesthera/apps/api/src/modules/supply-purchases/supply-purchases.service.test.ts` *(`mockTx.accountsPayable.create` adicionado)*
+  - `aesthera/apps/api/src/modules/appointments/appointments.service.test.ts` *(`makeCreateDto({ roomId: undefined })` no teste `[GAP-R10]`)*
+  - `aesthera/apps/web/lib/hooks/use-accounts-payable.ts` *(`AccountsPayablePaymentMethod` type exportado; `usePayAccountsPayable` tipado)*
+  - `aesthera/apps/web/app/(dashboard)/contas-a-pagar/page.tsx` *(datas com `T12:00:00.000Z`; `paymentMethod` tipado como `AccountsPayablePaymentMethod`; `PAYMENT_METHOD_OPTIONS` com `as const satisfies`)*
+  - `aesthera/apps/web/components/receive-manual-modal.tsx` *(`canConfirm` valida `walletEntryId` para métodos wallet)*
+- **O que foi feito:** Aplicadas todas as 18 correções do Copilot Code Review no PR #108. Principais melhorias: (1) Atomicidade com `prisma.$transaction` propagada para `AccountsPayable.pay()`, `ManualReceipts.create()` e `SupplyPurchases.create()`; (2) Multi-tenancy reforçado com `updateMany({ where: { id, clinicId } })` no repositório de AP; (3) Cron de AP agora escopado por clínica (`clinicId` obrigatório); (4) DTO de recibo manual com `discriminatedUnion` garantindo que `walletEntryId` só seja exigido quando o método é wallet; (5) Datas de vencimento no PostgreSQL como `@db.Date` + FK FK referencial no schema; (6) Fuso horário corrigido no frontend (T12 evita off-by-one em BRT -03:00); (7) Race condition P2002 em `ManualReceipt` → 409 `BILLING_ALREADY_PAID`.
+- **Impacto:** Operações financeiras críticas são agora atômicas. Multi-tenancy reforçado impede vazamento de dados entre clínicas. Validações mais rígidas nos DTOs evitam 500 do Prisma por datas inválidas. 117 testes unitários passando.
+
+### [2026-03-23] — #64 #65 #66 — Contas a Pagar, Recebimento Manual e Troco/Excedente
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(enum `AccountsPayableStatus`, modelos `AccountsPayable`, `ManualReceipt`, `ManualReceiptLine`)*
+  - `aesthera/apps/api/prisma/migrations/20260323230147_feat_accounts_payable_manual_receipts/migration.sql` *(novo)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.dto.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.repository.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.service.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.routes.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.dto.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.service.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.routes.ts` *(novo)*
+  - `aesthera/apps/api/src/app.ts` *(registrados novos módulos)*
+  - `aesthera/apps/api/src/modules/supply-purchases/supply-purchases.service.ts` *(auto-criação de AP)*
+  - `aesthera/apps/web/lib/hooks/use-accounts-payable.ts` *(novo)*
+  - `aesthera/apps/web/lib/hooks/use-appointments.ts` *(hook `useCreateManualReceipt`)*
+  - `aesthera/apps/web/lib/nav-items.ts` *(item `/contas-a-pagar`)*
+  - `aesthera/apps/web/app/(dashboard)/contas-a-pagar/page.tsx` *(novo)*
+  - `aesthera/apps/web/components/receive-manual-modal.tsx` *(novo)*
+  - `aesthera/apps/web/app/(dashboard)/billing/page.tsx` *(usa `ReceiveManualModal`)*
+- **O que foi feito:**
+  - `#64`: Módulo `AccountsPayable` backend completo (CRUD, marcar pago/cancelado, cron OVERDUE, resumo); integração com Ledger (entrada de débito ao pagar); `SupplyPurchase.create()` cria automaticamente um AP vinculado; página `/contas-a-pagar` com 3 cards de resumo (Total Pendente, Total Vencido, Pago no Mês), filtros por fornecedor/status/período, tabela com badge de origem, diálogos de nova conta e registrar pagamento.
+  - `#65`: Endpoint `POST /billing/:id/receive` que aceita múltiplas linhas de pagamento (`ManualReceiptLine`) com método e valor por linha; cria `ManualReceipt` + linhas em transação atômica, debita entradas de carteira usadas como pagamento, gera entradas de crédito no Ledger; modal `ReceiveManualModal` com linhas dinâmicas e exibição em tempo real do total pago vs. valor da cobrança.
+  - `#66`: Quando `totalPaid > billing.amount`, campo `overpaymentHandling` é obrigatório. Opções: `cash_change` (apenas anota o troco), `wallet_credit` (cria entrada de crédito na carteira), `wallet_voucher` (cria voucher nominal ao cliente). Seção dinâmica no modal exibe opções de rádio somente quando há excedente.
+- **Impacto:** Clínicas podem controlar suas contas a pagar (geradas manualmente ou automaticamente via compras de insumos). Recebimentos de cobranças passam a aceitar qualquer combinação de formas de pagamento em vez de apenas um método, com tratamento adequado de troco e crédito/voucher quando o cliente paga a mais.
 
 ### [2026-03-21] — #98 #99 #100 — UX Review: carteira dual-view, select shadcn/ui em clientes, campos fiscais colapsáveis
 - **Arquivo(s) afetado(s):**

@@ -96,6 +96,13 @@ enum WalletEntryType {
   PACKAGE
 }
 
+enum AccountsPayableStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
 enum WalletEntryStatus {
   ACTIVE
   USED
@@ -196,6 +203,8 @@ model Clinic {
   servicePackages  ServicePackage[]
   customerPackages CustomerPackage[]
   auditLogs        AuditLog[]
+  accountsPayable  AccountsPayable[]
+  manualReceipts   ManualReceipt[]
 
   @@map("clinics")
 }
@@ -857,9 +866,10 @@ model WalletEntry {
   createdAt        DateTime          @default(now())       @map("created_at")
   updatedAt        DateTime          @updatedAt            @map("updated_at")
 
-  clinic       Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  customer     Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  transactions WalletTransaction[]
+  clinic              Clinic              @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer            Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  transactions        WalletTransaction[]
+  manualReceiptLines  ManualReceiptLine[]
 
   @@index([clinicId])
   @@index([clinicId, customerId])
@@ -1039,4 +1049,67 @@ model AuditLog {
 
   @@index([clinicId, createdAt])
   @@map("audit_logs")
+}
+
+// ─── Accounts Payable ─────────────────────────────────────────────────────────
+// Contas a pagar: despesas e compras com fornecedores.
+
+model AccountsPayable {
+  id              String                @id @default(uuid())
+  clinicId        String                                     @map("clinic_id")
+  description     String
+  supplierName    String?                                    @map("supplier_name")
+  category        String?
+  amount          Int                                        // BRL cents
+  dueDate         DateTime              @db.Date             @map("due_date")
+  status          AccountsPayableStatus @default(PENDING)
+  paidAt          DateTime?                                  @map("paid_at")
+  paymentMethod   String?                                    @map("payment_method")
+  notes           String?
+  originType      String?                                    @map("origin_type")   // supply_purchase | manual
+  originReference String?                                    @map("origin_reference") // ID da compra vinculada
+  createdAt       DateTime              @default(now())      @map("created_at")
+  updatedAt       DateTime              @updatedAt           @map("updated_at")
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId])
+  @@index([clinicId, status])
+  @@index([clinicId, dueDate])
+  @@map("accounts_payable")
+}
+
+// ─── Manual Receipt ───────────────────────────────────────────────────────────
+// Recebimento manual presencial com múltiplas formas de pagamento.
+
+model ManualReceipt {
+  id         String   @id @default(uuid())
+  clinicId   String                       @map("clinic_id")
+  billingId  String   @unique             @map("billing_id")
+  totalPaid  Int                          @map("total_paid")  // BRL cents
+  receivedAt DateTime @default(now())     @map("received_at")
+  notes      String?
+  createdAt  DateTime @default(now())     @map("created_at")
+
+  clinic  Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  lines   ManualReceiptLine[]
+
+  @@index([clinicId])
+  @@map("manual_receipts")
+}
+
+model ManualReceiptLine {
+  id              String  @id @default(uuid())
+  manualReceiptId String                      @map("manual_receipt_id")
+  clinicId        String                      @map("clinic_id")
+  paymentMethod   String                      @map("payment_method")  // cash|pix|card|transfer|wallet_credit|wallet_voucher
+  amount          Int                                                  // BRL cents
+  walletEntryId   String?                     @map("wallet_entry_id")
+
+  manualReceipt ManualReceipt @relation(fields: [manualReceiptId], references: [id], onDelete: Cascade)
+  walletEntry   WalletEntry?  @relation(fields: [walletEntryId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId])
+  @@index([clinicId, walletEntryId])
+  @@map("manual_receipt_lines")
 }
