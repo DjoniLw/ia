@@ -19,7 +19,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // ── GET /auth/resolve-slug?email=... ────────────────────────────────────────────
   // Returns the clinic slug for a given e-mail. PUBLIC — no tenant, no auth.
   // Responds generically (slug: null) when not found to avoid leaking account existence.
-  app.get('/auth/resolve-slug', async (request, reply) => {
+  // Rate limit restritivo: evita enumeração de e-mails por força bruta.
+  app.get('/auth/resolve-slug', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { email } = request.query as { email?: string }
     if (!email) return reply.status(400).send({ message: 'E-mail obrigatório' })
     const result = await authService.resolveSlug(email)
@@ -66,21 +67,23 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // ── POST /auth/reset-password ─────────────────────────────────────────────────
   // Validates the reset token from Redis and updates the user's password. PUBLIC.
-  app.post('/auth/reset-password', async (request, reply) => {
+  app.post('/auth/reset-password', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
     const body = ResetPasswordDto.parse(request.body)
     const result = await authService.resetPassword(body.token, body.password)
     reply.status(200).send(result)
   })
 
-  app.post('/auth/confirm-transfer', async (request, reply) => {
-    const query = TransferTokenActionDto.parse(request.query)
-    const result = await authService.confirmTransfer(query.token)
+  // Token lido do body (não query string) para evitar exposição em access logs.
+  app.post('/auth/confirm-transfer', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
+    const body = TransferTokenActionDto.parse(request.body)
+    const result = await authService.confirmTransfer(body.token)
     reply.status(200).send(result)
   })
 
-  app.post('/auth/reject-transfer', async (request, reply) => {
-    const query = TransferTokenActionDto.parse(request.query)
-    const result = await authService.rejectTransfer(query.token)
+  // Token lido do body (não query string) para evitar exposição em access logs.
+  app.post('/auth/reject-transfer', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
+    const body = TransferTokenActionDto.parse(request.body)
+    const result = await authService.rejectTransfer(body.token)
     reply.status(200).send(result)
   })
 

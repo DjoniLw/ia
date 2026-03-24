@@ -402,7 +402,14 @@ export class AuthService {
       }
     } catch (err) {
       if (err instanceof AppError) throw err
-      logger.warn({ err }, 'Redis unavailable — skipping cooldown check for resend-transfer')
+      // Fail-closed: se o Redis estiver fora, rejeitar com 503 para evitar
+      // spam de e-mails durante outages (behavior seguro > disponibilidade).
+      logger.error({ err }, 'Redis unavailable — rejecting resend-transfer to prevent e-mail spam')
+      throw new AppError(
+        'Serviço temporariamente indisponível. Tente novamente em instantes.',
+        503,
+        'SERVICE_UNAVAILABLE',
+      )
     }
 
     // Rotação atômica: expirar todos os tokens pendentes e criar novo em transação.
