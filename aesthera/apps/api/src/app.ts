@@ -89,7 +89,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     '/auth/verify-email',
     '/auth/refresh',
     '/auth/logout',
+    '/auth/resolve-slug',       // busca clínica por e-mail — não há slug ainda
     '/auth/recover-access',
+    '/auth/reset-password',
+    '/auth/resend-verification',
+    '/auth/resend-transfer',
+    '/auth/confirm-transfer',
+    '/auth/reject-transfer',
     '/payments/webhooks/stripe',      // Stripe não envia X-Clinic-Slug
     '/payments/webhooks/mercadopago', // MercadoPago não envia X-Clinic-Slug
   ])
