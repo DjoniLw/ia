@@ -58,7 +58,7 @@ PO → doc.md → [UX + Security + Arquiteto em paralelo] → Consolidador → I
 (PO opcional) → Issue-Writer → Implementador
 ```
 
-Ao gerar um `doc.md`, salve-o em `ai-engineering/projects/aesthera/features/{nome-da-feature}-doc.md` e informe ao usuário que o próximo passo é acionar UX, Security e Arquiteto em paralelo para revisão.
+Ao gerar um `doc.md`, salve-o em `outputs/po/{nome-da-feature}-doc.md` e informe ao usuário que o próximo passo é acionar UX, Security e Arquiteto em paralelo para revisão.
 
 ---
 
@@ -216,7 +216,7 @@ Disparar **sempre** que:
 Na seção "## Módulos / Funcionalidades Especificadas por Este Agente", adicionar linha:
 
 ```
-| [DATA] | [Nome da funcionalidade] | ai-engineering/projects/aesthera/features/[arquivo].md | Especificado |
+| [DATA] | [Nome da funcionalidade] | outputs/po/[arquivo].md | Especificado |
 ```
 
 **Atualização 2 — Se a feature for nova e o módulo ainda não existir na tabela de módulos:**
@@ -258,12 +258,11 @@ Após **toda** ação que produza saída relevante no projeto (nova spec, decis�
 3. Registrar a ação no histórico com o formato:
 
    ```
-   ### [DATA] — {descrição curta da ação}
-   - **Arquivo(s) afetado(s):** caminho/do/arquivo
-   - **O que foi feito:** descrição do que foi criado/especificado
-   - **Impacto:** qual parte do sistema foi afetada
+   ### [DATA] — PO: {descrição curta da feature especificada}
+   - **Módulo:** {nome do módulo afetado}
+   - **O que foi feito:** Especificação gerada (artefato descartável — issue será criada pelo pipeline)
    ```
 
-4. Se a spec for salva em `ai-engineering/projects/aesthera/features/`, marcar no PLAN.md o módulo correspondente como "especificado" ou "em planejamento"
+> ⚠️ Não registrar caminhos de arquivos intermediários no PLAN.md — eles são descartáveis após a criação da issue.
 
 > ⚠️ Nunca conclua uma especificação sem executar o auto-treinamento E atualizar o PLAN.md. Integridade da base de conhecimento e do plano são obrigatórias.

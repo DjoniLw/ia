@@ -96,7 +96,7 @@ Produzir o documento consolidado no formato abaixo.
 
 ### 6. Salvar e atualizar
 
-Salvar em `ai-engineering/projects/aesthera/features/{nome-do-modulo}-spec-final.md` e atualizar o PLAN.md.
+Salvar em `outputs/consolidador/{nome-do-modulo}-spec-final.md` e atualizar o PLAN.md.
 
 ---
 
@@ -175,10 +175,11 @@ Após gerar a spec final:
 2. Registrar no histórico:
 
    ```
-   ### [DATA] — Spec consolidada: {Nome da Feature}
-   - **Arquivo(s) afetado(s):** ai-engineering/projects/aesthera/features/{nome}-spec-final.md
-   - **O que foi feito:** Spec consolidada a partir de revisões de UX, Security e Arquitetura
-   - **Impacto:** Pronta para issue-writer criar a issue de desenvolvimento
+   ### [DATA] — Consolidação: {Nome da Feature}
+   - **Módulo:** {nome do módulo afetado}
+   - **O que foi feito:** Spec consolidada (artefato descartável — issue será criada pelo pipeline)
    ```
+
+> ⚠️ Não registrar caminhos de arquivos intermediários no PLAN.md — eles são descartáveis após a criação da issue.
 
 > ⚠️ Nunca conclua uma consolidação sem salvar a spec final e atualizar o PLAN.md.

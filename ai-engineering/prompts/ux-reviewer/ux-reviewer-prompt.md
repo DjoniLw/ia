@@ -283,14 +283,14 @@ Para cada problema:
 Após concluir, **salve o relatório obrigatoriamente** em:
 
 ```
-outputs/{projeto}-ux-review-{YYYY-MM-DD}.md
+outputs/ux/{projeto}-ux-review-{YYYY-MM-DD}.md
 ```
 
-Exemplo: `outputs/aesthera-ux-review-2026-03-21.md`
+Exemplo: `outputs/ux/aesthera-ux-review-2026-03-21.md`
 
 Se não estiver vinculada a um projeto específico:
 ```
-outputs/ux-review-{contexto-curto}-{YYYY-MM-DD}.md
+outputs/ux/ux-review-{contexto-curto}-{YYYY-MM-DD}.md
 ```
 
 O arquivo deve conter o relatório completo (Resumo Geral, Problemas Encontrados, Melhorias Sugeridas, Pontos Positivos).

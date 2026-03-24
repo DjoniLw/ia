@@ -93,7 +93,7 @@ Invocar `aesthera-product-owner` com a ideia do usuário.
 **Prompt para o subagente:**
 ```
 Expanda a seguinte ideia em uma especificação completa para o Aesthera.
-Salve o resultado em: ai-engineering/projects/aesthera/features/{nome-kebab-case}-doc.md
+Salve o resultado em: outputs/po/{nome-kebab-case}-doc.md
 
 Ideia: {descrição do usuário}
 ```
@@ -190,7 +190,7 @@ Revisão Security:
 Revisão Arquitetura:
 {resultado da revisão de arquitetura}
 
-Salve o resultado em: ai-engineering/projects/aesthera/features/{nome-kebab-case}-spec-final.md
+Salve o resultado em: outputs/consolidador/{nome-kebab-case}-spec-final.md
 ```
 
 Aguardar conclusão. Anotar o caminho da `spec_final.md`.
@@ -290,7 +290,8 @@ Ao concluir qualquer fluxo com sucesso:
    ```
    ### [DATA] — Pipeline: {nome da feature}
    - **Trilho usado:** Complexo / Simples
-   - **Arquivo(s) gerado(s):** {caminhos}
-   - **Issue criada:** #{número}
-   - **Impacto:** {módulos afetados}
+   - **Issue criada:** #{número} — {título}
+   - **Módulo(s) afetado(s):** {módulos}
    ```
+
+> ⚠️ Não registrar caminhos de arquivos intermediários (doc.md, spec-final.md) — são descartáveis e não pertencem ao PLAN.md. A fonte da verdade é a issue no GitHub.

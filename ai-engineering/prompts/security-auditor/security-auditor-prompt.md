@@ -329,14 +329,14 @@ Este agente executa **uma auditoria por instrução**. Apresenta o resultado com
 Após concluir, **salve o relatório obrigatoriamente** em:
 
 ```
-outputs/{projeto}-security-audit-{YYYY-MM-DD}.md
+outputs/security/{projeto}-security-audit-{YYYY-MM-DD}.md
 ```
 
-Exemplo: `outputs/aesthera-security-audit-2026-03-21.md`
+Exemplo: `outputs/security/aesthera-security-audit-2026-03-21.md`
 
 Se não estiver vinculada a um projeto específico:
 ```
-outputs/security-audit-{contexto-curto}-{YYYY-MM-DD}.md
+outputs/security/security-audit-{contexto-curto}-{YYYY-MM-DD}.md
 ```
 
 O arquivo deve conter todos os achados organizados por criticidade e o parecer final.
