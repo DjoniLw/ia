@@ -30,6 +30,7 @@ import { promotionsRoutes } from './modules/promotions/promotions.routes'
 import { packagesRoutes } from './modules/packages/packages.routes'
 import { accountsPayableRoutes } from './modules/accounts-payable/accounts-payable.routes'
 import { manualReceiptsRoutes } from './modules/manual-receipts/manual-receipts.routes'
+import { PUBLIC_ROUTES } from './shared/constants/public-routes'
 import './domain-event-handlers'
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -82,24 +83,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerRequestId(app)
 
   // Apply tenant middleware globally, skipping routes that truly don't need a clinic context
-  const PUBLIC_ROUTES = new Set([
-    '/',
-    '/health',
-    '/auth/register',
-    '/auth/verify-email',
-    '/auth/refresh',
-    '/auth/logout',
-    '/auth/resolve-slug',       // busca clínica por e-mail — não há slug ainda
-    '/auth/recover-access',
-    '/auth/reset-password',
-    '/auth/resend-verification',
-    '/auth/resend-transfer',
-    '/auth/confirm-transfer',
-    '/auth/reject-transfer',
-    '/payments/webhooks/stripe',      // Stripe não envia X-Clinic-Slug
-    '/payments/webhooks/mercadopago', // MercadoPago não envia X-Clinic-Slug
-  ])
-
+  // PUBLIC_ROUTES is defined in src/shared/constants/public-routes.ts — edit there.
   app.addHook('preHandler', async (request, reply) => {
     // routeOptions.url is an empty string when no route was matched (Fastify
     // still runs preHandler hooks for its built-in not-found handler).
