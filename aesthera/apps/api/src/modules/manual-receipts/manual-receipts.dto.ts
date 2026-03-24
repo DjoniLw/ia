@@ -1,10 +1,13 @@
 import { z } from 'zod'
 
-export const ManualReceiptLineDto = z.object({
-  paymentMethod: z.enum(['cash', 'pix', 'card', 'transfer', 'wallet_credit', 'wallet_voucher']),
-  amount: z.number().int().positive(),
-  walletEntryId: z.string().uuid().optional(),
-})
+export const ManualReceiptLineDto = z.discriminatedUnion('paymentMethod', [
+  z.object({ paymentMethod: z.literal('cash'), amount: z.number().int().positive() }),
+  z.object({ paymentMethod: z.literal('pix'), amount: z.number().int().positive() }),
+  z.object({ paymentMethod: z.literal('card'), amount: z.number().int().positive() }),
+  z.object({ paymentMethod: z.literal('transfer'), amount: z.number().int().positive() }),
+  z.object({ paymentMethod: z.literal('wallet_credit'), amount: z.number().int().positive(), walletEntryId: z.string().uuid() }),
+  z.object({ paymentMethod: z.literal('wallet_voucher'), amount: z.number().int().positive(), walletEntryId: z.string().uuid() }),
+])
 
 export const OverpaymentHandlingDto = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cash_change') }),

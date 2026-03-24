@@ -43,7 +43,7 @@ export class AccountsPayableRepository {
     return prisma.accountsPayable.create({ data })
   }
 
-  async update(_clinicId: string, id: string, data: Partial<{
+  async update(clinicId: string, id: string, data: Partial<{
     description: string
     supplierName: string | null
     category: string | null
@@ -51,31 +51,32 @@ export class AccountsPayableRepository {
     dueDate: Date
     notes: string | null
   }>) {
-    return prisma.accountsPayable.update({ where: { id }, data })
+    await prisma.accountsPayable.updateMany({ where: { id, clinicId }, data })
+    return prisma.accountsPayable.findFirst({ where: { id, clinicId } })
   }
 
-  async markPaid(_clinicId: string, id: string, paymentMethod: string, paidAt: Date) {
-    return prisma.accountsPayable.update({
-      where: { id },
+  async markPaid(clinicId: string, id: string, paymentMethod: string, paidAt: Date) {
+    await prisma.accountsPayable.updateMany({
+      where: { id, clinicId },
       data: { status: 'PAID', paidAt, paymentMethod },
     })
+    return prisma.accountsPayable.findFirst({ where: { id, clinicId } })
   }
 
-  async markCancelled(_clinicId: string, id: string) {
-    return prisma.accountsPayable.update({
-      where: { id },
+  async markCancelled(clinicId: string, id: string) {
+    await prisma.accountsPayable.updateMany({
+      where: { id, clinicId },
       data: { status: 'CANCELLED' },
     })
+    return prisma.accountsPayable.findFirst({ where: { id, clinicId } })
   }
 
-  /** Cron: mark overdue entries */
-  async markOverdueBatch(clinicId?: string) {
-    const where = {
-      status: 'PENDING' as const,
-      dueDate: { lt: new Date() },
-      ...(clinicId ? { clinicId } : {}),
-    }
-    return prisma.accountsPayable.updateMany({ where, data: { status: 'OVERDUE' } })
+  /** Cron: mark overdue entries for a specific clinic */
+  async markOverdueBatch(clinicId: string) {
+    return prisma.accountsPayable.updateMany({
+      where: { clinicId, status: 'PENDING', dueDate: { lt: new Date() } },
+      data: { status: 'OVERDUE' },
+    })
   }
 
   async getSummary(clinicId: string) {

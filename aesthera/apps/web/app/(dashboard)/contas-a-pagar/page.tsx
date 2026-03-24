@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   type AccountsPayable,
+  type AccountsPayablePaymentMethod,
   type AccountsPayableStatus,
   useCancelAccountsPayable,
   useCreateAccountsPayable,
@@ -64,7 +65,7 @@ const PAYMENT_METHOD_OPTIONS = [
   { value: 'card', label: 'Cartão' },
   { value: 'transfer', label: 'Transferência' },
   { value: 'boleto', label: 'Boleto' },
-]
+] as const satisfies { value: import('@/lib/hooks/use-accounts-payable').AccountsPayablePaymentMethod; label: string }[]
 
 // ──── Nova Conta Dialog ───────────────────────────────────────────────────────
 
@@ -94,7 +95,7 @@ function NovaContaDialog({ onClose }: { onClose: () => void }) {
         supplierName: supplierName.trim() || undefined,
         category: category || undefined,
         amount,
-        dueDate: `${dueDate}T00:00:00.000Z`,
+        dueDate: `${dueDate}T12:00:00.000Z`,
         notes: notes.trim() || undefined,
       })
       toast.success('Conta a pagar criada!')
@@ -201,7 +202,7 @@ function RegistrarPagamentoDialog({
   onClose: () => void
 }) {
   const today = new Date().toISOString().slice(0, 10)
-  const [paymentMethod, setPaymentMethod] = useState('pix')
+  const [paymentMethod, setPaymentMethod] = useState<AccountsPayablePaymentMethod>('pix')
   const [paidAt, setPaidAt] = useState(today)
 
   const pay = usePayAccountsPayable(entry.id)
@@ -209,7 +210,7 @@ function RegistrarPagamentoDialog({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     try {
-      await pay.mutateAsync({ paymentMethod, paidAt: `${paidAt}T00:00:00.000Z` })
+      await pay.mutateAsync({ paymentMethod, paidAt: `${paidAt}T12:00:00.000Z` })
       toast.success('Pagamento registrado!')
       onClose()
     } catch {

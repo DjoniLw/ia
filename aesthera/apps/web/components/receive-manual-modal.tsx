@@ -236,7 +236,11 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
 
   const canConfirm =
     totalPaid >= billing.amount &&
-    lines.every((l) => parseCurrencyInput(l.amountStr) > 0) &&
+    lines.every((l) => {
+      if (parseCurrencyInput(l.amountStr) <= 0) return false
+      if ((l.method === 'wallet_credit' || l.method === 'wallet_voucher') && !l.walletEntryId) return false
+      return true
+    }) &&
     !receive.isPending
 
   async function handleSubmit(e: React.FormEvent) {

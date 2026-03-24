@@ -11,6 +11,9 @@ const mockTx = vi.hoisted(() => ({
     findFirst: vi.fn(),
     delete: vi.fn(),
   },
+  accountsPayable: {
+    create: vi.fn().mockResolvedValue({}),
+  },
 }))
 
 vi.mock('../../database/prisma/client', () => ({

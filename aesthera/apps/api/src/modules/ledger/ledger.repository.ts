@@ -1,5 +1,8 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '../../database/prisma/client'
 import type { LedgerSummaryQuery, ListLedgerQuery } from './ledger.dto'
+
+export type Tx = Prisma.TransactionClient
 
 const ledgerInclude = {
   payment: {
@@ -99,19 +102,23 @@ export class LedgerRepository {
     }
   }
 
-  async create(data: {
-    clinicId: string
-    type: 'credit' | 'debit'
-    amount: number
-    paymentId?: string | null
-    billingId?: string | null
-    appointmentId?: string | null
-    customerId?: string | null
-    description?: string
-    metadata?: Record<string, unknown>
-  }) {
+  async create(
+    data: {
+      clinicId: string
+      type: 'credit' | 'debit'
+      amount: number
+      paymentId?: string | null
+      billingId?: string | null
+      appointmentId?: string | null
+      customerId?: string | null
+      description?: string
+      metadata?: Record<string, unknown>
+    },
+    tx?: Tx,
+  ) {
     const { metadata, ...rest } = data
-    return prisma.ledgerEntry.create({
+    const client = tx ?? prisma
+    return client.ledgerEntry.create({
       data: {
         ...rest,
         ...(metadata !== undefined && { metadata: metadata as object }),

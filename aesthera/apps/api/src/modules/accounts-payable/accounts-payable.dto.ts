@@ -2,8 +2,8 @@ import { z } from 'zod'
 
 export const ListAccountsPayableQuery = z.object({
   status: z.enum(['PENDING', 'PAID', 'OVERDUE', 'CANCELLED']).optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   category: z.string().trim().min(1).optional(),
   supplierName: z.string().trim().min(1).optional(),
   page: z.coerce.number().int().positive().default(1),

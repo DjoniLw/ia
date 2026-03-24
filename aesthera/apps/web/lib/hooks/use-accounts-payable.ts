@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 // ──── Types ───────────────────────────────────────────────────────────────────
 
 export type AccountsPayableStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED'
+export type AccountsPayablePaymentMethod = 'cash' | 'pix' | 'card' | 'transfer' | 'boleto'
 
 export interface AccountsPayable {
   id: string
@@ -73,7 +74,7 @@ export function useCreateAccountsPayable() {
 export function usePayAccountsPayable(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { paymentMethod: string; paidAt?: string }) =>
+    mutationFn: (data: { paymentMethod: AccountsPayablePaymentMethod; paidAt?: string }) =>
       api.post(`/accounts-payable/${id}/pay`, data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts-payable'] })

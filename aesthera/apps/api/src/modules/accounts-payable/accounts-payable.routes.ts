@@ -76,12 +76,12 @@ export async function accountsPayableRoutes(app: FastifyInstance) {
     },
   )
 
-  // Internal cron endpoint
+  // Cron endpoint: mark overdue entries for the authenticated clinic only
   app.post(
     '/accounts-payable/cron/overdue',
     { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
-    async (_req, reply) => {
-      return reply.send(await svc.runOverdueCron())
+    async (req, reply) => {
+      return reply.send(await svc.runOverdueCron(req.clinicId))
     },
   )
 }

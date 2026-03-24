@@ -1,4 +1,5 @@
 import { AppError, NotFoundError } from '../../shared/errors/app-error'
+import { prisma } from '../../database/prisma/client'
 import type {
   CreateAccountsPayableDto,
   ListAccountsPayableQuery,
@@ -90,16 +91,24 @@ export class AccountsPayableService {
     }
 
     const paidAt = dto.paidAt ? new Date(dto.paidAt) : new Date()
-    const updated = await this.repo.markPaid(clinicId, id, dto.paymentMethod, paidAt)
+    return prisma.$transaction(async (tx) => {
+      await tx.accountsPayable.updateMany({
+        where: { id, clinicId },
+        data: { status: 'PAID', paidAt, paymentMethod: dto.paymentMethod },
+      })
 
-    await ledger.createDebitEntry({
-      clinicId,
-      amount: entry.amount,
-      description: `Contas a Pagar — ${entry.description}${entry.supplierName ? ` (${entry.supplierName})` : ''}`,
-      metadata: { source: 'accounts_payable', accountsPayableId: entry.id },
+      await ledger.createDebitEntry(
+        {
+          clinicId,
+          amount: entry.amount,
+          description: `Contas a Pagar — ${entry.description}${entry.supplierName ? ` (${entry.supplierName})` : ''}`,
+          metadata: { source: 'accounts_payable', accountsPayableId: entry.id },
+        },
+        tx,
+      )
+
+      return tx.accountsPayable.findFirst({ where: { id, clinicId } })
     })
-
-    return updated
   }
 
   async cancel(clinicId: string, id: string) {
@@ -114,9 +123,9 @@ export class AccountsPayableService {
     return this.repo.markCancelled(clinicId, id)
   }
 
-  /** Cron job: mark overdue entries. Can be called globally or per clinic. */
-  async runOverdueCron() {
-    const result = await this.repo.markOverdueBatch()
+  /** Cron job: mark overdue entries for the given clinic. */
+  async runOverdueCron(clinicId: string) {
+    const result = await this.repo.markOverdueBatch(clinicId)
     return { updated: result.count }
   }
 }

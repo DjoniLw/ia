@@ -1,7 +1,6 @@
 import { prisma } from '../../database/prisma/client'
 import { AppError } from '../../shared/errors/app-error'
 import type { CreateSupplyPurchaseDto, ListSupplyPurchasesQuery } from './supply-purchases.dto'
-import { AccountsPayableService } from '../accounts-payable/accounts-payable.service'
 
 const PURCHASE_INCLUDE = {
   supply: {
@@ -25,7 +24,6 @@ function supplyNotFoundError() {
 }
 
 export class SupplyPurchasesService {
-  private accountsPayable = new AccountsPayableService()
   async list(clinicId: string, q: ListSupplyPurchasesQuery) {
     const skip = (q.page - 1) * q.limit
     const where = {
@@ -80,7 +78,7 @@ export class SupplyPurchasesService {
         data: { stock: { increment: stockIncrement } },
       })
 
-      return tx.supplyPurchase.create({
+      const purchase = await tx.supplyPurchase.create({
         data: {
           clinicId,
           supplyId: supply.id,
@@ -96,16 +94,22 @@ export class SupplyPurchasesService {
         },
         include: PURCHASE_INCLUDE,
       })
-    }).then(async (purchase) => {
-      // Auto-create AccountsPayable entry for this purchase (due date = purchase date)
-      await this.accountsPayable.createFromSupplyPurchase({
-        clinicId,
-        description: `Compra de Insumo — ${purchase.supply.name}`,
-        supplierName: purchase.supplierName ?? undefined,
-        amount: purchase.totalCost,
-        dueDate: purchase.purchasedAt,
-        originReference: purchase.id,
+
+      // Auto-create AccountsPayable entry inside the same transaction (due date = purchase date)
+      await tx.accountsPayable.create({
+        data: {
+          clinicId,
+          description: `Compra de Insumo — ${supply.name}`,
+          supplierName: purchase.supplierName ?? null,
+          category: 'Insumos',
+          amount: purchase.totalCost,
+          dueDate: purchase.purchasedAt,
+          status: 'PENDING',
+          originType: 'supply_purchase',
+          originReference: purchase.id,
+        },
       })
+
       return purchase
     })
   }
