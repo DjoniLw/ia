@@ -28,6 +28,8 @@ import { supplyPurchasesRoutes } from './modules/supply-purchases/supply-purchas
 import { walletRoutes } from './modules/wallet/wallet.routes'
 import { promotionsRoutes } from './modules/promotions/promotions.routes'
 import { packagesRoutes } from './modules/packages/packages.routes'
+import { accountsPayableRoutes } from './modules/accounts-payable/accounts-payable.routes'
+import { manualReceiptsRoutes } from './modules/manual-receipts/manual-receipts.routes'
 import './domain-event-handlers'
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -145,6 +147,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await walletRoutes(app)
   await promotionsRoutes(app)
   await packagesRoutes(app)
+  await accountsPayableRoutes(app)
+  await manualReceiptsRoutes(app)
 
   return app
 }

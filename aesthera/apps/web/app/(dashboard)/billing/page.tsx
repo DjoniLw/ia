@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { PaymentModal } from '@/components/payment-modal'
+import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { type BillingStatus, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,12 +102,12 @@ function BillingActions({ billing }: { billing: Billing }) {
           className="text-green-700 hover:text-green-800 hover:bg-green-50 dark:text-green-400"
           onClick={() => setModalOpen(true)}
         >
-          Recebido
+          Registrar Recebimento
         </Button>
         <CancelBillingButton id={billing.id} status={billing.status} />
       </div>
 
-      <PaymentModal
+      <ReceiveManualModal
         billing={billing}
         open={modalOpen}
         onClose={() => setModalOpen(false)}

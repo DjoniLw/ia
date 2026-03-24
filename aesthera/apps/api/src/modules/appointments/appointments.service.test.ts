@@ -427,7 +427,7 @@ describe('AppointmentsService', () => {
     it('[GAP-R10] deve lançar ROOM_REQUIRED (400) quando roomId não for fornecido', async () => {
       setupHappyPathMocks()
       await expect(
-        service.create('clinic-1', makeCreateDto()), // sem roomId
+        service.create('clinic-1', makeCreateDto({ roomId: undefined })), // sem roomId
       ).rejects.toMatchObject({
         message: 'Sala é obrigatória para confirmar o agendamento',
         statusCode: 400,

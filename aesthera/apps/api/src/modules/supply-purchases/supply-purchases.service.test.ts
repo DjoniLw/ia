@@ -11,6 +11,9 @@ const mockTx = vi.hoisted(() => ({
     findFirst: vi.fn(),
     delete: vi.fn(),
   },
+  accountsPayable: {
+    create: vi.fn().mockResolvedValue({}),
+  },
 }))
 
 vi.mock('../../database/prisma/client', () => ({
@@ -22,6 +25,12 @@ vi.mock('../../database/prisma/client', () => ({
       findFirst: vi.fn(),
     },
   },
+}))
+
+vi.mock('../accounts-payable/accounts-payable.service', () => ({
+  AccountsPayableService: vi.fn(function AccountsPayableService() {
+    return { createFromSupplyPurchase: vi.fn().mockResolvedValue(undefined) }
+  }),
 }))
 
 import { SupplyPurchasesService } from './supply-purchases.service'
