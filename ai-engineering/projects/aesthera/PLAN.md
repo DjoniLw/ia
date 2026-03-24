@@ -282,6 +282,13 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - `#100`: Campos fiscais NCM, CEST e CFOP agrupados em seção colapsável "Dados fiscais (opcional)" no formulário de produtos. Componente `collapsible.tsx` criado. Estado inicial: fechado. Chevron animado indica estado aberto/fechado.
 - **Impacto:** Administradores conseguem verificar overview da carteira sem selecionar cliente por vez; formulário de clientes visualmente consistente; formulário de produtos com menor carga cognitiva para usuários não-contábeis.
 
+### [2026-03-23] — Criação do agente test-guardian (guardião de testes e regras de negócio)
+- **Arquivo(s) afetado(s):**
+  - `.github/agents/test-guardian.agent.md` *(novo)*
+  - `ai-engineering/prompts/test-guardian/test-guardian-prompt.md` *(novo)*
+- **O que foi feito:** Criado agente `test-guardian` responsável por auditar qualidade de testes, bloquear alterações suspeitas que enfraqueçam cobertura, criar testes baseados nas regras do PO e garantir que regras de negócio críticas estejam protegidas. O agente opera com mentalidade de QA Sênior e emite relatórios estruturados com status (OK/BLOQUEADO) e recomendação de aprovar/bloquear PR.
+- **Impacto:** O sistema passa a ter um guardião dedicado à integridade dos testes. Alterações indevidas em testes são detectadas e bloqueadas antes de chegar à produção.
+
 ### [2026-03-22] — Criação do agente aesthera-pipeline (orquestrador do fluxo completo)
 - **Arquivo(s) afetado(s):**
   - `.github/agents/aesthera-pipeline.agent.md` *(novo)*

@@ -94,7 +94,7 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 - **Verificação de disponibilidade** (profissional + slot) deve ocorrer dentro de uma transação DB
 - **Nunca hard-delete** sem justificativa explícita — usar soft-delete ou cascade
 - **Mudanças mínimas e isoladas** — não refatorar código não relacionado à tarefa. Somente os arquivos listados em "Arquivos esperados para alteração" da issue podem ser modificados. Qualquer necessidade de alterar arquivo fora dessa lista deve ser reportada ao usuário antes de prosseguir.
-- **Toda implementação deve ter testes** — novas features exigem testes unitários; alterações em código coberto exigem revisão e atualização dos testes existentes
+- **Toda implementação deve ter cobertura de testes** — ao implementar, descreva os testes necessários e acione o `test-guardian`; **nunca crie nem altere arquivos de teste diretamente** — somente o `test-guardian` tem autoridade sobre arquivos `*.test.ts` e `*.spec.ts`
 
 ---
 
@@ -120,10 +120,10 @@ Este agente executa **uma vez por etapa** e aguarda validação explícita do us
 2. **Mapear zonas estáveis** (ver seção "Mapeamento de Zona Estável" abaixo) — obrigatório quando a task toca arquivos existentes
 3. **Implementar** a mudança em `aesthera/`
 4. **Executar Checklist de Conformidade UI** (ver seção abaixo) — obrigatório para qualquer arquivo `.tsx` criado ou modificado
-5. **Criar ou atualizar testes** (ver seção "Testes Unitários e Automatizados" abaixo)
+5. **Descrever os testes necessários** e acionar o `test-guardian` (ver seção "Delegação de Testes ao Test Guardian" abaixo)
 6. **Executar auto-atualização** (ver seção abaixo)
 
-> ⚠️ Nunca inverter essa ordem. Código sempre segue a documentação. Testes **nunca** são opcionais.
+> ⚠️ Nunca inverter essa ordem. Código sempre segue a documentação. Cobertura de testes **nunca** é opcional — mas quem cria e altera testes é o `test-guardian`, não este agente.
 
 ---
 
@@ -206,108 +206,44 @@ Antes de marcar qualquer task como concluída, execute este checklist em **cada 
 
 ---
 
-## Testes Unitários e Automatizados (obrigatório)
+## Delegação de Testes ao Test Guardian
 
-### Framework
+> ⛔ **PROIBIDO**: criar, editar ou excluir qualquer arquivo `*.test.ts` ou `*.spec.ts`.
+> ✅ **OBRIGATÓRIO**: ao final de toda implementação, descrever os testes necessários para que o `test-guardian` os crie.
 
-- **Backend**: Vitest (configurado em `aesthera/apps/api/vitest.config.ts`)
-- Arquivos de teste: padrão `{módulo}.service.test.ts`, co-localizados no mesmo diretório do módulo
-- Cobertura configurada para `src/**/*.ts` — o provider é `v8`
+### O que fazer ao terminar a implementação
 
-### Regras obrigatórias
+Após concluir o código, emita obrigatoriamente o bloco abaixo antes de parar:
 
-#### Ao implementar algo novo
-- Sempre criar o arquivo `{módulo}.service.test.ts` ao criar ou estender um novo serviço
-- O arquivo de teste vai junto ao módulo: `aesthera/apps/api/src/modules/{módulo}/{módulo}.service.test.ts`
-- Cobrir obrigatoriamente: casos de sucesso, casos de erro/exceção e regras de negócio críticas
-- Usar mocks para Prisma e repositórios — nunca depender de banco real nos unit tests
+```
+## Sugestão de Testes para o Test Guardian
 
-#### Ao alterar código existente
-- Verificar se existe arquivo `*.test.ts` para o módulo modificado
-- Se existir: **ler o arquivo de testes** e avaliar se os testes ainda refletem o comportamento esperado
-- Se o comportamento mudou: **atualizar os testes** para refletir a nova lógica
-- Se novos cenários foram criados: **adicionar novos casos de teste**
-- Se os testes quebrarem por conta de refatoração interna (não comportamento): **corrigir os mocks/setup** sem alterar as asserções de comportamento
+Módulo: {nome do módulo}
+Arquivo sugerido: aesthera/apps/api/src/modules/{módulo}/{módulo}.service.test.ts
 
-### Padrão de estrutura do arquivo de testes
+Cenários a cobrir:
+- [ ] {caso de sucesso principal}
+- [ ] {entidade não encontrada}
+- [ ] {violação de tenant / clinic_id errado}
+- [ ] {regra de negócio crítica, se houver}
+- [ ] {caso de erro esperado}
 
-```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-// 1. Hoists: mocks que precisam ser referenciados antes do vi.mock()
-const mockRepo = vi.hoisted(() => ({
-  findById: vi.fn(),
-  create: vi.fn(),
-  // ... outros métodos usados pelo serviço
-}))
-
-const mockPrisma = vi.hoisted(() => ({
-  $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
-  // ... modelos usados diretamente pelo serviço
-}))
-
-// 2. Mocks de módulos (sempre antes dos imports do módulo real)
-vi.mock('../../database/prisma/client', () => ({ prisma: mockPrisma }))
-vi.mock('./{módulo}.repository', () => ({
-  {Módulo}Repository: vi.fn(() => mockRepo),
-}))
-
-// 3. Import do módulo sendo testado (DEPOIS dos vi.mock)
-import { {Módulo}Service } from './{módulo}.service'
-
-// 4. Helpers de factory (dados de teste reutilizáveis)
-function make{Entidade}(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'id-1',
-    clinicId: 'clinic-1',
-    // ... campos obrigatórios com valores padrão
-    ...overrides,
-  }
-}
-
-// 5. Suites de teste
-describe('{Módulo}Service.{método}()', () => {
-  let service: {Módulo}Service
-
-  beforeEach(() => {
-    vi.resetAllMocks()
-    service = new {Módulo}Service()
-  })
-
-  it('deve {comportamento esperado no caso de sucesso}', async () => {
-    // arrange
-    mockRepo.findById.mockResolvedValue(make{Entidade}())
-    // act
-    const result = await service.{método}('clinic-1', 'id-1')
-    // assert
-    expect(result).toMatchObject({ /* campos esperados */ })
-  })
-
-  it('deve lançar erro quando {condição de falha}', async () => {
-    mockRepo.findById.mockResolvedValue(null)
-    await expect(service.{método}('clinic-1', 'id-inexistente'))
-      .rejects.toThrow('{mensagem de erro}')
-  })
-})
+Regras de negócio protegidas por estes testes:
+- {descrever brevemente cada regra}
 ```
 
-### O que sempre cobrir nos testes
+### O que NÃO fazer
+- ❌ Criar `*.test.ts` ou `*.spec.ts`
+- ❌ Editar testes existentes mesmo que eles falhem após sua mudança
+- ❌ Comentar ou remover `it` / `test` blocks
+- ❌ Alterar mocks para contornar falhas de teste
 
-| Cenário | Obrigatório? |
-|---|---|
-| Caminho feliz (operação bem-sucedida) | ✅ Sempre |
-| Entidade não encontrada (404) | ✅ Sempre |
-| Violação de tenant (`clinic_id` errado) | ✅ Sempre que aplicável |
-| Regras de negócio críticas (ex: saldo insuficiente, status inválido) | ✅ Sempre |
-| Chamadas a serviços externos (mock verificado) | ✅ Quando aplicável |
-| Casos de validação de input | ⚠️ Quando a lógica está no service |
+### Quando testes existentes falham após sua implementação
 
-### Não é necessário testar
-
-- Controllers/rotas (testados via e2e)
-- Schemas Zod isolados
-- Geração de IDs, timestamps e valores aleatórios
-- Componentes React (por ora — aguardar setup de vitest para web)
+Se sua implementação causar falha em testes existentes:
+1. **Não altere o teste**
+2. Reporte ao usuário: `⚠️ Testes existentes falharam após esta implementação: {lista de testes}. Acione o test-guardian para avaliar se é o código ou o teste que precisa ser ajustado.`
+3. Aguarde decisão antes de avançar
 
 ---
 

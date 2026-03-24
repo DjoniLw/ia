@@ -265,7 +265,9 @@ Referencie a spec em `features/{módulo}.md` se relevante.}
 
 > Omitir esta seção se não houver impacto externo identificado.
 
-## Testes
+## Testes (sugestões para o test-guardian)
+
+> ⚠️ Os testes abaixo são **sugestões** — quem os cria e valida é o `test-guardian`, não o implementador.
 
 ### Backend
 - [ ] {cenário esperado}
