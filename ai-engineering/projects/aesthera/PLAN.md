@@ -278,6 +278,27 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-24] — PR #108 Code Review — Correções de atomicidade, multi-tenancy, validações e testes
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(`@db.Date` em `AccountsPayable.dueDate`; FK `ManualReceiptLine → WalletEntry` com `@@index` composto)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.dto.ts` *(regex `^\d{4}-\d{2}-\d{2}$` em `from`/`to`)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.repository.ts` *(`updateMany + findFirst` com `clinicId` em `update/markPaid/markCancelled`; `clinicId` obrigatório em `markOverdueBatch`)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.service.ts` *(`pay()` em `prisma.$transaction`; `runOverdueCron(clinicId)` exige clinicId)*
+  - `aesthera/apps/api/src/modules/accounts-payable/accounts-payable.routes.ts` *(cron passa `req.clinicId`)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.dto.ts` *(`ManualReceiptLineDto` como `discriminatedUnion` — `walletEntryId` obrigatório apenas para `wallet_credit`/`wallet_voucher`)*
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.service.ts` *(`paidAt` usa `dto.receivedAt`; P2002 → 409; `wallet.use()` e `ledger.createCreditEntry()` recebem `tx`)*
+  - `aesthera/apps/api/src/modules/ledger/ledger.repository.ts` *(`Tx` exportado; `tx?` em `create()`)*
+  - `aesthera/apps/api/src/modules/ledger/ledger.service.ts` *(`tx?` em `createCreditEntry/createDebitEntry`)*
+  - `aesthera/apps/api/src/modules/wallet/wallet.service.ts` *(`providedTx?` em `use()` — padrão `run` pattern)*
+  - `aesthera/apps/api/src/modules/supply-purchases/supply-purchases.service.ts` *(AP criado inline em `prisma.$transaction` em vez de via serviço externo)*
+  - `aesthera/apps/api/src/modules/supply-purchases/supply-purchases.service.test.ts` *(`mockTx.accountsPayable.create` adicionado)*
+  - `aesthera/apps/api/src/modules/appointments/appointments.service.test.ts` *(`makeCreateDto({ roomId: undefined })` no teste `[GAP-R10]`)*
+  - `aesthera/apps/web/lib/hooks/use-accounts-payable.ts` *(`AccountsPayablePaymentMethod` type exportado; `usePayAccountsPayable` tipado)*
+  - `aesthera/apps/web/app/(dashboard)/contas-a-pagar/page.tsx` *(datas com `T12:00:00.000Z`; `paymentMethod` tipado como `AccountsPayablePaymentMethod`; `PAYMENT_METHOD_OPTIONS` com `as const satisfies`)*
+  - `aesthera/apps/web/components/receive-manual-modal.tsx` *(`canConfirm` valida `walletEntryId` para métodos wallet)*
+- **O que foi feito:** Aplicadas todas as 18 correções do Copilot Code Review no PR #108. Principais melhorias: (1) Atomicidade com `prisma.$transaction` propagada para `AccountsPayable.pay()`, `ManualReceipts.create()` e `SupplyPurchases.create()`; (2) Multi-tenancy reforçado com `updateMany({ where: { id, clinicId } })` no repositório de AP; (3) Cron de AP agora escopado por clínica (`clinicId` obrigatório); (4) DTO de recibo manual com `discriminatedUnion` garantindo que `walletEntryId` só seja exigido quando o método é wallet; (5) Datas de vencimento no PostgreSQL como `@db.Date` + FK FK referencial no schema; (6) Fuso horário corrigido no frontend (T12 evita off-by-one em BRT -03:00); (7) Race condition P2002 em `ManualReceipt` → 409 `BILLING_ALREADY_PAID`.
+- **Impacto:** Operações financeiras críticas são agora atômicas. Multi-tenancy reforçado impede vazamento de dados entre clínicas. Validações mais rígidas nos DTOs evitam 500 do Prisma por datas inválidas. 117 testes unitários passando.
+
 ### [2026-03-23] — #64 #65 #66 — Contas a Pagar, Recebimento Manual e Troco/Excedente
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/api/prisma/schema.prisma` *(enum `AccountsPayableStatus`, modelos `AccountsPayable`, `ManualReceipt`, `ManualReceiptLine`)*
