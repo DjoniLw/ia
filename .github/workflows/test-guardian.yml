@@ -9,7 +9,20 @@ jobs:
   
     steps:
       - uses: actions/checkout@v4
-    
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: aesthera/apps/api/package-lock.json
+
+      - name: Instalar dependências (API)
+        working-directory: aesthera/apps/api
+        run: npm ci
+
       - name: Verificar mudanças em testes
         run: |
           git fetch origin ${{ github.base_ref }}
@@ -28,6 +41,7 @@ jobs:
           fi
     
       - name: Rodar testes
+        working-directory: aesthera/apps/api
         run: npm test
     
       - name: Bloquear se falhar
