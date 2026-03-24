@@ -1,0 +1,35 @@
+name: Test Guardian
+
+on:
+  pull_request:
+  
+jobs:
+  test-guardian:
+    runs-on: ubuntu-latest
+  
+    steps:
+      - uses: actions/checkout@v4
+    
+      - name: Verificar mudanças em testes
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git diff --name-only origin/${{ github.base_ref }} > files.txt
+    
+          if grep -E "(test|spec)" files.txt; then
+            echo "TEST_CHANGED=true" >> $GITHUB_ENV
+          fi
+    
+      - name: Validar justificativa
+        if: env.TEST_CHANGED == 'true'
+        run: |
+          if ! grep -i "Test Change Justification" <<< "${{ github.event.pull_request.body }}"; then
+            echo "❌ Falta justificativa para mudança de teste"
+            exit 1
+          fi
+    
+      - name: Rodar testes
+        run: npm test
+    
+      - name: Bloquear se falhar
+        if: failure()
+        run: exit 1
