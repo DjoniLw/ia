@@ -210,3 +210,9 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 |------|---------|----------|
 | 2026-03-24 | Infraestrutura de upload de arquivos (pre-signed URL + Cloudflare R2) deve ser issue separada e pré-requisito do Item 20 | R2 tem zero egress fee no Railway, compatível com S3 SDK — escolha ideal para MVP |
 | 2026-03-24 | Fotos e medidas corporais são dados sensíveis de saúde (LGPD Art. 11) — URLs sempre temporárias (TTL 1h), bucket privado | Evita exposição permanente de dados clínicos |
+| 2026-03-24 | **DP-01** Promoção em cobrança: **(A) Sugestão com confirmação** — banner âmbar no ReceiveManualModal, não auto-aplicar | Recepcionista pode intencionalmente não aplicar; auto-apply cria risco financeiro sem rastreabilidade |
+| 2026-03-24 | **DP-02** Promoção em venda de pacote: **(A) Bloquear** (RB-05 mantido) | Pacote tem preço próprio; desconto via promoção criaria dupla complexidade. Extensão futura via produto "promoção de pacote" |
+| 2026-03-24 | **DP-04** Múltiplas promoções ativas: **(A) Maior desconto** (RN-PR04 mantido) | Mais intuitivo; admin que quer exclusividade deve desativar as demais |
+| 2026-03-24 | **DP-05** Idempotency-Key TTL: **(B) 7 dias** | 24h curto para problemas percebidos após fim de semana; sem expiração acumula dados desnecessários |
+| 2026-03-24 | **DP-06** Pacote expirado com sessões AGENDADO: **(B) Alerta visual na UI** (não cron/WhatsApp) | Badge âmbar na aba de pacotes do cliente e na listagem de agendamentos. WhatsApp ao cliente = evolução futura |
+| 2026-03-24 | **DP-07** GET /packages/sold filtros: **(B) Período + cliente + status + serviceId** | Tela de gestão financeira; custo marginal de implementar completo vs. refatorar depois |

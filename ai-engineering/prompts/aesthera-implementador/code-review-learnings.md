@@ -25,6 +25,12 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: se um usuário com permissão restrita consegue chamar `GET /financial-summary` diretamente via curl e receber dados, a proteção de UI é inútil.
   - 📅 Aprendido em: 22/03/2026 — revisão de controle de acesso por perfil (dados financeiros e screenPermissions)
 
+- [ ] **Guards de role devem ser aplicados na menor granularidade possível, não no componente/rota inteira**
+  - 🔴 Anti-padrão: colocar o guard no componente pai ou em um `early return` no nível da página inteira — isso bloqueia acesso a partes da tela que poderiam ser visíveis ao perfil restrito
+  - ✅ Correto: aplicar o guard diretamente na sub-seção protegida (ex.: painel financeiro dentro de uma tela de cliente) ou no endpoint específico, permitindo que o restante da página permaneça acessível
+  - 📌 Regra geral: quanto menor o escopo do guard, mais precisa e menos disruptiva é a proteção — aplicar no nível mais interno possível em que a restrição faz sentido de negócio
+  - 📅 Aprendido em: 24/03/2026 — revisão de componentes com controle de acesso por perfil
+
 ### Validação e Tipagem
 
 - [ ] **Campos obrigatórios por regra de negócio devem ser validados explicitamente no `service.create()`, não apenas no schema Zod**
@@ -37,6 +43,17 @@ Se a resposta for não → revise antes de prosseguir.
     ```
   - 📌 Regra geral: o Zod valida apenas a **forma dos dados** (tipo, formato, presença de string) — **regras de negócio** (ex.: "sala é obrigatória para este tipo de agendamento") devem ser verificadas no service, onde o contexto de negócio está disponível
   - 📅 Aprendido em: 23/03/2026 — revisão de `appointments.service.create()` (roomId requerido por R10 não validado no service)
+
+- [ ] **Campos de data em DTOs Zod devem usar `.refine(v => Number.isFinite(Date.parse(v)))` além do regex de formato**
+  - 🔴 Anti-padrão: validar apenas o formato visual com regex (`/^\d{4}-\d{2}-\d{2}$/`) sem garantir que a string representa uma data real — `"2026-02-30"` passa no regex mas não é uma data válida
+  - ✅ Correto: combinar regex de formato com `.refine()` para validação semântica:
+    ```ts
+    z.string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato de data inválido (YYYY-MM-DD)')
+      .refine(v => Number.isFinite(Date.parse(v)), 'Data inválida')
+    ```
+  - 📌 Regra geral: regex verifica apenas o padrão visual; `.refine()` com `Date.parse()` + `Number.isFinite()` garante que a data é semanticamente válida (mês e dia existentes)
+  - 📅 Aprendido em: 24/03/2026 — revisão de DTOs de agendamento com campos de data
 
 ### Async / Promises / Error Handling
 
@@ -54,6 +71,20 @@ Se a resposta for não → revise antes de prosseguir.
 
 <!-- Itens serão adicionados automaticamente após code reviews -->
 
+### Acessibilidade e Cores
+
+- [ ] **Texto branco sobre `bg-amber-500` ou `bg-orange-400` reprova WCAG — não usar em EVENT_COLOR ou STATUS_COLOR**
+  - 🔴 Anti-padrão: usar `text-white` sobre fundos de baixo contraste como `bg-amber-500` ou `bg-orange-400` em badges, tags ou eventos de calendário — contraste <3:1, reprovando WCAG AA
+  - ✅ Correto: para tonalidades amber/orange intermediárias, usar `text-amber-900` ou `text-orange-900` como cor de texto; ou escolher um fundo suficientemente escuro (ex.: `bg-amber-700`, `bg-orange-700`) que suporte texto branco com contraste ≥4.5:1
+  - 📌 Regra geral: antes de definir qualquer par fundo + texto, verificar o contraste — para texto normal o mínimo é 4.5:1 (WCAG AA). `bg-amber-500` (#F59E0B) com `text-white` = ~2.3:1 — reprovado
+  - 📅 Aprendido em: 24/03/2026 — revisão de EVENT_COLOR no calendário (cores intermediárias com texto branco)
+
+- [ ] **`STATUS_COLOR` e `EVENT_COLOR` devem ser definidos em um único arquivo central — nunca replicados por página**
+  - 🔴 Anti-padrão: definir `const STATUS_COLOR = { pending: '...', completed: '...' }` diretamente em cada página/componente que usa — resulta em divergência de cores entre páginas e dark mode inconsistente
+  - ✅ Correto: centralizar em um único arquivo (ex.: `lib/constants/colors.ts`) e importar em todos os componentes que precisam
+  - 📌 Regra geral: qualquer constante visual compartilhada entre ≥2 componentes pertence a um arquivo central — alterar uma cor de status deve ser uma mudança em 1 único lugar
+  - 📅 Aprendido em: 24/03/2026 — revisão de STATUS_COLOR duplicado em múltiplas páginas sem suporte a dark mode
+
 ### Formulários e Validação
 
 - [ ] **Verificar lógica `disabled` do botão salvar/gravar em todo formulário implementado**
@@ -65,6 +96,17 @@ Se a resposta for não → revise antes de prosseguir.
   - 🔴 Erro: ao implementar uma task de adicionar máscara em campos, reimplementou a barra de filtros e alterou o `disabled` do botão em tela adjacente
   - ✅ Correto: identificar as zonas estáveis antes de implementar (via "Mapeamento de Zona Estável") e alterar SOMENTE os campos pedidos na issue
   - 📅 Aprendido em: 21/03/2026 — cadastro de cliente após task de máscaras em grades
+
+- [ ] **Converter data para string ISO no frontend deve usar hora local — nunca `toISOString().slice(0, 10)` que opera em UTC**
+  - 🔴 Anti-padrão: `new Date(value).toISOString().slice(0, 10)` — `toISOString()` converte para UTC; um agendamento às **23h no Brasil (UTC-3)** vira o dia seguinte em UTC, enviando a data errada para a API
+  - ✅ Correto: usar conversão baseada em hora local:
+    ```ts
+    const toISODate = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    ```
+    Ou, se o projeto usa `date-fns`: `format(date, 'yyyy-MM-dd')` (usa hora local por padrão)
+  - 📌 Regra geral: nunca usar `toISOString()` para extrair a parte de data em contextos com fuso horário local — o resultado depende do UTC offset do cliente
+  - 📅 Aprendido em: 24/03/2026 — revisão de envio de datas de agendamentos com fuso horário
 
 ### Componentes e Estado
 
@@ -94,6 +136,18 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: toda nova dependência de serviço introduzida em um módulo testado é um **breaking change nos testes** — o mock é obrigatório e deve ser adicionado no mesmo commit/PR que introduz a dependência.
   - 📅 Aprendido em: 23/03/2026 — revisão de `supply-purchases.service.test.ts` (AccountsPayableService não mockado após injeção)
 
+- [ ] **Todo PR que adicione ou modifique arquivos `*.test.ts` / `*.spec.ts` exige a seção `## Test Change Justification` no corpo do PR**
+  - 🔴 Anti-padrão: abrir um PR com alterações de testes sem a seção obrigatória — o workflow `test-guardian.yml` bloqueia o CI automaticamente, e editar a descrição do PR **não reabre** o check (é necessário push de novo commit ou re-run manual)
+  - ✅ Correto: incluir a seção no corpo do PR desde o momento da criação:
+    ```markdown
+    ## Test Change Justification
+    Motivo: {descrever por que os testes foram adicionados/alterados}
+    Referência: {issue ou decisão técnica}
+    Impacto: {o que muda no comportamento — ex: cobertura aumentada, regra de negócio atualizada}
+    ```
+  - 📌 Boa prática: incluir esta seção no template de PR do repositório (`.github/pull_request_template.md`) para que apareça automaticamente em todo PR novo — não como pós-fix
+  - 📅 Aprendido em: 24/03/2026 — revisão de workflow `test-guardian.yml` e bloqueio de CI por ausência de justificativa de teste
+
 ### Arquitetura e Padrões do Projeto
 
 - [ ] **Task de formatação/máscara = alterar somente o campo alvo, nada mais**
@@ -116,3 +170,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 21/03/2026 | — | 5 padrões adicionados pelo treinador-agent: lógica disabled do botão salvar, barra de filtros desalinhada, campos de pesquisa fora do padrão, task de máscara alterando escopo indevido, leitura obrigatória de arquivo antes de edição |
 | 22/03/2026 | — | 1 padrão adicionado pelo treinador-agent: anti-padrão "ocultar UI mas deixar API aberta" — proteção de dados sensíveis deve existir no backend via roleGuard |
 | 23/03/2026 | — | 1 padrão adicionado pelo treinador-agent: campos obrigatórios por regra de negócio devem ter validação explícita no `service.create()`, além do schema Zod |
+| 24/03/2026 | — | 6 padrões adicionados pelo treinador-agent: (1) contraste WCAG para texto branco sobre amber/orange em EVENT_COLOR; (2) STATUS_COLOR centralizado em arquivo único; (3) guards de role na menor granularidade possível; (4) safe parse de data em DTOs Zod com `.refine(Number.isFinite(Date.parse(v)))`; (5) toISODate em frontend usando hora local, não `toISOString()`; (6) seção `## Test Change Justification` obrigatória em PRs com arquivos de teste |
