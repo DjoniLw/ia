@@ -46,7 +46,7 @@ export class UploadsService {
    * Gera presigned PUT URL para upload direto ao R2.
    * NUNCA recebe clinicId do body — sempre do JWT.
    */
-  async presign(clinicId: string, userId: string, dto: PresignDto) {
+  async presign(clinicId: string, _userId: string, dto: PresignDto) {
     // 1. Proteção IDOR: cross-tenant check — nunca 404
     const customer = await this.repo.findCustomerInClinic(dto.customerId, clinicId)
     if (!customer) {
@@ -113,7 +113,7 @@ export class UploadsService {
   async getUrl(
     id: string,
     clinicId: string,
-    userId: string,
+    _userId: string,
     userRole: string,
     professionalId?: string,
   ) {
