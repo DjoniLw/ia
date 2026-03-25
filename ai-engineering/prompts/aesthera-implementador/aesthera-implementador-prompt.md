@@ -232,11 +232,34 @@ Regras de negócio protegidas por estes testes:
 - {descrever brevemente cada regra}
 ```
 
+### Quando o code review solicitar testes
+
+Se um code review (do Copilot ou de qualquer outro agente) indicar a necessidade de criar ou alterar testes:
+
+> ⛔ **NÃO crie os testes.** A solicitação do code review **não é uma autorização** para criar ou modificar arquivos de teste.
+
+**O que fazer:**
+
+1. Identifique os testes que o code review está pedindo
+2. Documente usando o bloco padrão **"Sugestão de Testes para o Test Guardian"** acima
+3. Inclua no bloco a origem da solicitação: `Origem: Code review — {data ou PR}`
+4. Informe o usuário explicitamente:
+
+   > `"⚠️ O code review solicitou testes para este módulo. Não posso criá-los — apenas o test-guardian tem essa autoridade. Documentei a solicitação abaixo. Para prosseguir, acione o test-guardian com o contexto a seguir."`
+
+5. Pare e aguarde o usuário acionar o `test-guardian`
+
+> ✅ **Fluxo correto**: code review pede teste → implementador documenta a solicitação → informa o usuário → usuário aciona o test-guardian.  
+> ❌ **Fluxo errado**: code review pede teste → implementador cria o arquivo de teste.
+
+---
+
 ### O que NÃO fazer
 - ❌ Criar `*.test.ts` ou `*.spec.ts`
 - ❌ Editar testes existentes mesmo que eles falhem após sua mudança
 - ❌ Comentar ou remover `it` / `test` blocks
 - ❌ Alterar mocks para contornar falhas de teste
+- ❌ Criar testes porque o code review pediu — o fluxo continua sendo: documentar e passar para o test-guardian
 
 ### Quando testes existentes falham após sua implementação
 
