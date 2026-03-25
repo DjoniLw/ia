@@ -5,6 +5,14 @@ import { toast } from 'sonner'
 import { LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
+import {
+  WALLET_ENTRY_TYPE_LABELS,
+  WALLET_ENTRY_TYPE_COLORS,
+  WALLET_ENTRY_STATUS_CONFIG,
+  WALLET_TRANSACTION_LABELS,
+  WALLET_ORIGIN_LABELS,
+} from '@/lib/wallet-labels'
 import {
   useWallet,
   useWalletOverview,
@@ -25,48 +33,6 @@ function formatCurrency(cents: number) {
 function formatDate(iso: string | null | undefined) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('pt-BR')
-}
-
-const TYPE_LABEL: Record<WalletEntryType, string> = {
-  VOUCHER: 'Voucher',
-  CREDIT: 'Crédito',
-  CASHBACK: 'Cashback',
-  PACKAGE: 'Pacote',
-}
-
-const TYPE_COLOR: Record<WalletEntryType, string> = {
-  VOUCHER: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
-  CREDIT: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  CASHBACK: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  PACKAGE: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  ACTIVE: 'Ativo',
-  USED: 'Utilizado',
-  EXPIRED: 'Expirado',
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  ACTIVE: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  USED: 'bg-muted text-muted-foreground',
-  EXPIRED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-}
-
-const ORIGIN_LABEL: Record<WalletOriginType, string> = {
-  OVERPAYMENT: 'Troco de cobrança',
-  GIFT: 'Presente / Cortesia',
-  REFUND: 'Estorno',
-  CASHBACK_PROMOTION: 'Cashback',
-  PACKAGE_PURCHASE: 'Compra de pacote',
-  VOUCHER_SPLIT: 'Divisão de voucher',
-}
-
-const TRANSACTION_LABEL: Record<string, string> = {
-  CREATE: 'Criação',
-  USE: 'Uso',
-  SPLIT: 'Divisão',
-  ADJUST: 'Ajuste',
 }
 
 // ──── Transaction History ─────────────────────────────────────────────────────
@@ -95,7 +61,7 @@ function TransactionHistory({ entry }: { entry: WalletEntry }) {
             >
               <div className="flex items-center gap-2">
                 <span className="font-medium text-foreground">
-                  {TRANSACTION_LABEL[t.type] ?? 'Desconhecido'}
+                  {WALLET_TRANSACTION_LABELS[t.type as keyof typeof WALLET_TRANSACTION_LABELS] ?? 'Desconhecido'}
                 </span>
                 {t.description && (
                   <span className="text-muted-foreground">{t.description}</span>
@@ -223,7 +189,7 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
         expirationDate: expirationDate || undefined,
         notes: notes || undefined,
       })
-      toast.success(`${TYPE_LABEL[type]} ${result.code} criado com sucesso!`)
+      toast.success(`${WALLET_ENTRY_TYPE_LABELS[type]} ${result.code} criado com sucesso!`)
       onClose()
     } catch {
       toast.error('Erro ao criar voucher')
@@ -258,9 +224,9 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               onChange={(e) => setType(e.target.value as WalletEntryType)}
               className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              {(Object.keys(TYPE_LABEL) as WalletEntryType[]).map((t) => (
+              {(Object.keys(WALLET_ENTRY_TYPE_LABELS) as WalletEntryType[]).map((t) => (
                 <option key={t} value={t}>
-                  {TYPE_LABEL[t]}
+                  {WALLET_ENTRY_TYPE_LABELS[t]}
                 </option>
               ))}
             </select>
@@ -286,9 +252,9 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
             onChange={(e) => setOriginType(e.target.value as WalletOriginType)}
             className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            {(Object.keys(ORIGIN_LABEL) as WalletOriginType[]).map((o) => (
+            {(Object.keys(WALLET_ORIGIN_LABELS) as WalletOriginType[]).map((o) => (
               <option key={o} value={o}>
-                {ORIGIN_LABEL[o]}
+                {WALLET_ORIGIN_LABELS[o].label}
               </option>
             ))}
           </select>
@@ -369,16 +335,16 @@ function OverviewTable({
                 <span className="ml-2 font-mono text-xs text-muted-foreground">{entry.code}</span>
               </td>
               <td className="px-4 py-2.5">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[entry.type]}`}>
-                  {TYPE_LABEL[entry.type]}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WALLET_ENTRY_TYPE_COLORS[entry.type]}`}>
+                  {WALLET_ENTRY_TYPE_LABELS[entry.type]}
                 </span>
               </td>
               <td className="px-4 py-2.5 font-semibold text-green-600">
                 {formatCurrency(entry.balance)}
               </td>
               <td className="px-4 py-2.5">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[entry.status]}`}>
-                  {STATUS_LABEL[entry.status]}
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WALLET_ENTRY_STATUS_CONFIG[entry.status].className}`}>
+                  {WALLET_ENTRY_STATUS_CONFIG[entry.status].label}
                 </span>
               </td>
               <td className="px-4 py-2.5 text-muted-foreground">
@@ -457,7 +423,7 @@ export default function CarteiraPage() {
     { value: '', label: 'Todos os tipos' },
     { value: 'VOUCHER', label: 'Voucher' },
     { value: 'CREDIT', label: 'Crédito' },
-    { value: 'CASHBACK', label: 'Cashback' },
+    { value: 'CASHBACK', label: 'Bônus de retorno' },
     { value: 'PACKAGE', label: 'Pacote' },
   ]
 
@@ -620,22 +586,19 @@ export default function CarteiraPage() {
                         {entry.code}
                       </span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[entry.type]}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${WALLET_ENTRY_TYPE_COLORS[entry.type]}`}
                       >
-                        {TYPE_LABEL[entry.type]}
+                        {WALLET_ENTRY_TYPE_LABELS[entry.type]}
                       </span>
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[entry.status]}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${WALLET_ENTRY_STATUS_CONFIG[entry.status].className}`}
                       >
-                        {STATUS_LABEL[entry.status]}
+                        {WALLET_ENTRY_STATUS_CONFIG[entry.status].label}
                       </span>
                     </div>
                     <p className="mt-1 text-sm font-medium text-foreground">{entry.customer.name}</p>
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                      <span>Origem: {ORIGIN_LABEL[entry.originType as WalletOriginType]}</span>
-                      {entry.originReference && (
-                        <span>Ref: {entry.originReference.slice(0, 8)}…</span>
-                      )}
+                      <WalletOriginBadge originType={entry.originType} originReference={entry.originReference} />
                       <span>Criado em {formatDate(entry.createdAt)}</span>
                       {entry.expirationDate && (
                         <span>Expira em {formatDate(entry.expirationDate)}</span>

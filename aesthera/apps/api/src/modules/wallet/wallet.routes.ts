@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
-import { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery } from './wallet.dto'
+import { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery, WalletSummaryQuery } from './wallet.dto'
 import { WalletService } from './wallet.service'
 
 export async function walletRoutes(app: FastifyInstance) {
@@ -11,6 +11,15 @@ export async function walletRoutes(app: FastifyInstance) {
     const q = ListWalletQuery.parse(req.query)
     return reply.send(await svc.list(req.clinicId, q))
   })
+
+  app.get(
+    '/wallet/summary',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const q = WalletSummaryQuery.parse(req.query)
+      return reply.send(await svc.getSummary(req.clinicId, q.customerId))
+    },
+  )
 
   app.get('/wallet/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const { id } = req.params as { id: string }

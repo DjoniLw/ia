@@ -53,7 +53,7 @@ export function decodeJwtPayload<T = Record<string, unknown>>(token: string): T 
   }
 }
 
-export type UserRole = 'admin' | 'staff'
+export type UserRole = 'admin' | 'staff' | 'professional'
 
 export function getUserRole(): UserRole | null {
   const token = getAccessToken()

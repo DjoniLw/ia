@@ -36,3 +36,8 @@ export const AdjustWalletEntryDto = z.object({
   notes: z.string().min(1),
 })
 export type AdjustWalletEntryDto = z.infer<typeof AdjustWalletEntryDto>
+
+export const WalletSummaryQuery = z.object({
+  customerId: z.string().uuid(),
+})
+export type WalletSummaryQuery = z.infer<typeof WalletSummaryQuery>
