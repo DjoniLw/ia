@@ -423,7 +423,7 @@ export default function CarteiraPage() {
     { value: '', label: 'Todos os tipos' },
     { value: 'VOUCHER', label: 'Voucher' },
     { value: 'CREDIT', label: 'Crédito' },
-    { value: 'CASHBACK', label: 'Bônus de retorno' },
+    { value: 'CASHBACK', label: 'Cashback' },
     { value: 'PACKAGE', label: 'Pacote' },
   ]
 

@@ -15,6 +15,7 @@ const mockRepo = vi.hoisted(() => ({
   create: vi.fn(),
   updateBalance: vi.fn(),
   createTransaction: vi.fn(),
+  sumActiveBalance: vi.fn(),
 }))
 
 // ─── Mock the Prisma client ─────────────────────────────────────────────────
@@ -23,6 +24,9 @@ vi.mock('../../database/prisma/client', () => ({
     $transaction: vi.fn(async function (fn: (tx: unknown) => Promise<unknown>) {
       return fn(mockTx)
     }),
+    customer: {
+      findFirst: vi.fn(),
+    },
   },
 }))
 
@@ -301,5 +305,52 @@ describe('Double spend simulation', () => {
     await expect(service.use('clinic-1', 'entry-1', 7000, 'billing-B')).rejects.toMatchObject({
       code: 'INSUFFICIENT_BALANCE',
     })
+  })
+})
+
+describe('WalletService.getSummary()', () => {
+  let service: WalletService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new WalletService()
+  })
+
+  it('retorna totalBalance agregado quando customer pertence à clínica', async () => {
+    const { prisma } = await import('../../database/prisma/client')
+    ;(prisma.customer.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'customer-1',
+      clinicId: 'clinic-1',
+    })
+    mockRepo.sumActiveBalance.mockResolvedValue(5000)
+
+    const result = await service.getSummary('clinic-1', 'customer-1')
+
+    expect(result).toEqual({ totalBalance: 5000 })
+    expect(mockRepo.sumActiveBalance).toHaveBeenCalledWith('clinic-1', 'customer-1')
+  })
+
+  it('retorna totalBalance = 0 quando cliente sem entradas ativas', async () => {
+    const { prisma } = await import('../../database/prisma/client')
+    ;(prisma.customer.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'customer-1',
+      clinicId: 'clinic-1',
+    })
+    mockRepo.sumActiveBalance.mockResolvedValue(0)
+
+    const result = await service.getSummary('clinic-1', 'customer-1')
+
+    expect(result).toEqual({ totalBalance: 0 })
+  })
+
+  it('lança 403 quando customerId não pertence à clínica (proteção IDOR)', async () => {
+    const { prisma } = await import('../../database/prisma/client')
+    ;(prisma.customer.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null)
+
+    await expect(service.getSummary('clinic-1', 'customer-outro')).rejects.toMatchObject({
+      statusCode: 403,
+    })
+
+    expect(mockRepo.sumActiveBalance).not.toHaveBeenCalled()
   })
 })

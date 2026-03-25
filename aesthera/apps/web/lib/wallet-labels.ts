@@ -1,16 +1,11 @@
-// Tipos de enums de Wallet — espelham os valores do Prisma/backend.
-// As strings são definidas aqui em vez de importar @prisma/client (não disponível no web package).
-export type WalletOriginType =
-  | 'OVERPAYMENT'
-  | 'GIFT'
-  | 'REFUND'
-  | 'CASHBACK_PROMOTION'
-  | 'PACKAGE_PURCHASE'
-  | 'VOUCHER_SPLIT'
+import type {
+  WalletOriginType,
+  WalletTransactionType,
+  WalletEntryType,
+  WalletEntryStatus,
+} from '@/lib/hooks/use-wallet'
 
-export type WalletTransactionType = 'CREATE' | 'ADJUST' | 'USE' | 'SPLIT'
-export type WalletEntryType = 'VOUCHER' | 'CREDIT' | 'CASHBACK' | 'PACKAGE'
-export type WalletEntryStatus = 'ACTIVE' | 'USED' | 'EXPIRED'
+export type { WalletOriginType, WalletTransactionType, WalletEntryType, WalletEntryStatus }
 
 // Record<EnumType, ...> garante cobertura exaustiva em compile-time.
 // Se novo valor for adicionado ao enum sem label aqui, o TypeScript apontará erro imediatamente.
@@ -34,7 +29,7 @@ export const WALLET_TRANSACTION_LABELS: Record<WalletTransactionType, string> = 
 export const WALLET_ENTRY_TYPE_LABELS: Record<WalletEntryType, string> = {
   VOUCHER:  'Voucher',
   CREDIT:   'Crédito',
-  CASHBACK: 'Bônus de retorno',  // enum interno permanece CASHBACK; label exibida traduzida
+  CASHBACK: 'Cashback',  // enum interno permanece CASHBACK; amplamente conhecido no Brasil
   PACKAGE:  'Pacote',
 }
 

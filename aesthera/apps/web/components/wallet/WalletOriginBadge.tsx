@@ -1,5 +1,5 @@
 import { AlertCircle } from 'lucide-react'
-import { getWalletOriginLabel, WALLET_ORIGIN_LABELS } from '@/lib/wallet-labels'
+import { getWalletOriginLabel } from '@/lib/wallet-labels'
 import type { WalletOriginType } from '@/lib/wallet-labels'
 
 interface WalletOriginBadgeProps {

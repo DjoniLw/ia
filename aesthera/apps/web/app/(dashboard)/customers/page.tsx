@@ -635,7 +635,8 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
   const [statusFilter, setStatusFilter] = useState<WalletEntryStatus>('ACTIVE')
   const [page, setPage] = useState(1)
 
-  const { entries, summary } = useCustomerWallet(customerId, statusFilter, page)
+  const isAllowed = role !== 'professional'
+  const { entries, summary } = useCustomerWallet(customerId, statusFilter, page, isAllowed)
 
   if (role === 'professional') {
     return (
