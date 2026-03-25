@@ -26,7 +26,7 @@ function TransferConfirmContent() {
 
       try {
         const endpoint = action === 'confirm' ? '/auth/confirm-transfer' : '/auth/reject-transfer'
-        const response = await api.post<{ message: string; clinicSlug?: string }>(`${endpoint}?token=${encodeURIComponent(token)}`)
+        const response = await api.post<{ message: string; clinicSlug?: string }>(endpoint, { token })
         if (response.data.clinicSlug) {
           localStorage.setItem('clinic-slug', response.data.clinicSlug)
         }
