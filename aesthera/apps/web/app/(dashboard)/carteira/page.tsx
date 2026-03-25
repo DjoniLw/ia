@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useRef } from 'react'
 import { toast } from 'sonner'
 import { Info, LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,139 @@ function defaultCreatedAtFrom() {
 function isValidISODate(s: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
   return Number.isFinite(Date.parse(s))
+}
+
+function buildFilterLabel(
+  statusFilter: string,
+  typeFilter: string,
+  createdAtFrom: string,
+  createdAtTo: string,
+  viewMode: 'overview' | 'by-customer',
+  selectedCustomerName: string | undefined,
+): string {
+  const parts: string[] = []
+
+  const defaultFrom = defaultCreatedAtFrom()
+  if (!createdAtFrom && !createdAtTo) {
+    parts.push('todo o período')
+  } else if (createdAtFrom === defaultFrom && !createdAtTo) {
+    parts.push('últimos 6 meses')
+  } else if (createdAtFrom && !createdAtTo) {
+    parts.push(`a partir de ${formatDate(createdAtFrom)}`)
+  } else if (createdAtFrom && createdAtTo && createdAtFrom === createdAtTo) {
+    parts.push(`em ${formatDate(createdAtFrom)}`)
+  } else if (createdAtFrom && createdAtTo) {
+    parts.push(`de ${formatDate(createdAtFrom)} até ${formatDate(createdAtTo)}`)
+  }
+
+  const statusLabel: Record<string, string> = {
+    '': 'todos os status',
+    ACTIVE: 'apenas ativas',
+    USED: 'utilizadas',
+    EXPIRED: 'expiradas',
+  }
+  parts.push(statusLabel[statusFilter] ?? statusFilter)
+
+  if (typeFilter) {
+    const typeLabel: Record<string, string> = {
+      VOUCHER: 'Vouchers',
+      CREDIT: 'Créditos',
+      CASHBACK: 'Cashback',
+      PACKAGE: 'Pacotes',
+    }
+    parts.push(typeLabel[typeFilter] ?? typeFilter)
+  }
+
+  if (viewMode === 'by-customer' && selectedCustomerName) {
+    parts.push(`cliente: ${selectedCustomerName}`)
+  }
+
+  return parts.join(' · ')
+}
+
+// ──── Customer Search Input ────────────────────────────────────────────────────
+
+function CustomerSearchInput({
+  value,
+  onChange,
+  placeholder = 'Buscar cliente…',
+}: {
+  value: { id: string; name: string } | null
+  onChange: (customer: { id: string; name: string } | null) => void
+  placeholder?: string
+}) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [debounced, setDebounced] = useState('')
+
+  const { data } = useCustomers(
+    debounced.trim().length >= 1 ? { name: debounced.trim(), limit: '20' } : undefined,
+  )
+  const results = data?.items ?? []
+
+  function handleInput(v: string) {
+    setSearch(v)
+    setOpen(true)
+    if (!v) onChange(null)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebounced(v), 250)
+  }
+
+  function handleSelect(c: { id: string; name: string }) {
+    onChange(c)
+    setSearch('')
+    setDebounced('')
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <div className="flex h-8 items-center gap-2 rounded-full border border-input bg-card px-3">
+        <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <input
+          value={value && !open ? value.name : search}
+          onChange={(e) => handleInput(e.target.value)}
+          onFocus={() => { setSearch(''); setOpen(true) }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder={value ? value.name : placeholder}
+          className="flex-1 bg-transparent text-xs focus:outline-none"
+          autoComplete="off"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => { onChange(null); setSearch('') }}
+            className="text-muted-foreground hover:text-foreground text-xs"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {open && search.trim().length >= 1 && (
+        <div className="absolute z-50 mt-1 w-full min-w-[200px] rounded-md border bg-background shadow-lg max-h-48 overflow-auto">
+          {results.length === 0 ? (
+            <p className="p-3 text-xs text-muted-foreground">Nenhum cliente encontrado</p>
+          ) : (
+            results.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="w-full px-3 py-2 text-left text-xs hover:bg-muted"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSelect(c)}
+              >
+                <span className="font-medium">{c.name}</span>
+                {c.phone && (
+                  <span className="ml-2 text-muted-foreground">{c.phone}</span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ──── Transaction History ─────────────────────────────────────────────────────
@@ -396,7 +529,7 @@ function CarteiraPageContent() {
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? 'ACTIVE')
   const [typeFilter, setTypeFilter] = useState<string>(searchParams.get('type') ?? '')
   const [customerSearch, setCustomerSearch] = useState('')
-  const [selectedCustomerId, setSelectedCustomerId] = useState('')
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [adjustEntry, setAdjustEntry] = useState<WalletEntry | null>(null)
   const [createdAtFrom, setCreatedAtFrom] = useState(searchParams.get('createdAtFrom') ?? defaultCreatedAtFrom())
@@ -457,8 +590,6 @@ function CarteiraPageContent() {
     }
   }
 
-  const { data: customersData } = useCustomers({ limit: '200' })
-
   // Visão geral
   const overviewParams: Record<string, string> = {}
   if (statusFilter) overviewParams.status = statusFilter
@@ -474,12 +605,12 @@ function CarteiraPageContent() {
   const byCustomerParams: Record<string, string> = {}
   if (statusFilter) byCustomerParams.status = statusFilter
   if (typeFilter) byCustomerParams.type = typeFilter
-  if (selectedCustomerId) byCustomerParams.customerId = selectedCustomerId
+  if (selectedCustomer) byCustomerParams.customerId = selectedCustomer.id
   if (createdAtFrom && !dateRangeError && isValidISODate(createdAtFrom)) byCustomerParams.createdAtFrom = createdAtFrom
   if (createdAtTo && !dateRangeError && isValidISODate(createdAtTo)) byCustomerParams.createdAtTo = createdAtTo
   const { data: byCustomerData, isLoading: byCustomerLoading } = useWallet(
     byCustomerParams,
-    viewMode === 'by-customer' && !!selectedCustomerId,
+    viewMode === 'by-customer' && !!selectedCustomer,
   )
 
   const isLoading = viewMode === 'overview' ? overviewLoading : byCustomerLoading
@@ -609,20 +740,13 @@ function CarteiraPageContent() {
             </div>
           )}
 
-          {/* Por cliente — seletor de cliente */}
+          {/* Por cliente — busca de cliente */}
           {viewMode === 'by-customer' && (
-            <select
-              value={selectedCustomerId}
-              onChange={(e) => setSelectedCustomerId(e.target.value)}
-              className="h-8 rounded-full border border-input bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="">Selecione um cliente…</option>
-              {customersData?.items?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <CustomerSearchInput
+              value={selectedCustomer}
+              onChange={setSelectedCustomer}
+              placeholder="Buscar cliente…"
+            />
           )}
         </div>
 
@@ -691,11 +815,11 @@ function CarteiraPageContent() {
           </p>
         )}
 
-        {/* Aviso de estado padrão */}
-        {isDefaultFilters && (
-          <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-            <Info className="h-3.5 w-3.5 shrink-0" />
-            <span>Exibindo entradas dos últimos 6 meses · apenas ativas</span>
+        {/* Legenda descritiva dos filtros */}
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel(statusFilter, typeFilter, createdAtFrom, createdAtTo, viewMode, selectedCustomer?.name)}</span>
+          {!isDefaultFilters && (
             <button
               type="button"
               onClick={resetFilters}
@@ -703,8 +827,8 @@ function CarteiraPageContent() {
             >
               Restaurar padrão
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Conteúdo */}
@@ -721,7 +845,7 @@ function CarteiraPageContent() {
             </p>
           )}
         </>
-      ) : !selectedCustomerId ? (
+      ) : !selectedCustomer ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border bg-card py-16 text-center">
           <Users className="h-10 w-10 text-muted-foreground/30" />
           <p className="text-sm font-medium text-muted-foreground">

@@ -686,6 +686,9 @@ function CustomerPackageItem({ pkg }: { pkg: CustomerPackage }) {
               const serviceName =
                 pkg.package.items.find((i) => i.serviceId === session.serviceId)?.service.name ??
                 'Serviço'
+              const sessionsOfService = pkg.sessions.filter((s) => s.serviceId === session.serviceId)
+              const sessionNum = sessionsOfService.indexOf(session) + 1
+              const totalForService = sessionsOfService.length
               const statusConfig =
                 session.usedAt !== null
                   ? WALLET_PACKAGE_SESSION_STATUS.used
@@ -700,7 +703,12 @@ function CustomerPackageItem({ pkg }: { pkg: CustomerPackage }) {
                   className="flex items-center justify-between gap-2 rounded-md bg-muted/20 px-3 py-1.5 text-xs"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-medium text-foreground truncate">{serviceName}</span>
+                    <span className="font-medium text-foreground truncate">
+                      {serviceName}
+                      {totalForService > 1 && (
+                        <span className="ml-1 font-normal text-muted-foreground">· sessão {sessionNum}/{totalForService}</span>
+                      )}
+                    </span>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0 ${statusClass}`}>
                       {statusConfig.label}
                     </span>
