@@ -130,6 +130,14 @@ enum NotificationType {
   email
 }
 
+enum FileCategory {
+  BEFORE_PHOTO
+  AFTER_PHOTO
+  MEASUREMENT
+  EXAM
+  OTHER
+}
+
 enum NotificationStatus {
   pending
   sent
@@ -205,6 +213,9 @@ model Clinic {
   auditLogs        AuditLog[]
   accountsPayable  AccountsPayable[]
   manualReceipts   ManualReceipt[]
+  customerFiles    CustomerFile[]
+  bodyMeasurementFields  BodyMeasurementField[]
+  bodyMeasurementRecords BodyMeasurementRecord[]
 
   @@map("clinics")
 }
@@ -449,20 +460,23 @@ model Customer {
   address    Json?
   notes      String?
   metadata   Json?
+  bodyDataConsentAt DateTime?                      @map("body_data_consent_at") // LGPD Art. 11I — consentimento para dados corporais sensíveis
   deletedAt  DateTime?                      @map("deleted_at")
   createdAt  DateTime  @default(now())      @map("created_at")
   updatedAt  DateTime  @updatedAt           @map("updated_at")
 
-  clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  appointments     Appointment[]
-  billing          Billing[]
-  payments         Payment[]
-  ledgerEntries    LedgerEntry[]
-  notificationLogs NotificationLog[]
-  productSales     ProductSale[]
-  clinicalRecords  ClinicalRecord[]
-  walletEntries    WalletEntry[]
-  customerPackages CustomerPackage[]
+  clinic               Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  appointments         Appointment[]
+  billing              Billing[]
+  payments             Payment[]
+  ledgerEntries        LedgerEntry[]
+  notificationLogs     NotificationLog[]
+  productSales         ProductSale[]
+  clinicalRecords      ClinicalRecord[]
+  walletEntries        WalletEntry[]
+  customerPackages     CustomerPackage[]
+  customerFiles        CustomerFile[]
+  bodyMeasurementRecords BodyMeasurementRecord[]
 
   @@unique([clinicId, email])
   @@unique([clinicId, document])
@@ -1113,4 +1127,90 @@ model ManualReceiptLine {
   @@index([clinicId])
   @@index([clinicId, walletEntryId])
   @@map("manual_receipt_lines")
+}
+
+// ─── Customer File ─────────────────────────────────────────────────────────────
+// Arquivos enviados pelo upload flow (presign → R2 → confirm).
+// Soft-delete via deletedAt — NUNCA hard-delete.
+
+model CustomerFile {
+  id           String       @id @default(uuid())
+  clinicId     String                                @map("clinic_id")
+  customerId   String                                @map("customer_id")
+  recordId     String?                               @map("record_id")    // FK → BodyMeasurementRecord (opcional)
+  name         String
+  mimeType     String                                @map("mime_type")
+  size         Int
+  storageKey   String       @unique                  @map("storage_key")
+  category     FileCategory
+  deletedAt    DateTime?                             @map("deleted_at")   // soft-delete — NUNCA Boolean deleted
+  uploadedAt   DateTime     @default(now())          @map("uploaded_at")
+  uploadedById String                                @map("uploaded_by_id") // FK → User (rastreabilidade)
+
+  clinic    Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer  Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  record    BodyMeasurementRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+
+  @@index([clinicId, customerId])
+  @@index([clinicId, recordId])
+  @@map("customer_files")
+}
+
+// ─── Body Measurement Field ───────────────────────────────────────────────────
+// Campos configuráveis por clínica para registro de medidas corporais.
+
+model BodyMeasurementField {
+  id        String   @id @default(uuid())
+  clinicId  String                          @map("clinic_id")
+  name      String
+  unit      String
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())        @map("created_at")
+  updatedAt DateTime @updatedAt             @map("updated_at")
+
+  clinic Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  values BodyMeasurementValue[]
+
+  @@index([clinicId, active])
+  @@index([clinicId, order])
+  @@map("body_measurement_fields")
+}
+
+// ─── Body Measurement Record ──────────────────────────────────────────────────
+// Registro imutável de medidas corporais — sem PATCH após criação.
+
+model BodyMeasurementRecord {
+  id          String   @id @default(uuid())
+  clinicId    String                          @map("clinic_id")
+  customerId  String                          @map("customer_id")
+  recordedAt  DateTime                        @map("recorded_at")   // permite retroativo
+  notes       String?
+  createdAt   DateTime @default(now())        @map("created_at")
+  createdById String                          @map("created_by_id") // FK → User (rastreabilidade)
+
+  clinic   Clinic                @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  values   BodyMeasurementValue[]
+  files    CustomerFile[]
+
+  @@index([clinicId, customerId, recordedAt])
+  @@map("body_measurement_records")
+}
+
+// ─── Body Measurement Value ───────────────────────────────────────────────────
+// Valor numérico de um campo de medição em um registro específico.
+
+model BodyMeasurementValue {
+  id       String  @id @default(uuid())
+  clinicId String                          @map("clinic_id") // convenção global do schema
+  recordId String                          @map("record_id")
+  fieldId  String                          @map("field_id")
+  value    Decimal @db.Decimal(10, 2)
+
+  record BodyMeasurementRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  field  BodyMeasurementField  @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, recordId])
+  @@map("body_measurement_values")
 }
