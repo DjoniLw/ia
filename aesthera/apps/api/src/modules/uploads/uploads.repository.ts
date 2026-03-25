@@ -52,14 +52,19 @@ export class UploadsRepository {
     })
   }
 
-  /** Verifica vínculo RN18: professional já realizou atendimento com o cliente (RN18) */
+  /** Verifica vínculo RN18: professional já realizou atendimento confirmado com o cliente */
   async professionalHasAppointmentWithCustomer(
     professionalId: string,
     customerId: string,
     clinicId: string,
   ): Promise<boolean> {
     const count = await prisma.appointment.count({
-      where: { professionalId, customerId, clinicId },
+      where: {
+        professionalId,
+        customerId,
+        clinicId,
+        status: { in: ['confirmed', 'in_progress', 'completed'] },
+      },
     })
     return count > 0
   }

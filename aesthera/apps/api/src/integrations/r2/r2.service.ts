@@ -66,8 +66,14 @@ export async function headObject(storageKey: string): Promise<boolean> {
       new HeadObjectCommand({ Bucket: bucketName, Key: storageKey }),
     )
     return true
-  } catch {
-    return false
+  } catch (error: unknown) {
+    const err = error as { $metadata?: { httpStatusCode?: number }; name?: string; Code?: string } | undefined
+    const httpStatus = err?.$metadata?.httpStatusCode
+    if (httpStatus === 404 || err?.name === 'NotFound' || err?.Code === 'NoSuchKey') {
+      return false
+    }
+    // Erros de credencial, rede, bucket inexistente — propagar para tratamento 5xx
+    throw error
   }
 }
 

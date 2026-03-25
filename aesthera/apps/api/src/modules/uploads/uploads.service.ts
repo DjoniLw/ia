@@ -81,20 +81,29 @@ export class UploadsService {
       throw new ForbiddenError('CROSS_TENANT_VIOLATION')
     }
 
-    // 2. HEAD no storage: verificar existência real
+    // 2. Validação de escopo do storageKey — impede confirmar arquivos fora do tenant
+    const expectedPrefix = `${clinicId}/${dto.customerId}/`
+    if (!dto.storageKey.startsWith(expectedPrefix)) {
+      throw new ForbiddenError('INVALID_STORAGE_KEY_PREFIX')
+    }
+    if (dto.storageKey.split('/').includes('..')) {
+      throw new ForbiddenError('INVALID_STORAGE_KEY_PATH')
+    }
+
+    // 3. HEAD no storage: verificar existência real
     const exists = await headObject(dto.storageKey)
     if (!exists) {
       throw new ValidationError('FILE_NOT_FOUND_IN_STORAGE')
     }
 
-    // 3. Magic bytes: validar MIME type real
+    // 4. Magic bytes: validar MIME type real
     const magicBytes = await getObjectFirstBytes(dto.storageKey, 12)
     const validator = MAGIC_BYTES[dto.mimeType]
     if (validator && !validator(magicBytes)) {
       throw new ValidationError('MIME_TYPE_MISMATCH')
     }
 
-    // 4. Persistir CustomerFile
+    // 5. Persistir CustomerFile
     return this.repo.create(clinicId, userId, dto)
   }
 

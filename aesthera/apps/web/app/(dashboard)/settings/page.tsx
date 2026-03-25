@@ -31,6 +31,7 @@ import { BusinessHoursTab } from './_components/business-hours-tab'
 import { ClinicTab } from './_components/clinic-tab'
 import { PaymentMethodsTab } from './_components/payment-methods-tab'
 import { UsersTab } from './_components/users-tab'
+import { BodyMeasurementsTab } from './_components/body-measurements-tab'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1174,6 +1175,7 @@ export default function SettingsPage() {
           <TabsTrigger value="ai">Integrações IA</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="anamnesis">Anamnese</TabsTrigger>
+          <TabsTrigger value="body-measurements">Medidas Corporais</TabsTrigger>
         </TabsList>
 
         <TabsContent value="clinic">
@@ -1202,6 +1204,10 @@ export default function SettingsPage() {
 
         <TabsContent value="anamnesis">
           <AnamnesisConfigTab actionsRef={anamnesisActionsRef} onDirtyChange={setAnamnesisDirty} />
+        </TabsContent>
+
+        <TabsContent value="body-measurements">
+          <BodyMeasurementsTab />
         </TabsContent>
       </Tabs>
 

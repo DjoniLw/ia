@@ -36,17 +36,19 @@ export class BodyMeasurementsRepository {
   }
 
   async updateField(id: string, clinicId: string, dto: UpdateFieldDto) {
-    return prisma.bodyMeasurementField.update({
-      where: { id },
+    await prisma.bodyMeasurementField.updateMany({
+      where: { id, clinicId },
       data: dto,
     })
+    return prisma.bodyMeasurementField.findFirst({ where: { id, clinicId } })
   }
 
   async deactivateField(id: string, clinicId: string) {
-    return prisma.bodyMeasurementField.update({
-      where: { id },
+    await prisma.bodyMeasurementField.updateMany({
+      where: { id, clinicId },
       data: { active: false },
     })
+    return prisma.bodyMeasurementField.findFirst({ where: { id, clinicId } })
   }
 
   // ─── Records ───────────────────────────────────────────────────────────────
@@ -117,17 +119,17 @@ export class BodyMeasurementsRepository {
     })
   }
 
-  async linkFilesToRecord(recordId: string, fileIds: string[], clinicId: string) {
+  async linkFilesToRecord(recordId: string, fileIds: string[], clinicId: string, customerId: string) {
     if (fileIds.length === 0) return
     await prisma.customerFile.updateMany({
-      where: { id: { in: fileIds }, clinicId, deletedAt: null },
+      where: { id: { in: fileIds }, clinicId, customerId, deletedAt: null },
       data: { recordId },
     })
   }
 
   async deleteRecord(id: string, clinicId: string) {
-    return prisma.bodyMeasurementRecord.delete({
-      where: { id },
+    await prisma.bodyMeasurementRecord.deleteMany({
+      where: { id, clinicId },
     })
   }
 
@@ -146,14 +148,19 @@ export class BodyMeasurementsRepository {
     return count === fieldIds.length
   }
 
-  /** RN18: professional já realizou atendimento com o cliente */
+  /** RN18: professional já realizou atendimento confirmado com o cliente */
   async professionalHasAppointmentWithCustomer(
     professionalId: string,
     customerId: string,
     clinicId: string,
   ): Promise<boolean> {
     const count = await prisma.appointment.count({
-      where: { professionalId, customerId, clinicId },
+      where: {
+        professionalId,
+        customerId,
+        clinicId,
+        status: { in: ['confirmed', 'in_progress', 'completed'] },
+      },
     })
     return count > 0
   }

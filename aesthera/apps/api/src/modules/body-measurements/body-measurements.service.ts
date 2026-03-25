@@ -110,7 +110,7 @@ export class BodyMeasurementsService {
 
     // 5. Vincular arquivos confirmados ao registro
     if (dto.fileIds && dto.fileIds.length > 0) {
-      await this.repo.linkFilesToRecord(record.id, dto.fileIds, clinicId)
+      await this.repo.linkFilesToRecord(record.id, dto.fileIds, clinicId, dto.customerId)
     }
 
     return record

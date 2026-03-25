@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -12,20 +12,13 @@ import {
   AlertCircle,
   BarChart2,
 } from 'lucide-react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   useBodyMeasurementFields,
   useBodyMeasurementRecords,
@@ -40,7 +33,6 @@ import {
   type FileCategory,
 } from '@/lib/hooks/use-body-measurements'
 import { useRole } from '@/lib/hooks/use-role'
-import { api } from '@/lib/api'
 
 // ──── Types ────────────────────────────────────────────────────────────────────
 
@@ -443,7 +435,15 @@ function NewRecordModal({
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [uploading, setUploading] = useState(false)
 
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<RecordForm>({
+  // Cleanup object URLs quando o modal fecha — evita memory leak
+  useEffect(() => {
+    return () => {
+      pendingFiles.forEach((f) => URL.revokeObjectURL(f.preview))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const { register, handleSubmit, formState: { errors } } = useForm<RecordForm>({
     resolver: zodResolver(recordSchema),
     defaultValues: {
       recordedAt: new Date().toISOString().slice(0, 10),
@@ -487,7 +487,7 @@ function NewRecordModal({
         updated[i] = { ...updated[i], progress: 30 }
         setPendingFiles([...updated])
 
-        const xhr = await new Promise<void>((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
           const x = new XMLHttpRequest()
           x.open('PUT', presignedUrl)
           x.setRequestHeader('Content-Type', pf.file.type)

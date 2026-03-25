@@ -44,7 +44,7 @@ export async function uploadsRoutes(app: FastifyInstance) {
    */
   app.get(
     '/uploads/:id/url',
-    { preHandler: [jwtClinicGuard] },
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff', 'professional'])] },
     async (req, reply) => {
       const { id } = req.params as { id: string }
       const result = await svc.getUrl(

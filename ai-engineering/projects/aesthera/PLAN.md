@@ -303,6 +303,27 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - `#112`: Filtro `createdAtFrom`/`createdAtTo` no `GET /wallet` (backend + frontend), com valida\u00e7\u00e3o de data em ambas as camadas, presets de per\u00edodo e persist\u00eencia por URL.
 - **Impacto:** FASE 3 itens 1 e 2 conclu\u00eddos. `@@index([clinicId, createdAt])` no schema exige migration antes do deploy em produ\u00e7\u00e3o.
 
+### [2026-03-25] — Issues #113 e #114 — Módulo Uploads (Cloudflare R2 + LGPD) + Medidas Corporais implementados
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/integrations/r2/r2.service.ts` *(novo — presign PUT/GET, HEAD com diferenciação 404 vs 5xx, magic bytes)*
+  - `aesthera/apps/api/src/modules/uploads/` *(novo — dto, repository, service, routes)*
+  - `aesthera/apps/api/src/modules/body-measurements/` *(novo — dto, repository, service, routes)*
+  - `aesthera/apps/api/prisma/schema.prisma` *(`FileCategory` enum, `CustomerFile`, `BodyMeasurementField/Record/Value`, `bodyDataConsentAt` em `Customer`)*
+  - `aesthera/apps/api/prisma/migrations/20260327000001_feat_uploads_and_body_measurements/migration.sql` *(novo)*
+  - `aesthera/apps/api/src/app.ts` *(registra `uploadsRoutes` + `bodyMeasurementsRoutes`)*
+  - `aesthera/apps/api/package.json` *(`@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` adicionados)*
+  - `aesthera/apps/api/.env.example` *(`R2_ACCOUNT_ID/ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET_NAME/PUBLIC_URL`)*
+  - `aesthera/apps/web/lib/hooks/use-body-measurements.ts` *(novo — hooks TanStack Query + upload helpers)*
+  - `aesthera/apps/web/lib/hooks/use-resources.ts` *(`bodyDataConsentAt` adicionado ao tipo `Customer`)*
+  - `aesthera/apps/web/app/(dashboard)/settings/_components/body-measurements-tab.tsx` *(novo — CRUD de campos, limite 30)*
+  - `aesthera/apps/web/app/(dashboard)/settings/page.tsx` *(nova aba "Medidas Corporais")*
+  - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx` *(novo — cards, galeria, modal upload)*
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(nova aba "Evolução")*
+- **O que foi feito:**
+  - `#113`: Integração Cloudflare R2 com presign PUT/GET, validação de magic bytes (JPEG/PNG/WebP/PDF), proteção IDOR (`CROSS_TENANT_VIOLATION` + `INVALID_STORAGE_KEY_PREFIX` 403), path traversal bloqueado, diferenciação de erros 404 vs 5xx no `headObject`. Verificação de consentimento LGPD Art. 11I (`BODY_DATA_CONSENT_REQUIRED` 422), soft-delete via `deletedAt`. `storageKey` pattern `{clinicId}/{customerId}/{uuid}.{ext}`. `roleGuard` explícito em todos os endpoints.
+  - `#114`: Campos de medição configuráveis por clínica (máx 30 ativos — `MAX_FIELDS_REACHED`), `updateField`/`deactivateField` com `clinicId` via `updateMany` (IDOR). Registros imutáveis com `recordedAt` retroativo, valores `Decimal(10,2)`, fotos vinculadas com validação de `customerId`. RN18: profissional só acessa clientes com histórico de atendimento **confirmado** (`status in confirmed/in_progress/completed`). IMC calculado localmente no frontend (nunca persistido). Frontend com aba "Evolução" na ficha do cliente e aba "Medidas Corporais" nas configurações.
+- **Impacto:** PR #121 aberto (`Closes #113`, `Closes #114`). FASE 3 itens `BodyMeasurements` + `Uploads` concluídos. Requer `prisma migrate dev` + variáveis R2 no `.env` para deploy.
+
 ### [2026-03-24] — Fluxo de Pagamento, Pacotes e Promoções — Spec Final consolidada (aesthera-consolidador)
 - **Arquivo(s) afetado(s):** `outputs/consolidador/fluxo-pagamento-pacotes-promocoes-spec-final.md` *(novo)*
 - **O que foi feito:** Spec final consolidada pelo `aesthera-consolidador` a partir do `outputs/po/fluxo-pagamento-pacotes-promocoes-doc.md` (Product Owner) + revisões de UX Reviewer (P-01 a P-14), Security Auditor (6 bloqueantes + 3 atenções) e System Architect (4 bloqueantes B-01–B-04 + 6 sugestões S-01–S-06). **2 conflitos resolvidos:** (C-01) mensagens de cupom PT-BR apenas para autenticados + rate limiting (Security prevalece); (C-02) status de sessão explícito via migration (arquiteto prevalece). **Decisões de Produto Pendentes** documentadas em DP-01, DP-02, DP-04, DP-05, DP-06, DP-07 — devem ser respondidas antes do início da implementação. Principais mudanças incorporadas: `appointmentId` nullable em `Billing` e `CustomerPackageSession`; `dueDate = now()` em package sale; cupom integrado em `ManualReceiptsService.receive()`; `apply()` dentro de `prisma.$transaction()`; `RoleGuard` explícito em todos os endpoints novos; idempotência via `Idempotency-Key`; `SELECT FOR UPDATE` em `maxUses`/`maxUsesPerCustomer`; validação backend de `sum(paymentMethods) >= package.price`; `customerId` validado contra `clinicId`; rate limiting em `POST /promotions/validate`; badges de status com cores definidas; pill "Todos" nos filtros; estados de loading em botões assíncronos; `isDirty` guard no `PackageSaleModal`.
