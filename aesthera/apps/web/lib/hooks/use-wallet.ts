@@ -118,6 +118,41 @@ export function useAdjustWalletEntry(id: string) {
   })
 }
 
+export function useWalletSummary(customerId: string, enabled = true) {
+  return useQuery<{ totalBalance: number }>({
+    queryKey: ['wallet', 'summary', customerId],
+    queryFn: () => api.get('/wallet/summary', { params: { customerId } }).then((r) => r.data),
+    enabled: enabled && !!customerId,
+  })
+}
+
+export function useCustomerWallet(
+  customerId: string,
+  status?: string,
+  page = 1,
+  enabled = true,
+) {
+  const entries = useQuery<Paginated<WalletEntry>>({
+    queryKey: ['wallet', { customerId, status, page }],
+    queryFn: () =>
+      api
+        .get('/wallet', {
+          params: {
+            customerId,
+            ...(status ? { status } : {}),
+            page: String(page),
+            limit: '10',
+          },
+        })
+        .then((r) => r.data),
+    enabled: enabled && !!customerId,
+  })
+
+  const summary = useWalletSummary(customerId, enabled && !!customerId)
+
+  return { entries, summary }
+}
+
 export function useReceivePayment(billingId: string) {
   const qc = useQueryClient()
   return useMutation({

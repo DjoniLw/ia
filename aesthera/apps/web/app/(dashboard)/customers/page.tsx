@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Bot, ClipboardList, FileSignature, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User } from 'lucide-react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, FileSignature, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User, Wallet } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -36,6 +36,16 @@ import {
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
 import { api } from '@/lib/api'
+import { useRole } from '@/lib/hooks/use-role'
+import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
+import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
+import {
+  WALLET_ENTRY_TYPE_LABELS,
+  WALLET_ENTRY_TYPE_COLORS,
+  WALLET_ENTRY_STATUS_CONFIG,
+  WALLET_TRANSACTION_LABELS,
+} from '@/lib/wallet-labels'
+import type { WalletEntryStatus } from '@/lib/wallet-labels'
 
 // ──── Schema ───────────────────────────────────────────────────────────────────
 
@@ -565,9 +575,213 @@ function AiSummaryDialog({ customer, onClose }: { customer: Customer; onClose: (
   )
 }
 
+// ──── Customer Wallet Tab ─────────────────────────────────────────────────────
+
+function formatCurrency(cents: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
+}
+
+function formatDate(iso: string | null | undefined) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+function WalletTransactionList({ entry }: { entry: WalletEntry }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!entry.transactions.length) return null
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        Histórico ({entry.transactions.length})
+      </button>
+      {expanded && (
+        <div className="mt-1 space-y-1">
+          {entry.transactions.map((t) => (
+            <div key={t.id} className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-1.5 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground">
+                  {WALLET_TRANSACTION_LABELS[t.type as keyof typeof WALLET_TRANSACTION_LABELS] ?? 'Desconhecido'}
+                </span>
+                {t.description && <span className="text-muted-foreground">{t.description}</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0) ? 'text-red-600' : 'text-green-600'}>
+                  {t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0) ? '-' : '+'}
+                  {formatCurrency(Math.abs(t.value))}
+                </span>
+                <span className="text-muted-foreground">{formatDate(t.createdAt)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const WALLET_STATUS_FILTERS: { value: WalletEntryStatus | ''; label: string }[] = [
+  { value: 'ACTIVE',  label: 'Ativo' },
+  { value: 'USED',    label: 'Utilizado' },
+  { value: 'EXPIRED', label: 'Expirado' },
+]
+
+function CustomerWalletTab({ customerId }: { customerId: string }) {
+  const role = useRole()
+  const [statusFilter, setStatusFilter] = useState<WalletEntryStatus>('ACTIVE')
+  const [page, setPage] = useState(1)
+
+  const isAllowed = role !== 'professional'
+  const { entries, summary } = useCustomerWallet(customerId, statusFilter, page, isAllowed)
+
+  if (role === 'professional') {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-4 py-12 text-center">
+        <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
+        <p className="text-sm font-medium text-muted-foreground">
+          Acesso a dados financeiros não disponível para este perfil.
+        </p>
+      </div>
+    )
+  }
+
+  const isLoading = entries.isLoading || summary.isLoading
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        <div className="h-16 rounded-xl border bg-muted/20 animate-pulse" />
+        <div className="h-48 rounded-xl border bg-muted/20 animate-pulse" />
+      </div>
+    )
+  }
+
+  const items = entries.data?.items ?? []
+  const total = entries.data?.total ?? 0
+  const limit = entries.data?.limit ?? 10
+  const totalPages = Math.ceil(total / limit)
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="flex items-center gap-3">
+        <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Carteira</p>
+      </div>
+
+      {/* Saldo */}
+      <div className="rounded-lg border bg-muted/20 px-4 py-3 flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">Saldo disponível</span>
+        {summary.isError ? (
+          <span
+            className="text-sm font-bold text-muted-foreground"
+            title="Não foi possível carregar o saldo"
+          >
+            —
+          </span>
+        ) : (
+          <span className="text-sm font-bold text-green-600">
+            {summary.data ? formatCurrency(summary.data.totalBalance) : '…'}
+          </span>
+        )}
+      </div>
+
+      {/* Filtro de status */}
+      <div className="flex gap-1 flex-wrap">
+        {WALLET_STATUS_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => { setStatusFilter(f.value as WalletEntryStatus); setPage(1) }}
+            className={[
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              statusFilter === f.value
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-input bg-card text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista de entradas */}
+      {entries.isError ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-10 text-center">
+          <p className="text-xs text-muted-foreground">Erro ao carregar carteira.</p>
+          <button
+            type="button"
+            onClick={() => entries.refetch()}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      ) : !items.length ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-10 text-center">
+          <Wallet className="h-8 w-8 text-muted-foreground/30" />
+          <p className="text-xs font-medium text-muted-foreground">Nenhuma entrada na carteira.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((entry) => (
+            <div key={entry.id} className="rounded-lg border bg-muted/10 p-3 space-y-1">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-mono text-xs font-bold text-foreground">{entry.code}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${WALLET_ENTRY_TYPE_COLORS[entry.type]}`}>
+                    {WALLET_ENTRY_TYPE_LABELS[entry.type]}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${WALLET_ENTRY_STATUS_CONFIG[entry.status].className}`}>
+                    {WALLET_ENTRY_STATUS_CONFIG[entry.status].label}
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-green-600">{formatCurrency(entry.balance)}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <WalletOriginBadge originType={entry.originType} originReference={entry.originReference} />
+                {entry.expirationDate && (
+                  <span className="text-[10px] text-muted-foreground">Expira {formatDate(entry.expirationDate)}</span>
+                )}
+              </div>
+              <WalletTransactionList entry={entry} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-1">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+            className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
+          >
+            Anterior
+          </button>
+          <span className="text-xs text-muted-foreground">{page} / {totalPages}</span>
+          <button
+            type="button"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+            className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
+          >
+            Próximo
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ──── Customer Detail Panel ────────────────────────────────────────────────────
 
-type DetailTab = 'profile' | 'history' | 'prontuario' | 'contracts'
+type DetailTab = 'profile' | 'history' | 'wallet' | 'prontuario' | 'contracts'
 
 // Types for the new-entry form
 type EntryType = ClinicalRecord['type']
@@ -819,7 +1033,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados'], ['history', 'Histórico'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos']] as const).map(([id, label]) => (
+        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -924,6 +1138,11 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Carteira ─────────────────────────────────────────────────── */}
+      {detailTab === 'wallet' && (
+        <CustomerWalletTab customerId={customer.id} />
       )}
 
       {/* ── Prontuário (anamnese + exames + observações…) ─────────────── */}

@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma/client'
-import { AppError, NotFoundError } from '../../shared/errors/app-error'
+import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/app-error'
 import type { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery } from './wallet.dto'
 import { WalletRepository } from './wallet.repository'
 import type { Tx } from './wallet.repository'
@@ -24,6 +24,19 @@ export class WalletService {
     const entry = await this.repo.findById(clinicId, id)
     if (!entry) throw new NotFoundError('WalletEntry')
     return entry
+  }
+
+  /**
+   * Retorna o saldo total ativo de um cliente.
+   * Valida que o customerId pertence à clínica do JWT (proteção contra IDOR).
+   */
+  async getSummary(clinicId: string, customerId: string): Promise<{ totalBalance: number }> {
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, clinicId } })
+    if (!customer) {
+      throw new ForbiddenError('Cliente não encontrado ou não pertence a esta clínica')
+    }
+    const totalBalance = await this.repo.sumActiveBalance(clinicId, customerId)
+    return { totalBalance }
   }
 
   async create(clinicId: string, dto: CreateWalletEntryDto) {

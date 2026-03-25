@@ -56,6 +56,14 @@ export class WalletRepository {
     })
   }
 
+  async sumActiveBalance(clinicId: string, customerId: string): Promise<number> {
+    const result = await prisma.walletEntry.aggregate({
+      where: { clinicId, customerId, status: 'ACTIVE' },
+      _sum: { balance: true },
+    })
+    return result._sum.balance ?? 0
+  }
+
   async create(
     data: {
       clinicId: string
