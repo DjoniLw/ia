@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { toast } from 'sonner'
 import { Info, LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -388,7 +388,7 @@ function OverviewTable({
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function CarteiraPage() {
+function CarteiraPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -818,5 +818,13 @@ export default function CarteiraPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function CarteiraPage() {
+  return (
+    <Suspense>
+      <CarteiraPageContent />
+    </Suspense>
   )
 }
