@@ -278,6 +278,16 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-24] — Melhorias de UX na Carteira e Ficha do Cliente (sem issue)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/app/(dashboard)/carteira/page.tsx` *(legenda descritiva de filtros; busca de cliente por nome no modo "Por cliente"; `CustomerSearchInput` local com debounce)*
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(`CustomerPackageItem` exibe número de sessão por serviço: "Massagem · sessão 2/5")*
+- **O que foi feito:**
+  - Legenda de filtros agora **sempre visível** (não só no estado padrão), exibindo dinamicamente o período, status, tipo e cliente ativo.
+  - Filtro "Por cliente" substituído por campo de busca com autocomplete (debounced) igual ao padrão da aba Visão geral.
+  - Histórico de sessões no pacote do cliente exibe número da sessão por serviço ("Massagem · sessão 1/3") quando há múltiplas sessões do mesmo serviço.
+- **Impacto:** Apenas frontend. Sem migração ou mudança de API.
+
 ### [2026-03-25] — PR #119 \u2014 Issues #111 e #112 \u2014 Sub-aba Pacotes + Filtro de data em /carteira (feat branch)
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/api/src/modules/wallet/wallet.dto.ts` *(`createdAtFrom`/`createdAtTo` com regex + `.refine()` de data v\u00e1lida)*
@@ -292,6 +302,11 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - `#111`: Sub-aba **Pacotes** na ficha do cliente com lista expansível (`CustomerPackageItem`), badge de status, data de uso em PT-BR e link "Ver agendamento".
   - `#112`: Filtro `createdAtFrom`/`createdAtTo` no `GET /wallet` (backend + frontend), com valida\u00e7\u00e3o de data em ambas as camadas, presets de per\u00edodo e persist\u00eencia por URL.
 - **Impacto:** FASE 3 itens 1 e 2 conclu\u00eddos. `@@index([clinicId, createdAt])` no schema exige migration antes do deploy em produ\u00e7\u00e3o.
+
+### [2026-03-24] — Fluxo de Pagamento, Pacotes e Promoções — Spec Final consolidada (aesthera-consolidador)
+- **Arquivo(s) afetado(s):** `outputs/consolidador/fluxo-pagamento-pacotes-promocoes-spec-final.md` *(novo)*
+- **O que foi feito:** Spec final consolidada pelo `aesthera-consolidador` a partir do `outputs/po/fluxo-pagamento-pacotes-promocoes-doc.md` (Product Owner) + revisões de UX Reviewer (P-01 a P-14), Security Auditor (6 bloqueantes + 3 atenções) e System Architect (4 bloqueantes B-01–B-04 + 6 sugestões S-01–S-06). **2 conflitos resolvidos:** (C-01) mensagens de cupom PT-BR apenas para autenticados + rate limiting (Security prevalece); (C-02) status de sessão explícito via migration (arquiteto prevalece). **Decisões de Produto Pendentes** documentadas em DP-01, DP-02, DP-04, DP-05, DP-06, DP-07 — devem ser respondidas antes do início da implementação. Principais mudanças incorporadas: `appointmentId` nullable em `Billing` e `CustomerPackageSession`; `dueDate = now()` em package sale; cupom integrado em `ManualReceiptsService.receive()`; `apply()` dentro de `prisma.$transaction()`; `RoleGuard` explícito em todos os endpoints novos; idempotência via `Idempotency-Key`; `SELECT FOR UPDATE` em `maxUses`/`maxUsesPerCustomer`; validação backend de `sum(paymentMethods) >= package.price`; `customerId` validado contra `clinicId`; rate limiting em `POST /promotions/validate`; badges de status com cores definidas; pill "Todos" nos filtros; estados de loading em botões assíncronos; `isDirty` guard no `PackageSaleModal`.
+- **Impacto:** Spec pronta para o issue-writer. Implementação bloqueada por DP-01 e DP-02 (decisões de produto críticas). Schema Prisma requer 7 migrations encadeadas na ordem definida no BLOCO 6.
 
 ### [2026-03-24] — FASE 3 Cliente e Relacionamento — Spec Final consolidada (aesthera-consolidador)
 - **Arquivo(s) afetado(s):** `ai-engineering/projects/aesthera/features/fase3-cliente-relacionamento-spec-final.md` *(novo)*
