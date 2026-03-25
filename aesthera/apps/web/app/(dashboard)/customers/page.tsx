@@ -648,6 +648,9 @@ function CustomerPackageItem({ pkg }: { pkg: CustomerPackage }) {
         <div className="space-y-0.5 flex-1 min-w-0">
           <p className="text-xs font-semibold text-foreground truncate">{pkg.package.name}</p>
           <p className="text-[10px] text-muted-foreground">Comprado em {formatDate(pkg.purchasedAt)}</p>
+          {pkg.expiresAt && (
+            <p className="text-[10px] text-muted-foreground">Válido até {formatDate(pkg.expiresAt)}</p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -736,16 +739,9 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
   const { entries, summary } = useCustomerWallet(customerId, statusFilter, page, isAllowed)
   const customerPackages = useCustomerPackages(customerId)
 
-  if (role === 'professional') {
-    return (
-      <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-4 py-12 text-center">
-        <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">
-          Acesso a dados financeiros não disponível para este perfil.
-        </p>
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (customerPackages.isError) toast.error('Erro ao carregar pacotes')
+  }, [customerPackages.isError])
 
   const isLoadingWallet = entries.isLoading || summary.isLoading
 
@@ -788,7 +784,14 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
 
       {/* ── Sub-tab: Carteira ─────────────────────────────────────── */}
       {walletSubTab === 'carteira' && (
-        isLoadingWallet ? (
+        role === 'professional' ? (
+          <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-4 py-12 text-center">
+            <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Acesso a dados financeiros não disponível para este perfil.
+            </p>
+          </div>
+        ) : isLoadingWallet ? (
           <div className="space-y-3">
             <div className="h-16 rounded-xl border bg-muted/20 animate-pulse" />
             <div className="h-48 rounded-xl border bg-muted/20 animate-pulse" />

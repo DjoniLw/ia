@@ -71,7 +71,6 @@ export function useWalletOverview(params?: Record<string, string>, enabled = tru
     queryKey: ['wallet', 'overview', params],
     queryFn: () => api.get('/wallet', { params }).then((r) => r.data),
     enabled,
-    placeholderData: (prev) => prev,
   })
 }
 

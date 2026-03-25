@@ -15,8 +15,8 @@ export const ListWalletQuery = z.object({
   customerId: z.string().uuid().optional(),
   type: WalletEntryTypeEnum.optional(),
   status: WalletEntryStatusEnum.optional(),
-  createdAtFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  createdAtTo:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  createdAtFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => Number.isFinite(Date.parse(v)), { message: 'Data inválida' }).optional(),
+  createdAtTo:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => Number.isFinite(Date.parse(v)), { message: 'Data inválida' }).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 })

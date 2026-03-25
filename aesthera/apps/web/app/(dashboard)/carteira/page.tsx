@@ -36,11 +36,20 @@ function formatDate(iso: string | null | undefined) {
   return new Date(iso).toLocaleDateString('pt-BR')
 }
 
-function toISODate(d: Date) { return d.toISOString().slice(0, 10) }
+function toISODate(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 function defaultCreatedAtFrom() {
   const d = new Date()
   d.setMonth(d.getMonth() - 6)
   return toISODate(d)
+}
+function isValidISODate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  return Number.isFinite(Date.parse(s))
 }
 
 // ──── Transaction History ─────────────────────────────────────────────────────
@@ -454,8 +463,8 @@ export default function CarteiraPage() {
   const overviewParams: Record<string, string> = {}
   if (statusFilter) overviewParams.status = statusFilter
   if (typeFilter) overviewParams.type = typeFilter
-  if (createdAtFrom && !dateRangeError) overviewParams.createdAtFrom = createdAtFrom
-  if (createdAtTo && !dateRangeError) overviewParams.createdAtTo = createdAtTo
+  if (createdAtFrom && !dateRangeError && isValidISODate(createdAtFrom)) overviewParams.createdAtFrom = createdAtFrom
+  if (createdAtTo && !dateRangeError && isValidISODate(createdAtTo)) overviewParams.createdAtTo = createdAtTo
   const { data: overviewData, isLoading: overviewLoading } = useWalletOverview(
     overviewParams,
     viewMode === 'overview',
@@ -466,8 +475,8 @@ export default function CarteiraPage() {
   if (statusFilter) byCustomerParams.status = statusFilter
   if (typeFilter) byCustomerParams.type = typeFilter
   if (selectedCustomerId) byCustomerParams.customerId = selectedCustomerId
-  if (createdAtFrom && !dateRangeError) byCustomerParams.createdAtFrom = createdAtFrom
-  if (createdAtTo && !dateRangeError) byCustomerParams.createdAtTo = createdAtTo
+  if (createdAtFrom && !dateRangeError && isValidISODate(createdAtFrom)) byCustomerParams.createdAtFrom = createdAtFrom
+  if (createdAtTo && !dateRangeError && isValidISODate(createdAtTo)) byCustomerParams.createdAtTo = createdAtTo
   const { data: byCustomerData, isLoading: byCustomerLoading } = useWallet(
     byCustomerParams,
     viewMode === 'by-customer' && !!selectedCustomerId,
@@ -687,6 +696,13 @@ export default function CarteiraPage() {
           <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
             <Info className="h-3.5 w-3.5 shrink-0" />
             <span>Exibindo entradas dos últimos 6 meses · apenas ativas</span>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
           </div>
         )}
       </div>

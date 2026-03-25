@@ -19,9 +19,18 @@ export class WalletService {
 
   async list(clinicId: string, q: ListWalletQuery) {
     if (q.createdAtFrom && q.createdAtTo) {
-      const diffDays = Math.floor(
-        (new Date(q.createdAtTo).getTime() - new Date(q.createdAtFrom).getTime()) / 86_400_000,
-      )
+      const from = new Date(q.createdAtFrom)
+      const to = new Date(q.createdAtTo)
+      const fromTime = from.getTime()
+      const toTime = to.getTime()
+
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) {
+        throw new AppError('Parâmetros de data inválidos', 400, 'INVALID_DATE_RANGE')
+      }
+      if (fromTime > toTime) {
+        throw new AppError('Data inicial maior que data final', 400, 'INVALID_DATE_RANGE')
+      }
+      const diffDays = Math.floor((toTime - fromTime) / 86_400_000)
       if (diffDays > 730) throw new AppError('Intervalo de datas muito grande', 400, 'DATE_RANGE_TOO_LARGE')
       if (diffDays > 180) logger.warn({ clinicId, diffDays }, 'Large date range query on /wallet')
     }
