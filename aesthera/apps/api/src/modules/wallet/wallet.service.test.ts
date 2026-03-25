@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Hoist shared mocks so they are available before vi.mock hoisting ───────
+const mockLogger = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn() }))
+
 const mockTx = vi.hoisted(() => ({
   $queryRaw: vi.fn().mockResolvedValue([]),
   walletEntry: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -36,6 +38,9 @@ vi.mock('./wallet.repository', () => ({
     return mockRepo
   }),
 }))
+
+// ─── Mock logger ────────────────────────────────────────────────────────────
+vi.mock('../../shared/logger/logger', () => ({ logger: mockLogger }))
 
 import { WalletService } from './wallet.service'
 
@@ -272,6 +277,51 @@ describe('WalletService.create()', () => {
       expect.objectContaining({ type: 'CREATE', value: 10000 }),
       mockTx,
     )
+  })
+})
+
+describe('WalletService.list() \u2014 date range validation', () => {
+  let service: WalletService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new WalletService()
+    mockRepo.findAll.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 })
+  })
+
+  it('passes through when no date params are given', async () => {
+    await expect(service.list('clinic-1', { page: 1, limit: 20 })).resolves.toBeDefined()
+    expect(mockRepo.findAll).toHaveBeenCalledOnce()
+  })
+
+  it('passes through when only createdAtFrom is given', async () => {
+    await expect(service.list('clinic-1', { page: 1, limit: 20, createdAtFrom: '2025-01-01' })).resolves.toBeDefined()
+  })
+
+  it('throws INVALID_DATE_RANGE when createdAtFrom > createdAtTo', async () => {
+    await expect(
+      service.list('clinic-1', { page: 1, limit: 20, createdAtFrom: '2025-12-31', createdAtTo: '2025-01-01' }),
+    ).rejects.toMatchObject({ code: 'INVALID_DATE_RANGE' })
+    expect(mockRepo.findAll).not.toHaveBeenCalled()
+  })
+
+  it('throws DATE_RANGE_TOO_LARGE when interval > 730 days', async () => {
+    await expect(
+      service.list('clinic-1', { page: 1, limit: 20, createdAtFrom: '2023-01-01', createdAtTo: '2025-12-31' }),
+    ).rejects.toMatchObject({ code: 'DATE_RANGE_TOO_LARGE' })
+    expect(mockRepo.findAll).not.toHaveBeenCalled()
+  })
+
+  it('calls logger.warn when interval is between 181 and 730 days', async () => {
+    await service.list('clinic-1', { page: 1, limit: 20, createdAtFrom: '2024-07-01', createdAtTo: '2025-03-01' })
+    expect(mockLogger.warn).toHaveBeenCalledOnce()
+    expect(mockRepo.findAll).toHaveBeenCalledOnce()
+  })
+
+  it('does NOT call logger.warn for interval \u2264 180 days', async () => {
+    await service.list('clinic-1', { page: 1, limit: 20, createdAtFrom: '2025-01-01', createdAtTo: '2025-06-01' })
+    expect(mockLogger.warn).not.toHaveBeenCalled()
+    expect(mockRepo.findAll).toHaveBeenCalledOnce()
   })
 })
 

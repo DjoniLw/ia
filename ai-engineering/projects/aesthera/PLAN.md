@@ -278,6 +278,36 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-24] — Melhorias de UX na Carteira e Ficha do Cliente (sem issue)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/app/(dashboard)/carteira/page.tsx` *(legenda descritiva de filtros; busca de cliente por nome no modo "Por cliente"; `CustomerSearchInput` local com debounce)*
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(`CustomerPackageItem` exibe número de sessão por serviço: "Massagem · sessão 2/5")*
+- **O que foi feito:**
+  - Legenda de filtros agora **sempre visível** (não só no estado padrão), exibindo dinamicamente o período, status, tipo e cliente ativo.
+  - Filtro "Por cliente" substituído por campo de busca com autocomplete (debounced) igual ao padrão da aba Visão geral.
+  - Histórico de sessões no pacote do cliente exibe número da sessão por serviço ("Massagem · sessão 1/3") quando há múltiplas sessões do mesmo serviço.
+- **Impacto:** Apenas frontend. Sem migração ou mudança de API.
+
+### [2026-03-25] — PR #119 \u2014 Issues #111 e #112 \u2014 Sub-aba Pacotes + Filtro de data em /carteira (feat branch)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/wallet/wallet.dto.ts` *(`createdAtFrom`/`createdAtTo` com regex + `.refine()` de data v\u00e1lida)*
+  - `aesthera/apps/api/src/modules/wallet/wallet.repository.ts` *(filtros `gte`/`lte` UTC-3 em `findAll`)*
+  - `aesthera/apps/api/src/modules/wallet/wallet.service.ts` *(safe parse + `from > to` → 400; `> 730d` → `DATE_RANGE_TOO_LARGE`; `> 180d` → `logger.warn`)*
+  - `aesthera/apps/api/src/modules/wallet/wallet.service.test.ts` *(5 novos cen\u00e1rios cobrindo valida\u00e7\u00e3o de intervalo de datas)*
+  - `aesthera/apps/api/prisma/schema.prisma` *(`@@index([clinicId, createdAt])` no modelo `WalletEntry` — migration obrigat\u00f3ria antes do deploy)*
+  - `aesthera/apps/web/lib/hooks/use-wallet.ts` *(`useWallet`/`useWalletOverview` aceitam `createdAtFrom`/`createdAtTo`)*
+  - `aesthera/apps/web/app/(dashboard)/carteira/page.tsx` *(presets de data; inputs PT-BR; persist\u00eancia via URL params; `toISODate` com hora local; `isValidISODate`; bot\u00e3o "Restaurar padr\u00e3o" no aviso contextual)*
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(`CustomerWalletTab` com sub-tabs Carteira/Pacotes; role guard movido para dentro da sub-tab Carteira; `expiresAt` exibido; `toast.error` em erro de pacotes)*
+- **O que foi feito:**
+  - `#111`: Sub-aba **Pacotes** na ficha do cliente com lista expansível (`CustomerPackageItem`), badge de status, data de uso em PT-BR e link "Ver agendamento".
+  - `#112`: Filtro `createdAtFrom`/`createdAtTo` no `GET /wallet` (backend + frontend), com valida\u00e7\u00e3o de data em ambas as camadas, presets de per\u00edodo e persist\u00eencia por URL.
+- **Impacto:** FASE 3 itens 1 e 2 conclu\u00eddos. `@@index([clinicId, createdAt])` no schema exige migration antes do deploy em produ\u00e7\u00e3o.
+
+### [2026-03-24] — Fluxo de Pagamento, Pacotes e Promoções — Spec Final consolidada (aesthera-consolidador)
+- **Arquivo(s) afetado(s):** `outputs/consolidador/fluxo-pagamento-pacotes-promocoes-spec-final.md` *(novo)*
+- **O que foi feito:** Spec final consolidada pelo `aesthera-consolidador` a partir do `outputs/po/fluxo-pagamento-pacotes-promocoes-doc.md` (Product Owner) + revisões de UX Reviewer (P-01 a P-14), Security Auditor (6 bloqueantes + 3 atenções) e System Architect (4 bloqueantes B-01–B-04 + 6 sugestões S-01–S-06). **2 conflitos resolvidos:** (C-01) mensagens de cupom PT-BR apenas para autenticados + rate limiting (Security prevalece); (C-02) status de sessão explícito via migration (arquiteto prevalece). **Decisões de Produto Pendentes** documentadas em DP-01, DP-02, DP-04, DP-05, DP-06, DP-07 — devem ser respondidas antes do início da implementação. Principais mudanças incorporadas: `appointmentId` nullable em `Billing` e `CustomerPackageSession`; `dueDate = now()` em package sale; cupom integrado em `ManualReceiptsService.receive()`; `apply()` dentro de `prisma.$transaction()`; `RoleGuard` explícito em todos os endpoints novos; idempotência via `Idempotency-Key`; `SELECT FOR UPDATE` em `maxUses`/`maxUsesPerCustomer`; validação backend de `sum(paymentMethods) >= package.price`; `customerId` validado contra `clinicId`; rate limiting em `POST /promotions/validate`; badges de status com cores definidas; pill "Todos" nos filtros; estados de loading em botões assíncronos; `isDirty` guard no `PackageSaleModal`.
+- **Impacto:** Spec pronta para o issue-writer. Implementação bloqueada por DP-01 e DP-02 (decisões de produto críticas). Schema Prisma requer 7 migrations encadeadas na ordem definida no BLOCO 6.
+
 ### [2026-03-24] — FASE 3 Cliente e Relacionamento — Spec Final consolidada (aesthera-consolidador)
 - **Arquivo(s) afetado(s):** `ai-engineering/projects/aesthera/features/fase3-cliente-relacionamento-spec-final.md` *(novo)*
 - **O que foi feito:** Spec final da FASE 3 gerada pelo `aesthera-consolidador` a partir do `fase3-cliente-relacionamento-doc.md` (Product Owner) + revisões de UX Reviewer, Security Auditor e System Architect. Todos os **18 bloqueantes** incorporados (6 Security + 6 Arquitetura + 6 UX). Principais correções consolidadas: (1) Nomes e posição da aba "Carteira" corrigidos conforme código real (`profile/history/wallet/prontuario/contracts`); (2) Saldo total calculado via endpoint dedicado ou pré-paginação (nunca soma de lista paginada); (3) `BodyMeasurementValue.clinicId` obrigatório (convenção global do schema); (4) `CustomerFile.deletedAt DateTime?` em vez de `Boolean` (soft-delete padrão do projeto); (5) Validação cross-tenant obrigatória em `POST /uploads/presign` (prevenção de IDOR); (6) Guard + validação `file.clinicId` em `GET /uploads/:id/url`; (7) RN18 definida com critério SQL concreto (Appointment.professionalId + customerId + clinicId); (8) Base legal LGPD documentada + campo `bodyDataConsentAt` em Customer; (9) Tabela de guards por endpoint; (10) Verificação de magic bytes em `POST /uploads/confirm`; (11) Migration `@@index([clinicId, createdAt])` em WalletEntry marcada como obrigatória antes de expor filtro; (12) Timezone UTC-3 em queries de data de carteira; (13) "Limpar filtros" → "Restaurar padrão"; (14) Grade 2–3 colunas para formulário de medidas; (15) Cards expandíveis por data no histórico de evolução; (16) Seletor de categoria inline por arquivo no upload; (17) Variáveis R2/S3 adicionadas ao `railway.toml`; (18) Ordem de migrations explicitada (CustomerFile precede BodyMeasurementRecord).

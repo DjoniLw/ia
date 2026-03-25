@@ -15,6 +15,12 @@ export class WalletRepository {
     if (q.customerId) where.customerId = q.customerId
     if (q.type) where.type = q.type
     if (q.status) where.status = q.status
+    if (q.createdAtFrom || q.createdAtTo) {
+      const createdAt: Record<string, Date> = {}
+      if (q.createdAtFrom) createdAt.gte = new Date(`${q.createdAtFrom}T03:00:00.000Z`)
+      if (q.createdAtTo)   createdAt.lte = new Date(`${q.createdAtTo}T02:59:59.999Z`)
+      where.createdAt = createdAt
+    }
 
     const skip = (q.page - 1) * q.limit
     const [items, total] = await Promise.all([

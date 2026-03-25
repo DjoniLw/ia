@@ -135,6 +135,51 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 
 ---
 
+## Specs Geradas pelo PO
+
+| Spec | Data | Arquivo |
+|------|------|---------|
+| Fase 3 — Cliente, Relacionamento, Carteira | 2026-03 | `outputs/fase3-cliente-relacionamento-doc.md` |
+| Fase 3 — Spec Final Consolidada | 2026-03 | `outputs/fase3-cliente-relacionamento-spec-final.md` |
+| **Pagamento, Pacotes e Promoções** | **2026-03-24** | **`outputs/po/fluxo-pagamento-pacotes-promocoes-doc.md`** |
+
+---
+
+## Regras de Negócio — Pacotes (atualizado 24/03/2026)
+
+- **Sessão de pacote** tem 4 estados derivados: `Aberto` (sem appointmentId, sem usedAt), `Agendado` (appointmentId set, usedAt null), `Finalizado` (usedAt set), `Expirado` (pacote vencido, sessão ainda aberta)
+- Ao criar agendamento com `packageSessionId`, backend valida: sessão Aberta + não expirada + mesmo serviceId
+- Ao cancelar agendamento de pacote → `unlinkSession()` → sessão volta para `Aberto`
+- Ao concluir agendamento de pacote → `redeemSession()` → sessão vai para `Finalizado` + **nenhuma cobrança é criada**
+- Venda de pacote **deve** gerar `Billing` com `status = paid` + entrada no `Ledger` — hoje isso NÃO está implementado
+- Cobrança de venda de pacote não dispara WhatsApp de cobrança
+
+---
+
+## Regras de Negócio — Promoções (atualizado 24/03/2026)
+
+- **Bug conhecido:** Frontend envia `validFrom` como `"YYYY-MM-DD"` mas DTO exige ISO datetime completo → promoção não salva. Fix: frontend deve enviar `"YYYY-MM-DDTHH:mm:ss.000Z"`
+- Campo `maxUsesPerCustomer` ainda não existe no modelo — precisa de migration
+- Campo `applicableProductIds` ainda não existe — precisa de migration para suporte a promoções em produtos
+- Promoção auto-aplicada em cobrança deve ser **opt-in** (sugestão + confirmação), não automática
+- Promoção em produto aplica-se automaticamente na tela de venda
+- Uma promoção por cobrança (não acumular cupons)
+- Promoções não se aplicam a cobranças do tipo `PACKAGE_SALE`
+- Validação de cupom requer `customerId` para verificar `maxUsesPerCustomer`
+
+---
+
+## Campos Pendentes de Migration (identificados em 24/03/2026)
+
+| Tabela | Campo | Tipo | Descrição |
+|--------|-------|------|-----------|
+| `Promotion` | `applicableProductIds` | `String[] @default([])` | Produtos vinculados |
+| `Promotion` | `maxUsesPerCustomer` | `Int?` | Limite de uso por cliente |
+| `Billing` | `sourceType` | `Enum(APPOINTMENT, PACKAGE_SALE, PRODUCT_SALE, MANUAL)` | Origem da cobrança |
+| `CustomerPackageSession` | `status` | `Enum(ABERTO, AGENDADO, FINALIZADO, EXPIRADO)?` | Status explícito (opcional — pode derivar) |
+
+---
+
 ## Convenções de UI (Padrões Estabelecidos)
 
 - Barra de filtros: `flex flex-wrap items-center gap-2`
@@ -165,3 +210,9 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 |------|---------|----------|
 | 2026-03-24 | Infraestrutura de upload de arquivos (pre-signed URL + Cloudflare R2) deve ser issue separada e pré-requisito do Item 20 | R2 tem zero egress fee no Railway, compatível com S3 SDK — escolha ideal para MVP |
 | 2026-03-24 | Fotos e medidas corporais são dados sensíveis de saúde (LGPD Art. 11) — URLs sempre temporárias (TTL 1h), bucket privado | Evita exposição permanente de dados clínicos |
+| 2026-03-24 | **DP-01** Promoção em cobrança: **(A) Sugestão com confirmação** — banner âmbar no ReceiveManualModal, não auto-aplicar | Recepcionista pode intencionalmente não aplicar; auto-apply cria risco financeiro sem rastreabilidade |
+| 2026-03-24 | **DP-02** Promoção em venda de pacote: **(A) Bloquear** (RB-05 mantido) | Pacote tem preço próprio; desconto via promoção criaria dupla complexidade. Extensão futura via produto "promoção de pacote" |
+| 2026-03-24 | **DP-04** Múltiplas promoções ativas: **(A) Maior desconto** (RN-PR04 mantido) | Mais intuitivo; admin que quer exclusividade deve desativar as demais |
+| 2026-03-24 | **DP-05** Idempotency-Key TTL: **(B) 7 dias** | 24h curto para problemas percebidos após fim de semana; sem expiração acumula dados desnecessários |
+| 2026-03-24 | **DP-06** Pacote expirado com sessões AGENDADO: **(B) Alerta visual na UI** (não cron/WhatsApp) | Badge âmbar na aba de pacotes do cliente e na listagem de agendamentos. WhatsApp ao cliente = evolução futura |
+| 2026-03-24 | **DP-07** GET /packages/sold filtros: **(B) Período + cliente + status + serviceId** | Tela de gestão financeira; custo marginal de implementar completo vs. refatorar depois |

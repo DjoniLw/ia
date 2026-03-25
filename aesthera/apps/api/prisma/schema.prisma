@@ -874,6 +874,7 @@ model WalletEntry {
   @@index([clinicId])
   @@index([clinicId, customerId])
   @@index([clinicId, status])
+  @@index([clinicId, createdAt])
   @@map("wallet_entries")
 }
 

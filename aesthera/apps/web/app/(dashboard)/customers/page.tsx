@@ -36,14 +36,17 @@ import {
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
 import { api } from '@/lib/api'
+import Link from 'next/link'
 import { useRole } from '@/lib/hooks/use-role'
 import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
+import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import {
   WALLET_ENTRY_TYPE_LABELS,
   WALLET_ENTRY_TYPE_COLORS,
   WALLET_ENTRY_STATUS_CONFIG,
   WALLET_TRANSACTION_LABELS,
+  WALLET_PACKAGE_SESSION_STATUS,
 } from '@/lib/wallet-labels'
 import type { WalletEntryStatus } from '@/lib/wallet-labels'
 
@@ -630,35 +633,125 @@ const WALLET_STATUS_FILTERS: { value: WalletEntryStatus | ''; label: string }[] 
   { value: 'EXPIRED', label: 'Expirado' },
 ]
 
+// ──── Packages Sub-Tab ───────────────────────────────────────────────────────
+
+function CustomerPackageItem({ pkg }: { pkg: CustomerPackage }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const totalSessions = pkg.sessions.length
+  const usedSessions = pkg.sessions.filter((s) => s.usedAt !== null).length
+  const remainingSessions = totalSessions - usedSessions
+
+  return (
+    <div className="rounded-lg border bg-muted/10 p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-0.5 flex-1 min-w-0">
+          <p className="text-xs font-semibold text-foreground truncate">{pkg.package.name}</p>
+          <p className="text-[10px] text-muted-foreground">Comprado em {formatDate(pkg.purchasedAt)}</p>
+          {pkg.expiresAt && (
+            <p className="text-[10px] text-muted-foreground">Válido até {formatDate(pkg.expiresAt)}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span>{usedSessions}/{totalSessions}</span>
+            <span
+              className={[
+                'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                remainingSessions > 0
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                  : 'bg-muted text-muted-foreground',
+              ].join(' ')}
+            >
+              {remainingSessions} restante{remainingSessions !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={expanded ? 'Recolher sessões' : 'Expandir sessões'}
+          >
+            {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-1 space-y-1 border-t pt-2">
+          {pkg.sessions.length === 0 ? (
+            <p className="text-[10px] text-muted-foreground py-1">Nenhuma sessão encontrada para este pacote.</p>
+          ) : (
+            pkg.sessions.map((session) => {
+              const serviceName =
+                pkg.package.items.find((i) => i.serviceId === session.serviceId)?.service.name ??
+                'Serviço'
+              const sessionsOfService = pkg.sessions.filter((s) => s.serviceId === session.serviceId)
+              const sessionNum = sessionsOfService.indexOf(session) + 1
+              const totalForService = sessionsOfService.length
+              const statusConfig =
+                session.usedAt !== null
+                  ? WALLET_PACKAGE_SESSION_STATUS.used
+                  : WALLET_PACKAGE_SESSION_STATUS.available
+              const statusClass =
+                session.usedAt !== null
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+              return (
+                <div
+                  key={session.id}
+                  className="flex items-center justify-between gap-2 rounded-md bg-muted/20 px-3 py-1.5 text-xs"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-foreground truncate">
+                      {serviceName}
+                      {totalForService > 1 && (
+                        <span className="ml-1 font-normal text-muted-foreground">· sessão {sessionNum}/{totalForService}</span>
+                      )}
+                    </span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0 ${statusClass}`}>
+                      {statusConfig.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {session.usedAt && (
+                      <span className="text-[10px] text-muted-foreground">{formatDate(session.usedAt)}</span>
+                    )}
+                    {session.appointmentId && (
+                      <Link
+                        href={`/appointments/${session.appointmentId}`}
+                        className="text-[10px] font-medium text-primary hover:underline"
+                      >
+                        Ver agendamento
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CustomerWalletTab({ customerId }: { customerId: string }) {
   const role = useRole()
+  const [walletSubTab, setWalletSubTab] = useState<'carteira' | 'pacotes'>('carteira')
   const [statusFilter, setStatusFilter] = useState<WalletEntryStatus>('ACTIVE')
   const [page, setPage] = useState(1)
 
   const isAllowed = role !== 'professional'
+  // Both queries run in parallel
   const { entries, summary } = useCustomerWallet(customerId, statusFilter, page, isAllowed)
+  const customerPackages = useCustomerPackages(customerId)
 
-  if (role === 'professional') {
-    return (
-      <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-4 py-12 text-center">
-        <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium text-muted-foreground">
-          Acesso a dados financeiros não disponível para este perfil.
-        </p>
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (customerPackages.isError) toast.error('Erro ao carregar pacotes')
+  }, [customerPackages.isError])
 
-  const isLoading = entries.isLoading || summary.isLoading
-
-  if (isLoading) {
-    return (
-      <div className="space-y-3">
-        <div className="h-16 rounded-xl border bg-muted/20 animate-pulse" />
-        <div className="h-48 rounded-xl border bg-muted/20 animate-pulse" />
-      </div>
-    )
-  }
+  const isLoadingWallet = entries.isLoading || summary.isLoading
 
   const items = entries.data?.items ?? []
   const total = entries.data?.total ?? 0
@@ -667,113 +760,181 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
 
   return (
     <div className="space-y-4 text-sm">
-      <div className="flex items-center gap-3">
-        <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Carteira</p>
+      {/* Sub-tabs: Carteira e Pacotes */}
+      <div className="flex rounded-lg border overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setWalletSubTab('carteira')}
+          className={[
+            'flex flex-1 items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-medium transition-colors',
+            walletSubTab === 'carteira'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-card text-muted-foreground hover:bg-accent',
+          ].join(' ')}
+        >
+          <Wallet className="h-3 w-3" />
+          Carteira
+        </button>
+        <button
+          type="button"
+          onClick={() => setWalletSubTab('pacotes')}
+          className={[
+            'flex flex-1 items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-medium transition-colors',
+            walletSubTab === 'pacotes'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-card text-muted-foreground hover:bg-accent',
+          ].join(' ')}
+        >
+          <Package className="h-3 w-3" />
+          Pacotes
+        </button>
       </div>
 
-      {/* Saldo */}
-      <div className="rounded-lg border bg-muted/20 px-4 py-3 flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">Saldo disponível</span>
-        {summary.isError ? (
-          <span
-            className="text-sm font-bold text-muted-foreground"
-            title="Não foi possível carregar o saldo"
-          >
-            —
-          </span>
+      {/* ── Sub-tab: Carteira ─────────────────────────────────────── */}
+      {walletSubTab === 'carteira' && (
+        role === 'professional' ? (
+          <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-4 py-12 text-center">
+            <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">
+              Acesso a dados financeiros não disponível para este perfil.
+            </p>
+          </div>
+        ) : isLoadingWallet ? (
+          <div className="space-y-3">
+            <div className="h-16 rounded-xl border bg-muted/20 animate-pulse" />
+            <div className="h-48 rounded-xl border bg-muted/20 animate-pulse" />
+          </div>
         ) : (
-          <span className="text-sm font-bold text-green-600">
-            {summary.data ? formatCurrency(summary.data.totalBalance) : '…'}
-          </span>
-        )}
-      </div>
-
-      {/* Filtro de status */}
-      <div className="flex gap-1 flex-wrap">
-        {WALLET_STATUS_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            onClick={() => { setStatusFilter(f.value as WalletEntryStatus); setPage(1) }}
-            className={[
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              statusFilter === f.value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-input bg-card text-muted-foreground hover:bg-accent',
-            ].join(' ')}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Lista de entradas */}
-      {entries.isError ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-10 text-center">
-          <p className="text-xs text-muted-foreground">Erro ao carregar carteira.</p>
-          <button
-            type="button"
-            onClick={() => entries.refetch()}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      ) : !items.length ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-10 text-center">
-          <Wallet className="h-8 w-8 text-muted-foreground/30" />
-          <p className="text-xs font-medium text-muted-foreground">Nenhuma entrada na carteira.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {items.map((entry) => (
-            <div key={entry.id} className="rounded-lg border bg-muted/10 p-3 space-y-1">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-mono text-xs font-bold text-foreground">{entry.code}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${WALLET_ENTRY_TYPE_COLORS[entry.type]}`}>
-                    {WALLET_ENTRY_TYPE_LABELS[entry.type]}
-                  </span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${WALLET_ENTRY_STATUS_CONFIG[entry.status].className}`}>
-                    {WALLET_ENTRY_STATUS_CONFIG[entry.status].label}
-                  </span>
-                </div>
-                <span className="text-xs font-semibold text-green-600">{formatCurrency(entry.balance)}</span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <WalletOriginBadge originType={entry.originType} originReference={entry.originReference} />
-                {entry.expirationDate && (
-                  <span className="text-[10px] text-muted-foreground">Expira {formatDate(entry.expirationDate)}</span>
-                )}
-              </div>
-              <WalletTransactionList entry={entry} />
+          <div className="space-y-4">
+            {/* Saldo */}
+            <div className="rounded-lg border bg-muted/20 px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Saldo disponível</span>
+              {summary.isError ? (
+                <span className="text-sm font-bold text-muted-foreground" title="Não foi possível carregar o saldo">—</span>
+              ) : (
+                <span className="text-sm font-bold text-green-600">
+                  {summary.data ? formatCurrency(summary.data.totalBalance) : '…'}
+                </span>
+              )}
             </div>
-          ))}
-        </div>
+
+            {/* Filtro de status */}
+            <div className="flex flex-wrap items-center gap-2">
+              {WALLET_STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => { setStatusFilter(f.value as WalletEntryStatus); setPage(1) }}
+                  className={[
+                    'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                    statusFilter === f.value
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                  ].join(' ')}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Lista de entradas */}
+            {entries.isError ? (
+              <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-10 text-center">
+                <p className="text-xs text-muted-foreground">Erro ao carregar carteira.</p>
+                <button type="button" onClick={() => entries.refetch()} className="text-xs font-medium text-primary hover:underline">
+                  Tentar novamente
+                </button>
+              </div>
+            ) : !items.length ? (
+              <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-10 text-center">
+                <Wallet className="h-8 w-8 text-muted-foreground/30" />
+                <p className="text-xs font-medium text-muted-foreground">Nenhuma entrada na carteira.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {items.map((entry) => (
+                  <div key={entry.id} className="rounded-lg border bg-muted/10 p-3 space-y-1">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-xs font-bold text-foreground">{entry.code}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${WALLET_ENTRY_TYPE_COLORS[entry.type]}`}>
+                          {WALLET_ENTRY_TYPE_LABELS[entry.type]}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${WALLET_ENTRY_STATUS_CONFIG[entry.status].className}`}>
+                          {WALLET_ENTRY_STATUS_CONFIG[entry.status].label}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-green-600">{formatCurrency(entry.balance)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <WalletOriginBadge originType={entry.originType} originReference={entry.originReference} />
+                      {entry.expirationDate && (
+                        <span className="text-[10px] text-muted-foreground">Expira {formatDate(entry.expirationDate)}</span>
+                      )}
+                    </div>
+                    <WalletTransactionList entry={entry} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Paginação */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+                <span className="text-xs text-muted-foreground">{page} / {totalPages}</span>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
+                >
+                  Próximo
+                </button>
+              </div>
+            )}
+          </div>
+        )
       )}
 
-      {/* Paginação */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-1">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
-          >
-            Anterior
-          </button>
-          <span className="text-xs text-muted-foreground">{page} / {totalPages}</span>
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-40"
-          >
-            Próximo
-          </button>
-        </div>
+      {/* ── Sub-tab: Pacotes ──────────────────────────────────────── */}
+      {walletSubTab === 'pacotes' && (
+        customerPackages.isLoading ? (
+          <div className="space-y-3">
+            <div className="h-24 rounded-xl border bg-muted/20 animate-pulse" />
+            <div className="h-24 rounded-xl border bg-muted/20 animate-pulse" />
+          </div>
+        ) : customerPackages.isError ? (
+          <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-10 text-center">
+            <Package className="h-8 w-8 text-muted-foreground/30" />
+            <p className="text-xs text-muted-foreground">Erro ao carregar pacotes.</p>
+            <button
+              type="button"
+              onClick={() => customerPackages.refetch()}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : !customerPackages.data?.length ? (
+          <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-10 text-center">
+            <Package className="h-8 w-8 text-muted-foreground/30" />
+            <p className="text-xs font-medium text-muted-foreground">Este cliente não possui pacotes comprados.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {customerPackages.data.map((pkg) => (
+              <CustomerPackageItem key={pkg.id} pkg={pkg} />
+            ))}
+          </div>
+        )
       )}
     </div>
   )
