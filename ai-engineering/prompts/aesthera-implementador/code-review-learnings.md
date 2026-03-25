@@ -136,17 +136,23 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: toda nova dependência de serviço introduzida em um módulo testado é um **breaking change nos testes** — o mock é obrigatório e deve ser adicionado no mesmo commit/PR que introduz a dependência.
   - 📅 Aprendido em: 23/03/2026 — revisão de `supply-purchases.service.test.ts` (AccountsPayableService não mockado após injeção)
 
-- [ ] **Todo PR que adicione ou modifique arquivos `*.test.ts` / `*.spec.ts` exige a seção `## Test Change Justification` no corpo do PR**
-  - 🔴 Anti-padrão: abrir um PR com alterações de testes sem a seção obrigatória — o workflow `test-guardian.yml` bloqueia o CI automaticamente, e editar a descrição do PR **não reabre** o check (é necessário push de novo commit ou re-run manual)
-  - ✅ Correto: incluir a seção no corpo do PR desde o momento da criação:
+- [ ] **Todo PR que adicione ou modifique arquivos `*.test.ts` / `*.spec.ts` exige a seção `## Test Change Justification` no corpo do PR — incluir no momento de abrir o PR, não como pós-fix**
+  - 🔴 Anti-padrão 1: abrir um PR com alterações de testes sem a seção obrigatória — o workflow `test-guardian.yml` bloqueia o CI automaticamente
+  - 🔴 Anti-padrão 2 (crítico): editar a descrição do PR depois e clicar "Re-run" **não resolve** — o GitHub Actions usa o `body` do **evento original** (`pull_request` ou `pull_request_target`), não o body atual do PR. Clicar em "Re-run" reexecuta o workflow com o payload original, sem a seção adicionada posteriormente
+  - ✅ Correto: incluir a seção no corpo do PR **desde o momento da criação**:
     ```markdown
     ## Test Change Justification
     Motivo: {descrever por que os testes foram adicionados/alterados}
     Referência: {issue ou decisão técnica}
     Impacto: {o que muda no comportamento — ex: cobertura aumentada, regra de negócio atualizada}
     ```
-  - 📌 Boa prática: incluir esta seção no template de PR do repositório (`.github/pull_request_template.md`) para que apareça automaticamente em todo PR novo — não como pós-fix
-  - 📅 Aprendido em: 24/03/2026 — revisão de workflow `test-guardian.yml` e bloqueio de CI por ausência de justificativa de teste
+  - 🔧 Única solução quando a seção foi esquecida: fazer um novo commit (pode ser vazio) para disparar um novo evento `pull_request` com o body atualizado:
+    ```bash
+    git commit --allow-empty -m "chore: trigger CI with Test Change Justification"
+    git push
+    ```
+  - 📌 Boa prática: incluir esta seção no template de PR do repositório (`.github/pull_request_template.md`) para que apareça automaticamente em todo PR novo
+  - 📅 Aprendido em: 24/03/2026 (atualizado 24/03/2026) — revisão de workflow `test-guardian.yml`; comportamento do GitHub Actions com evento original confirmado
 
 ### Arquitetura e Padrões do Projeto
 
