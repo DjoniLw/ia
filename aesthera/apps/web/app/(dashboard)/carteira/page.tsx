@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { Info, LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
@@ -23,6 +23,7 @@ import {
   type WalletOriginType,
 } from '@/lib/hooks/use-wallet'
 import { useCustomers } from '@/lib/hooks/use-resources'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,13 @@ function formatCurrency(cents: number) {
 function formatDate(iso: string | null | undefined) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+function toISODate(d: Date) { return d.toISOString().slice(0, 10) }
+function defaultCreatedAtFrom() {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 6)
+  return toISODate(d)
 }
 
 // ──── Transaction History ─────────────────────────────────────────────────────
@@ -372,13 +380,73 @@ function OverviewTable({
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CarteiraPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [viewMode, setViewMode] = useState<'overview' | 'by-customer'>('overview')
-  const [statusFilter, setStatusFilter] = useState<string>('')
-  const [typeFilter, setTypeFilter] = useState<string>('')
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? 'ACTIVE')
+  const [typeFilter, setTypeFilter] = useState<string>(searchParams.get('type') ?? '')
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [adjustEntry, setAdjustEntry] = useState<WalletEntry | null>(null)
+  const [createdAtFrom, setCreatedAtFrom] = useState(searchParams.get('createdAtFrom') ?? defaultCreatedAtFrom())
+  const [createdAtTo, setCreatedAtTo] = useState(searchParams.get('createdAtTo') ?? '')
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (statusFilter) p.set('status', statusFilter)
+    if (typeFilter) p.set('type', typeFilter)
+    if (createdAtFrom) p.set('createdAtFrom', createdAtFrom)
+    if (createdAtTo) p.set('createdAtTo', createdAtTo)
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, statusFilter, typeFilter, createdAtFrom, createdAtTo])
+
+  // Date validation
+  const dateRangeError =
+    createdAtFrom && createdAtTo && createdAtFrom > createdAtTo
+      ? 'Data inicial deve ser anterior à data final'
+      : null
+  const dateRangeWarning =
+    !dateRangeError && createdAtFrom && createdAtTo &&
+    (new Date(createdAtTo).getTime() - new Date(createdAtFrom).getTime()) / (1000 * 60 * 60 * 24) > 730
+      ? 'Períodos maiores que 2 anos podem apresentar lentidão'
+      : null
+
+  const isDefaultFilters =
+    statusFilter === 'ACTIVE' && !typeFilter &&
+    createdAtFrom === defaultCreatedAtFrom() && !createdAtTo
+
+  function resetFilters() {
+    setStatusFilter('ACTIVE')
+    setTypeFilter('')
+    setCreatedAtFrom(defaultCreatedAtFrom())
+    setCreatedAtTo('')
+  }
+
+  function applyPreset(preset: 'today' | 7 | 30 | '6months' | '1year') {
+    const today = toISODate(new Date())
+    if (preset === 'today') {
+      setCreatedAtFrom(today)
+      setCreatedAtTo(today)
+    } else if (preset === '6months') {
+      const d = new Date()
+      d.setMonth(d.getMonth() - 6)
+      setCreatedAtFrom(toISODate(d))
+      setCreatedAtTo('')
+    } else if (preset === '1year') {
+      const d = new Date()
+      d.setFullYear(d.getFullYear() - 1)
+      setCreatedAtFrom(toISODate(d))
+      setCreatedAtTo('')
+    } else {
+      const d = new Date()
+      d.setDate(d.getDate() - preset)
+      setCreatedAtFrom(toISODate(d))
+      setCreatedAtTo(today)
+    }
+  }
 
   const { data: customersData } = useCustomers({ limit: '200' })
 
@@ -386,8 +454,10 @@ export default function CarteiraPage() {
   const overviewParams: Record<string, string> = {}
   if (statusFilter) overviewParams.status = statusFilter
   if (typeFilter) overviewParams.type = typeFilter
+  if (createdAtFrom && !dateRangeError) overviewParams.createdAtFrom = createdAtFrom
+  if (createdAtTo && !dateRangeError) overviewParams.createdAtTo = createdAtTo
   const { data: overviewData, isLoading: overviewLoading } = useWalletOverview(
-    Object.keys(overviewParams).length ? overviewParams : undefined,
+    overviewParams,
     viewMode === 'overview',
   )
 
@@ -396,6 +466,8 @@ export default function CarteiraPage() {
   if (statusFilter) byCustomerParams.status = statusFilter
   if (typeFilter) byCustomerParams.type = typeFilter
   if (selectedCustomerId) byCustomerParams.customerId = selectedCustomerId
+  if (createdAtFrom && !dateRangeError) byCustomerParams.createdAtFrom = createdAtFrom
+  if (createdAtTo && !dateRangeError) byCustomerParams.createdAtTo = createdAtTo
   const { data: byCustomerData, isLoading: byCustomerLoading } = useWallet(
     byCustomerParams,
     viewMode === 'by-customer' && !!selectedCustomerId,
@@ -474,71 +546,148 @@ export default function CarteiraPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Status pills — comuns aos dois modos */}
-        <div className="flex gap-1">
-          {statusOptions.map((s) => (
-            <button
-              key={s.value}
-              onClick={() => setStatusFilter(s.value)}
-              className={[
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                statusFilter === s.value
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
-              ].join(' ')}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Tipo */}
-        <div className="flex gap-1">
-          {typeOptions.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => setTypeFilter(t.value)}
-              className={[
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                typeFilter === t.value
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
-              ].join(' ')}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Visão geral — busca por cliente */}
-        {viewMode === 'overview' && (
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              value={customerSearch}
-              onChange={(e) => setCustomerSearch(e.target.value)}
-              placeholder="Buscar por cliente…"
-              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status pills — comuns aos dois modos */}
+          <div className="flex gap-1">
+            {statusOptions.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => setStatusFilter(s.value)}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  statusFilter === s.value
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {s.label}
+              </button>
+            ))}
           </div>
+
+          {/* Tipo */}
+          <div className="flex gap-1">
+            {typeOptions.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setTypeFilter(t.value)}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  typeFilter === t.value
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Visão geral — busca por cliente */}
+          {viewMode === 'overview' && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                placeholder="Buscar por cliente…"
+                className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          )}
+
+          {/* Por cliente — seletor de cliente */}
+          {viewMode === 'by-customer' && (
+            <select
+              value={selectedCustomerId}
+              onChange={(e) => setSelectedCustomerId(e.target.value)}
+              className="h-8 rounded-full border border-input bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Selecione um cliente…</option>
+              {customersData?.items?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Filtro por data de criação */}
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Presets de data */}
+          <div className="flex gap-1">
+            {(
+              [
+                { label: 'Hoje', preset: 'today' },
+                { label: '7 dias', preset: 7 },
+                { label: '30 dias', preset: 30 },
+                { label: '6 meses', preset: '6months' },
+                { label: '1 ano', preset: '1year' },
+              ] as const
+            ).map(({ label, preset }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                className="rounded-full border border-input bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Inputs de data */}
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-xs text-muted-foreground">Criado a partir de</label>
+              <input
+                type="date"
+                value={createdAtFrom}
+                onChange={(e) => setCreatedAtFrom(e.target.value)}
+                className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-xs text-muted-foreground">Até</label>
+              <input
+                type="date"
+                value={createdAtTo}
+                onChange={(e) => setCreatedAtTo(e.target.value)}
+                className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          {/* Restaurar padrão */}
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="h-8 rounded-lg border border-input bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent"
+            >
+              Restaurar padrão
+            </button>
+          )}
+        </div>
+
+        {/* Erros / avisos de intervalo */}
+        {(dateRangeError ?? dateRangeWarning) && (
+          <p className={`text-xs font-medium ${dateRangeError ? 'text-red-600' : 'text-amber-600'}`}>
+            {dateRangeError ?? dateRangeWarning}
+          </p>
         )}
 
-        {/* Por cliente — seletor de cliente */}
-        {viewMode === 'by-customer' && (
-          <select
-            value={selectedCustomerId}
-            onChange={(e) => setSelectedCustomerId(e.target.value)}
-            className="h-8 rounded-full border border-input bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="">Selecione um cliente…</option>
-            {customersData?.items?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+        {/* Aviso de estado padrão */}
+        {isDefaultFilters && (
+          <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            <span>Exibindo entradas dos últimos 6 meses · apenas ativas</span>
+          </div>
         )}
       </div>
 

@@ -3,6 +3,7 @@ import { AppError, ForbiddenError, NotFoundError } from '../../shared/errors/app
 import type { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery } from './wallet.dto'
 import { WalletRepository } from './wallet.repository'
 import type { Tx } from './wallet.repository'
+import { logger } from '../../shared/logger/logger'
 
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -17,6 +18,13 @@ export class WalletService {
   private repo = new WalletRepository()
 
   async list(clinicId: string, q: ListWalletQuery) {
+    if (q.createdAtFrom && q.createdAtTo) {
+      const diffDays = Math.floor(
+        (new Date(q.createdAtTo).getTime() - new Date(q.createdAtFrom).getTime()) / 86_400_000,
+      )
+      if (diffDays > 730) throw new AppError('Intervalo de datas muito grande', 400, 'DATE_RANGE_TOO_LARGE')
+      if (diffDays > 180) logger.warn({ clinicId, diffDays }, 'Large date range query on /wallet')
+    }
     return this.repo.findAll(clinicId, q)
   }
 
