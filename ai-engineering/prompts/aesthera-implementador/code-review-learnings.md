@@ -57,11 +57,59 @@ Se a resposta for não → revise antes de prosseguir.
 
 ### Async / Promises / Error Handling
 
-<!-- Itens serão adicionados automaticamente após code reviews -->
+- [ ] **Catch genérico em chamadas de storage/API externo mascara falhas reais de infra — nunca usar `catch { return false }`**
+  - 🔴 Anti-padrão: silenciar toda exceção em chamadas a serviços externos (S3, R2, APIs de terceiros) com `catch { return false }` ou `catch { return null }` — uma falha de credenciais inválidas, timeout de rede ou bucket inexistente fica indistinguível de um arquivo genuinamente não encontrado
+  - ✅ Correto: inspecionar o erro antes de decidir o comportamento. Para SDKs AWS/Cloudflare, verificar o código de erro:
+    ```ts
+    try {
+      await s3.send(new GetObjectCommand({ ... }));
+    } catch (err: unknown) {
+      if (err instanceof Error && (err as { Code?: string }).Code === 'NoSuchKey') {
+        return null; // não encontrado — esperado
+      }
+      // erro de infra (credenciais, rede, permissão) — propagar para diagnóstico
+      throw err;
+    }
+    ```
+  - 📌 Regra geral: `catch { return false }` é aceitável **somente** quando qualquer falha é tratada como ausência de dado. Para storage e APIs externas, erros de credenciais ou rede devem ser relançados para aparecer nos logs e alertas
+  - 📅 Aprendido em: 25/03/2026 — revisão de chamadas de storage R2 mascarando erros de credencial
+
+- [ ] **Fluxo presign/confirm de upload: o `presign` deve persistir um registro de upload pendente — o `confirm` valida pelo `id`, nunca aceita `storageKey` bruto do cliente**
+  - 🔴 Anti-padrão: endpoint `POST /uploads/confirm` recebe `storageKey` diretamente do cliente e o persiste sem validação — permite que um usuário malicioso aponte para qualquer chave do bucket (inclusive de outros tenants) e force o sistema a registrá-la como válida
+  - ✅ Correto: o fluxo deve ter duas etapas com estado server-side:
+    1. `POST /uploads/presign` → gera a URL assinada **e** persiste um registro `PendingUpload { id, storageKey, clinicId, expiresAt }` no banco
+    2. `POST /uploads/confirm` → recebe apenas o `uploadId` (UUID do `PendingUpload`), busca o registro com `clinicId` do token, verifica `expiresAt`, e só então persiste o recurso final
+    ```ts
+    // presign
+    const pending = await prisma.pendingUpload.create({
+      data: { storageKey, clinicId, expiresAt: addMinutes(new Date(), 15) },
+    });
+    return { uploadId: pending.id, presignedUrl };
+
+    // confirm
+    const pending = await prisma.pendingUpload.findFirst({
+      where: { id: uploadId, clinicId }, // multi-tenancy garantido
+    });
+    if (!pending || pending.expiresAt < new Date()) throw new BadRequestException('Upload inválido ou expirado');
+    // persistir recurso final usando pending.storageKey (nunca do client)
+    ```
+  - 📌 Regra geral: o cliente **nunca** deve poder nomear ou referenciar uma chave de storage diretamente no `confirm` — o `storageKey` é determinado pelo servidor no `presign` e recuperado pelo `id` no `confirm`. Isso previne path traversal de bucket e violação de multi-tenancy
+  - 📅 Aprendido em: 25/03/2026 — revisão de `POST /uploads/confirm` recebendo `storageKey` bruto sem validação de intent de presign
 
 ### Prisma / Banco de Dados
 
-<!-- Itens serão adicionados automaticamente após code reviews -->
+- [ ] **IDOR em updates Prisma: sempre incluir `clinicId` no `where` para evitar que um tenant altere dados de outro**
+  - 🔴 Anti-padrão: `prisma.entity.update({ where: { id }, data: { ... } })` — qualquer `clinicId` que conheça o `id` do registro pode sobrescrevê-lo, mesmo que pertença a outra clínica
+  - ✅ Correto: usar `updateMany` com `clinicId` no where (garante multi-tenancy) e depois `findFirst` para retornar o objeto atualizado:
+    ```ts
+    await this.prisma.entity.updateMany({
+      where: { id, clinicId },
+      data: { ... },
+    });
+    return this.prisma.entity.findFirst({ where: { id, clinicId } });
+    ```
+  - 📌 Regra geral: **toda** operação de escrita em tabelas multi-tenant (`update`, `delete`, `updateMany`) deve incluir `clinicId` no `where`. O `id` isolado não é suficiente — é uma superfície de IDOR. Se `updateMany` retornar `count === 0`, o registro não pertence ao tenant → lançar `NotFoundException`
+  - 📅 Aprendido em: 25/03/2026 — revisão de repositórios Prisma sem filtro de tenant em operações de update
 
 ---
 
@@ -109,6 +157,34 @@ Se a resposta for não → revise antes de prosseguir.
   - 📅 Aprendido em: 24/03/2026 — revisão de envio de datas de agendamentos com fuso horário
 
 ### Componentes e Estado
+
+- [ ] **Nunca criar modais manualmente com `fixed inset-0 z-50` — sempre usar o componente `<Dialog>` do shadcn/ui**
+  - 🔴 Anti-padrão: implementar modal com `<div className="fixed inset-0 z-50 ...">` ou overlay customizado — não garante foco trap (acessibilidade), não respeita o `isDirty` guard, não possui animações padronizadas e viola o `ui-standards.md`
+  - ✅ Correto: importar e usar o componente `<Dialog>` disponível em `@/components/ui/dialog`:
+    ```tsx
+    import {
+      Dialog,
+      DialogContent,
+      DialogHeader,
+      DialogTitle,
+      DialogFooter,
+    } from '@/components/ui/dialog';
+
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Título do Modal</DialogTitle>
+        </DialogHeader>
+        {/* conteúdo */}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSave}>Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    ```
+  - 📌 Regra geral: `<Dialog>` do shadcn/ui fornece foco trap, fechamento por `Esc`, overlay acessível e animações consistentes — qualquer substituição manual perde esses comportamentos e gera inconsistência visual entre telas
+  - 📅 Aprendido em: 25/03/2026 — revisão de dois componentes de modal implementados com `fixed inset-0 z-50` customizado
 
 - [ ] **Verificar alinhamento da barra de filtros em toda tela criada ou modificada**
   - 🔴 Erro: barra de filtros com `flex gap-4` ou `space-x-2` ao invés do padrão — campos desalinhados
@@ -177,3 +253,6 @@ Se a resposta for não → revise antes de prosseguir.
 | 22/03/2026 | — | 1 padrão adicionado pelo treinador-agent: anti-padrão "ocultar UI mas deixar API aberta" — proteção de dados sensíveis deve existir no backend via roleGuard |
 | 23/03/2026 | — | 1 padrão adicionado pelo treinador-agent: campos obrigatórios por regra de negócio devem ter validação explícita no `service.create()`, além do schema Zod |
 | 24/03/2026 | — | 6 padrões adicionados pelo treinador-agent: (1) contraste WCAG para texto branco sobre amber/orange em EVENT_COLOR; (2) STATUS_COLOR centralizado em arquivo único; (3) guards de role na menor granularidade possível; (4) safe parse de data em DTOs Zod com `.refine(Number.isFinite(Date.parse(v)))`; (5) toISODate em frontend usando hora local, não `toISOString()`; (6) seção `## Test Change Justification` obrigatória em PRs com arquivos de teste |
+| 25/03/2026 | — | 2 padrões adicionados pelo treinador-agent: (1) IDOR em updates Prisma — `update({ where: { id } })` sem `clinicId` permite alteração cross-tenant; padrão correto é `updateMany` + `findFirst` com `clinicId`; (2) catch genérico mascarando erros de infra em storage/API externo — inspecionar código de erro antes de silenciar |
+| 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: modal manual com `fixed inset-0 z-50` é anti-padrão — sempre usar `<Dialog>` do shadcn/ui (`@/components/ui/dialog`) para foco trap, animações e consistência visual |
+| 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: fluxo presign/confirm de upload — `presign` deve persistir `PendingUpload` no banco; `confirm` valida pelo `id` server-side com `clinicId`, nunca aceita `storageKey` bruto do cliente |

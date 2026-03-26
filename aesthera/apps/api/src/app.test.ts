@@ -96,6 +96,8 @@ vi.mock('./modules/promotions/promotions.routes', () => ({ promotionsRoutes: vi.
 vi.mock('./modules/packages/packages.routes', () => ({ packagesRoutes: vi.fn() }))
 vi.mock('./modules/accounts-payable/accounts-payable.routes', () => ({ accountsPayableRoutes: vi.fn() }))
 vi.mock('./modules/manual-receipts/manual-receipts.routes', () => ({ manualReceiptsRoutes: vi.fn() }))
+vi.mock('./modules/uploads/uploads.routes', () => ({ uploadsRoutes: vi.fn() }))
+vi.mock('./modules/body-measurements/body-measurements.routes', () => ({ bodyMeasurementsRoutes: vi.fn() }))
 
 import { buildApp } from './app'
 
