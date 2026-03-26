@@ -12,6 +12,7 @@ import {
   ImageIcon,
   AlertCircle,
   BarChart2,
+  ArrowLeftRight,
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -230,19 +231,211 @@ function UploadArea({
   )
 }
 
+// ──── Compare modal ────────────────────────────────────────────────────────────
+
+function CompareModal({
+  current,
+  previous,
+  onClose,
+}: {
+  current: BodyMeasurementRecord
+  previous: BodyMeasurementRecord
+  onClose: () => void
+}) {
+  // Constrói mapa unificado de campos presentes em qualquer dos dois registros
+  const fieldMeta = new Map<string, { name: string; unit: string }>()
+  ;[...previous.values, ...current.values].forEach((v) => {
+    if (!fieldMeta.has(v.fieldId)) {
+      fieldMeta.set(v.fieldId, { name: v.field.name, unit: v.field.unit })
+    }
+  })
+
+  // Preserva ordem de exibição (campos do registro atual primeiro)
+  const allFieldIds = [
+    ...current.values.map((v) => v.fieldId),
+    ...previous.values.map((v) => v.fieldId).filter((id) => !current.values.some((v) => v.fieldId === id)),
+  ]
+
+  const prevMap = new Map(previous.values.map((v) => [v.fieldId, Number(v.value)]))
+  const currMap = new Map(current.values.map((v) => [v.fieldId, Number(v.value)]))
+
+  // IMC calculado para cada lado
+  const calcBMIFromValues = (values: BodyMeasurementRecord['values']) => {
+    const wv = values.find((v) => v.field.name.toLowerCase().includes('peso'))
+    const hv = values.find((v) => v.field.name.toLowerCase().includes('altura'))
+    if (!wv || !hv) return null
+    return calcBMI(Number(wv.value), Number(hv.value))
+  }
+  const prevBMI = calcBMIFromValues(previous.values)
+  const currBMI = calcBMIFromValues(current.values)
+
+  return (
+    <Dialog open onClose={onClose} className="max-w-3xl">
+      <div className="sticky top-0 bg-card border-b px-6 py-4 flex items-center justify-between rounded-t-xl">
+        <DialogTitle className="mb-0">Comparação de registros</DialogTitle>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Fechar modal"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="p-6 space-y-4">
+        {/* Cabeçalho das colunas */}
+        <div className="grid grid-cols-[1fr_120px_1fr] gap-2">
+          <div className="rounded-lg bg-muted/30 px-3 py-2 text-center">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Anterior</p>
+            <p className="text-sm font-medium mt-0.5">{formatDate(previous.recordedAt)}</p>
+          </div>
+          <div />
+          <div className="rounded-lg bg-muted/30 px-3 py-2 text-center">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Atual</p>
+            <p className="text-sm font-medium mt-0.5">{formatDate(current.recordedAt)}</p>
+          </div>
+        </div>
+
+        {/* Linhas de comparação de campos */}
+        {allFieldIds.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-4">
+            Nenhuma medida registrada em ambos os registros.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {allFieldIds.map((fieldId) => {
+              const meta = fieldMeta.get(fieldId)!
+              const prevVal = prevMap.get(fieldId) ?? null
+              const currVal = currMap.get(fieldId) ?? null
+
+              let trend: 'up' | 'down' | 'same' = 'same'
+              if (prevVal !== null && currVal !== null) {
+                if (currVal > prevVal) trend = 'up'
+                else if (currVal < prevVal) trend = 'down'
+              }
+
+              const currClass =
+                trend === 'up'
+                  ? 'text-green-600 dark:text-green-400'
+                  : trend === 'down'
+                    ? 'text-red-600 dark:text-red-400'
+                    : ''
+
+              return (
+                <div
+                  key={fieldId}
+                  className="grid grid-cols-[1fr_120px_1fr] items-center gap-2 rounded-lg bg-muted/10 border px-3 py-2"
+                >
+                  <div className="text-right">
+                    {prevVal !== null ? (
+                      <span className="text-sm font-medium">
+                        {prevVal.toLocaleString('pt-BR')} {meta.unit}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground truncate">{meta.name}</p>
+                    {trend === 'up' && (
+                      <span className="text-xs font-semibold text-green-600 dark:text-green-400">↑</span>
+                    )}
+                    {trend === 'down' && (
+                      <span className="text-xs font-semibold text-red-600 dark:text-red-400">↓</span>
+                    )}
+                  </div>
+                  <div className="text-left">
+                    {currVal !== null ? (
+                      <span className={`text-sm font-medium ${currClass}`}>
+                        {currVal.toLocaleString('pt-BR')} {meta.unit}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Linha de IMC calculado */}
+            {(prevBMI !== null || currBMI !== null) && (
+              <div className="grid grid-cols-[1fr_120px_1fr] items-center gap-2 rounded-lg bg-muted/20 border border-dashed px-3 py-2">
+                <div className="text-right">
+                  {prevBMI !== null ? (
+                    <span className="text-sm font-medium">{prevBMI} kg/m²</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">IMC</p>
+                  <p className="text-[10px] text-muted-foreground">calculado</p>
+                </div>
+                <div className="text-left">
+                  {currBMI !== null ? (() => {
+                    const bmiTrend =
+                      prevBMI !== null
+                        ? Number(currBMI) > Number(prevBMI)
+                          ? 'up'
+                          : Number(currBMI) < Number(prevBMI)
+                            ? 'down'
+                            : 'same'
+                        : 'same'
+                    const bmiClass =
+                      bmiTrend === 'up'
+                        ? 'text-green-600 dark:text-green-400'
+                        : bmiTrend === 'down'
+                          ? 'text-red-600 dark:text-red-400'
+                          : ''
+                    return (
+                      <span className={`text-sm font-medium ${bmiClass}`}>
+                        {currBMI} kg/m²
+                      </span>
+                    )
+                  })() : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Observações dos dois registros */}
+        {(previous.notes || current.notes) && (
+          <div className="grid grid-cols-2 gap-4 pt-1">
+            <div className="rounded-lg bg-muted/20 p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Observações (anterior)</p>
+              <p className="text-sm">{previous.notes ?? '—'}</p>
+            </div>
+            <div className="rounded-lg bg-muted/20 p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-1">Observações (atual)</p>
+              <p className="text-sm">{current.notes ?? '—'}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </Dialog>
+  )
+}
+
 // ──── Record card ──────────────────────────────────────────────────────────────
 
 function RecordCard({
   record,
+  previousRecord,
   isAdmin,
   onDelete,
 }: {
   record: BodyMeasurementRecord
+  previousRecord?: BodyMeasurementRecord
   isAdmin: boolean
   onDelete: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({})
   const [loadingUrls, setLoadingUrls] = useState(false)
   const [lightboxFile, setLightboxFile] = useState<string | null>(null)
@@ -355,40 +548,58 @@ function RecordCard({
           )}
 
           {/* Actions */}
-          {isAdmin && (
-            <div className="flex justify-end pt-1">
-              {showDeleteConfirm ? (
-                <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
-                  <p className="text-xs text-destructive">
-                    Esta ação é irreversível. Deseja excluir este registro?
-                  </p>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={onDelete}
-                  >
-                    Excluir
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => setShowDeleteConfirm(false)}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              ) : (
+          {(isAdmin || previousRecord) && (
+            <div className="flex items-center justify-between pt-1">
+              {/* Botão comparar — disponível para todos (admin e staff) quando houver registro anterior */}
+              {previousRecord && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => setShowDeleteConfirm(true)}
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setCompareOpen(true)}
                 >
-                  <Trash2 className="mr-1 h-3 w-3" />
-                  Excluir registro
+                  <ArrowLeftRight className="mr-1 h-3 w-3" />
+                  Comparar com anterior
                 </Button>
+              )}
+              {!previousRecord && <span />}
+
+              {isAdmin && (
+                <div className="flex justify-end">
+                  {showDeleteConfirm ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+                      <p className="text-xs text-destructive">
+                        Esta ação é irreversível. Deseja excluir este registro?
+                      </p>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={onDelete}
+                      >
+                        Excluir
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setShowDeleteConfirm(false)}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 className="mr-1 h-3 w-3" />
+                      Excluir registro
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -413,6 +624,15 @@ function RecordCard({
             <X className="h-5 w-5" />
           </button>
         </Dialog>
+      )}
+
+      {/* Modal de comparação com registro anterior */}
+      {compareOpen && previousRecord && (
+        <CompareModal
+          current={record}
+          previous={previousRecord}
+          onClose={() => setCompareOpen(false)}
+        />
       )}
     </div>
   )
@@ -484,8 +704,8 @@ function NewRecordModal({
       const pf = updated[i]
       if (!pf.category) continue // skip sem categoria
       try {
-        // 1. Presign
-        const { presignedUrl, storageKey } = await presignUpload({
+        // 1. Presign — cria registro PENDING no servidor e devolve o ID
+        const { presignedUrl, id: pendingId } = await presignUpload({
           fileName: pf.file.name,
           mimeType: pf.file.type,
           size: pf.file.size,
@@ -512,15 +732,8 @@ function NewRecordModal({
           x.send(pf.file)
         })
 
-        // 3. Confirm
-        const confirmed = await confirmUpload({
-          storageKey,
-          customerId: customer.id,
-          name: pf.file.name,
-          mimeType: pf.file.type,
-          size: pf.file.size,
-          category: pf.category as FileCategory,
-        })
+        // 3. Confirm — envia apenas o ID do registro PENDING
+        const confirmed = await confirmUpload({ id: pendingId })
 
         updated[i] = { ...updated[i], progress: 100, confirmedId: confirmed.id }
         setPendingFiles([...updated])
@@ -764,10 +977,11 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {records.map((record) => (
+          {records.map((record, i) => (
             <RecordCard
               key={record.id}
               record={record}
+              previousRecord={records[i + 1]}
               isAdmin={isAdmin}
               onDelete={() => void handleDelete(record)}
             />

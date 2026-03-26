@@ -1,5 +1,4 @@
 import { prisma } from '../../database/prisma/client'
-import type { ConfirmUploadDto } from './uploads.dto'
 
 export class UploadsRepository {
   async findCustomerInClinic(customerId: string, clinicId: string) {
@@ -9,23 +8,47 @@ export class UploadsRepository {
     })
   }
 
-  async create(
+  /** Cria registro CustomerFile com status PENDING (chamado no presign, antes do upload ao R2). */
+  async createPending(
     clinicId: string,
     uploadedById: string,
-    dto: ConfirmUploadDto,
+    storageKey: string,
+    customerId: string,
+    name: string,
+    mimeType: string,
+    size: number,
+    category: string,
   ) {
     return prisma.customerFile.create({
       data: {
         clinicId,
-        customerId: dto.customerId,
-        name: dto.name,
-        mimeType: dto.mimeType,
-        size: dto.size,
-        storageKey: dto.storageKey,
-        category: dto.category as any,
+        customerId,
+        name,
+        mimeType,
+        size,
+        storageKey,
+        category: category as any,
+        status: 'PENDING',
         uploadedById,
       },
     })
+  }
+
+  /** Busca registro PENDING por id e clinicId (cross-tenant safe). */
+  async findPendingById(id: string, clinicId: string) {
+    return prisma.customerFile.findFirst({
+      where: { id, clinicId, status: 'PENDING', deletedAt: null },
+      select: { id: true, storageKey: true, mimeType: true, customerId: true, name: true, size: true, category: true },
+    })
+  }
+
+  /** Atualiza status PENDING → CONFIRMED e retorna o registro atualizado. */
+  async confirmPending(id: string, clinicId: string) {
+    await prisma.customerFile.updateMany({
+      where: { id, clinicId, status: 'PENDING' },
+      data: { status: 'CONFIRMED' },
+    })
+    return prisma.customerFile.findFirst({ where: { id, clinicId } })
   }
 
   async findByIdInClinic(id: string, clinicId: string) {

@@ -68,43 +68,41 @@ export class UploadsService {
     const presignedUrl = await generatePresignedPutUrl(storageKey, dto.mimeType, 3600)
     const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString()
 
-    return { presignedUrl, storageKey, expiresAt }
+    // 4. Persistir CustomerFile com status PENDING — o ID é devolvido ao cliente
+    const file = await this.repo.createPending(
+      clinicId, _userId, storageKey, dto.customerId,
+      dto.fileName, dto.mimeType, dto.size, dto.category,
+    )
+
+    return { id: file.id, presignedUrl, expiresAt }
   }
 
   /**
-   * Confirma o upload: verifica existência real + magic bytes + persiste CustomerFile.
+   * Confirma o upload: busca o registro PENDING pelo ID (cross-tenant implícito),
+   * verifica existência real no R2 + magic bytes e atualiza status para CONFIRMED.
    */
-  async confirm(clinicId: string, userId: string, dto: ConfirmUploadDto) {
-    // 1. Cross-tenant check
-    const customer = await this.repo.findCustomerInClinic(dto.customerId, clinicId)
-    if (!customer) {
-      throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+  async confirm(clinicId: string, _userId: string, dto: ConfirmUploadDto) {
+    // 1. Busca PENDING — valida clinicId implicitamente (cross-tenant safe)
+    const pending = await this.repo.findPendingById(dto.id, clinicId)
+    if (!pending) {
+      throw new NotFoundError('CustomerFile')
     }
 
-    // 2. Validação de escopo do storageKey — impede confirmar arquivos fora do tenant
-    const expectedPrefix = `${clinicId}/${dto.customerId}/`
-    if (!dto.storageKey.startsWith(expectedPrefix)) {
-      throw new ForbiddenError('INVALID_STORAGE_KEY_PREFIX')
-    }
-    if (dto.storageKey.split('/').includes('..')) {
-      throw new ForbiddenError('INVALID_STORAGE_KEY_PATH')
-    }
-
-    // 3. HEAD no storage: verificar existência real
-    const exists = await headObject(dto.storageKey)
+    // 2. HEAD no storage: verificar que o arquivo foi realmente enviado
+    const exists = await headObject(pending.storageKey)
     if (!exists) {
       throw new ValidationError('FILE_NOT_FOUND_IN_STORAGE')
     }
 
-    // 4. Magic bytes: validar MIME type real
-    const magicBytes = await getObjectFirstBytes(dto.storageKey, 12)
-    const validator = MAGIC_BYTES[dto.mimeType]
+    // 3. Magic bytes: validar MIME type real
+    const magicBytes = await getObjectFirstBytes(pending.storageKey, 12)
+    const validator = MAGIC_BYTES[pending.mimeType as keyof typeof MAGIC_BYTES]
     if (validator && !validator(magicBytes)) {
       throw new ValidationError('MIME_TYPE_MISMATCH')
     }
 
-    // 5. Persistir CustomerFile
-    return this.repo.create(clinicId, userId, dto)
+    // 4. Confirmar: atualiza status PENDING → CONFIRMED
+    return this.repo.confirmPending(dto.id, clinicId)
   }
 
   /**

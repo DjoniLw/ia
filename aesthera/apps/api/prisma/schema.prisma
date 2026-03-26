@@ -138,6 +138,11 @@ enum FileCategory {
   OTHER
 }
 
+enum FileUploadStatus {
+  PENDING
+  CONFIRMED
+}
+
 enum NotificationStatus {
   pending
   sent
@@ -1143,6 +1148,7 @@ model CustomerFile {
   size         Int
   storageKey   String       @unique                  @map("storage_key")
   category     FileCategory
+  status       FileUploadStatus @default(CONFIRMED)
   deletedAt    DateTime?                             @map("deleted_at")   // soft-delete — NUNCA Boolean deleted
   uploadedAt   DateTime     @default(now())          @map("uploaded_at")
   uploadedById String                                @map("uploaded_by_id") // FK → User (rastreabilidade)

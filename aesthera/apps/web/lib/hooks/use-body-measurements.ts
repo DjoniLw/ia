@@ -181,8 +181,8 @@ export function useDeleteBodyMeasurementRecord() {
 // ──── Upload hooks ─────────────────────────────────────────────────────────────
 
 interface PresignResult {
+  id: string
   presignedUrl: string
-  storageKey: string
   expiresAt: string
 }
 
@@ -206,14 +206,7 @@ export async function presignUpload(input: {
   return res.data
 }
 
-export async function confirmUpload(input: {
-  storageKey: string
-  customerId: string
-  name: string
-  mimeType: string
-  size: number
-  category: FileCategory
-}): Promise<ConfirmResult> {
+export async function confirmUpload(input: { id: string }): Promise<ConfirmResult> {
   const res = await api.post<ConfirmResult>('/uploads/confirm', input)
   return res.data
 }

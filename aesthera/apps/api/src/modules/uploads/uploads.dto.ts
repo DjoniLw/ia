@@ -41,13 +41,10 @@ export const PresignDto = z.object({
 export type PresignDto = z.infer<typeof PresignDto>
 
 // ─── Confirm ──────────────────────────────────────────────────────────────────
+// O presign cria um registro CustomerFile PENDING — o confirm recebe apenas o
+// ID desse registro em vez de repetir todos os dados do lado do cliente.
 
 export const ConfirmUploadDto = z.object({
-  storageKey: z.string().min(1),
-  customerId: z.string().uuid(),
-  name: z.string().min(1).max(255),
-  mimeType: z.enum(ALLOWED_MIME_TYPES),
-  size: z.number().int().positive(),
-  category: z.enum(ALLOWED_CATEGORIES),
+  id: z.string().uuid(),
 })
 export type ConfirmUploadDto = z.infer<typeof ConfirmUploadDto>
