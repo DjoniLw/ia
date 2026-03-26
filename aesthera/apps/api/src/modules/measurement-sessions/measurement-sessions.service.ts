@@ -100,6 +100,27 @@ export class MeasurementSessionsService {
       ]
       const fieldsOwned = await this.repo.validateFieldsOwnership(allFieldIds, clinicId)
       if (!fieldsOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+      // Impedir sessão vazia após update
+      const hasAnyValues = dto.sheetRecords.some(
+        (sr) => (sr.values?.length ?? 0) + (sr.tabularValues?.length ?? 0) > 0,
+      )
+      if (!hasAnyValues) throw new ValidationError('EMPTY_SESSION')
+
+      // Validar consistência columnId → fieldId
+      const columnFieldMap = new Map<string, string>()
+      for (const sr of dto.sheetRecords) {
+        for (const tv of sr.tabularValues ?? []) {
+          columnFieldMap.set(tv.columnId, tv.fieldId)
+        }
+      }
+      if (columnFieldMap.size > 0) {
+        const columnsValid = await this.repo.validateColumnsOwnership(
+          Array.from(columnFieldMap.keys()),
+          columnFieldMap,
+        )
+        if (!columnsValid) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+      }
     }
 
     return this.repo.updateSession(id, clinicId, dto)

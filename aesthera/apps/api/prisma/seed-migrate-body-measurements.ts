@@ -8,7 +8,7 @@
  *   npx tsx prisma/seed-migrate-body-measurements.ts
  *
  * ⚠️ Rodar em uma transação com rollback habilitado.
- * ⚠️ Executar SOMENTE após validatear a Migration 1 em produção.
+ * ⚠️ Executar SOMENTE após validar a Migration 1 em produção.
  * ⚠️ Migration 3 (drop das tabelas legadas) DEVE ser executada separadamente,
  *    após validar que todas as contagens batem.
  */

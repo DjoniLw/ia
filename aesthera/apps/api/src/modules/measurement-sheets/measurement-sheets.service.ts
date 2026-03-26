@@ -159,9 +159,9 @@ export class MeasurementSheetsService {
 
   // ─── Sub-colunas ──────────────────────────────────────────────────────────
 
-  async createSubColumn(_sheetId: string, fieldId: string, clinicId: string, dto: CreateSubColumnDto) {
+  async createSubColumn(sheetId: string, fieldId: string, clinicId: string, dto: CreateSubColumnDto) {
     const field = await this.repo.findFieldById(fieldId, clinicId)
-    if (!field) throw new NotFoundError('MeasurementField')
+    if (!field || field.sheetId !== sheetId) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
     if (field.type !== 'TABULAR') {
@@ -181,9 +181,9 @@ export class MeasurementSheetsService {
     return this.repo.createSubColumn(fieldId, dto)
   }
 
-  async updateSubColumn(_sheetId: string, fieldId: string, colId: string, clinicId: string, dto: UpdateSubColumnDto) {
+  async updateSubColumn(sheetId: string, fieldId: string, colId: string, clinicId: string, dto: UpdateSubColumnDto) {
     const field = await this.repo.findFieldById(fieldId, clinicId)
-    if (!field) throw new NotFoundError('MeasurementField')
+    if (!field || field.sheetId !== sheetId) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
     const col = await this.repo.findSubColumnById(colId, fieldId)
@@ -192,9 +192,9 @@ export class MeasurementSheetsService {
     return this.repo.updateSubColumn(colId, fieldId, dto)
   }
 
-  async deleteSubColumn(_sheetId: string, fieldId: string, colId: string, clinicId: string) {
+  async deleteSubColumn(sheetId: string, fieldId: string, colId: string, clinicId: string) {
     const field = await this.repo.findFieldById(fieldId, clinicId)
-    if (!field) throw new NotFoundError('MeasurementField')
+    if (!field || field.sheetId !== sheetId) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
     const col = await this.repo.findSubColumnById(colId, fieldId)

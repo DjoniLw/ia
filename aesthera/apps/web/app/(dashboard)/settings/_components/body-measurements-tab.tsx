@@ -279,8 +279,13 @@ function FieldDialog({
           </div>
         )}
 
-        {/* Sub-colunas — somente para TABULAR */}
-        {fieldType === 'TABULAR' && (
+        {/* Sub-colunas — somente para TABULAR em modo criação */}
+        {field && field.type === 'TABULAR' && (
+          <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
+            Sub-colunas não podem ser editadas após a criação do campo. Para alterar a estrutura, crie um novo campo.
+          </p>
+        )}
+        {fieldType === 'TABULAR' && !field && (
           <div className="space-y-2">
             <Label>Sub-colunas *</Label>
             <p className="text-xs text-muted-foreground -mt-1">Cada sub-coluna representa uma medida dentro do campo tabular.</p>

@@ -24,7 +24,7 @@ export class MeasurementSheetsRepository {
       orderBy: { order: 'asc' },
       include: {
         fields: {
-          where: { active: true },
+          ...(activeOnly ? { where: { active: true } } : {}),
           orderBy: { order: 'asc' },
           include: {
             columns: { orderBy: { order: 'asc' } },
