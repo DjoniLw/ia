@@ -47,6 +47,61 @@ export const schemaSyncReady: Promise<void> = new Promise((res, rej) => {
 // not outlive a failed deployment attempt.
 const SCHEMA_SYNC_TIMEOUT_MS = 110_000
 
+function runMigrateDeployWithRetry(prismaBin: string, retriesLeft = 1): void {
+  execFile(
+    prismaBin,
+    ['migrate', 'deploy'],
+    { timeout: SCHEMA_SYNC_TIMEOUT_MS },
+    (error, _stdout, stderr) => {
+      if (!error) {
+        logger.info('✅ Migrations applied — API is now fully operational')
+        _resolveSchemaSyncReady()
+        return
+      }
+
+      // When transitioning from `db push` to `migrate deploy`, Prisma may find
+      // migrations that were partially recorded as FAILED in _prisma_migrations
+      // even though the schema changes are already present in the DB.
+      // Auto-resolve them as applied and retry once.
+      const failedMatch = (stderr ?? '').match(
+        /The `(.+?)` migration started at .+ failed/,
+      )
+      if (failedMatch && retriesLeft > 0) {
+        const failedMigration = failedMatch[1]
+        logger.warn(
+          `Found failed migration in history: "${failedMigration}". ` +
+          'Schema was maintained via db push — resolving as applied and retrying.',
+        )
+        execFile(
+          prismaBin,
+          ['migrate', 'resolve', '--applied', failedMigration],
+          { timeout: 30_000 },
+          (resolveError) => {
+            if (resolveError) {
+              logger.error(
+                { err: resolveError },
+                `❌ Could not resolve failed migration "${failedMigration}". Manual intervention required.`,
+              )
+              _rejectSchemaSyncReady(resolveError)
+              return
+            }
+            logger.info(`Migration "${failedMigration}" resolved — retrying migrate deploy`)
+            runMigrateDeployWithRetry(prismaBin, retriesLeft - 1)
+          },
+        )
+        return
+      }
+
+      logger.error(
+        { err: error },
+        '❌ prisma migrate deploy failed — API is serving 503 for non-health routes. ' +
+        'Check DATABASE_URL and the Railway PostgreSQL service.',
+      )
+      _rejectSchemaSyncReady(error)
+    },
+  )
+}
+
 function startSchemaSyncBackground(): void {
   const prismaBin = path.resolve(__dirname, '..', 'node_modules', '.bin', 'prisma')
 
@@ -60,25 +115,7 @@ function startSchemaSyncBackground(): void {
   }
 
   logger.info('⏳ Running prisma migrate deploy (schema sync)…')
-
-  execFile(
-    prismaBin,
-    ['migrate', 'deploy'],
-    { timeout: SCHEMA_SYNC_TIMEOUT_MS },
-    (error) => {
-      if (error) {
-        logger.error(
-          { err: error },
-          '❌ prisma migrate deploy failed — API is serving 503 for non-health routes. ' +
-          'Check DATABASE_URL and the Railway PostgreSQL service.',
-        )
-        _rejectSchemaSyncReady(error)
-      } else {
-        logger.info('✅ Migrations applied — API is now fully operational')
-        _resolveSchemaSyncReady()
-      }
-    },
-  )
+  runMigrateDeployWithRetry(prismaBin)
 }
 
 async function main(): Promise<void> {
