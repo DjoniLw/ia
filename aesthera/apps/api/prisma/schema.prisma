@@ -149,6 +149,11 @@ enum NotificationStatus {
   failed
 }
 
+enum MeasurementFieldType {
+  SIMPLE
+  TABULAR
+}
+
 enum RecurrenceType {
   none
   daily
@@ -221,6 +226,8 @@ model Clinic {
   customerFiles    CustomerFile[]
   bodyMeasurementFields  BodyMeasurementField[]
   bodyMeasurementRecords BodyMeasurementRecord[]
+  measurementSheets    MeasurementSheet[]
+  measurementSessions  MeasurementSession[]
 
   @@map("clinics")
 }
@@ -314,6 +321,7 @@ model User {
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   sourceTransfers TransferToken[] @relation("TransferSourceUser")
   targetTransfers TransferToken[] @relation("TransferTargetUser")
+  measurementSessions MeasurementSession[]
 
   @@unique([clinicId, email])
   @@index([clinicId])
@@ -482,6 +490,7 @@ model Customer {
   customerPackages     CustomerPackage[]
   customerFiles        CustomerFile[]
   bodyMeasurementRecords BodyMeasurementRecord[]
+  measurementSessions  MeasurementSession[]
 
   @@unique([clinicId, email])
   @@unique([clinicId, document])
@@ -1139,26 +1148,29 @@ model ManualReceiptLine {
 // Soft-delete via deletedAt — NUNCA hard-delete.
 
 model CustomerFile {
-  id           String       @id @default(uuid())
-  clinicId     String                                @map("clinic_id")
-  customerId   String                                @map("customer_id")
-  recordId     String?                               @map("record_id")    // FK → BodyMeasurementRecord (opcional)
-  name         String
-  mimeType     String                                @map("mime_type")
-  size         Int
-  storageKey   String       @unique                  @map("storage_key")
-  category     FileCategory
-  status       FileUploadStatus @default(CONFIRMED)
-  deletedAt    DateTime?                             @map("deleted_at")   // soft-delete — NUNCA Boolean deleted
-  uploadedAt   DateTime     @default(now())          @map("uploaded_at")
-  uploadedById String                                @map("uploaded_by_id") // FK → User (rastreabilidade)
+  id                    String       @id @default(uuid())
+  clinicId              String                                @map("clinic_id")
+  customerId            String                                @map("customer_id")
+  recordId              String?                               @map("record_id")    // FK → BodyMeasurementRecord (legado)
+  measurementSessionId  String?                               @map("measurement_session_id") // FK → MeasurementSession (novo)
+  name                  String
+  mimeType              String                                @map("mime_type")
+  size                  Int
+  storageKey            String       @unique                  @map("storage_key")
+  category              FileCategory
+  status                FileUploadStatus @default(CONFIRMED)
+  deletedAt             DateTime?                             @map("deleted_at")   // soft-delete — NUNCA Boolean deleted
+  uploadedAt            DateTime     @default(now())          @map("uploaded_at")
+  uploadedById          String                                @map("uploaded_by_id") // FK → User (rastreabilidade)
 
-  clinic    Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  customer  Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  record    BodyMeasurementRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  clinic             Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer           Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  record             BodyMeasurementRecord?  @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  measurementSession MeasurementSession?     @relation(fields: [measurementSessionId], references: [id], onDelete: SetNull)
 
   @@index([clinicId, customerId])
   @@index([clinicId, recordId])
+  @@index([clinicId, measurementSessionId])
   @@map("customer_files")
 }
 
@@ -1219,4 +1231,129 @@ model BodyMeasurementValue {
 
   @@index([clinicId, recordId])
   @@map("body_measurement_values")
+}
+
+// ─── Measurement Sheets (novo modelo) ────────────────────────────────────────
+
+// Ficha de Avaliação Corporal — configurável por clínica
+model MeasurementSheet {
+  id        String   @id @default(uuid())
+  clinicId  String   @map("clinic_id")
+  name      String
+  active    Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  clinic       Clinic                   @relation(fields: [clinicId], references: [id])
+  fields       MeasurementField[]
+  sheetRecords MeasurementSheetRecord[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId, active, order])
+  @@map("measurement_sheets")
+}
+
+// Campo de uma Ficha — SIMPLE (um valor numérico) ou TABULAR (sub-colunas)
+model MeasurementField {
+  id       String               @id @default(uuid())
+  sheetId  String               @map("sheet_id")
+  clinicId String               @map("clinic_id")
+  name     String
+  unit     String?              // obrigatório para SIMPLE, nulo para TABULAR
+  type     MeasurementFieldType @default(SIMPLE)
+  order    Int                  @default(0)
+  active   Boolean              @default(true)
+
+  sheet         MeasurementSheet        @relation(fields: [sheetId], references: [id])
+  columns       MeasurementSubColumn[]
+  values        MeasurementValue[]
+  tabularValues MeasurementTabularValue[]
+
+  @@unique([sheetId, name])
+  @@index([sheetId, active, order])
+  @@index([clinicId])
+  @@map("measurement_fields")
+}
+
+// Sub-coluna de campo tabular
+model MeasurementSubColumn {
+  id      String @id @default(uuid())
+  fieldId String @map("field_id")
+  name    String
+  unit    String
+  order   Int    @default(0)
+
+  field         MeasurementField         @relation(fields: [fieldId], references: [id])
+  tabularValues MeasurementTabularValue[]
+
+  @@unique([fieldId, name])
+  @@index([fieldId, order])
+  @@map("measurement_sub_columns")
+}
+
+// Sessão de Evolução — agrupa fichas preenchidas em uma data
+model MeasurementSession {
+  id          String   @id @default(uuid())
+  clinicId    String   @map("clinic_id")
+  customerId  String   @map("customer_id")
+  recordedAt  DateTime @map("recorded_at")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+  createdById String   @map("created_by_id")
+
+  clinic       Clinic                   @relation(fields: [clinicId], references: [id])
+  customer     Customer                 @relation(fields: [customerId], references: [id])
+  createdBy    User                     @relation(fields: [createdById], references: [id])
+  sheetRecords MeasurementSheetRecord[]
+  files        CustomerFile[]
+
+  @@index([clinicId, customerId, recordedAt])
+  @@map("measurement_sessions")
+}
+
+// Registro de uma ficha dentro de uma sessão
+model MeasurementSheetRecord {
+  id        String @id @default(uuid())
+  sessionId String @map("session_id")
+  sheetId   String @map("sheet_id")
+
+  session       MeasurementSession       @relation(fields: [sessionId], references: [id])
+  sheet         MeasurementSheet         @relation(fields: [sheetId], references: [id])
+  values        MeasurementValue[]
+  tabularValues MeasurementTabularValue[]
+
+  @@unique([sessionId, sheetId])
+  @@map("measurement_sheet_records")
+}
+
+// Valor simples (tipo SIMPLE)
+model MeasurementValue {
+  id            String  @id @default(uuid())
+  sheetRecordId String  @map("sheet_record_id")
+  fieldId       String  @map("field_id")
+  value         Decimal @db.Decimal(10, 2)
+
+  sheetRecord MeasurementSheetRecord @relation(fields: [sheetRecordId], references: [id])
+  field       MeasurementField       @relation(fields: [fieldId], references: [id])
+
+  @@unique([sheetRecordId, fieldId])
+  @@map("measurement_values")
+}
+
+// Valor tabular (tipo TABULAR — por sub-coluna)
+model MeasurementTabularValue {
+  id            String  @id @default(uuid())
+  sheetRecordId String  @map("sheet_record_id")
+  fieldId       String  @map("field_id")
+  columnId      String  @map("column_id")
+  value         Decimal @db.Decimal(10, 2)
+
+  sheetRecord MeasurementSheetRecord @relation(fields: [sheetRecordId], references: [id])
+  field       MeasurementField       @relation(fields: [fieldId], references: [id])
+  column      MeasurementSubColumn   @relation(fields: [columnId], references: [id])
+
+  @@unique([sheetRecordId, fieldId, columnId])
+  @@map("measurement_tabular_values")
 }
