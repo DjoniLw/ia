@@ -23,7 +23,10 @@ export async function bodyMeasurementsRoutes(app: FastifyInstance) {
     '/body-measurements/fields',
     { preHandler: [jwtClinicGuard] },
     async (req, reply) => {
-      return reply.send(await svc.listFields(req.clinicId))
+      // Admin pode passar ?includeInactive=true para ver todos os campos
+      const includeInactive = (req.query as Record<string, string>).includeInactive === 'true'
+      const activeOnly = !includeInactive
+      return reply.send(await svc.listFields(req.clinicId, activeOnly))
     },
   )
 

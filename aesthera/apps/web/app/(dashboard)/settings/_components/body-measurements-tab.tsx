@@ -115,7 +115,7 @@ function FieldDialog({
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function BodyMeasurementsTab() {
-  const { data: fields = [], isLoading } = useBodyMeasurementFields()
+  const { data: fields = [], isLoading } = useBodyMeasurementFields({ includeInactive: true })
   const updateMutation = useUpdateBodyMeasurementField()
   const deleteMutation = useDeleteBodyMeasurementField()
 

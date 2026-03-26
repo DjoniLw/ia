@@ -10,3 +10,12 @@ healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+
+# ── Cloudflare R2 (uploads) — preencher no painel do Railway ─────────────────
+# Obter em: Cloudflare Dashboard → R2 → Manage R2 API Tokens
+[variables]
+R2_ACCOUNT_ID = ""
+R2_ACCESS_KEY_ID = ""
+R2_SECRET_ACCESS_KEY = ""
+R2_BUCKET_NAME = ""
+R2_PUBLIC_URL = ""

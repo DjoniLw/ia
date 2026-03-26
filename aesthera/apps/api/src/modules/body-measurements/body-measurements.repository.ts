@@ -4,9 +4,9 @@ import type { CreateFieldDto, CreateRecordDto, ListRecordsQuery, UpdateFieldDto 
 export class BodyMeasurementsRepository {
   // ─── Fields ────────────────────────────────────────────────────────────────
 
-  async listFields(clinicId: string) {
+  async listFields(clinicId: string, activeOnly = true) {
     return prisma.bodyMeasurementField.findMany({
-      where: { clinicId },
+      where: { clinicId, ...(activeOnly ? { active: true } : {}) },
       orderBy: { order: 'asc' },
     })
   }

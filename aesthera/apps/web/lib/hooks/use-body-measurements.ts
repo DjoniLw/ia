@@ -86,11 +86,14 @@ interface CreateRecordInput {
 
 // ──── Fields hooks ─────────────────────────────────────────────────────────────
 
-export function useBodyMeasurementFields() {
+export function useBodyMeasurementFields({ includeInactive = false } = {}) {
   return useQuery({
-    queryKey: ['body-measurement-fields'],
+    queryKey: ['body-measurement-fields', { includeInactive }],
     queryFn: async () => {
-      const res = await api.get<BodyMeasurementField[]>('/body-measurements/fields')
+      const url = includeInactive
+        ? '/body-measurements/fields?includeInactive=true'
+        : '/body-measurements/fields'
+      const res = await api.get<BodyMeasurementField[]>(url)
       return res.data
     },
   })

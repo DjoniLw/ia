@@ -14,8 +14,8 @@ export class BodyMeasurementsService {
 
   // ─── Fields ────────────────────────────────────────────────────────────────
 
-  async listFields(clinicId: string) {
-    return this.repo.listFields(clinicId)
+  async listFields(clinicId: string, activeOnly = true) {
+    return this.repo.listFields(clinicId, activeOnly)
   }
 
   async createField(clinicId: string, dto: CreateFieldDto) {
