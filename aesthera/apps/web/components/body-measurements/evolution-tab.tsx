@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Loader2,
   Plus,
+  RefreshCw,
   Trash2,
   X,
   ImageIcon,
@@ -17,8 +18,16 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   useBodyMeasurementFields,
   useBodyMeasurementRecords,
@@ -131,10 +140,8 @@ function UploadArea({
           </p>
           <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">
             Este cliente ainda não forneceu consentimento para registro de dados corporais. O
-            upload de fotos está desabilitado.{' '}
-            <a href="#" className="underline">
-              Saiba mais
-            </a>
+            upload de fotos está desabilitado. Para registrar o consentimento, acesse o perfil
+            do cliente.
           </p>
         </div>
       </div>
@@ -181,20 +188,21 @@ function UploadArea({
               />
               <div className="flex-1 min-w-0 space-y-1.5">
                 <p className="text-xs font-medium truncate">{pf.file.name}</p>
-                <select
+                <Select
                   value={pf.category}
-                  onChange={(e) => setCategory(idx, e.target.value as FileCategory)}
-                  className="w-full rounded border bg-background px-2 py-1 text-xs"
+                  onValueChange={(v) => setCategory(idx, v as FileCategory)}
                 >
-                  <option value="" disabled>
-                    Selecionar categoria *
-                  </option>
-                  {(Object.keys(FILE_CATEGORY_LABELS) as FileCategory[]).map((cat) => (
-                    <option key={cat} value={cat}>
-                      {FILE_CATEGORY_LABELS[cat]}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue placeholder="Selecionar categoria *" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(FILE_CATEGORY_LABELS) as FileCategory[]).map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {FILE_CATEGORY_LABELS[cat]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {pf.progress > 0 && pf.progress < 100 && (
                   <div className="h-1 rounded-full bg-muted overflow-hidden">
                     <div
@@ -389,25 +397,22 @@ function RecordCard({
 
       {/* Lightbox */}
       {lightboxFile && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setLightboxFile(null)}
-        >
+        <Dialog open onClose={() => setLightboxFile(null)} className="p-0 bg-transparent border-0 shadow-none max-w-5xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={lightboxFile}
-            alt=""
-            className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
-            onClick={(e) => e.stopPropagation()}
+            alt="Foto ampliada"
+            className="max-h-[85vh] max-w-full rounded-lg object-contain"
           />
           <button
             type="button"
-            className="absolute top-4 right-4 text-white/80 hover:text-white"
+            className="absolute top-3 right-3 text-white/80 hover:text-white bg-black/40 rounded-full p-1"
+            aria-label="Fechar imagem"
             onClick={() => setLightboxFile(null)}
           >
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           </button>
-        </div>
+        </Dialog>
       )}
     </div>
   )
@@ -443,12 +448,17 @@ function NewRecordModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { register, handleSubmit, formState: { errors } } = useForm<RecordForm>({
+  const { register, handleSubmit, formState: { errors, isDirty: formDirty } } = useForm<RecordForm>({
     resolver: zodResolver(recordSchema),
     defaultValues: {
       recordedAt: new Date().toISOString().slice(0, 10),
     },
   })
+
+  const hasUnsavedData =
+    formDirty ||
+    Object.values(values).some((v) => v !== '') ||
+    pendingFiles.length > 0
 
   // IMC calculation (weight/height fields — não persiste no banco)
   const activeFields = fields.filter((f) => f.active)
@@ -532,6 +542,13 @@ function NewRecordModal({
   }
 
   const onSubmit = handleSubmit(async (data) => {
+    // P-06: validar que todos os arquivos têm categoria antes de prosseguir
+    const withoutCategory = pendingFiles.filter((f) => !f.category)
+    if (withoutCategory.length > 0) {
+      toast.error('Selecione a categoria de todos os arquivos antes de salvar.')
+      return
+    }
+
     setUploading(true)
     try {
       const fileIds = await doUploadFiles()
@@ -560,19 +577,15 @@ function NewRecordModal({
   const isPending = uploading || createRecord.isPending
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <form
-        onSubmit={onSubmit}
-        className="bg-card relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border shadow-xl"
-      >
-        <div className="sticky top-0 bg-card border-b px-6 py-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold">Novo registro de evolução</h3>
-          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <Dialog open onClose={onClose} isDirty={hasUnsavedData} className="p-0 max-w-2xl">
+      <div className="sticky top-0 bg-card border-b px-6 py-4 flex items-center justify-between rounded-t-xl">
+        <DialogTitle className="mb-0">Novo registro de evolução</DialogTitle>
+        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Fechar modal">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
 
+      <form onSubmit={onSubmit}>
         <div className="p-6 space-y-6">
           {/* Data */}
           <div className="space-y-1.5">
@@ -639,7 +652,7 @@ function NewRecordModal({
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-card border-t px-6 py-4 flex justify-end gap-2">
+        <div className="sticky bottom-0 bg-card border-t px-6 py-4 flex justify-end gap-2 rounded-b-xl">
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isPending}>
             Cancelar
           </Button>
@@ -649,7 +662,7 @@ function NewRecordModal({
           </Button>
         </div>
       </form>
-    </div>
+    </Dialog>
   )
 }
 
@@ -660,7 +673,7 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
   const isAdmin = role === 'admin'
 
   const { data: fieldsData = [], isLoading: loadingFields } = useBodyMeasurementFields()
-  const { data: recordsPage, isLoading: loadingRecords, error } = useBodyMeasurementRecords(
+  const { data: recordsPage, isLoading: loadingRecords, error, refetch } = useBodyMeasurementRecords(
     customer.id,
   )
   const deleteRecord = useDeleteBodyMeasurementRecord()
@@ -692,8 +705,12 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
       )
     }
     return (
-      <div className="py-6 text-center text-sm text-muted-foreground">
-        Erro ao carregar registros.
+      <div className="py-6 text-center text-sm text-muted-foreground space-y-3">
+        <p>Erro ao carregar registros.</p>
+        <Button variant="outline" size="sm" onClick={() => void refetch()}>
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+          Tentar novamente
+        </Button>
       </div>
     )
   }
@@ -705,7 +722,7 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-muted-foreground">Evolução corporal</p>
+        <p className="text-sm font-semibold">Evolução corporal</p>
         {(isAdmin || role === 'staff') && (
           <Button
             size="sm"
@@ -755,6 +772,11 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
               onDelete={() => void handleDelete(record)}
             />
           ))}
+          {records.length >= 50 && (
+            <p className="text-center text-xs text-muted-foreground pt-1">
+              Exibindo os 50 registros mais recentes.
+            </p>
+          )}
         </div>
       )}
 

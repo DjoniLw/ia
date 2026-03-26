@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { GripVertical, Loader2, Pencil, Plus, Power, Ruler } from 'lucide-react'
+import { useState } from 'react'
+import { Loader2, Pencil, Plus, Power, Ruler } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -31,9 +32,11 @@ type FieldForm = z.infer<typeof fieldSchema>
 // ── Field dialog ──────────────────────────────────────────────────────────────
 
 function FieldDialog({
+  open,
   field,
   onClose,
 }: {
+  open: boolean
   field?: BodyMeasurementField
   onClose: () => void
 }) {
@@ -44,7 +47,7 @@ function FieldDialog({
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FieldForm>({
     resolver: zodResolver(fieldSchema),
     defaultValues: {
@@ -74,25 +77,10 @@ function FieldDialog({
     }
   })
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <form
-        onSubmit={onSubmit}
-        className="bg-card relative z-10 w-full max-w-sm space-y-4 rounded-xl border p-6 shadow-xl"
-      >
-        <h3 className="text-base font-semibold">
-          {field ? 'Editar campo' : 'Novo campo'}
-        </h3>
-
+    <Dialog open={open} onClose={onClose} isDirty={isDirty} className="max-w-sm">
+      <DialogTitle>{field ? 'Editar campo' : 'Novo campo'}</DialogTitle>
+      <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="field-name">Nome *</Label>
           <Input id="field-name" {...register('name')} placeholder="Ex: Peso, Altura, Cintura" />
@@ -120,7 +108,7 @@ function FieldDialog({
           </Button>
         </div>
       </form>
-    </div>
+    </Dialog>
   )
 }
 
@@ -214,7 +202,6 @@ export function BodyMeasurementsTab() {
                 .filter(Boolean)
                 .join(' ')}
             >
-              <GripVertical className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{field.name}</p>
                 <p className="text-xs text-muted-foreground">{field.unit}</p>
@@ -234,6 +221,7 @@ export function BodyMeasurementsTab() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
+                  aria-label="Editar campo"
                   title="Editar"
                   onClick={() => {
                     setEditingField(field)
@@ -246,6 +234,7 @@ export function BodyMeasurementsTab() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
+                  aria-label={field.active ? 'Desativar campo' : 'Reativar campo'}
                   title={field.active ? 'Desativar' : 'Reativar'}
                   onClick={() => void handleToggleActive(field)}
                   disabled={updateMutation.isPending || deleteMutation.isPending}
@@ -260,6 +249,7 @@ export function BodyMeasurementsTab() {
 
       {dialogOpen && (
         <FieldDialog
+          open={dialogOpen}
           field={editingField}
           onClose={() => {
             setDialogOpen(false)
