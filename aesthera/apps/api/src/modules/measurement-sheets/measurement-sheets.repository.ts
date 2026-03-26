@@ -1,9 +1,11 @@
 import { prisma } from '../../database/prisma/client'
+import { MeasurementFieldType } from '@prisma/client'
 import type {
   CreateFieldDto,
   CreateSheetDto,
   CreateSubColumnDto,
   ReorderFieldsDto,
+  ReorderSheetsDto,
   UpdateFieldDto,
   UpdateSheetDto,
   UpdateSubColumnDto,
@@ -103,7 +105,7 @@ export class MeasurementSheetsRepository {
         sheetId,
         clinicId,
         name: dto.name,
-        type: dto.type,
+        type: dto.type as MeasurementFieldType,
         unit: dto.unit ?? null,
         order: dto.order ?? 0,
         active: true,
@@ -212,5 +214,23 @@ export class MeasurementSheetsRepository {
 
   async deleteSubColumn(id: string, fieldId: string) {
     await prisma.measurementSubColumn.deleteMany({ where: { id, fieldId } })
+  }
+
+  async reorderSheets(clinicId: string, items: ReorderSheetsDto) {
+    return prisma.$transaction(
+      items.map((item) =>
+        prisma.measurementSheet.updateMany({
+          where: { id: item.id, clinicId },
+          data: { order: item.order },
+        }),
+      ),
+    )
+  }
+
+  async validateSheetsOwnedByClinic(sheetIds: string[], clinicId: string): Promise<boolean> {
+    const count = await prisma.measurementSheet.count({
+      where: { id: { in: sheetIds }, clinicId },
+    })
+    return count === sheetIds.length
   }
 }

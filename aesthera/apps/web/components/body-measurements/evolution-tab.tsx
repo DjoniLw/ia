@@ -7,6 +7,7 @@ import {
   BarChart2,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
   ImageIcon,
   Loader2,
   Pencil,
@@ -73,6 +74,7 @@ interface PendingFile {
 type SheetFormState = {
   simpleValues: Record<string, string>       // fieldId → value
   tabularValues: Record<string, Record<string, string>>  // fieldId → {columnId: value}
+  checkValues: Record<string, boolean>       // fieldId → checked (M-04)
 }
 type FormState = Record<string, SheetFormState>  // sheetId → state
 
@@ -107,6 +109,7 @@ function hasAnyValue(state: FormState): boolean {
     for (const cols of Object.values(sheet.tabularValues)) {
       if (Object.values(cols).some((v) => v !== '')) return true
     }
+    if (Object.values(sheet.checkValues ?? {}).some((v) => v)) return true
   }
   return false
 }
@@ -244,12 +247,14 @@ function SheetFormSection({
   sheet,
   state,
   onStateChange,
+  defaultOpen = false,
 }: {
   sheet: MeasurementSheet
   state: SheetFormState
   onStateChange: (next: SheetFormState) => void
+  defaultOpen?: boolean
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(defaultOpen)
   const activeFields = sheet.fields.filter((f) => f.active).sort((a, b) => a.order - b.order)
 
   const setSimple = (fieldId: string, val: string) => {
@@ -269,8 +274,16 @@ function SheetFormSection({
     })
   }
 
+  const setCheck = (fieldId: string, checked: boolean) => {
+    onStateChange({
+      ...state,
+      checkValues: { ...(state.checkValues ?? {}), [fieldId]: checked },
+    })
+  }
+
   const simpleFields = activeFields.filter((f) => f.type === 'SIMPLE')
   const tabularFields = activeFields.filter((f) => f.type === 'TABULAR')
+  const checkFields = activeFields.filter((f) => f.type === 'CHECK')
 
   // IMC calculado
   const weightField = simpleFields.find((f) => f.name.toLowerCase().includes('peso'))
@@ -284,13 +297,16 @@ function SheetFormSection({
       : null
 
   return (
-    <div className="rounded-xl border overflow-hidden">
+    <div className="rounded-xl border shadow-sm overflow-hidden">
       <button
         type="button"
-        className="w-full flex items-center justify-between px-4 py-3 bg-muted/20 hover:bg-muted/30 transition-colors text-left"
+        className="w-full flex items-center justify-between px-4 py-3 bg-primary/5 border-b hover:bg-primary/10 transition-colors text-left"
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="text-sm font-medium">{sheet.name}</span>
+        <div className="flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-sm font-semibold">{sheet.name}</span>
+        </div>
         {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
       </button>
 
@@ -334,11 +350,11 @@ function SheetFormSection({
                 <p className="text-xs text-muted-foreground">Nenhuma sub-coluna configurada.</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
+                  <table className="w-full text-xs border-collapse">
+                    <thead className="bg-muted/50">
                       <tr>
                         {field.columns.map((col) => (
-                          <th key={col.id} className="text-left font-medium text-muted-foreground pr-3 pb-1 whitespace-nowrap">
+                          <th key={col.id} className="border px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
                             {col.name} <span className="font-normal">({col.unit})</span>
                           </th>
                         ))}
@@ -347,7 +363,7 @@ function SheetFormSection({
                     <tbody>
                       <tr>
                         {field.columns.map((col) => (
-                          <td key={col.id} className="pr-3 pb-1">
+                          <td key={col.id} className="border px-3 py-2">
                             <Input
                               type="number"
                               step="any"
@@ -366,7 +382,24 @@ function SheetFormSection({
             </div>
           ))}
 
-          {simpleFields.length === 0 && tabularFields.length === 0 && (
+          {/* M-04: Campos de marcação (CHECK) */}
+          {checkFields.length > 0 && (
+            <div className="space-y-2">
+              {checkFields.map((field) => (
+                <label key={field.id} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-input"
+                    checked={(state.checkValues ?? {})[field.id] ?? false}
+                    onChange={(e) => setCheck(field.id, e.target.checked)}
+                  />
+                  <span className="text-sm">{field.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {simpleFields.length === 0 && tabularFields.length === 0 && checkFields.length === 0 && (
             <p className="text-xs text-muted-foreground">Nenhum campo ativo nesta ficha.</p>
           )}
         </div>
@@ -405,11 +438,16 @@ function SessionFormModal({
     for (const sheet of sheets) {
       const simpleValues: Record<string, string> = {}
       const tabularValues: Record<string, Record<string, string>> = {}
+      const checkValues: Record<string, boolean> = {}
       if (sessionToEdit) {
         const sheetRecord = sessionToEdit.sheetRecords.find((sr) => sr.sheetId === sheet.id)
         if (sheetRecord) {
           for (const v of sheetRecord.values) {
-            simpleValues[v.fieldId] = String(Number(v.value))
+            if (v.field.type === 'CHECK') {
+              checkValues[v.fieldId] = Number(v.value) === 1
+            } else {
+              simpleValues[v.fieldId] = String(Number(v.value))
+            }
           }
           for (const v of sheetRecord.tabularValues) {
             if (!tabularValues[v.fieldId]) tabularValues[v.fieldId] = {}
@@ -417,7 +455,7 @@ function SessionFormModal({
           }
         }
       }
-      result[sheet.id] = { simpleValues, tabularValues }
+      result[sheet.id] = { simpleValues, tabularValues, checkValues }
     }
     return result
   }
@@ -506,9 +544,14 @@ function SessionFormModal({
 
       const sheetRecords = Object.entries(formState)
         .map(([sheetId, state]) => {
-          const values = Object.entries(state.simpleValues)
-            .filter(([, v]) => v !== '' && !isNaN(Number(v)))
-            .map(([fieldId, value]) => ({ fieldId, value: Number(value) }))
+          const values = [
+            ...Object.entries(state.simpleValues)
+              .filter(([, v]) => v !== '' && !isNaN(Number(v)))
+              .map(([fieldId, value]) => ({ fieldId, value: Number(value) })),
+            // M-04: CHECK fields stored as 1/0
+            ...Object.entries(state.checkValues ?? {})
+              .map(([fieldId, checked]) => ({ fieldId, value: checked ? 1 : 0 })),
+          ]
           const tabularValues = Object.entries(state.tabularValues).flatMap(([fieldId, cols]) =>
             Object.entries(cols)
               .filter(([, v]) => v !== '' && !isNaN(Number(v)))
@@ -577,12 +620,13 @@ function SessionFormModal({
           {sheets
             .filter((s) => s.active)
             .sort((a, b) => a.order - b.order)
-            .map((sheet) => (
+            .map((sheet, index) => (
               <SheetFormSection
                 key={sheet.id}
                 sheet={sheet}
-                state={formState[sheet.id] ?? { simpleValues: {}, tabularValues: {} }}
+                state={formState[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {} }}
                 onStateChange={(next) => setFormState((prev) => ({ ...prev, [sheet.id]: next }))}
+                defaultOpen={index === 0}
               />
             ))}
 
@@ -847,7 +891,8 @@ function SessionCard({
         <div className="px-4 pb-4 space-y-4 border-t">
           {/* Valores por ficha */}
           {session.sheetRecords.map((sr) => {
-            const simpleVals = sr.values.filter((v) => v.field.type !== 'TABULAR')
+            const simpleVals = sr.values.filter((v) => v.field.type === 'SIMPLE')
+            const checkVals = sr.values.filter((v) => v.field.type === 'CHECK')
             const tabularFields = sr.tabularValues.reduce<Record<string, { name: string; cols: typeof sr.tabularValues }>>(
               (acc, v) => {
                 if (!acc[v.fieldId]) acc[v.fieldId] = { name: v.field.name, cols: [] }
@@ -902,6 +947,24 @@ function SessionCard({
                     </div>
                   </div>
                 ))}
+
+                {/* M-04: Campos CHECK */}
+                {checkVals.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                    {checkVals.map((v) => (
+                      <div key={v.id} className="rounded-lg bg-muted/30 p-2.5">
+                        <p className="text-xs text-muted-foreground">{v.field.name}</p>
+                        <p className="text-sm font-semibold mt-0.5">
+                          {Number(v.value) === 1 ? (
+                            <span className="text-emerald-600 dark:text-emerald-400">✓ Sim</span>
+                          ) : (
+                            <span className="text-muted-foreground">— Não</span>
+                          )}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

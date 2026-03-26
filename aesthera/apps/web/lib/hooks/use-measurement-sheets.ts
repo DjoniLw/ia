@@ -3,7 +3,7 @@ import { api } from '@/lib/api'
 
 // ──── Types ────────────────────────────────────────────────────────────────────
 
-export type MeasurementFieldType = 'SIMPLE' | 'TABULAR'
+export type MeasurementFieldType = 'SIMPLE' | 'TABULAR' | 'CHECK'
 
 export interface MeasurementSubColumn {
   id: string
@@ -217,6 +217,18 @@ export function useReorderMeasurementFields() {
     onSuccess: (_data, vars) => {
       void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
       void qc.invalidateQueries({ queryKey: ['measurement-sheet-fields', vars.sheetId] })
+    },
+  })
+}
+
+export function useReorderMeasurementSheets() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (sheets: Array<{ id: string; order: number }>) => {
+      await api.post('/measurement-sheets/reorder', sheets)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
     },
   })
 }

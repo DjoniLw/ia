@@ -24,7 +24,7 @@ export type ListSheetsQuery = z.infer<typeof ListSheetsQuery>
 
 export const CreateFieldDto = z.object({
   name: z.string().min(1).max(100),
-  type: z.enum(['SIMPLE', 'TABULAR']),
+  type: z.enum(['SIMPLE', 'TABULAR', 'CHECK']),
   unit: z.string().min(1).max(20).optional(),
   order: z.number().int().nonnegative().optional(),
 })
@@ -45,6 +45,14 @@ export const ReorderFieldsDto = z.array(
   }),
 )
 export type ReorderFieldsDto = z.infer<typeof ReorderFieldsDto>
+
+export const ReorderSheetsDto = z.array(
+  z.object({
+    id: z.string().uuid(),
+    order: z.number().int().nonnegative(),
+  }),
+)
+export type ReorderSheetsDto = z.infer<typeof ReorderSheetsDto>
 
 // ─── Sub-colunas ──────────────────────────────────────────────────────────────
 

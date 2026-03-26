@@ -8,6 +8,7 @@ import {
   type CreateSubColumnDto,
   type ListSheetsQuery,
   type ReorderFieldsDto,
+  type ReorderSheetsDto,
   type UpdateFieldDto,
   type UpdateSheetDto,
   type UpdateSubColumnDto,
@@ -98,6 +99,9 @@ export class MeasurementSheetsService {
     if (dto.type === 'TABULAR' && dto.unit) {
       throw new ValidationError('Campos TABULARES não devem ter unidade — a unidade fica em cada sub-coluna')
     }
+    if (dto.type === 'CHECK' && dto.unit) {
+      throw new ValidationError('Campos CHECK não devem ter unidade')
+    }
 
     // Limite de campos
     const count = await this.repo.countActiveFields(sheetId)
@@ -155,6 +159,14 @@ export class MeasurementSheetsService {
 
     await this.repo.reorderFields(sheetId, clinicId, items)
     return this.repo.listFields(sheetId)
+  }
+
+  async reorderSheets(clinicId: string, dto: ReorderSheetsDto) {
+    const sheetIds = dto.map((d) => d.id)
+    const allOwned = await this.repo.validateSheetsOwnedByClinic(sheetIds, clinicId)
+    if (!allOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+    await this.repo.reorderSheets(clinicId, dto)
+    return this.repo.listSheets(clinicId, false)
   }
 
   // ─── Sub-colunas ──────────────────────────────────────────────────────────

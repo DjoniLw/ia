@@ -7,6 +7,7 @@ import {
   CreateSubColumnDto,
   ListSheetsQuery,
   ReorderFieldsDto,
+  ReorderSheetsDto,
   UpdateFieldDto,
   UpdateSheetDto,
   UpdateSubColumnDto,
@@ -116,7 +117,17 @@ export async function measurementSheetsRoutes(app: FastifyInstance) {
     },
   )
 
-  // ─── Sub-colunas ──────────────────────────────────────────────────────────────
+  /** POST /measurement-sheets/reorder — reordena fichas em batch (admin only) */
+  app.post(
+    '/measurement-sheets/reorder',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const dto = ReorderSheetsDto.parse(req.body)
+      return reply.send(await svc.reorderSheets(req.clinicId, dto))
+    },
+  )
+
+  // ─── Sub-colunas ─────────────────────────────────────────────────────────────
 
   /** POST /measurement-sheets/:sheetId/fields/:fieldId/columns — cria sub-coluna (admin only) */
   app.post(

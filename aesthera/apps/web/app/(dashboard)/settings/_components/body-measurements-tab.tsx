@@ -4,6 +4,8 @@ import { useState } from 'react'
 import {
   ChevronDown,
   ChevronUp,
+  ClipboardList,
+  Copy,
   GripVertical,
   Loader2,
   Pencil,
@@ -12,6 +14,18 @@ import {
   Ruler,
   Trash2,
 } from 'lucide-react'
+import {
+  DndContext,
+  closestCenter,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -25,6 +39,7 @@ import {
   useCreateMeasurementSheet,
   useUpdateMeasurementSheet,
   useDeleteMeasurementSheet,
+  useReorderMeasurementSheets,
   useCreateMeasurementField,
   useUpdateMeasurementField,
   useDeleteMeasurementField,
@@ -63,6 +78,12 @@ const fieldSchema = z.discriminatedUnion('type', [
     unit: z.string().optional(),
     subColumns: z.array(subColumnSchema).min(1, 'Adicione ao menos uma sub-coluna').max(10),
   }),
+  z.object({
+    type: z.literal('CHECK'),
+    name: z.string().min(1, 'Nome obrigatório').max(100),
+    unit: z.string().optional(),
+    subColumns: z.array(subColumnSchema).optional(),
+  }),
 ])
 type FieldForm = z.infer<typeof fieldSchema>
 
@@ -73,6 +94,12 @@ function fieldTypeBadge(type: MeasurementFieldType) {
     return (
       <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
         Simples
+      </span>
+    )
+  if (type === 'CHECK')
+    return (
+      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+        Marcação
       </span>
     )
   return (
@@ -153,21 +180,40 @@ function SheetDialog({
 
 // ── Dialog de Campo ───────────────────────────────────────────────────────────
 
+type FieldPrefill = {
+  type: MeasurementFieldType
+  unit?: string
+  subColumns?: Array<{ name: string; unit: string }>
+}
+
 function FieldDialog({
   open,
   sheetId,
   field,
+  prefill,
   onClose,
 }: {
   open: boolean
   sheetId: string
   field?: MeasurementField
+  prefill?: FieldPrefill
   onClose: () => void
 }) {
   const createField = useCreateMeasurementField(sheetId)
   const updateField = useUpdateMeasurementField()
   const createSubColumn = useCreateSubColumn()
   const isPending = createField.isPending || updateField.isPending || createSubColumn.isPending
+
+  const defaultValues = field
+    ? {
+        type: field.type,
+        name: field.name,
+        unit: field.unit ?? '',
+        subColumns: field.columns.map((c) => ({ name: c.name, unit: c.unit })),
+      }
+    : prefill
+    ? { type: prefill.type, name: '', unit: prefill.unit ?? '', subColumns: prefill.subColumns ?? [] }
+    : { type: 'SIMPLE' as MeasurementFieldType, name: '', unit: '', subColumns: [] }
 
   const {
     register,
@@ -177,14 +223,7 @@ function FieldDialog({
     formState: { errors, isDirty },
   } = useForm<FieldForm>({
     resolver: zodResolver(fieldSchema),
-    defaultValues: field
-      ? {
-          type: field.type,
-          name: field.name,
-          unit: field.unit ?? '',
-          subColumns: field.columns.map((c) => ({ name: c.name, unit: c.unit })),
-        }
-      : { type: 'SIMPLE', name: '', unit: '', subColumns: [] },
+    defaultValues,
   })
 
   const { fields: subCols, append, remove } = useFieldArray({ control, name: 'subColumns' as never })
@@ -249,8 +288,8 @@ function FieldDialog({
           <div className="space-y-1.5">
             <Label>Tipo *</Label>
             <div className="flex gap-2">
-              {(['SIMPLE', 'TABULAR'] as MeasurementFieldType[]).map((t) => {
-                const label = t === 'SIMPLE' ? 'Simples' : 'Tabular'
+              {(['SIMPLE', 'TABULAR', 'CHECK'] as MeasurementFieldType[]).map((t) => {
+                const label = t === 'SIMPLE' ? 'Simples' : t === 'TABULAR' ? 'Tabular' : 'Marcação (Sim/Não)'
                 return (
                   <label
                     key={t}
@@ -277,6 +316,13 @@ function FieldDialog({
             <Input id="field-unit" {...register('unit')} placeholder="Ex: kg, cm, %, mm" />
             {errors.unit && <p className="text-xs text-destructive">{errors.unit.message}</p>}
           </div>
+        )}
+
+        {/* CHECK: sem unidade, sem sub-colunas */}
+        {fieldType === 'CHECK' && (
+          <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
+            Campo de marcação — apenas Sim / Não. Sem unidade ou sub-colunas.
+          </p>
         )}
 
         {/* Sub-colunas — somente para TABULAR em modo criação */}
@@ -355,6 +401,122 @@ function FieldDialog({
   )
 }
 
+// ── Item de campo ordenável via DnD ─────────────────────────────────────────
+
+function SortableFieldItem({
+  field,
+  reorderPending,
+  updatePending,
+  deletePending,
+  onEdit,
+  onDuplicate,
+  onToggle,
+  onDelete,
+}: {
+  field: MeasurementField
+  reorderPending: boolean
+  updatePending: boolean
+  deletePending: boolean
+  onEdit: () => void
+  onDuplicate: () => void
+  onToggle: () => void
+  onDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: field.id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={[
+        'flex items-center gap-2 px-3 py-2.5 bg-card text-sm',
+        !field.active && 'opacity-50',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing shrink-0 touch-none"
+        aria-label="Arrastar para reordenar"
+        disabled={reorderPending}
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground/40" aria-hidden />
+      </button>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium truncate">{field.name}</span>
+          {fieldTypeBadge(field.type)}
+          {field.unit && (
+            <span className="text-xs text-muted-foreground">{field.unit}</span>
+          )}
+          {/* B-03: Badge Inativo visível mesmo com opacity-50 */}
+          {!field.active && (
+            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+              Inativo
+            </span>
+          )}
+        </div>
+        {field.type === 'TABULAR' && field.columns.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {field.columns.map((c) => `${c.name} (${c.unit})`).join(' · ')}
+          </p>
+        )}
+      </div>
+
+      <div className="flex gap-0.5 shrink-0">
+        {/* M-02: Duplicar campo */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={onDuplicate}
+          aria-label="Duplicar campo"
+          title="Duplicar (pré-preenche novo campo)"
+        >
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={onEdit}
+          aria-label="Editar campo"
+          title="Editar"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={onToggle}
+          disabled={updatePending}
+          aria-label={field.active ? 'Desativar campo' : 'Reativar campo'}
+          title={field.active ? 'Desativar' : 'Reativar'}
+        >
+          <Power className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={onDelete}
+          disabled={deletePending}
+          aria-label="Excluir campo"
+          title="Excluir"
+        >
+          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ── Painel inline de uma Ficha ────────────────────────────────────────────────
 
 function SheetPanel({
@@ -372,6 +534,7 @@ function SheetPanel({
 
   const [fieldDialogOpen, setFieldDialogOpen] = useState(false)
   const [editingField, setEditingField] = useState<MeasurementField | undefined>()
+  const [fieldPrefill, setFieldPrefill] = useState<FieldPrefill | undefined>()
 
   const sortedFields = [...sheet.fields].sort((a, b) => a.order - b.order)
   const activeFieldCount = sortedFields.filter((f) => f.active).length
@@ -403,16 +566,17 @@ function SheetPanel({
     }
   }
 
-  const handleMoveField = async (field: MeasurementField, direction: 'up' | 'down') => {
-    const sorted = [...sortedFields]
-    const idx = sorted.findIndex((f) => f.id === field.id)
-    if (direction === 'up' && idx === 0) return
-    if (direction === 'down' && idx === sorted.length - 1) return
+  // B-04: Reordenação por DnD
+  const handleFieldDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
 
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    ;[sorted[idx], sorted[swapIdx]] = [sorted[swapIdx], sorted[idx]]
+    const oldIndex = sortedFields.findIndex((f) => f.id === active.id)
+    const newIndex = sortedFields.findIndex((f) => f.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
 
-    const payload = sorted.map((f, i) => ({ id: f.id, order: i }))
+    const reordered = arrayMove(sortedFields, oldIndex, newIndex)
+    const payload = reordered.map((f, i) => ({ id: f.id, order: i }))
     try {
       await reorderFields.mutateAsync({ sheetId: sheet.id, fields: payload })
     } catch {
@@ -446,6 +610,13 @@ function SheetPanel({
         toast.error('Erro ao remover ficha')
       }
     }
+  }
+
+  // M-02: Abrir diálogo com pre-preenchimento do último campo
+  const openAddFieldDialog = (prefill?: FieldPrefill) => {
+    setEditingField(undefined)
+    setFieldPrefill(prefill)
+    setFieldDialogOpen(true)
   }
 
   return (
@@ -488,101 +659,53 @@ function SheetPanel({
         </div>
       </div>
 
-      {/* Lista de campos */}
+      {/* Lista de campos com DnD (B-04) */}
       {sortedFields.length === 0 ? (
         <p className="text-xs text-muted-foreground py-2">Nenhum campo. Adicione o primeiro abaixo.</p>
       ) : (
-        <div className="rounded-xl border divide-y overflow-hidden">
-          {sortedFields.map((field, idx) => (
-            <div
-              key={field.id}
-              className={[
-                'flex items-center gap-2 px-3 py-2.5 bg-card text-sm',
-                !field.active && 'opacity-50',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/40 cursor-grab" aria-hidden />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium truncate">{field.name}</span>
-                  {fieldTypeBadge(field.type)}
-                  {field.unit && (
-                    <span className="text-xs text-muted-foreground">{field.unit}</span>
-                  )}
-                </div>
-                {field.type === 'TABULAR' && field.columns.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {field.columns.map((c) => `${c.name} (${c.unit})`).join(' · ')}
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-0.5 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => handleMoveField(field, 'up')}
-                  disabled={idx === 0 || reorderFields.isPending}
-                  aria-label="Mover campo para cima"
-                  title="Mover para cima"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => handleMoveField(field, 'down')}
-                  disabled={idx === sortedFields.length - 1 || reorderFields.isPending}
-                  aria-label="Mover campo para baixo"
-                  title="Mover para baixo"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => { setEditingField(field); setFieldDialogOpen(true) }}
-                  aria-label="Editar campo"
-                  title="Editar"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => handleToggleField(field)}
-                  disabled={updateField.isPending}
-                  aria-label={field.active ? 'Desativar campo' : 'Reativar campo'}
-                  title={field.active ? 'Desativar' : 'Reativar'}
-                >
-                  <Power className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => handleDeleteField(field)}
-                  disabled={deleteField.isPending}
-                  aria-label="Excluir campo"
-                  title="Excluir"
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </div>
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
+          <SortableContext items={sortedFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+            <div className="rounded-xl border divide-y overflow-hidden">
+              {sortedFields.map((field) => (
+                <SortableFieldItem
+                  key={field.id}
+                  field={field}
+                  reorderPending={reorderFields.isPending}
+                  updatePending={updateField.isPending}
+                  deletePending={deleteField.isPending}
+                  onEdit={() => { setEditingField(field); setFieldPrefill(undefined); setFieldDialogOpen(true) }}
+                  onDuplicate={() =>
+                    openAddFieldDialog({
+                      type: field.type,
+                      unit: field.unit ?? undefined,
+                      subColumns: field.columns.map((c) => ({ name: c.name, unit: c.unit })),
+                    })
+                  }
+                  onToggle={() => handleToggleField(field)}
+                  onDelete={() => handleDeleteField(field)}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+          </SortableContext>
+        </DndContext>
       )}
 
+      {/* M-02: Botão "Adicionar campo" pré-preenche com último campo */}
       <Button
         variant="outline"
         size="sm"
-        onClick={() => { setEditingField(undefined); setFieldDialogOpen(true) }}
+        onClick={() => {
+          const last = sortedFields[sortedFields.length - 1]
+          openAddFieldDialog(
+            last
+              ? {
+                  type: last.type,
+                  unit: last.unit ?? undefined,
+                  subColumns: last.columns.map((c) => ({ name: c.name, unit: c.unit })),
+                }
+              : undefined
+          )
+        }}
         disabled={activeFieldCount >= MAX_ACTIVE_FIELDS}
         title={activeFieldCount >= MAX_ACTIVE_FIELDS ? `Limite de ${MAX_ACTIVE_FIELDS} campos atingido` : undefined}
       >
@@ -595,8 +718,87 @@ function SheetPanel({
           open={fieldDialogOpen}
           sheetId={sheet.id}
           field={editingField}
-          onClose={() => { setFieldDialogOpen(false); setEditingField(undefined) }}
+          prefill={editingField ? undefined : fieldPrefill}
+          onClose={() => { setFieldDialogOpen(false); setEditingField(undefined); setFieldPrefill(undefined) }}
         />
+      )}
+    </div>
+  )
+}
+
+// ── Item de ficha ordenável via DnD ─────────────────────────────────────────
+
+function SortableSheetItem({
+  sheet,
+  isExpanded,
+  onToggleExpand,
+  onEditSheet,
+}: {
+  sheet: MeasurementSheet
+  isExpanded: boolean
+  onToggleExpand: () => void
+  onEditSheet: (sheet: MeasurementSheet) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: sheet.id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={[
+        'rounded-xl border overflow-hidden',
+        !sheet.active && 'opacity-60',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {/* Cabeçalho da ficha */}
+      <div className="w-full flex items-center gap-2 px-4 py-3 bg-card">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing shrink-0 touch-none"
+          aria-label="Arrastar para reordenar ficha"
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground/40" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="flex-1 flex items-center gap-3 text-left hover:bg-transparent transition-colors"
+          onClick={onToggleExpand}
+          aria-expanded={isExpanded}
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium truncate">{sheet.name}</span>
+              <span className="text-xs text-muted-foreground">
+                ({sheet.fields.filter((f) => f.active).length} campos)
+              </span>
+              {!sheet.active && (
+                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  Inativa
+                </span>
+              )}
+            </div>
+          </div>
+          {isExpanded ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+      </div>
+
+      {/* Painel inline */}
+      {isExpanded && (
+        <div className="border-t px-4 py-4 bg-muted/20">
+          <SheetPanel
+            sheet={sheet}
+            onEditSheet={onEditSheet}
+          />
+        </div>
       )}
     </div>
   )
@@ -606,6 +808,7 @@ function SheetPanel({
 
 export function BodyMeasurementsTab() {
   const { data: sheets = [], isLoading } = useMeasurementSheets({ includeInactive: true })
+  const reorderSheets = useReorderMeasurementSheets()
   const [expandedSheetId, setExpandedSheetId] = useState<string | null>(null)
   const [sheetDialogOpen, setSheetDialogOpen] = useState(false)
   const [editingSheet, setEditingSheet] = useState<MeasurementSheet | undefined>()
@@ -614,6 +817,24 @@ export function BodyMeasurementsTab() {
   const atLimit = activeCount >= MAX_ACTIVE_SHEETS
 
   const sortedSheets = [...sheets].sort((a, b) => a.order - b.order)
+
+  // M-03: Reordenação de fichas por DnD
+  const handleSheetDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = sortedSheets.findIndex((s) => s.id === active.id)
+    const newIndex = sortedSheets.findIndex((s) => s.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const reordered = arrayMove(sortedSheets, oldIndex, newIndex)
+    const payload = reordered.map((s, i) => ({ id: s.id, order: i }))
+    try {
+      await reorderSheets.mutateAsync(payload)
+    } catch {
+      toast.error('Erro ao reordenar fichas')
+    }
+  }
 
   return (
     <div className="mt-6 space-y-4">
@@ -655,57 +876,21 @@ export function BodyMeasurementsTab() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {sortedSheets.map((sheet) => {
-            const isExpanded = expandedSheetId === sheet.id
-            return (
-              <div
-                key={sheet.id}
-                className={[
-                  'rounded-xl border overflow-hidden',
-                  !sheet.active && 'opacity-60',
-                ].filter(Boolean).join(' ')}
-              >
-                {/* Cabeçalho da ficha */}
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-card text-left hover:bg-muted/40 transition-colors"
-                  onClick={() => setExpandedSheetId(isExpanded ? null : sheet.id)}
-                  aria-expanded={isExpanded}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium truncate">{sheet.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        ({sheet.fields.filter((f) => f.active).length} campos)
-                      </span>
-                      {!sheet.active && (
-                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                          Inativa
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {isExpanded ? (
-                    <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                </button>
-
-                {/* Painel inline */}
-                {isExpanded && (
-                  <div className="border-t px-4 py-4 bg-muted/20">
-                    <SheetPanel
-                      sheet={sheet}
-                      onEditSheet={(s) => { setEditingSheet(s); setSheetDialogOpen(true) }}
-                    />
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+        <DndContext collisionDetection={closestCenter} onDragEnd={handleSheetDragEnd}>
+          <SortableContext items={sortedSheets.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {sortedSheets.map((sheet) => (
+                <SortableSheetItem
+                  key={sheet.id}
+                  sheet={sheet}
+                  isExpanded={expandedSheetId === sheet.id}
+                  onToggleExpand={() => setExpandedSheetId(expandedSheetId === sheet.id ? null : sheet.id)}
+                  onEditSheet={(s) => { setEditingSheet(s); setSheetDialogOpen(true) }}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Dialog de ficha */}
