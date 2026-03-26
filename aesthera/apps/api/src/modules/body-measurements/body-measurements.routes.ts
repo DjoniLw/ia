@@ -12,6 +12,12 @@ import { BodyMeasurementsService } from './body-measurements.service'
 export async function bodyMeasurementsRoutes(app: FastifyInstance) {
   const svc = new BodyMeasurementsService()
 
+  // Marca todas as rotas deste módulo como depreciadas (substituídas por /measurement-sheets e /measurement-sessions)
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('X-Deprecated', 'true')
+    return payload
+  })
+
   // ─── Fields ─────────────────────────────────────────────────────────────────
 
   /**

@@ -1,18 +1,19 @@
-'use client'
+﻿'use client'
 
 import { useRef, useState, useEffect } from 'react'
 import {
+  AlertCircle,
+  ArrowLeftRight,
+  BarChart2,
   ChevronDown,
   ChevronUp,
+  ImageIcon,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   Trash2,
   X,
-  ImageIcon,
-  AlertCircle,
-  BarChart2,
-  ArrowLeftRight,
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -29,20 +30,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useRole } from '@/lib/hooks/use-role'
+import { getAccessToken, decodeJwtPayload } from '@/lib/auth'
 import {
-  useBodyMeasurementFields,
-  useBodyMeasurementRecords,
-  useCreateBodyMeasurementRecord,
-  useDeleteBodyMeasurementRecord,
   presignUpload,
   confirmUpload,
   getUploadUrl,
   FILE_CATEGORY_LABELS,
-  type BodyMeasurementRecord,
-  type BodyMeasurementField,
   type FileCategory,
 } from '@/lib/hooks/use-body-measurements'
-import { useRole } from '@/lib/hooks/use-role'
+import {
+  useMeasurementSheets,
+  type MeasurementSheet,
+  type MeasurementField,
+} from '@/lib/hooks/use-measurement-sheets'
+import {
+  useMeasurementSessions,
+  useCreateMeasurementSession,
+  useUpdateMeasurementSession,
+  useDeleteMeasurementSession,
+  type MeasurementSession,
+} from '@/lib/hooks/use-measurement-sessions'
 
 // ──── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +70,12 @@ interface PendingFile {
   confirmedId?: string
 }
 
+type SheetFormState = {
+  simpleValues: Record<string, string>       // fieldId → value
+  tabularValues: Record<string, Record<string, string>>  // fieldId → {columnId: value}
+}
+type FormState = Record<string, SheetFormState>  // sheetId → state
+
 // ──── Helpers ──────────────────────────────────────────────────────────────────
 
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp']
@@ -80,6 +94,23 @@ function calcBMI(weight: number, height: number): string | null {
   return bmi.toFixed(1)
 }
 
+function getCurrentUserId(): string | null {
+  const token = getAccessToken()
+  if (!token) return null
+  const payload = decodeJwtPayload<{ sub?: string }>(token)
+  return payload?.sub ?? null
+}
+
+function hasAnyValue(state: FormState): boolean {
+  for (const sheet of Object.values(state)) {
+    if (Object.values(sheet.simpleValues).some((v) => v !== '')) return true
+    for (const cols of Object.values(sheet.tabularValues)) {
+      if (Object.values(cols).some((v) => v !== '')) return true
+    }
+  }
+  return false
+}
+
 // ──── Upload area ──────────────────────────────────────────────────────────────
 
 function UploadArea({
@@ -93,16 +124,8 @@ function UploadArea({
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files ?? [])
-    addFiles(selected)
-    e.target.value = ''
-  }
-
   const addFiles = (selected: File[]) => {
-    const valid = selected.filter(
-      (f) => ALLOWED_MIME.includes(f.type) && f.size <= MAX_SIZE,
-    )
+    const valid = selected.filter((f) => ALLOWED_MIME.includes(f.type) && f.size <= MAX_SIZE)
     const remaining = MAX_FILES - files.length
     const toAdd: PendingFile[] = valid.slice(0, remaining).map((f) => ({
       file: f,
@@ -111,6 +134,11 @@ function UploadArea({
       progress: 0,
     }))
     onChange([...files, ...toAdd])
+  }
+
+  const handleSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    addFiles(Array.from(e.target.files ?? []))
+    e.target.value = ''
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -137,12 +165,12 @@ function UploadArea({
         <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-            Consentimento LGPD não fornecido
+            Consentimento LGPD não registrado
           </p>
           <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">
             Este cliente ainda não forneceu consentimento para registro de dados corporais. O
-            upload de fotos está desabilitado. Para registrar o consentimento, acesse o perfil
-            do cliente.
+            upload de fotos está desabilitado. Para registrar o consentimento, acesse a aba
+            &ldquo;Contratos &amp; LGPD&rdquo; do perfil do cliente.
           </p>
         </div>
       </div>
@@ -177,50 +205,29 @@ function UploadArea({
       {files.length > 0 && (
         <div className="space-y-2">
           {files.map((pf, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-3 rounded-lg border p-2 bg-muted/20"
-            >
+            <div key={idx} className="flex items-center gap-3 rounded-lg border p-2 bg-muted/20">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={pf.preview}
-                alt=""
-                className="h-12 w-12 rounded object-cover flex-shrink-0"
-              />
+              <img src={pf.preview} alt="" className="h-12 w-12 rounded object-cover flex-shrink-0" />
               <div className="flex-1 min-w-0 space-y-1.5">
                 <p className="text-xs font-medium truncate">{pf.file.name}</p>
-                <Select
-                  value={pf.category}
-                  onValueChange={(v) => setCategory(idx, v as FileCategory)}
-                >
+                <Select value={pf.category} onValueChange={(v) => setCategory(idx, v as FileCategory)}>
                   <SelectTrigger className="h-7 text-xs">
                     <SelectValue placeholder="Selecionar categoria *" />
                   </SelectTrigger>
                   <SelectContent>
                     {(Object.keys(FILE_CATEGORY_LABELS) as FileCategory[]).map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {FILE_CATEGORY_LABELS[cat]}
-                      </SelectItem>
+                      <SelectItem key={cat} value={cat}>{FILE_CATEGORY_LABELS[cat]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {pf.progress > 0 && pf.progress < 100 && (
                   <div className="h-1 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all"
-                      style={{ width: `${pf.progress}%` }}
-                    />
+                    <div className="h-full bg-primary transition-all" style={{ width: `${pf.progress}%` }} />
                   </div>
                 )}
-                {pf.error && (
-                  <p className="text-xs text-destructive">{pf.error}</p>
-                )}
+                {pf.error && <p className="text-xs text-destructive">{pf.error}</p>}
               </div>
-              <button
-                type="button"
-                onClick={() => removeFile(idx)}
-                className="flex-shrink-0 p-1 rounded hover:bg-muted text-muted-foreground"
-              >
+              <button type="button" onClick={() => removeFile(idx)} className="flex-shrink-0 p-1 rounded hover:bg-muted text-muted-foreground">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -231,59 +238,445 @@ function UploadArea({
   )
 }
 
-// ──── Compare modal ────────────────────────────────────────────────────────────
+// ──── Sheet accordion section no formulário ────────────────────────────────────
+
+function SheetFormSection({
+  sheet,
+  state,
+  onStateChange,
+}: {
+  sheet: MeasurementSheet
+  state: SheetFormState
+  onStateChange: (next: SheetFormState) => void
+}) {
+  const [open, setOpen] = useState(true)
+  const activeFields = sheet.fields.filter((f) => f.active).sort((a, b) => a.order - b.order)
+
+  const setSimple = (fieldId: string, val: string) => {
+    onStateChange({
+      ...state,
+      simpleValues: { ...state.simpleValues, [fieldId]: val },
+    })
+  }
+
+  const setTabular = (fieldId: string, columnId: string, val: string) => {
+    onStateChange({
+      ...state,
+      tabularValues: {
+        ...state.tabularValues,
+        [fieldId]: { ...(state.tabularValues[fieldId] ?? {}), [columnId]: val },
+      },
+    })
+  }
+
+  const simpleFields = activeFields.filter((f) => f.type === 'SIMPLE')
+  const tabularFields = activeFields.filter((f) => f.type === 'TABULAR')
+
+  // IMC calculado
+  const weightField = simpleFields.find((f) => f.name.toLowerCase().includes('peso'))
+  const heightField = simpleFields.find((f) => f.name.toLowerCase().includes('altura'))
+  const bmi =
+    weightField && heightField
+      ? calcBMI(
+          Number(state.simpleValues[weightField.id]),
+          Number(state.simpleValues[heightField.id]),
+        )
+      : null
+
+  return (
+    <div className="rounded-xl border overflow-hidden">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between px-4 py-3 bg-muted/20 hover:bg-muted/30 transition-colors text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="text-sm font-medium">{sheet.name}</span>
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="px-4 py-4 space-y-4">
+          {/* Campos simples */}
+          {simpleFields.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {simpleFields.map((field) => (
+                <div key={field.id} className="space-y-1">
+                  <Label className="text-xs">
+                    {field.name}
+                    {field.unit && <span className="text-muted-foreground"> ({field.unit})</span>}
+                  </Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="—"
+                    value={state.simpleValues[field.id] ?? ''}
+                    onChange={(e) => setSimple(field.id, e.target.value)}
+                  />
+                </div>
+              ))}
+              {bmi && (
+                <div className="space-y-1">
+                  <Label className="text-xs">IMC <span className="text-muted-foreground">(kg/m²)</span></Label>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">
+                    {bmi}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">calculado</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Campos tabulares */}
+          {tabularFields.map((field) => (
+            <div key={field.id}>
+              <p className="text-xs font-medium text-muted-foreground mb-2">{field.name}</p>
+              {field.columns.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhuma sub-coluna configurada.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr>
+                        {field.columns.map((col) => (
+                          <th key={col.id} className="text-left font-medium text-muted-foreground pr-3 pb-1 whitespace-nowrap">
+                            {col.name} <span className="font-normal">({col.unit})</span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {field.columns.map((col) => (
+                          <td key={col.id} className="pr-3 pb-1">
+                            <Input
+                              type="number"
+                              step="any"
+                              placeholder="—"
+                              className="h-8 text-xs w-24"
+                              value={(state.tabularValues[field.id] ?? {})[col.id] ?? ''}
+                              onChange={(e) => setTabular(field.id, col.id, e.target.value)}
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {simpleFields.length === 0 && tabularFields.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nenhum campo ativo nesta ficha.</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ──── Modal de nova/editar evolução ───────────────────────────────────────────
+
+const sessionMetaSchema = z.object({
+  recordedAt: z.string().min(1, 'Data obrigatória'),
+  notes: z.string().optional(),
+})
+type SessionMetaForm = z.infer<typeof sessionMetaSchema>
+
+function SessionFormModal({
+  customer,
+  sheets,
+  sessionToEdit,
+  onClose,
+}: {
+  customer: Customer
+  sheets: MeasurementSheet[]
+  sessionToEdit?: MeasurementSession
+  onClose: () => void
+}) {
+  const createSession = useCreateMeasurementSession()
+  const updateSession = useUpdateMeasurementSession()
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
+  const [uploading, setUploading] = useState(false)
+
+  // Pre-populate state for editing
+  const buildInitialState = (): FormState => {
+    const result: FormState = {}
+    for (const sheet of sheets) {
+      const simpleValues: Record<string, string> = {}
+      const tabularValues: Record<string, Record<string, string>> = {}
+      if (sessionToEdit) {
+        const sheetRecord = sessionToEdit.sheetRecords.find((sr) => sr.sheetId === sheet.id)
+        if (sheetRecord) {
+          for (const v of sheetRecord.values) {
+            simpleValues[v.fieldId] = String(Number(v.value))
+          }
+          for (const v of sheetRecord.tabularValues) {
+            if (!tabularValues[v.fieldId]) tabularValues[v.fieldId] = {}
+            tabularValues[v.fieldId][v.columnId] = String(Number(v.value))
+          }
+        }
+      }
+      result[sheet.id] = { simpleValues, tabularValues }
+    }
+    return result
+  }
+
+  const [formState, setFormState] = useState<FormState>(buildInitialState)
+
+  // Cleanup object URLs when modal closes
+  useEffect(() => {
+    return () => { pendingFiles.forEach((f) => URL.revokeObjectURL(f.preview)) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const { register, handleSubmit, formState: { errors, isDirty: metaDirty } } = useForm<SessionMetaForm>({
+    resolver: zodResolver(sessionMetaSchema),
+    defaultValues: {
+      recordedAt: sessionToEdit ? sessionToEdit.recordedAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      notes: sessionToEdit?.notes ?? '',
+    },
+  })
+
+  const hasUnsaved = metaDirty || hasAnyValue(formState) || pendingFiles.length > 0
+
+  const doUploadFiles = async (): Promise<string[]> => {
+    const confirmedIds: string[] = []
+    const updated = [...pendingFiles]
+    for (let i = 0; i < updated.length; i++) {
+      const pf = updated[i]
+      if (!pf.category) continue
+      try {
+        const { presignedUrl, id: pendingId } = await presignUpload({
+          fileName: pf.file.name,
+          mimeType: pf.file.type,
+          size: pf.file.size,
+          customerId: customer.id,
+          category: pf.category as FileCategory,
+        })
+        updated[i] = { ...updated[i], progress: 30 }
+        setPendingFiles([...updated])
+        await new Promise<void>((resolve, reject) => {
+          const x = new XMLHttpRequest()
+          x.open('PUT', presignedUrl)
+          x.setRequestHeader('Content-Type', pf.file.type)
+          x.upload.onprogress = (ev) => {
+            if (ev.lengthComputable) {
+              updated[i] = { ...updated[i], progress: Math.round((ev.loaded / ev.total) * 70) + 30 }
+              setPendingFiles([...updated])
+            }
+          }
+          x.onload = () => (x.status < 300 ? resolve() : reject(new Error(`HTTP ${x.status}`)))
+          x.onerror = () => reject(new Error('Falha no upload'))
+          x.send(pf.file)
+        })
+        const confirmed = await confirmUpload({ id: pendingId })
+        updated[i] = { ...updated[i], progress: 100, confirmedId: confirmed.id }
+        setPendingFiles([...updated])
+        confirmedIds.push(confirmed.id)
+      } catch (err: unknown) {
+        const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
+        updated[i] = {
+          ...updated[i],
+          error: code === 'MIME_TYPE_MISMATCH'
+            ? 'Arquivo inválido. Apenas JPEG, PNG ou WebP são aceitos.'
+            : 'Erro no upload. Tente novamente.',
+        }
+        setPendingFiles([...updated])
+      }
+    }
+    return confirmedIds
+  }
+
+  const onSubmit = handleSubmit(async (meta) => {
+    if (!hasAnyValue(formState)) {
+      toast.error('Preencha ao menos um valor antes de salvar.')
+      return
+    }
+
+    const withoutCategory = pendingFiles.filter((f) => !f.category)
+    if (withoutCategory.length > 0) {
+      toast.error('Selecione a categoria de todos os arquivos antes de salvar.')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const fileIds = await doUploadFiles()
+
+      const sheetRecords = Object.entries(formState)
+        .map(([sheetId, state]) => {
+          const values = Object.entries(state.simpleValues)
+            .filter(([, v]) => v !== '' && !isNaN(Number(v)))
+            .map(([fieldId, value]) => ({ fieldId, value: Number(value) }))
+          const tabularValues = Object.entries(state.tabularValues).flatMap(([fieldId, cols]) =>
+            Object.entries(cols)
+              .filter(([, v]) => v !== '' && !isNaN(Number(v)))
+              .map(([columnId, value]) => ({ fieldId, columnId, value: Number(value) })),
+          )
+          if (values.length === 0 && tabularValues.length === 0) return null
+          return { sheetId, values, tabularValues }
+        })
+        .filter(Boolean) as Array<{ sheetId: string; values: { fieldId: string; value: number }[]; tabularValues: { fieldId: string; columnId: string; value: number }[] }>
+
+      if (sessionToEdit) {
+        await updateSession.mutateAsync({
+          id: sessionToEdit.id,
+          customerId: customer.id,
+          recordedAt: meta.recordedAt,
+          notes: meta.notes || undefined,
+          sheetRecords,
+          fileIds,
+        })
+        toast.success('Registros de evolução atualizados')
+      } else {
+        await createSession.mutateAsync({
+          customerId: customer.id,
+          recordedAt: meta.recordedAt,
+          notes: meta.notes || undefined,
+          sheetRecords,
+          fileIds,
+        })
+        toast.success('Registro de evolução salvo com sucesso')
+      }
+      onClose()
+    } catch (err: unknown) {
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
+      if (code === 'EMPTY_SESSION') {
+        toast.error('Preencha ao menos um valor antes de salvar.')
+      } else {
+        toast.error('Erro ao salvar registro')
+      }
+    } finally {
+      setUploading(false)
+    }
+  })
+
+  const isPending = uploading || createSession.isPending || updateSession.isPending
+  const title = sessionToEdit ? 'Editar registro de evolução' : 'Novo registro de evolução'
+
+  return (
+    <Dialog open onClose={onClose} isDirty={hasUnsaved} className="p-0 max-w-2xl">
+      <div className="sticky top-0 bg-card border-b px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
+        <DialogTitle className="mb-0">{title}</DialogTitle>
+        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Fechar modal">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <form onSubmit={onSubmit}>
+        <div className="p-6 space-y-6 overflow-y-auto max-h-[65vh]">
+          {/* Data */}
+          <div className="space-y-1.5">
+            <Label htmlFor="session-date">Data da avaliação</Label>
+            <Input id="session-date" type="date" max={new Date().toISOString().slice(0, 10)} {...register('recordedAt')} />
+            {errors.recordedAt && <p className="text-xs text-destructive">{errors.recordedAt.message}</p>}
+          </div>
+
+          {/* Fitas por ficha */}
+          {sheets
+            .filter((s) => s.active)
+            .sort((a, b) => a.order - b.order)
+            .map((sheet) => (
+              <SheetFormSection
+                key={sheet.id}
+                sheet={sheet}
+                state={formState[sheet.id] ?? { simpleValues: {}, tabularValues: {} }}
+                onStateChange={(next) => setFormState((prev) => ({ ...prev, [sheet.id]: next }))}
+              />
+            ))}
+
+          {/* Observações */}
+          <div className="space-y-1.5">
+            <Label htmlFor="session-notes">Observações gerais</Label>
+            <textarea
+              id="session-notes"
+              rows={3}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="Anotações sobre esta avaliação..."
+              {...register('notes')}
+            />
+          </div>
+
+          {/* Upload de fotos */}
+          <div>
+            <p className="text-sm font-medium mb-3">Fotos</p>
+            <UploadArea files={pendingFiles} onChange={setPendingFiles} consentAt={customer.bodyDataConsentAt} />
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-card border-t px-6 py-4 flex justify-end gap-2 rounded-b-xl">
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" size="sm" disabled={isPending}>
+            {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+            {sessionToEdit ? 'Salvar alterações' : 'Salvar registro'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+// ──── Modal de comparação ──────────────────────────────────────────────────────
 
 function CompareModal({
   current,
   previous,
   onClose,
 }: {
-  current: BodyMeasurementRecord
-  previous: BodyMeasurementRecord
+  current: MeasurementSession
+  previous: MeasurementSession
   onClose: () => void
 }) {
-  // Constrói mapa unificado de campos presentes em qualquer dos dois registros
-  const fieldMeta = new Map<string, { name: string; unit: string }>()
-  ;[...previous.values, ...current.values].forEach((v) => {
-    if (!fieldMeta.has(v.fieldId)) {
-      fieldMeta.set(v.fieldId, { name: v.field.name, unit: v.field.unit })
+  // Coleta todos os valores simples de uma sessão em um único mapa
+  const flattenSimple = (session: MeasurementSession) => {
+    const map = new Map<string, { name: string; unit: string; value: number }>()
+    for (const sr of session.sheetRecords) {
+      for (const v of sr.values) {
+        if (v.field.type !== 'SIMPLE') continue
+        map.set(v.fieldId, { name: v.field.name, unit: v.field.unit ?? '', value: Number(v.value) })
+      }
     }
-  })
-
-  // Preserva ordem de exibição (campos do registro atual primeiro)
-  const allFieldIds = [
-    ...current.values.map((v) => v.fieldId),
-    ...previous.values.map((v) => v.fieldId).filter((id) => !current.values.some((v) => v.fieldId === id)),
-  ]
-
-  const prevMap = new Map(previous.values.map((v) => [v.fieldId, Number(v.value)]))
-  const currMap = new Map(current.values.map((v) => [v.fieldId, Number(v.value)]))
-
-  // IMC calculado para cada lado
-  const calcBMIFromValues = (values: BodyMeasurementRecord['values']) => {
-    const wv = values.find((v) => v.field.name.toLowerCase().includes('peso'))
-    const hv = values.find((v) => v.field.name.toLowerCase().includes('altura'))
-    if (!wv || !hv) return null
-    return calcBMI(Number(wv.value), Number(hv.value))
+    return map
   }
-  const prevBMI = calcBMIFromValues(previous.values)
-  const currBMI = calcBMIFromValues(current.values)
+
+  const prevMap = flattenSimple(previous)
+  const currMap = flattenSimple(current)
+  const allFieldIds = [...new Set([...prevMap.keys(), ...currMap.keys()])]
+
+  const getLabelForField = (id: string) =>
+    currMap.get(id) ?? prevMap.get(id) ?? { name: id, unit: '' }
+
+  const prevBMI = (() => {
+    const w = [...prevMap.values()].find((v) => v.name.toLowerCase().includes('peso'))
+    const h = [...prevMap.values()].find((v) => v.name.toLowerCase().includes('altura'))
+    return w && h ? calcBMI(w.value, h.value) : null
+  })()
+  const currBMI = (() => {
+    const w = [...currMap.values()].find((v) => v.name.toLowerCase().includes('peso'))
+    const h = [...currMap.values()].find((v) => v.name.toLowerCase().includes('altura'))
+    return w && h ? calcBMI(w.value, h.value) : null
+  })()
 
   return (
-    <Dialog open onClose={onClose} className="max-w-3xl">
-      <div className="sticky top-0 bg-card border-b px-6 py-4 flex items-center justify-between rounded-t-xl">
+    <Dialog open onClose={onClose} className="max-w-3xl p-0">
+      {/* X button fora do sticky header — posicionado absolutamente */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 z-20 text-muted-foreground hover:text-foreground bg-card rounded-full p-1"
+        aria-label="Fechar comparação"
+      >
+        <X className="h-4 w-4" />
+      </button>
+
+      <div className="sticky top-0 bg-card border-b px-6 py-4 rounded-t-xl z-10">
         <DialogTitle className="mb-0">Comparação de registros</DialogTitle>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-muted-foreground hover:text-foreground"
-          aria-label="Fechar modal"
-        >
-          <X className="h-4 w-4" />
-        </button>
       </div>
 
-      <div className="p-6 space-y-4">
+      <div className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
         {/* Cabeçalho das colunas */}
         <div className="grid grid-cols-[1fr_120px_1fr] gap-2">
           <div className="rounded-lg bg-muted/30 px-3 py-2 text-center">
@@ -297,112 +690,64 @@ function CompareModal({
           </div>
         </div>
 
-        {/* Linhas de comparação de campos */}
         {allFieldIds.length === 0 ? (
           <p className="text-center text-sm text-muted-foreground py-4">
-            Nenhuma medida registrada em ambos os registros.
+            Nenhuma medida simples registrada em ambos os registros.
           </p>
         ) : (
           <div className="space-y-2">
             {allFieldIds.map((fieldId) => {
-              const meta = fieldMeta.get(fieldId)!
-              const prevVal = prevMap.get(fieldId) ?? null
-              const currVal = currMap.get(fieldId) ?? null
-
-              let trend: 'up' | 'down' | 'same' = 'same'
-              if (prevVal !== null && currVal !== null) {
-                if (currVal > prevVal) trend = 'up'
-                else if (currVal < prevVal) trend = 'down'
-              }
-
+              const meta = getLabelForField(fieldId)
+              const prevVal = prevMap.get(fieldId)?.value ?? null
+              const currVal = currMap.get(fieldId)?.value ?? null
+              const trend: 'up' | 'down' | 'same' =
+                prevVal !== null && currVal !== null
+                  ? currVal > prevVal ? 'up' : currVal < prevVal ? 'down' : 'same'
+                  : 'same'
               const currClass =
-                trend === 'up'
-                  ? 'text-green-600 dark:text-green-400'
-                  : trend === 'down'
-                    ? 'text-red-600 dark:text-red-400'
-                    : ''
+                trend === 'up' ? 'text-green-600 dark:text-green-400' :
+                trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
 
               return (
-                <div
-                  key={fieldId}
-                  className="grid grid-cols-[1fr_120px_1fr] items-center gap-2 rounded-lg bg-muted/10 border px-3 py-2"
-                >
+                <div key={fieldId} className="grid grid-cols-[1fr_120px_1fr] items-center gap-2 rounded-lg bg-muted/10 border px-3 py-2">
                   <div className="text-right">
                     {prevVal !== null ? (
-                      <span className="text-sm font-medium">
-                        {prevVal.toLocaleString('pt-BR')} {meta.unit}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                      <span className="text-sm font-medium">{prevVal.toLocaleString('pt-BR')} {meta.unit}</span>
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
                   </div>
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground truncate">{meta.name}</p>
-                    {trend === 'up' && (
-                      <span className="text-xs font-semibold text-green-600 dark:text-green-400">↑</span>
-                    )}
-                    {trend === 'down' && (
-                      <span className="text-xs font-semibold text-red-600 dark:text-red-400">↓</span>
-                    )}
+                    {trend === 'up' && <span className="text-xs font-semibold text-green-600 dark:text-green-400">↑</span>}
+                    {trend === 'down' && <span className="text-xs font-semibold text-red-600 dark:text-red-400">↓</span>}
                   </div>
                   <div className="text-left">
                     {currVal !== null ? (
-                      <span className={`text-sm font-medium ${currClass}`}>
-                        {currVal.toLocaleString('pt-BR')} {meta.unit}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                      <span className={`text-sm font-medium ${currClass}`}>{currVal.toLocaleString('pt-BR')} {meta.unit}</span>
+                    ) : <span className="text-xs text-muted-foreground">—</span>}
                   </div>
                 </div>
               )
             })}
 
-            {/* Linha de IMC calculado */}
             {(prevBMI !== null || currBMI !== null) && (
               <div className="grid grid-cols-[1fr_120px_1fr] items-center gap-2 rounded-lg bg-muted/20 border border-dashed px-3 py-2">
                 <div className="text-right">
-                  {prevBMI !== null ? (
-                    <span className="text-sm font-medium">{prevBMI} kg/m²</span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
+                  {prevBMI ? <span className="text-sm font-medium">{prevBMI} kg/m²</span> : <span className="text-xs text-muted-foreground">—</span>}
                 </div>
                 <div className="text-center">
                   <p className="text-xs text-muted-foreground">IMC</p>
                   <p className="text-[10px] text-muted-foreground">calculado</p>
                 </div>
                 <div className="text-left">
-                  {currBMI !== null ? (() => {
-                    const bmiTrend =
-                      prevBMI !== null
-                        ? Number(currBMI) > Number(prevBMI)
-                          ? 'up'
-                          : Number(currBMI) < Number(prevBMI)
-                            ? 'down'
-                            : 'same'
-                        : 'same'
-                    const bmiClass =
-                      bmiTrend === 'up'
-                        ? 'text-green-600 dark:text-green-400'
-                        : bmiTrend === 'down'
-                          ? 'text-red-600 dark:text-red-400'
-                          : ''
-                    return (
-                      <span className={`text-sm font-medium ${bmiClass}`}>
-                        {currBMI} kg/m²
-                      </span>
-                    )
-                  })() : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
+                  {currBMI ? (
+                    <span className={`text-sm font-medium ${prevBMI && Number(currBMI) > Number(prevBMI) ? 'text-green-600 dark:text-green-400' : prevBMI && Number(currBMI) < Number(prevBMI) ? 'text-red-600 dark:text-red-400' : ''}`}>{currBMI} kg/m²</span>
+                  ) : <span className="text-xs text-muted-foreground">—</span>}
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Observações dos dois registros */}
         {(previous.notes || current.notes) && (
           <div className="grid grid-cols-2 gap-4 pt-1">
             <div className="rounded-lg bg-muted/20 p-3">
@@ -420,17 +765,21 @@ function CompareModal({
   )
 }
 
-// ──── Record card ──────────────────────────────────────────────────────────────
+// ──── Card de sessão ───────────────────────────────────────────────────────────
 
-function RecordCard({
-  record,
-  previousRecord,
+function SessionCard({
+  session,
+  previousSession,
+  canEdit,
   isAdmin,
+  onEdit,
   onDelete,
 }: {
-  record: BodyMeasurementRecord
-  previousRecord?: BodyMeasurementRecord
+  session: MeasurementSession
+  previousSession?: MeasurementSession
+  canEdit: boolean
   isAdmin: boolean
+  onEdit: () => void
   onDelete: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -440,17 +789,21 @@ function RecordCard({
   const [loadingUrls, setLoadingUrls] = useState(false)
   const [lightboxFile, setLightboxFile] = useState<string | null>(null)
 
+  const totalValues = session.sheetRecords.reduce(
+    (sum, sr) => sum + sr.values.length + sr.tabularValues.length,
+    0,
+  )
+  const sheetBadges = session.sheetRecords.map((sr) => sr.sheet.name)
+
   const loadFileUrls = async () => {
-    if (record.files.length === 0) return
+    if (session.files.length === 0) return
     setLoadingUrls(true)
     try {
       const urls: Record<string, string> = {}
-      await Promise.all(
-        record.files.map(async (f) => {
-          const { url } = await getUploadUrl(f.id)
-          urls[f.id] = url
-        }),
-      )
+      await Promise.all(session.files.map(async (f) => {
+        const { url } = await getUploadUrl(f.id)
+        urls[f.id] = url
+      }))
       setFileUrls(urls)
     } finally {
       setLoadingUrls(false)
@@ -460,7 +813,7 @@ function RecordCard({
   const handleExpand = () => {
     const next = !expanded
     setExpanded(next)
-    if (next && record.files.length > 0 && Object.keys(fileUrls).length === 0) {
+    if (next && session.files.length > 0 && Object.keys(fileUrls).length === 0) {
       void loadFileUrls()
     }
   }
@@ -474,56 +827,103 @@ function RecordCard({
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
       >
         <div className="text-left">
-          <p className="text-sm font-medium">{formatDate(record.recordedAt)}</p>
-          <p className="text-xs text-muted-foreground">
-            {record.values.length} medidas · {record.files.length} foto
-            {record.files.length !== 1 ? 's' : ''}
-          </p>
+          <p className="text-sm font-medium">{formatDate(session.recordedAt)}</p>
+          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+            {sheetBadges.map((name) => (
+              <span key={name} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                {name}
+              </span>
+            ))}
+            <span className="text-xs text-muted-foreground">· {totalValues} medida{totalValues !== 1 ? 's' : ''}</span>
+            {session.files.length > 0 && (
+              <span className="text-xs text-muted-foreground">· {session.files.length} foto{session.files.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
         </div>
-        {expanded ? (
-          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        )}
+        {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
       </button>
 
-      {/* Body */}
       {expanded && (
         <div className="px-4 pb-4 space-y-4 border-t">
-          {/* Values grid */}
-          {record.values.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3">
-              {record.values.map((v) => (
-                <div key={v.id} className="rounded-lg bg-muted/30 p-2.5">
-                  <p className="text-xs text-muted-foreground">{v.field.name}</p>
-                  <p className="text-sm font-semibold mt-0.5">
-                    {Number(v.value).toLocaleString('pt-BR')} {v.field.unit}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Valores por ficha */}
+          {session.sheetRecords.map((sr) => {
+            const simpleVals = sr.values.filter((v) => v.field.type !== 'TABULAR')
+            const tabularFields = sr.tabularValues.reduce<Record<string, { name: string; cols: typeof sr.tabularValues }>>(
+              (acc, v) => {
+                if (!acc[v.fieldId]) acc[v.fieldId] = { name: v.field.name, cols: [] }
+                acc[v.fieldId].cols.push(v)
+                return acc
+              },
+              {},
+            )
 
-          {/* Notes */}
-          {record.notes && (
+            return (
+              <div key={sr.id} className="pt-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{sr.sheet.name}</p>
+
+                {simpleVals.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+                    {simpleVals.map((v) => (
+                      <div key={v.id} className="rounded-lg bg-muted/30 p-2.5">
+                        <p className="text-xs text-muted-foreground">{v.field.name}</p>
+                        <p className="text-sm font-semibold mt-0.5">
+                          {Number(v.value).toLocaleString('pt-BR')}
+                          {v.field.unit && <span className="text-xs font-normal text-muted-foreground ml-1">{v.field.unit}</span>}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {Object.values(tabularFields).map((tf) => (
+                  <div key={tf.name} className="mb-3">
+                    <p className="text-xs text-muted-foreground mb-1">{tf.name}</p>
+                    <div className="overflow-x-auto">
+                      <table className="text-xs w-full">
+                        <thead>
+                          <tr>
+                            {tf.cols.map((v) => (
+                              <th key={v.columnId} className="text-left font-medium pr-3 pb-1 whitespace-nowrap text-muted-foreground">
+                                {v.column.name} ({v.column.unit})
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            {tf.cols.map((v) => (
+                              <td key={v.columnId} className="pr-3 text-sm font-medium">
+                                {Number(v.value).toLocaleString('pt-BR')}
+                              </td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+
+          {/* Observações */}
+          {session.notes && (
             <div className="rounded-lg bg-muted/20 p-3">
               <p className="text-xs font-medium text-muted-foreground mb-1">Observações</p>
-              <p className="text-sm">{record.notes}</p>
+              <p className="text-sm">{session.notes}</p>
             </div>
           )}
 
-          {/* Photos */}
-          {record.files.length > 0 && (
+          {/* Fotos */}
+          {session.files.length > 0 && (
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">Fotos</p>
               {loadingUrls ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
+                <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {record.files.map((f) => (
-                    <div key={f.id} className="relative group">
+                  {session.files.map((f) => (
+                    <div key={f.id} className="relative">
                       {fileUrls[f.id] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -538,7 +938,7 @@ function RecordCard({
                         </div>
                       )}
                       <span className="absolute bottom-1 left-1 right-1 text-center text-[10px] bg-black/60 text-white rounded px-1 truncate">
-                        {FILE_CATEGORY_LABELS[f.category]}
+                        {FILE_CATEGORY_LABELS[f.category as FileCategory] ?? f.category}
                       </span>
                     </div>
                   ))}
@@ -547,62 +947,39 @@ function RecordCard({
             </div>
           )}
 
-          {/* Actions */}
-          {(isAdmin || previousRecord) && (
-            <div className="flex items-center justify-between pt-1">
-              {/* Botão comparar — disponível para todos (admin e staff) quando houver registro anterior */}
-              {previousRecord && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setCompareOpen(true)}
-                >
+          {/* Ações */}
+          <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+            <div className="flex gap-1">
+              {previousSession && (
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground" onClick={() => setCompareOpen(true)}>
                   <ArrowLeftRight className="mr-1 h-3 w-3" />
                   Comparar com anterior
                 </Button>
               )}
-              {!previousRecord && <span />}
-
+            </div>
+            <div className="flex gap-1">
+              {canEdit && (
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onEdit}>
+                  <Pencil className="mr-1 h-3 w-3" />
+                  Editar
+                </Button>
+              )}
               {isAdmin && (
-                <div className="flex justify-end">
-                  {showDeleteConfirm ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
-                      <p className="text-xs text-destructive">
-                        Esta ação é irreversível. Deseja excluir este registro?
-                      </p>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={onDelete}
-                      >
-                        Excluir
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setShowDeleteConfirm(false)}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => setShowDeleteConfirm(true)}
-                    >
-                      <Trash2 className="mr-1 h-3 w-3" />
-                      Excluir registro
-                    </Button>
-                  )}
-                </div>
+                showDeleteConfirm ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+                    <p className="text-xs text-destructive">Esta ação é irreversível.</p>
+                    <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={onDelete}>Excluir</Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowDeleteConfirm(false)}>Cancelar</Button>
+                  </div>
+                ) : (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setShowDeleteConfirm(true)}>
+                    <Trash2 className="mr-1 h-3 w-3" />
+                    Excluir
+                  </Button>
+                )
               )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -610,303 +987,54 @@ function RecordCard({
       {lightboxFile && (
         <Dialog open onClose={() => setLightboxFile(null)} className="p-0 bg-transparent border-0 shadow-none max-w-5xl">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={lightboxFile}
-            alt="Foto ampliada"
-            className="max-h-[85vh] max-w-full rounded-lg object-contain"
-          />
-          <button
-            type="button"
-            className="absolute top-3 right-3 text-white/80 hover:text-white bg-black/40 rounded-full p-1"
-            aria-label="Fechar imagem"
-            onClick={() => setLightboxFile(null)}
-          >
+          <img src={lightboxFile} alt="Foto ampliada" className="max-h-[85vh] max-w-full rounded-lg object-contain" />
+          <button type="button" className="absolute top-3 right-3 text-white/80 hover:text-white bg-black/40 rounded-full p-1" aria-label="Fechar imagem" onClick={() => setLightboxFile(null)}>
             <X className="h-5 w-5" />
           </button>
         </Dialog>
       )}
 
-      {/* Modal de comparação com registro anterior */}
-      {compareOpen && previousRecord && (
-        <CompareModal
-          current={record}
-          previous={previousRecord}
-          onClose={() => setCompareOpen(false)}
-        />
+      {compareOpen && previousSession && (
+        <CompareModal current={session} previous={previousSession} onClose={() => setCompareOpen(false)} />
       )}
     </div>
   )
 }
 
-// ──── New record modal ─────────────────────────────────────────────────────────
-
-const recordSchema = z.object({
-  recordedAt: z.string().min(1, 'Data obrigatória'),
-  notes: z.string().optional(),
-})
-type RecordForm = z.infer<typeof recordSchema>
-
-function NewRecordModal({
-  customer,
-  fields,
-  onClose,
-}: {
-  customer: Customer
-  fields: BodyMeasurementField[]
-  onClose: () => void
-}) {
-  const createRecord = useCreateBodyMeasurementRecord()
-  const [values, setValues] = useState<Record<string, string>>({})
-  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
-  const [uploading, setUploading] = useState(false)
-
-  // Cleanup object URLs quando o modal fecha — evita memory leak
-  useEffect(() => {
-    return () => {
-      pendingFiles.forEach((f) => URL.revokeObjectURL(f.preview))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const { register, handleSubmit, formState: { errors, isDirty: formDirty } } = useForm<RecordForm>({
-    resolver: zodResolver(recordSchema),
-    defaultValues: {
-      recordedAt: new Date().toISOString().slice(0, 10),
-    },
-  })
-
-  const hasUnsavedData =
-    formDirty ||
-    Object.values(values).some((v) => v !== '') ||
-    pendingFiles.length > 0
-
-  // IMC calculation (weight/height fields — não persiste no banco)
-  const activeFields = fields.filter((f) => f.active)
-  const weightField = activeFields.find((f) =>
-    f.name.toLowerCase().includes('peso'),
-  )
-  const heightField = activeFields.find((f) =>
-    f.name.toLowerCase().includes('altura'),
-  )
-  const weightVal = weightField ? Number(values[weightField.id]) : 0
-  const heightVal = heightField ? Number(values[heightField.id]) : 0
-  const bmi = calcBMI(weightVal, heightVal)
-
-  const handleValueChange = (fieldId: string, val: string) => {
-    setValues((prev) => ({ ...prev, [fieldId]: val }))
-  }
-
-  const doUploadFiles = async (): Promise<string[]> => {
-    const confirmedIds: string[] = []
-    const updated = [...pendingFiles]
-
-    for (let i = 0; i < updated.length; i++) {
-      const pf = updated[i]
-      if (!pf.category) continue // skip sem categoria
-      try {
-        // 1. Presign — cria registro PENDING no servidor e devolve o ID
-        const { presignedUrl, id: pendingId } = await presignUpload({
-          fileName: pf.file.name,
-          mimeType: pf.file.type,
-          size: pf.file.size,
-          customerId: customer.id,
-          category: pf.category as FileCategory,
-        })
-
-        // 2. PUT direto ao R2
-        updated[i] = { ...updated[i], progress: 30 }
-        setPendingFiles([...updated])
-
-        await new Promise<void>((resolve, reject) => {
-          const x = new XMLHttpRequest()
-          x.open('PUT', presignedUrl)
-          x.setRequestHeader('Content-Type', pf.file.type)
-          x.upload.onprogress = (ev) => {
-            if (ev.lengthComputable) {
-              updated[i] = { ...updated[i], progress: Math.round((ev.loaded / ev.total) * 70) + 30 }
-              setPendingFiles([...updated])
-            }
-          }
-          x.onload = () => (x.status < 300 ? resolve() : reject(new Error(`HTTP ${x.status}`)))
-          x.onerror = () => reject(new Error('Falha no upload'))
-          x.send(pf.file)
-        })
-
-        // 3. Confirm — envia apenas o ID do registro PENDING
-        const confirmed = await confirmUpload({ id: pendingId })
-
-        updated[i] = { ...updated[i], progress: 100, confirmedId: confirmed.id }
-        setPendingFiles([...updated])
-        confirmedIds.push(confirmed.id)
-      } catch (err: any) {
-        const isInvalid = err?.response?.data?.code === 'MIME_TYPE_MISMATCH'
-        updated[i] = {
-          ...updated[i],
-          error: isInvalid
-            ? 'Arquivo inválido. Apenas imagens JPEG, PNG ou WebP são aceitos.'
-            : 'Erro no upload. Tente novamente.',
-        }
-        setPendingFiles([...updated])
-        // Arquivo com erro não bloqueia o submit
-      }
-    }
-
-    return confirmedIds
-  }
-
-  const onSubmit = handleSubmit(async (data) => {
-    // P-06: validar que todos os arquivos têm categoria antes de prosseguir
-    const withoutCategory = pendingFiles.filter((f) => !f.category)
-    if (withoutCategory.length > 0) {
-      toast.error('Selecione a categoria de todos os arquivos antes de salvar.')
-      return
-    }
-
-    setUploading(true)
-    try {
-      const fileIds = await doUploadFiles()
-
-      const rawValues = Object.entries(values)
-        .filter(([, v]) => v !== '' && !isNaN(Number(v)))
-        .map(([fieldId, value]) => ({ fieldId, value: Number(value) }))
-
-      await createRecord.mutateAsync({
-        customerId: customer.id,
-        recordedAt: data.recordedAt,
-        notes: data.notes || undefined,
-        values: rawValues,
-        fileIds,
-      })
-
-      toast.success('Registro salvo com sucesso')
-      onClose()
-    } catch {
-      toast.error('Erro ao salvar registro')
-    } finally {
-      setUploading(false)
-    }
-  })
-
-  const isPending = uploading || createRecord.isPending
-
-  return (
-    <Dialog open onClose={onClose} isDirty={hasUnsavedData} className="p-0 max-w-2xl">
-      <div className="sticky top-0 bg-card border-b px-6 py-4 flex items-center justify-between rounded-t-xl">
-        <DialogTitle className="mb-0">Novo registro de evolução</DialogTitle>
-        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Fechar modal">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <form onSubmit={onSubmit}>
-        <div className="p-6 space-y-6">
-          {/* Data */}
-          <div className="space-y-1.5">
-            <Label htmlFor="record-date">Data do registro</Label>
-            <Input id="record-date" type="date" max={new Date().toISOString().slice(0, 10)} {...register('recordedAt')} />
-            {errors.recordedAt && <p className="text-xs text-destructive">{errors.recordedAt.message}</p>}
-          </div>
-
-          {/* Campos de medição — grade 2-3 colunas */}
-          {activeFields.length > 0 && (
-            <div>
-              <p className="text-sm font-medium mb-3">Medidas</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {activeFields.map((field) => (
-                  <div key={field.id} className="space-y-1">
-                    <Label className="text-xs">
-                      {field.name} <span className="text-muted-foreground">({field.unit})</span>
-                    </Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      placeholder="—"
-                      value={values[field.id] ?? ''}
-                      onChange={(e) => handleValueChange(field.id, e.target.value)}
-                    />
-                  </div>
-                ))}
-                {/* IMC calculado — apenas exibido, nunca enviado */}
-                {bmi && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">
-                      IMC <span className="text-muted-foreground">(kg/m²)</span>
-                    </Label>
-                    <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">
-                      {bmi}
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">calculado</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Observações */}
-          <div className="space-y-1.5">
-            <Label htmlFor="record-notes">Observações</Label>
-            <textarea
-              id="record-notes"
-              rows={3}
-              className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Anotações sobre o registro..."
-              {...register('notes')}
-            />
-          </div>
-
-          {/* Upload de fotos */}
-          <div>
-            <p className="text-sm font-medium mb-3">Fotos</p>
-            <UploadArea
-              files={pendingFiles}
-              onChange={setPendingFiles}
-              consentAt={customer.bodyDataConsentAt}
-            />
-          </div>
-        </div>
-
-        <div className="sticky bottom-0 bg-card border-t px-6 py-4 flex justify-end gap-2 rounded-b-xl">
-          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isPending}>
-            Cancelar
-          </Button>
-          <Button type="submit" size="sm" disabled={isPending}>
-            {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-            Salvar registro
-          </Button>
-        </div>
-      </form>
-    </Dialog>
-  )
-}
-
-// ──── Main EvolutionTab ────────────────────────────────────────────────────────
+// ──── EvolutionTab (principal) ─────────────────────────────────────────────────
 
 export function EvolutionTab({ customer }: { customer: Customer }) {
   const role = useRole()
   const isAdmin = role === 'admin'
+  const isStaff = role === 'staff'
+  const currentUserId = getCurrentUserId()
 
-  const { data: fieldsData = [], isLoading: loadingFields } = useBodyMeasurementFields()
-  const { data: recordsPage, isLoading: loadingRecords, error, refetch } = useBodyMeasurementRecords(
+  const { data: sheetsData = [], isLoading: loadingSheets } = useMeasurementSheets()
+  const { data: sessionsPage, isLoading: loadingSessions, error, refetch } = useMeasurementSessions(
     customer.id,
+    { limit: 50 },
   )
-  const deleteRecord = useDeleteBodyMeasurementRecord()
+  const deleteSession = useDeleteMeasurementSession()
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [editingSession, setEditingSession] = useState<MeasurementSession | undefined>()
 
-  const activeFields = fieldsData.filter((f) => f.active)
+  const activeSheets = sheetsData.filter((s) => s.active).sort((a, b) => a.order - b.order)
+  const sessions = sessionsPage?.items ?? []
+  const isLoading = loadingSheets || loadingSessions
+  const canCreate = isAdmin || isStaff
 
-  const handleDelete = async (record: BodyMeasurementRecord) => {
+  const handleDelete = async (session: MeasurementSession) => {
     try {
-      await deleteRecord.mutateAsync({ id: record.id, customerId: customer.id })
+      await deleteSession.mutateAsync({ id: session.id, customerId: customer.id })
       toast.success('Registro excluído com sucesso')
     } catch {
       toast.error('Erro ao excluir registro')
     }
   }
 
-  // Professional sem vínculo: erro 403 retornado pela API
   if (error) {
-    const status = (error as any)?.response?.status
+    const status = (error as { response?: { status?: number } })?.response?.status
     if (status === 403) {
       return (
         <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
@@ -919,7 +1047,7 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
     }
     return (
       <div className="py-6 text-center text-sm text-muted-foreground space-y-3">
-        <p>Erro ao carregar registros.</p>
+        <p>Erro ao carregar registros de evolução.</p>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
           Tentar novamente
@@ -928,48 +1056,38 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
     )
   }
 
-  const isLoading = loadingFields || loadingRecords
-  const records = recordsPage?.items ?? []
-
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">Evolução corporal</p>
-        {(isAdmin || role === 'staff') && (
-          <Button
-            size="sm"
-            onClick={() => setModalOpen(true)}
-            disabled={isLoading}
-          >
+        {canCreate && (
+          <Button size="sm" onClick={() => { setEditingSession(undefined); setModalOpen(true) }} disabled={isLoading}>
             <Plus className="mr-1 h-3.5 w-3.5" />
             Novo registro
           </Button>
         )}
       </div>
 
-      {/* States */}
+      {/* Estados */}
       {isLoading ? (
         <div className="flex justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-      ) : activeFields.length === 0 ? (
+      ) : activeSheets.length === 0 ? (
         <div className="rounded-xl border border-dashed p-8 text-center">
           <BarChart2 className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            Configure os campos de medição em{' '}
-            <span className="font-medium">Configurações → Medidas Corporais</span> para começar a
-            registrar.
+            Configure as fichas de avaliação em{' '}
+            <span className="font-medium">Configurações → Medidas Corporais</span> para começar a registrar.
           </p>
         </div>
-      ) : records.length === 0 ? (
+      ) : sessions.length === 0 ? (
         <div className="rounded-xl border border-dashed p-8 text-center">
           <BarChart2 className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground mb-2">
-            Nenhum registro de evolução.
-          </p>
-          {(isAdmin || role === 'staff') && (
-            <Button size="sm" onClick={() => setModalOpen(true)}>
+          <p className="text-sm text-muted-foreground mb-2">Nenhum registro de evolução.</p>
+          {canCreate && (
+            <Button size="sm" onClick={() => { setEditingSession(undefined); setModalOpen(true) }}>
               <Plus className="mr-1 h-3.5 w-3.5" />
               Novo registro
             </Button>
@@ -977,16 +1095,21 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {records.map((record, i) => (
-            <RecordCard
-              key={record.id}
-              record={record}
-              previousRecord={records[i + 1]}
-              isAdmin={isAdmin}
-              onDelete={() => void handleDelete(record)}
-            />
-          ))}
-          {records.length >= 50 && (
+          {sessions.map((session, i) => {
+            const canEdit = isAdmin || isStaff || session.createdById === currentUserId
+            return (
+              <SessionCard
+                key={session.id}
+                session={session}
+                previousSession={sessions[i + 1]}
+                canEdit={canEdit}
+                isAdmin={isAdmin}
+                onEdit={() => { setEditingSession(session); setModalOpen(true) }}
+                onDelete={() => void handleDelete(session)}
+              />
+            )
+          })}
+          {sessions.length >= 50 && (
             <p className="text-center text-xs text-muted-foreground pt-1">
               Exibindo os 50 registros mais recentes.
             </p>
@@ -994,14 +1117,16 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modal de formulário */}
       {modalOpen && (
-        <NewRecordModal
+        <SessionFormModal
           customer={customer}
-          fields={activeFields}
-          onClose={() => setModalOpen(false)}
+          sheets={activeSheets}
+          sessionToEdit={editingSession}
+          onClose={() => { setModalOpen(false); setEditingSession(undefined) }}
         />
       )}
     </div>
   )
 }
+

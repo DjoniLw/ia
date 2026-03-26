@@ -54,6 +54,7 @@ export const UpdateCustomerDto = z.object({
   notes: z.string().nullish(),
   address: AddressSchema,
   anamnesis: AnamnesisSchema,
+  bodyDataConsentAt: z.string().datetime().nullish(), // LGPD Art. 11I
 })
 export type UpdateCustomerDto = z.infer<typeof UpdateCustomerDto>
 

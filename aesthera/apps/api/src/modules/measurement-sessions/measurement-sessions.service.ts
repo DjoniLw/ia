@@ -1,0 +1,136 @@
+import type { FastifyBaseLogger } from 'fastify'
+import { ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors/app-error'
+import type {
+  CreateSessionDto,
+  ListSessionsQuery,
+  UpdateSessionDto,
+} from './measurement-sessions.dto'
+import { MeasurementSessionsRepository } from './measurement-sessions.repository'
+
+export class MeasurementSessionsService {
+  private repo = new MeasurementSessionsRepository()
+
+  async listSessions(clinicId: string, q: ListSessionsQuery) {
+    // Cross-tenant: customer pertence à clínica
+    const customer = await this.repo.findCustomerInClinic(q.customerId, clinicId)
+    if (!customer) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    return this.repo.listSessions(clinicId, q)
+  }
+
+  async createSession(
+    clinicId: string,
+    userId: string,
+    dto: CreateSessionDto,
+    logger: FastifyBaseLogger,
+  ) {
+    // 1. Cross-tenant: customer pertence à clínica
+    const customer = await this.repo.findCustomerInClinic(dto.customerId, clinicId)
+    if (!customer) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    // 2. Ao menos 1 sheetRecord com ao menos 1 valor
+    const hasAnyValue = dto.sheetRecords.some(
+      (sr) => (sr.values?.length ?? 0) + (sr.tabularValues?.length ?? 0) > 0,
+    )
+    if (!hasAnyValue) throw new ValidationError('EMPTY_SESSION')
+
+    // 3. Cross-tenant: sheets pertencem à clínica
+    const sheetIds = dto.sheetRecords.map((sr) => sr.sheetId)
+    const sheetsOwned = await this.repo.validateSheetsOwnership(sheetIds, clinicId)
+    if (!sheetsOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    // 4. Cross-tenant: fieldIds pertencem à clínica
+    const allFieldIds = [
+      ...dto.sheetRecords.flatMap((sr) => sr.values.map((v) => v.fieldId)),
+      ...dto.sheetRecords.flatMap((sr) => sr.tabularValues.map((v) => v.fieldId)),
+    ]
+    const fieldsOwned = await this.repo.validateFieldsOwnership(allFieldIds, clinicId)
+    if (!fieldsOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    // 5. Cross-tenant: columnIds são consistentes com fieldIds
+    const columnFieldMap = new Map<string, string>()
+    for (const sr of dto.sheetRecords) {
+      for (const tv of sr.tabularValues) {
+        columnFieldMap.set(tv.columnId, tv.fieldId)
+      }
+    }
+    const columnsValid = await this.repo.validateColumnsOwnership(
+      Array.from(columnFieldMap.keys()),
+      columnFieldMap,
+    )
+    if (!columnsValid) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    // 6. Warning para registro retroativo > 7 dias
+    const recordedDate = new Date(dto.recordedAt)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    if (recordedDate < sevenDaysAgo) {
+      logger.warn({ clinicId, customerId: dto.customerId, recordedAt: dto.recordedAt }, 'Retroactive measurement session')
+    }
+
+    return this.repo.createSession(clinicId, userId, dto)
+  }
+
+  async updateSession(
+    id: string,
+    clinicId: string,
+    userId: string,
+    userRole: string,
+    dto: UpdateSessionDto,
+  ) {
+    const session = await this.repo.findSessionById(id, clinicId)
+    if (!session) throw new NotFoundError('MeasurementSession')
+
+    // Cross-tenant
+    if (session.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    // Permissão: professional só pode editar sessão própria
+    if (userRole === 'professional' && session.createdById !== userId) {
+      throw new ForbiddenError('Você só pode editar evoluções criadas por você')
+    }
+
+    // Se sheetRecords fornecidos, validar cross-tenant
+    if (dto.sheetRecords) {
+      const sheetIds = dto.sheetRecords.map((sr) => sr.sheetId)
+      const sheetsOwned = await this.repo.validateSheetsOwnership(sheetIds, clinicId)
+      if (!sheetsOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+      const allFieldIds = [
+        ...dto.sheetRecords.flatMap((sr) => sr.values?.map((v) => v.fieldId) ?? []),
+        ...dto.sheetRecords.flatMap((sr) => sr.tabularValues?.map((v) => v.fieldId) ?? []),
+      ]
+      const fieldsOwned = await this.repo.validateFieldsOwnership(allFieldIds, clinicId)
+      if (!fieldsOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+      // Impedir sessão vazia após update
+      const hasAnyValues = dto.sheetRecords.some(
+        (sr) => (sr.values?.length ?? 0) + (sr.tabularValues?.length ?? 0) > 0,
+      )
+      if (!hasAnyValues) throw new ValidationError('EMPTY_SESSION')
+
+      // Validar consistência columnId → fieldId
+      const columnFieldMap = new Map<string, string>()
+      for (const sr of dto.sheetRecords) {
+        for (const tv of sr.tabularValues ?? []) {
+          columnFieldMap.set(tv.columnId, tv.fieldId)
+        }
+      }
+      if (columnFieldMap.size > 0) {
+        const columnsValid = await this.repo.validateColumnsOwnership(
+          Array.from(columnFieldMap.keys()),
+          columnFieldMap,
+        )
+        if (!columnsValid) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+      }
+    }
+
+    return this.repo.updateSession(id, clinicId, dto)
+  }
+
+  async deleteSession(id: string, clinicId: string) {
+    const session = await this.repo.findSessionById(id, clinicId)
+    if (!session) throw new NotFoundError('MeasurementSession')
+    if (session.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    await this.repo.deleteSession(id, clinicId)
+  }
+}

@@ -157,20 +157,26 @@ function fromCustomer(c: Customer): Partial<CustomerFormData> {
 
 // ──── Form Tabs ─────────────────────────────────────────────────────────────────
 
-type FormTab = 'basic' | 'address' | 'health'
+type FormTab = 'basic' | 'address' | 'contracts'
 
 function CustomerForm({
   defaultValues,
   onSave,
   isPending,
   onDirtyChange,
+  existingCustomer,
 }: {
   defaultValues?: Partial<CustomerFormData>
   onSave: (data: CustomerFormData) => Promise<void>
   isPending: boolean
   onDirtyChange?: (dirty: boolean) => void
+  existingCustomer?: Customer
 }) {
   const [tab, setTab] = useState<FormTab>('basic')
+  const [revokeConfirm, setRevokeConfirm] = useState(false)
+  const role = useRole()
+  const isAdmin = role === 'admin'
+  const lgpdUpdate = useUpdateCustomer(existingCustomer?.id ?? '')
 
   const {
     register,
@@ -187,10 +193,19 @@ function CustomerForm({
 
   useEffect(() => { onDirtyChange?.(isDirty) }, [isDirty, onDirtyChange])
 
+  async function handleRegisterConsent() {
+    await lgpdUpdate.mutateAsync({ bodyDataConsentAt: new Date().toISOString() } as Partial<Customer>)
+  }
+
+  async function handleRevokeConsent() {
+    await lgpdUpdate.mutateAsync({ bodyDataConsentAt: null } as Partial<Customer>)
+    setRevokeConfirm(false)
+  }
+
   const tabs: Array<{ id: FormTab; label: string }> = [
     { id: 'basic', label: 'Dados Básicos' },
     { id: 'address', label: 'Endereço' },
-    { id: 'health', label: 'Saúde & Anamnese' },
+    ...(existingCustomer ? [{ id: 'contracts' as FormTab, label: 'Contratos & LGPD' }] : []),
   ]
 
   return (
@@ -432,9 +447,41 @@ function CustomerForm({
         </div>
       )}
 
-      {/* Health / Anamnesis tab */}
-      {tab === 'health' && (
-        <div className="space-y-4">
+      {/* Contracts & LGPD tab */}
+      {tab === 'contracts' && existingCustomer && (
+        <div className="space-y-6">
+          {/* LGPD section */}
+          <div className="rounded-xl border p-4 space-y-3">
+            <p className="text-sm font-semibold">Consentimento LGPD (Art. 11)</p>
+            {existingCustomer.bodyDataConsentAt ? (
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Registrado em {new Date(existingCustomer.bodyDataConsentAt).toLocaleDateString('pt-BR')}
+                </p>
+                {isAdmin && (
+                  revokeConfirm ? (
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-destructive">Confirmar revogação?</p>
+                      <Button size="sm" variant="destructive" onClick={handleRevokeConsent} disabled={lgpdUpdate.isPending}>Revogar</Button>
+                      <Button size="sm" variant="outline" onClick={() => setRevokeConfirm(false)}>Cancelar</Button>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => setRevokeConfirm(true)}>Revogar</Button>
+                  )
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-sm text-muted-foreground">Consentimento não registrado</p>
+                <Button size="sm" onClick={handleRegisterConsent} disabled={lgpdUpdate.isPending}>
+                  {lgpdUpdate.isPending ? 'Salvando…' : 'Registrar consentimento'}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Anamnese */}
+          <div className="space-y-4">
           <div className="space-y-2">
             <Label>Tipo de pele</Label>
             <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('ana_skinType')}>
@@ -515,18 +562,19 @@ function CustomerForm({
               Termo de consentimento assinado
             </label>
           </div>
+          </div>{/* end anamnese */}
         </div>
       )}
 
       <div className="flex justify-between gap-2 border-t pt-4">
         <div className="flex gap-2">
           {tab !== 'basic' && (
-            <Button type="button" variant="outline" size="sm" onClick={() => setTab(tab === 'health' ? 'address' : 'basic')}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setTab(tab === 'contracts' ? 'address' : 'basic')}>
               ← Anterior
             </Button>
           )}
-          {tab !== 'health' && (
-            <Button type="button" variant="outline" size="sm" onClick={() => setTab(tab === 'basic' ? 'address' : 'health')}>
+          {tab !== 'contracts' && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setTab(tab === 'basic' ? 'address' : 'contracts')}>
               Próximo →
             </Button>
           )}
@@ -2060,6 +2108,7 @@ export default function CustomersPage() {
               onSave={handleUpdate}
               isPending={updateCustomer.isPending}
               onDirtyChange={setFormDirty}
+              existingCustomer={editing}
             />
           </div>
         </Dialog>

@@ -92,6 +92,9 @@ export class CustomersRepository {
           howFound: data.howFound ?? existingMeta.howFound ?? null,
           anamnesis: data.anamnesis ?? existingMeta.anamnesis ?? null,
         } as object,
+        ...(data.bodyDataConsentAt !== undefined && {
+          bodyDataConsentAt: data.bodyDataConsentAt ? new Date(data.bodyDataConsentAt) : null,
+        }),
       },
     })
   }
