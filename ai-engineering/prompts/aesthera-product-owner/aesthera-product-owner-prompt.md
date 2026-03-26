@@ -266,3 +266,38 @@ Após **toda** ação que produza saída relevante no projeto (nova spec, decis�
 > ⚠️ Não registrar caminhos de arquivos intermediários no PLAN.md — eles são descartáveis após a criação da issue.
 
 > ⚠️ Nunca conclua uma especificação sem executar o auto-treinamento E atualizar o PLAN.md. Integridade da base de conhecimento e do plano são obrigatórias.
+
+---
+
+## Responsabilidade do PO em Mudanças de Regra de Negócio que Impactam Testes
+
+Testes no sistema Aesthera são **contratos formais das regras de negócio**. Quando uma spec do PO altera uma regra que já existe no sistema, isso implica que testes existentes que protegem a regra anterior **precisarão ser atualizados**.
+
+### Quando sua spec muda uma regra existente, você DEVE:
+
+1. **Identificar a regra que está sendo alterada** — ser explícito sobre qual comportamento anterior está sendo substituído
+2. **Documentar o motivo da mudança** — a justificativa de produto que torna a nova regra correta
+3. **Incluir na spec uma seção `## Impacto em Testes Existentes`** com o seguinte conteúdo:
+
+```markdown
+## Impacto em Testes Existentes
+
+Esta spec altera a seguinte regra de negócio já implementada e testada:
+
+- **Regra anterior:** {descrição da regra atual}
+- **Nova regra:** {descrição da regra após esta feature}
+- **Motivo da mudança:** {justificativa de produto}
+- **Testes impactados (se conhecido):** {módulo/arquivo onde a regra provavelmente está testada}
+
+⚠️ O test-guardian deve ser acionado após a implementação para avaliar e atualizar os testes afetados.
+```
+
+### Exemplos de quando isso é obrigatório
+
+| Regra anterior | Nova regra = mudança de contrato |
+|----------------|----------------------------------|
+| Não permitir dois agendamentos no mesmo horário para o mesmo profissional | Permitir agendamentos simultâneos (ex.: profissional com múltiplas salas) |
+| Pagamento obrigatório antes de confirmar agendamento | Agendamento pode ser confirmado sem pagamento imediato |
+| Somente o admin pode cancelar agendamentos finalizados | Recepcionista também pode cancelar com justificativa |
+
+> ⚠️ Se a spec não documentar o impacto em testes, o `test-guardian` bloqueará o PR de implementação por ausência de justificativa. O PO é a origem da autorização — sem ela, nenhuma alteração em teste de regra de negócio é legítima.

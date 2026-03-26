@@ -196,6 +196,20 @@ Se a resposta for não → revise antes de prosseguir.
   - ✅ Correto: `<Input placeholder="Buscar por nome…" value={search} onChange={...} className="h-8 w-48 text-sm" />`
   - 📅 Aprendido em: 21/03/2026 — tela de estoque nova
 
+- [ ] **CTA em empty state nunca deve ser `<button>` nativo estilizado com underline — usar `<Button variant="outline">` dentro do container padronizado**
+  - 🔴 Anti-padrão: renderizar o call-to-action do estado vazio como `<button className="text-primary underline">` ou `<a>` estilizado — quebra consistência visual, não segue o design system e viola `ui-standards.md` seção 2.3
+  - ✅ Correto: usar sempre o container e botão padronizados:
+    ```tsx
+    <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+      <p className="text-sm">Nenhum registro encontrado.</p>
+      <Button variant="outline" size="sm" className="mt-3" onClick={handleAdd}>
+        Adicionar primeiro registro
+      </Button>
+    </div>
+    ```
+  - 📌 Regra geral: todo empty state com ação primária usa `<Button variant="outline" size="sm" className="mt-3">` — nunca elemento nativo. O container segue exatamente `rounded-lg border bg-card py-16 text-center text-muted-foreground` conforme `ui-standards.md` seção 2.3
+  - 📅 Aprendido em: 25/03/2026 — revisão de empty state com `<button>` nativo e underline em tela de uploads/medidas corporais
+
 ---
 
 ## Geral
@@ -230,6 +244,21 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Boa prática: incluir esta seção no template de PR do repositório (`.github/pull_request_template.md`) para que apareça automaticamente em todo PR novo
   - 📅 Aprendido em: 24/03/2026 (atualizado 24/03/2026) — revisão de workflow `test-guardian.yml`; comportamento do GitHub Actions com evento original confirmado
 
+- [ ] **Teste existente quebrando após sua implementação = NUNCA alterar o teste — classificar o tipo e acionar o `test-guardian`**
+  - 🔴 Anti-padrão (crítico): implementador modifica assertions, mocks ou remove `it()` blocks de testes existentes para o CI passar — pode estar silenciando proteção de regras de negócio críticas que a implementação violou sem perceber
+  - 📌 Dois tipos de quebra — tratamentos distintos:
+    - **Tipo 1 — Estrutural** (pode ser adaptado): o teste quebrou porque a estrutura mudou (novo campo obrigatório, assinatura alterada), mas a regra de negócio continua válida. Ex: adicionou `roomId` como obrigatório e o teste antigo não passa o campo. → test-guardian adapta o teste sem relaxar assertions.
+    - **Tipo 2 — Regra de Negócio** (NUNCA adaptar — corrigir o código): o comportamento do sistema mudou de forma que viola uma regra estabelecida. Ex: teste `não permitir dois agendamentos para o mesmo profissional no mesmo horário` quebra porque a implementação removeu a verificação de conflito. → o código está errado. O teste só pode ser alterado se o PO documentar e aprovar explicitamente a mudança de regra.
+  - ✅ Correto: ao detectar quebra, classificar e reportar ao usuário:
+    ```
+    ⚠️ Testes existentes quebraram após esta implementação:
+    - {arquivo}.test.ts: "{nome do teste}" — {erro resumido}
+      Tipo: [Estrutural | Regra de Negócio] — {justificativa}
+
+    Não alterei os testes. Acione o test-guardian.
+    ```
+  - 📅 Aprendido em: 25/03/2026 (atualizado 25/03/2026) — CI bloqueado após implementador alterar teste para contornar falha; distinção Tipo 1/Tipo 2 adicionada após análise de impacto de regra de negócio
+
 ### Arquitetura e Padrões do Projeto
 
 - [ ] **Task de formatação/máscara = alterar somente o campo alvo, nada mais**
@@ -256,3 +285,5 @@ Se a resposta for não → revise antes de prosseguir.
 | 25/03/2026 | — | 2 padrões adicionados pelo treinador-agent: (1) IDOR em updates Prisma — `update({ where: { id } })` sem `clinicId` permite alteração cross-tenant; padrão correto é `updateMany` + `findFirst` com `clinicId`; (2) catch genérico mascarando erros de infra em storage/API externo — inspecionar código de erro antes de silenciar |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: modal manual com `fixed inset-0 z-50` é anti-padrão — sempre usar `<Dialog>` do shadcn/ui (`@/components/ui/dialog`) para foco trap, animações e consistência visual |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: fluxo presign/confirm de upload — `presign` deve persistir `PendingUpload` no banco; `confirm` valida pelo `id` server-side com `clinicId`, nunca aceita `storageKey` bruto do cliente |
+| 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: CTA em empty state nunca usa `<button>` nativo com underline — padrão correto é `<Button variant="outline" size="sm" className="mt-3">` dentro de container `rounded-lg border bg-card py-16 text-center text-muted-foreground` (ui-standards.md §2.3) |
+| 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: teste existente quebrando = nunca alterar o teste, acionar test-guardian; assumir que o código está errado por padrão |

@@ -94,7 +94,7 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 - **Verificação de disponibilidade** (profissional + slot) deve ocorrer dentro de uma transação DB
 - **Nunca hard-delete** sem justificativa explícita — usar soft-delete ou cascade
 - **Mudanças mínimas e isoladas** — não refatorar código não relacionado à tarefa. Somente os arquivos listados em "Arquivos esperados para alteração" da issue podem ser modificados. Qualquer necessidade de alterar arquivo fora dessa lista deve ser reportada ao usuário antes de prosseguir.
-- **Toda implementação deve ter cobertura de testes** — ao implementar, descreva os testes necessários e acione o `test-guardian`; **nunca crie nem altere arquivos de teste diretamente** — somente o `test-guardian` tem autoridade sobre arquivos `*.test.ts` e `*.spec.ts`
+- **Toda implementação deve ter cobertura de testes** — ao implementar, descreva e crie os testes para código **novo** que você produziu (com `## Test Change Justification` obrigatório no PR body); **nunca altere testes existentes** que quebrarem após sua mudança — esse caso é exclusivo do `test-guardian`
 
 ---
 
@@ -208,65 +208,74 @@ Antes de marcar qualquer task como concluída, execute este checklist em **cada 
 
 ## Delegação de Testes ao Test Guardian
 
-> ⛔ **PROIBIDO**: criar, editar ou excluir qualquer arquivo `*.test.ts` ou `*.spec.ts`.
-> ✅ **OBRIGATÓRIO**: ao final de toda implementação, descrever os testes necessários para que o `test-guardian` os crie.
+### Dois casos — políticas distintas
 
-### O que fazer ao terminar a implementação
-
-Após concluir o código, emita obrigatoriamente o bloco abaixo antes de parar:
-
-```
-## Sugestão de Testes para o Test Guardian
-
-Módulo: {nome do módulo}
-Arquivo sugerido: aesthera/apps/api/src/modules/{módulo}/{módulo}.service.test.ts
-
-Cenários a cobrir:
-- [ ] {caso de sucesso principal}
-- [ ] {entidade não encontrada}
-- [ ] {violação de tenant / clinic_id errado}
-- [ ] {regra de negócio crítica, se houver}
-- [ ] {caso de erro esperado}
-
-Regras de negócio protegidas por estes testes:
-- {descrever brevemente cada regra}
-```
-
-### Quando o code review solicitar testes
-
-Se um code review (do Copilot ou de qualquer outro agente) indicar a necessidade de criar ou alterar testes:
-
-> ⛔ **NÃO crie os testes.** A solicitação do code review **não é uma autorização** para criar ou modificar arquivos de teste.
-
-**O que fazer:**
-
-1. Identifique os testes que o code review está pedindo
-2. Documente usando o bloco padrão **"Sugestão de Testes para o Test Guardian"** acima
-3. Inclua no bloco a origem da solicitação: `Origem: Code review — {data ou PR}`
-4. Informe o usuário explicitamente:
-
-   > `"⚠️ O code review solicitou testes para este módulo. Não posso criá-los — apenas o test-guardian tem essa autoridade. Documentei a solicitação abaixo. Para prosseguir, acione o test-guardian com o contexto a seguir."`
-
-5. Pare e aguarde o usuário acionar o `test-guardian`
-
-> ✅ **Fluxo correto**: code review pede teste → implementador documenta a solicitação → informa o usuário → usuário aciona o test-guardian.  
-> ❌ **Fluxo errado**: code review pede teste → implementador cria o arquivo de teste.
+| Situação | O que fazer |
+|----------|--------------|
+| Testes **novos** para código **novo** que você implementou | ✅ Pode criar — OBRIGATÓRIO incluir `## Test Change Justification` no PR body desde a criação |
+| Testes **existentes** que quebraram após sua mudança | ❌ Proibido alterar — acionar o `test-guardian` imediatamente |
 
 ---
 
-### O que NÃO fazer
-- ❌ Criar `*.test.ts` ou `*.spec.ts`
-- ❌ Editar testes existentes mesmo que eles falhem após sua mudança
+### Caso 1 — Criação de testes novos (permitida com justificativa)
+
+Se sua implementação introduz código novo sem cobertura existente, você **pode e deve** criar os arquivos de teste correspondentes. Porém, é **obrigatório** incluir a seção abaixo no corpo do PR **no momento da criação** (não depois):
+
+```markdown
+## Test Change Justification
+Motivo: {razão para criar estes testes}
+Referência: {número da issue ou decisão técnica}
+Impacto: {o que os testes cobrem — ex: lógica de negócio X, endpoint Y, cenário de erro Z}
+```
+
+> ⚠️ Se essa seção não estiver no PR body **desde o momento da criação**, o workflow `test-guardian.yml` bloqueará o CI automaticamente. Editar a descrição depois e clicar "Re-run" **não resolve** — o GitHub Actions usa o payload do evento original, não o body atual. A única solução é fazer um novo commit (pode ser vazio) para re-disparar o evento:
+> ```bash
+> git commit --allow-empty -m "chore: trigger CI with Test Change Justification"
+> git push
+> ```
+
+---
+
+### Caso 2 — Testes existentes que quebram após sua implementação (PROIBIDO alterar)
+
+Se sua implementação causar falha em testes existentes, **nunca altere o teste**. Antes de reportar, tente classificar o tipo de quebra:
+
+#### Tipo 1 — Falha Estrutural
+O teste quebrou porque a estrutura mudou (novo campo obrigatório, assinatura alterada), mas a regra de negócio não foi violada.
+> Exemplo: você adicionou `roomId` como obrigatório em `create()` e o teste antigo não passa o campo — a regra de negócio continua válida, só a estrutura mudou.
+
+#### Tipo 2 — Falha de Regra de Negócio
+O teste quebrou porque o comportamento do sistema mudou de forma que viola uma regra estabelecida.
+> Exemplo: você removeu a verificação de conflito de horário e o teste `não deve agendar dois atendimentos para o mesmo profissional no mesmo horário` começa a falhar — o código criou uma regressão crítica.
+
+**O que fazer em ambos os casos:**
+
+1. **Não toque no arquivo de teste**
+2. Identifique quais testes quebraram, o erro e o tipo provável
+3. Reporte ao usuário com o seguinte formato:
+
+```
+⚠️ Testes existentes quebraram após esta implementação:
+- {arquivo}.test.ts: "{nome do teste}" — {erro resumido}
+  Tipo: [Estrutural | Regra de Negócio] — {justificativa da classificação}
+
+Não alterei os testes. Acione o test-guardian para:
+- TIPO 1: adaptar o teste à nova estrutura mantendo as assertions
+- TIPO 2: confirmar que o código está violando uma regra válida e deve ser corrigido
+```
+
+4. **Aguarde** o `test-guardian` decidir. Em caso de Tipo 2, somente o PO pode autorizar mudança na regra e acionar atualização do teste.
+
+> ❌ **Anti-padrão crítico**: implementador altera o teste para o CI passar. Isso pode estar silenciando proteção de regra de negócio. CI quebrado por teste existente = sinal para acionar o `test-guardian`, não para "consertar" o teste.
+
+---
+
+### O que NUNCA fazer com testes existentes
+- ❌ Editar assertions / expects para o teste passar
+- ❌ Alterar mocks para contornar falhas
 - ❌ Comentar ou remover `it` / `test` blocks
-- ❌ Alterar mocks para contornar falhas de teste
-- ❌ Criar testes porque o code review pediu — o fluxo continua sendo: documentar e passar para o test-guardian
-
-### Quando testes existentes falham após sua implementação
-
-Se sua implementação causar falha em testes existentes:
-1. **Não altere o teste**
-2. Reporte ao usuário: `⚠️ Testes existentes falharam após esta implementação: {lista de testes}. Acione o test-guardian para avaliar se é o código ou o teste que precisa ser ajustado.`
-3. Aguarde decisão antes de avançar
+- ❌ Alterar o DTO ou schema esperado em teste existente sem aprovação do test-guardian
+- ❌ Criar testes **novos** sem incluir `## Test Change Justification` no PR body desde a criação
 
 ---
 
@@ -279,6 +288,64 @@ Após cada implementação, reportar:
 
 ### O que foi atualizado em `ai-engineering/`
 - Definições, specs ou documentação revisadas
+
+---
+
+## Roteiro de Testes Manuais (obrigatório no PR)
+
+Ao abrir o PR, incluir obrigatoriamente um comentário com o roteiro para o revisor testar manualmente o que foi implementado. O roteiro deve ser **conciso** — sem descrever cada clique, apenas o essencial para o revisor saber o que testar.
+
+### Formato obrigatório do comentário no PR
+
+```markdown
+## 🧪 Roteiro de Testes Manuais
+
+**Pré-requisitos:**
+- {ex.: clínica com pelo menos 1 profissional cadastrado}
+- {ex.: usuário com perfil Admin logado}
+
+**Cenários:**
+
+- [ ] **{nome do cenário principal}** — {uma linha descrevendo o que fazer e o que esperar}
+- [ ] **{cenário de erro ou validação}** — {o que fazer e o que deve acontecer}
+- [ ] **{edge case relevante, se houver}** — {o que fazer e o que deve acontecer}
+
+**Fluxo base:**
+1. {passo 1 — resumido}
+2. {passo 2}
+3. {passo N}
+```
+
+### Regras de preenchimento
+
+- **Pré-requisitos**: listar apenas o que precisa existir no ambiente para o teste funcionar (dados, perfil, configurações)
+- **Cenários**: máximo de 5 itens — caso feliz, validação principal, erro esperado e edge case relevante
+- **Fluxo base**: caminho mínimo necessário para chegar à feature testada (ex.: Menu → Clientes → selecionar cliente → aba Pacotes)
+- Não descrever cada campo de formulário — apenas o fluxo e o resultado esperado
+- Se a feature for exclusivamente backend/API, incluir o endpoint e o payload de teste ao invés do fluxo de UI
+
+### Exemplo
+
+```markdown
+## 🧪 Roteiro de Testes Manuais
+
+**Pré-requisitos:**
+- Clínica com 2 profissionais cadastrados
+- Agenda com pelo menos 1 agendamento existente
+
+**Cenários:**
+
+- [ ] **Criar agendamento no horário disponível** — deve ser criado com sucesso e aparecer no calendário
+- [ ] **Tentar agendar no mesmo horário de outro agendamento** — deve exibir erro "Horário indisponível"
+- [ ] **Agendar para profissional sem disponibilidade configurada** — deve exibir aviso ao usuário
+
+**Fluxo base:**
+1. Menu → Agenda → Nova consulta
+2. Selecionar profissional e data
+3. Escolher horário e confirmar
+```
+
+> ⚠️ PR sem este comentário deve ser considerado incompleto pelo revisor. O roteiro é a forma do implementador comunicar "o que devo verificar" de forma objetiva.
 
 ---
 
