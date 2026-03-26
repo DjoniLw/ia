@@ -278,31 +278,6 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
-### [2026-03-26] — Issue #122 — Redesign Fichas de Avaliação Corporal (implementado)
-- **Branch:** `feature/redesign-fichas-medidas-corporais-122`
-- **Arquivo(s) afetado(s):**
-  - `aesthera/apps/api/prisma/schema.prisma` *(7 novos modelos: `MeasurementSheet`, `MeasurementField`, `MeasurementSubColumn`, `MeasurementSession`, `MeasurementSheetRecord`, `MeasurementValue`, `MeasurementTabularValue`; novo enum `MeasurementFieldType`; `CustomerFile.measurementSessionId` adicionado)*
-  - `aesthera/apps/api/src/modules/measurement-sheets/` *(novo — dto, repository, service, routes)*
-  - `aesthera/apps/api/src/modules/measurement-sessions/` *(novo — dto, repository, service, routes)*
-  - `aesthera/apps/api/src/app.ts` *(registra `measurementSheetsRoutes` + `measurementSessionsRoutes`)*
-  - `aesthera/apps/api/src/modules/customers/customers.dto.ts` *(`bodyDataConsentAt` adicionado ao `UpdateCustomerDto`)*
-  - `aesthera/apps/api/src/modules/customers/customers.repository.ts` *(`bodyDataConsentAt` tratado em `update()`)*
-  - `aesthera/apps/api/src/modules/body-measurements/body-measurements.routes.ts` *(`X-Deprecated: true` via `addHook('onSend')`)*
-  - `aesthera/apps/api/prisma/seed-migrate-body-measurements.ts` *(novo — script de migração de dados legados em `prisma.$transaction`)*
-  - `aesthera/apps/web/lib/hooks/use-measurement-sheets.ts` *(novo — hooks TanStack Query para fichas e campos)*
-  - `aesthera/apps/web/lib/hooks/use-measurement-sessions.ts` *(novo — hooks TanStack Query para sessões de avaliação)*
-  - `aesthera/apps/web/app/(dashboard)/settings/_components/body-measurements-tab.tsx` *(reescrito — SheetDialog, FieldDialog com sub-colunas inline, SheetPanel com reordenação ↑↓)*
-  - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx` *(reescrito — SheetFormSection, SessionFormModal, CompareModal com botão X fixo, SessionCard com permissão por criador)*
-  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(aba `health` renomeada para `contracts` "Contratos & LGPD"; seção LGPD com registrar/revogar consentimento; aba oculta em modo de criação)*
-- **O que foi feito:**
-  - Schema Prisma: modelo de fichas configuráveis (`MeasurementSheet`) com campos SIMPLE (valor único + unidade) e TABULAR (sub-colunas), sessões de avaliação (`MeasurementSession`) com valores por linha, e vínculo com `CustomerFile` via `measurementSessionId`.
-  - Backend: módulo `measurement-sheets` (CRUD de fichas + campos + sub-colunas + reordenação) e módulo `measurement-sessions` (CRUD de sessões + valores); guards `jwtClinicGuard + roleGuard` em todos os endpoints; lógica de multi-tenancy via `clinicId` em todas as queries.
-  - Módulo legado `body-measurements` marcado como deprecated via cabeçalho HTTP `X-Deprecated: true`.
-  - Script de migração de dados `seed-migrate-body-measurements.ts` em transação atômica com validação de contagem e rollback automático.
-  - Frontend: hooks `useMeasurementSheets` / `useMeasurementSessions` completos; aba "Medidas Corporais" em Configurações reescrita com expansão inline por ficha, reordenação por botões ↑↓ (sem `@dnd-kit`), FieldDialog com sub-colunas inline para campos TABULAR; aba "Evolução" reescrita com `SessionFormModal` (criar+editar), `CompareModal` (bug do botão X corrigido — `absolute top-4 right-4 z-20`), `SessionCard` por ficha com grade SIMPLE e tabela TABULAR, permissão `canEdit` por papel ou criador via JWT sub.
-  - Aba "Saúde & Anamnese" renomeada para "Contratos & LGPD" (`contracts`) na ficha do cliente; aba visível apenas em modo de edição (cliente já salvo); seção LGPD com exibição de data de consentimento, "Registrar consentimento" (PATCH `bodyDataConsentAt = now()`) e "Revogar" (admin apenas, com confirmação inline).
-- **Impacto:** Módulo de medidas corporais completamente redesenhado. Requer `prisma migrate dev` para aplicar migrations dos 7 novos modelos. Script de migração de dados legados deve ser executado separadamente após a migration (`npx ts-node prisma/seed-migrate-body-measurements.ts`). Módulo `body-measurements` legado mantido para retrocompatibilidade com clientes antigos mas marcado como deprecated.
-
 ### [2026-03-25] — Treinamento dos agentes: padrões de filtros nos learnings (issue #124)
 - **Arquivo(s) afetado(s):**
   - `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md`
