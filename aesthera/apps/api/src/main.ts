@@ -12,21 +12,26 @@ import { logger } from './shared/logger/logger'
  * We need two competing goals:
  *
  *   1. Railway's health-check hits `/health` within ~2 minutes of deploy.
- *      This means the HTTP port must be bound BEFORE prisma db push finishes.
+ *      This means the HTTP port must be bound BEFORE prisma migrate deploy finishes.
  *
  *   2. The database schema must be fully applied before any real API request
  *      is served (prevents P2021 / P2022 errors on new tables / columns).
  *
  * Solution:
  *   • Bind the port first so `/health` is reachable immediately.
- *   • Start `prisma db push` right after binding (non-blocking).
- *   • Expose a `schemaSyncReady` promise that resolves/rejects when the push
+ *   • Start `prisma migrate deploy` right after binding (non-blocking).
+ *   • Expose a `schemaSyncReady` promise that resolves/rejects when the migration
  *     finishes.
  *   • The app's preHandler hook (added below) awaits `schemaSyncReady` for
  *     every non-health route, so real requests queue up harmlessly until the
  *     schema is consistent.
- *   • If the push fails the promise rejects, the preHandler returns 503, and
+ *   • If the migration fails the promise rejects, the preHandler returns 503, and
  *     Railway keeps the old replica alive while alerting on the deploy failure.
+ *
+ * Why `migrate deploy` and not `db push`:
+ *   • `migrate deploy` applies migrations from the /prisma/migrations folder
+ *     and records them in `_prisma_migrations` — safe, idempotent, auditable.
+ *   • `db push --accept-data-loss` can silently drop columns/data in production.
  */
 
 // Resolved when schema sync is complete, rejected if it fails.
@@ -54,22 +59,22 @@ function startSchemaSyncBackground(): void {
     return
   }
 
-  logger.info('⏳ Starting prisma db push (schema sync)…')
+  logger.info('⏳ Running prisma migrate deploy (schema sync)…')
 
   execFile(
     prismaBin,
-    ['db', 'push', '--accept-data-loss'],
+    ['migrate', 'deploy'],
     { timeout: SCHEMA_SYNC_TIMEOUT_MS },
     (error) => {
       if (error) {
         logger.error(
           { err: error },
-          '❌ prisma db push failed — API is serving 503 for non-health routes. ' +
+          '❌ prisma migrate deploy failed — API is serving 503 for non-health routes. ' +
           'Check DATABASE_URL and the Railway PostgreSQL service.',
         )
         _rejectSchemaSyncReady(error)
       } else {
-        logger.info('✅ Schema sync complete — API is now fully operational')
+        logger.info('✅ Migrations applied — API is now fully operational')
         _resolveSchemaSyncReady()
       }
     },
