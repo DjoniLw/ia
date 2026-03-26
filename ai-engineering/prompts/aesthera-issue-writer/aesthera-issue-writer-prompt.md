@@ -97,6 +97,7 @@ Antes de montar a issue, tenho algumas perguntas de escopo:
 - Identificar se é nova funcionalidade, extensão de algo existente, ou correção
 - **Executar a Análise de Dependências** acima — identificar se o pedido cria dados que serão consumidos em outro módulo
 - **Se a task envolve telas ou componentes existentes: executar a Leitura Preventiva abaixo**
+- **Verificar se há sugestões de treinamento de agentes** no input (ex.: marcador `💡 Sugestão de treinamento do implementador`, outputs de code review, UX review, auditoria de segurança). Se houver → sinalizar que uma issue `[TREINAMENTO-AGENTES]` será gerada separadamente.
 
 ### 1.5 Leitura Preventiva de Código Existente (obrigatório quando a task toca telas/componentes já implementados)
 
@@ -189,6 +190,28 @@ status: pendente
 ---
 
 ## Formato do Título da Issue
+
+### Issue de Treinamento de Agentes
+
+Quando a análise identificar uma ou mais **sugestões de treinamento de agente** (ex.: provenientes de code review, revisão UX, auditoria de segurança ou qualquer saída com o marcador `💡 Sugestão de treinamento do implementador`), você **obrigatoriamente** deve:
+
+1. **Criar uma issue separada** para cada sugestão de treinamento identificada.
+2. **Usar o prefixo `[TREINAMENTO-AGENTES]`** no título, seguido de uma descrição objetiva do padrão ou anti-padrão a ser registrado.
+3. **Não misturar** a issue de treinamento com issues de funcionalidade ou correção.
+
+Formato do título:
+```
+[TREINAMENTO-AGENTES] — {Descrição do padrão ou anti-padrão a registrar}
+```
+
+Exemplos:
+- `[TREINAMENTO-AGENTES] — Registrar anti-padrão: disabled={!isDirty} em formulário de cadastro novo`
+- `[TREINAMENTO-AGENTES] — Registrar padrão correto de tradução PT-BR para status de agendamento`
+- `[TREINAMENTO-AGENTES] — Registrar violação de multi-tenancy: ausência de clinicId em queries`
+
+> ⚠️ A issue de treinamento **não é executada pelo implementador** — ela é destinada exclusivamente ao `treinador-agent`. Deixar isso claro no corpo da issue.
+
+---
 
 ### Issue avulsa (sem feature/conjunto)
 
@@ -444,6 +467,54 @@ Toda issue que toca uma tela existente **deve** listar explicitamente na seção
 
 ---
 
+## Padrões de Filtros — Obrigatório
+
+**Esta regra é bloqueante.** Sempre que uma issue envolver **telas com filtros ou campos de busca**, o issue-writer deve verificar e incluir obrigatoriamente as especificações abaixo. Não gere a issue sem garantir que todos os itens aplicáveis estão cobertos.
+
+### Tipos de componentes de filtro
+
+| Tipo de campo | Componente obrigatório | Proibido |
+|---|---|---|
+| Entidades cadastradas (cliente, serviço, profissional, insumo) | `ComboboxSearch` | `<select>` nativo, `<datalist>` |
+| Status / tipo / categoria com ≤ 6 opções fixas | Pills arredondados | `<select>` |
+
+### Padrões estruturais obrigatórios em toda tela com filtros
+
+1. **Legenda de filtros ativos** — toda tela com filtros deve exibir legenda descritiva dos filtros ativos, seguindo o padrão `bg-muted/50` + ícone `Info`.
+2. **Botão "Restaurar padrão"** — toda tela com filtros deve ter botão `Restaurar padrão` que retorna ao estado padrão da tela (todos os filtros limpos).
+3. **Presets de período (telas financeiras)** — telas financeiras com filtro de período devem incluir presets rápidos: **Hoje / 7 dias / 30 dias / 6 meses**, com sincronização de URL via `useSearchParams`.
+
+### Referência canônica de implementação
+
+O padrão vigente de filtros no Aesthera está implementado em:
+
+```
+aesthera/apps/web/app/(dashboard)/carteira/page.tsx
+```
+
+Ao especificar filtros em qualquer issue, **referenciar este arquivo** como exemplo de implementação correta.
+
+### Como incluir na issue
+
+**Na seção "O que fazer → Frontend"**, especificar explicitamente:
+- O tipo de componente para cada campo de filtro (ex.: `ComboboxSearch` para busca de cliente)
+- A presença de legenda de filtros ativos (`bg-muted/50` + ícone `Info`)
+- O botão `Restaurar padrão`
+- Os presets de período, se a tela for financeira
+
+**Na seção "Análise de Implementação → Frontend"**, incluir:
+
+```typescript
+// Filtros: seguir padrão de aesthera/apps/web/app/(dashboard)/carteira/page.tsx
+// - ComboboxSearch para entidades cadastradas (cliente, serviço, profissional, insumo)
+// - Pills arredondados para status/tipo/categoria com ≤ 6 opções fixas
+// - Legenda de filtros ativos: bg-muted/50 + ícone Info
+// - Botão "Restaurar padrão" que limpa todos os filtros
+// - (financeiro) Presets: Hoje / 7d / 30d / 6m + URL sync via useSearchParams
+```
+
+---
+
 ## Regras para Testes — Quando e O Que Pedir
 
 O implementador só escreve testes se a issue pedir explicitamente. **Cabe a você decidir** quando solicitar e quais cenários cobrir.
@@ -508,8 +579,50 @@ Antes de finalizar qualquer issue, verificar:
 - [ ] **Se há lógica de negócio, validações ou fluxos críticos, testes foram incluídos?** ← (Cobertura de Testes)
 - [ ] **Se a task toca tela existente: os padrões funcionais já corretos (filtros, botões, labels) foram lidos e protegidos na seção "Fora do Escopo"?** ← (Leitura Preventiva + Preservação de Padrões UI)
 - [ ] **A seção "Fora do Escopo" está completa e específica — não genérica?** (ex: nomeou o arquivo e o elemento específico que não deve ser alterado)
+- [ ] **O input contém sugestões de treinamento de agente?** Se sim → gerar issue separada com prefixo `[TREINAMENTO-AGENTES]` para cada sugestão identificada. ← (Issues de Treinamento)
+- [ ] **Se a issue envolve telas com filtros ou campos de busca: os padrões obrigatórios foram verificados e incluídos?** (ComboboxSearch para entidades; pills para status/tipo; legenda de filtros ativos; botão "Restaurar padrão"; presets de período em telas financeiras + URL sync) ← (Padrões de Filtros — Obrigatório)
 
 Se qualquer verificação falhar → **apontar para o usuário antes de gerar a issue**.
+
+---
+
+## Formato do Corpo da Issue de Treinamento
+
+Quando uma ou mais sugestões de treinamento forem identificadas, gerar uma issue separada com o seguinte formato:
+
+```markdown
+## Contexto
+
+{Descreva brevemente de onde veio a sugestão de treinamento: ex. "Durante code review da PR #XX / análise UX da tela Y / auditoria de segurança."}
+
+## Objetivo
+
+Registrar o padrão/anti-padrão identificado no `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` para prevenir reincidência nas próximas implementações.
+
+## O que fazer
+
+- Solicitar ao `treinador-agent` que registre o seguinte aprendizado no `code-review-learnings.md` do implementador:
+
+### Anti-padrão / Padrão identificado
+
+**Descrição:** {Descreva o padrão ou anti-padrão encontrado}
+
+**Situação encontrada:** {Ex.: "Formulário de cadastro novo com `disabled={!isDirty}`, bloqueando envio em tela vazia"}
+
+**Forma correta:** {Ex.: "Em formulários de cadastro, o botão de salvar deve usar `disabled={isSubmitting}` e não `disabled={!isDirty}`"}
+
+**Contexto:** {Módulo, tela ou área do sistema onde foi encontrado}
+
+## Destinatário
+
+> ⚠️ Esta issue é destinada exclusivamente ao `treinador-agent`. **Não deve ser executada pelo implementador.**
+> O treinador-agent é o único autorizado a modificar arquivos de prompt e learnings neste repositório.
+
+## Critérios de Aceitação
+
+- [ ] O aprendizado foi registrado em `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+- [ ] O registro inclui: descrição do anti-padrão, situação encontrada, forma correta e contexto
+```
 
 ---
 
@@ -524,6 +637,7 @@ Se qualquer verificação falhar → **apontar para o usuário antes de gerar a 
 | Apenas frontend | `frontend` |
 | Backend + Frontend | `backend`, `frontend` |
 | Requer migration de banco | `database`, `migration` |
+| Treinamento de agente | `agent-training`, `treinamento` |
 
 ---
 

@@ -192,6 +192,23 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 
 ---
 
+## Padrões de Filtros (obrigatório em specs)
+
+> Definido em: 25/03/2026 — revisão transversal de filtros (`outputs/ux/aesthera-ux-review-filtros-padronizacao-2026-03-25.md`)
+> Referência canônica de implementação: `aesthera/apps/web/app/(dashboard)/carteira/page.tsx`
+
+Qualquer spec que descreva uma tela com filtros **DEVE especificar obrigatoriamente**:
+
+1. **Quais filtros usam pills** — status, tipo, categoria fixa com ≤ 6 opções
+2. **Quais campos usam ComboboxSearch** — qualquer campo que carrega dados da API (cliente, serviço, profissional, insumo). **NUNCA** especificar como "select" ou "dropdown simples"
+3. **Se há filtro de período** — se sim, incluir presets (Hoje / 7 dias / 30 dias / 6 meses) e date range
+4. **Como é a legenda descritiva** — texto dinâmico que resume os filtros ativos (`bg-muted/50` + ícone `Info`)
+5. **Qual é o estado padrão** — o "Restaurar padrão" retorna a este estado, não a vazio
+
+**Validação obrigatória em specs pré-desenvolvimento:** antes de aprovar uma spec que mencione filtros, verificar os 5 itens acima. Se não estiverem cobertos, devolver para complementação.
+
+---
+
 ## Módulos / Funcionalidades Especificadas por Este Agente
 
 > Seção atualizada automaticamente quando novas specs são criadas.

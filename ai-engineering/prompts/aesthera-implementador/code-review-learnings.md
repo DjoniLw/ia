@@ -115,6 +115,36 @@ Se a resposta for não → revise antes de prosseguir.
 
 ## Frontend
 
+### Filtros e Pesquisa
+
+- [ ] **`<select>` nativo para entidades cadastradas é BLOQUEANTE**
+  - 🔴 Anti-padrão: qualquer `<select>/<option>` ou `<datalist>` para campos que carregam dados dinâmicos da API (clientes, serviços, profissionais, insumos, salas, equipamentos)
+  - ✅ Correto: sempre usar `<ComboboxSearch>` do design system (`/components/ui/combobox-search.tsx`). O componente deve ser criado antes de qualquer tela nova que precise desse padrão.
+  - 📅 Aprendido em: 25/03/2026 — revisão transversal de filtros (issue #124)
+
+---
+
+- [ ] **`<select>` para status/tipo fixo deve ser corrigido**
+  - 🔴 Anti-padrão: `<select>` para filtros com opções fixas (≤ 6 opções) — quebra consistência com pills já usados em outras telas
+  - ✅ Correto: pills `rounded-full border px-3 py-1 text-xs font-medium` com `border-primary bg-primary text-primary-foreground` quando ativo
+  - 📅 Aprendido em: 25/03/2026 — revisão transversal de filtros (issue #124)
+
+---
+
+- [ ] **Toda tela com filtros deve ter legenda descritiva + botão restaurar**
+  - 🔴 Anti-padrão: entregar tela com filtros sem legenda de "o que está filtrado" e sem atalho de reset
+  - ✅ Correto: implementar `buildFilterLabel()` + legenda `bg-muted/50 rounded-lg` + botão "Restaurar padrão" que retorna ao estado padrão (não vazio). Referência: `/carteira/page.tsx`
+  - 📅 Aprendido em: 25/03/2026 — revisão transversal de filtros (issue #124)
+
+---
+
+- [ ] **Filtros de telas financeiras DEVEM ter URL sync**
+  - 🔴 Anti-padrão: filtros de data/período em telas financeiras sem `useSearchParams` — usuário perde contexto ao navegar
+  - ✅ Correto: `useSearchParams` + `router.replace()` para sincronizar todos os filtros ativos na URL. Referência: `/carteira/page.tsx`
+  - 📅 Aprendido em: 25/03/2026 — revisão transversal de filtros (issue #124)
+
+---
+
 ### Textos e Internacionalização (PT-BR)
 
 <!-- Itens serão adicionados automaticamente após code reviews -->
@@ -259,6 +289,27 @@ Se a resposta for não → revise antes de prosseguir.
     ```
   - 📅 Aprendido em: 25/03/2026 (atualizado 25/03/2026) — CI bloqueado após implementador alterar teste para contornar falha; distinção Tipo 1/Tipo 2 adicionada após análise de impacto de regra de negócio
 
+- [ ] **Após abrir qualquer PR, adicionar o roteiro de testes manuais como comentário — nunca no corpo do PR**
+  - 🔴 Anti-padrão: abrir o PR sem o comentário de roteiro; colocar os cenários no corpo do PR (onde ficam misturados com a descrição técnica e não são atualizáveis sem risco de disparar CI)
+  - ✅ Correto: imediatamente após criar o PR, executar `mcp_github_add_issue_comment` com o formato padrão já definido no prompt:
+    ```markdown
+    ## 🧪 Roteiro de Testes Manuais
+
+    **Pré-requisitos:**
+    - {ex.: clínica com pelo menos 1 profissional cadastrado}
+
+    **Cenários:**
+    - [ ] **{cenário principal}** — {o que fazer e o que esperar}
+    - [ ] **{validação / erro esperado}** — {o que fazer e o que deve acontecer}
+
+    **Fluxo base:**
+    1. {passo mínimo para chegar à feature}
+    2. {passo 2}
+    ```
+  - 📌 Máximo de 5 cenários: caso feliz, validação principal, erro esperado e edge case relevante — sem descrever cada clique
+  - 📌 Se a feature for exclusivamente backend/API, substituir o fluxo de UI pelo endpoint + payload de teste
+  - 📅 Aprendido em: 25/03/2026 — padrão definido após ausência recorrente de roteiro de teste manual em PRs
+
 ### Arquitetura e Padrões do Projeto
 
 - [ ] **Task de formatação/máscara = alterar somente o campo alvo, nada mais**
@@ -287,3 +338,5 @@ Se a resposta for não → revise antes de prosseguir.
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: fluxo presign/confirm de upload — `presign` deve persistir `PendingUpload` no banco; `confirm` valida pelo `id` server-side com `clinicId`, nunca aceita `storageKey` bruto do cliente |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: CTA em empty state nunca usa `<button>` nativo com underline — padrão correto é `<Button variant="outline" size="sm" className="mt-3">` dentro de container `rounded-lg border bg-card py-16 text-center text-muted-foreground` (ui-standards.md §2.3) |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: teste existente quebrando = nunca alterar o teste, acionar test-guardian; assumir que o código está errado por padrão |
+| 25/03/2026 | — | 4 padrões adicionados pelo treinador-agent (issue #124 — revisão transversal de filtros): (1) `<select>` para entidades cadastradas é BLOQUEANTE — usar `<ComboboxSearch>`; (2) `<select>` para status fixo → corrigir para pills; (3) legenda descritiva + botão "Restaurar padrão" obrigatórios em toda tela com filtros; (4) URL sync via `useSearchParams` em filtros de telas financeiras |
+| 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: após abrir qualquer PR, adicionar cenários de teste manual como comentário (não no corpo) via `mcp_github_add_issue_comment` — tabela Markdown por área (Settings, Ficha do Cliente, API/Multi-tenancy, Scripts) com colunas #, Cenário, Resultado esperado; cobrir fluxo feliz, casos de borda, permissões por papel e estados vazios/negativos |
