@@ -47,7 +47,7 @@ export const schemaSyncReady: Promise<void> = new Promise((res, rej) => {
 // not outlive a failed deployment attempt.
 const SCHEMA_SYNC_TIMEOUT_MS = 110_000
 
-function runMigrateDeployWithRetry(prismaBin: string, retriesLeft = 1): void {
+function runMigrateDeployWithRetry(prismaBin: string, retriesLeft = 10): void {
   execFile(
     prismaBin,
     ['migrate', 'deploy'],
