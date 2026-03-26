@@ -176,19 +176,20 @@ export function BodyMeasurementsTab() {
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : fields.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
-          <Ruler className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">Nenhum campo configurado.</p>
-          <button
-            type="button"
+        <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+          <Ruler className="mx-auto mb-2 h-8 w-8 opacity-30" />
+          <p className="text-sm">Nenhum campo configurado.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
             onClick={() => {
               setEditingField(undefined)
               setDialogOpen(true)
             }}
-            className="mt-1 text-sm underline text-primary hover:opacity-80"
           >
-            + Adicionar campo
-          </button>
+            Adicionar campo
+          </Button>
         </div>
       ) : (
         <div className="rounded-xl border divide-y overflow-hidden">
