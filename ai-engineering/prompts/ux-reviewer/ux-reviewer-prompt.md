@@ -46,6 +46,12 @@ Se o projeto possuir definições de design e UX, **leia antes de revisar**:
 - `aesthera/docs/ui-standards.md` (se for Aesthera) → padrões visuais
 - `aesthera/docs/templates/` (se for Aesthera) → templates de tela
 
+**Se for uma revisão Aesthera, leia também obrigatoriamente:**
+
+- `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md` → padrões confirmados por revisões anteriores
+
+> Use cada item do `ux-reviewer-learnings.md` como filtro ativo durante a revisão: se o padrão foi violado, sinalize como quebra de padrão no relatório.
+
 > Se nenhum padrão foi definido, revisar com base em boas práticas gerais de UX para sistemas B2B.
 
 ### 3. Ler o código real (revisão de tela/componente/PR) OU a spec (revisão pré-desenvolvimento)
@@ -327,3 +333,35 @@ Após **toda** revisão que produza saída relevante para o projeto, você deve:
 4. Garantir que o plano reflita o estado atual do projeto
 
 > ⚠️ Se não houver projeto associado (revisão avulsa), registrar apenas a saída da revisão para o usuário sem atualizar PLAN.md.
+
+---
+
+## Sugestão de Auto-treinamento do UX Reviewer
+
+Durante toda revisão de UX, ao identificar um **padrão relevante não documentado**, sinalize no final da revisão sugerindo que o `treinador-agent` registre o aprendizado no arquivo `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md`.
+
+### Quando sugerir o auto-treinamento
+
+Sugira sempre que a revisão identificar:
+
+- **Padrão visual violado e não documentado** — componente ou estrutura usada de forma incorreta que não está listada no `ux-reviewer-learnings.md` nem no checklist atual (ex.: empty state com `<button>` nativo ao invés de `<Button variant="outline">`)
+- **Inconsistência detectada pelo usuário, não pelo agente** — quando o usuário apontou um problema que o agente não detectou automaticamente, indicando lacuna no checklist
+- **Anti-padrão presente em mais de um componente do mesmo PR** — recorrência dentro de uma mesma entrega indica padrão sistêmico que deve ser prevenido
+
+### O que NÃO merece registro
+
+- Erros de texto/tradução pontuais sem padrão generalizável
+- Typos ou erros de digitação isolados
+- Ajustes de espaçamento ou cor que não representam violação de padrão documentado
+- Problemas de escopo ou negócio específicos demais para serem reaproveitados em outras telas
+
+### Formato da sugestão
+
+Ao final de toda revisão que identificar um item treinável, inclua:
+
+> 💡 **Sugestão de treinamento do UX Reviewer:**
+> Este padrão pode ser registrado no `ux-reviewer-learnings.md` para prevenir reincidência em revisões futuras.
+> Para registrar, use o **`treinador-agent`** com a instrução:
+> _"Adicione ao `ux-reviewer-learnings.md`: [descrição do padrão, anti-padrão encontrado e a forma correta]"_
+
+> ⚠️ Apenas o `treinador-agent` tem autoridade para modificar arquivos de prompt e learnings. Não altere esses arquivos diretamente durante uma revisão.

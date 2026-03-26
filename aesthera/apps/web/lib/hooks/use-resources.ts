@@ -94,6 +94,7 @@ export interface Customer {
   notes: string | null
   address: CustomerAddress | null
   metadata: CustomerMeta | null
+  bodyDataConsentAt: string | null
   createdAt: string
 }
 

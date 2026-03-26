@@ -30,6 +30,8 @@ import { promotionsRoutes } from './modules/promotions/promotions.routes'
 import { packagesRoutes } from './modules/packages/packages.routes'
 import { accountsPayableRoutes } from './modules/accounts-payable/accounts-payable.routes'
 import { manualReceiptsRoutes } from './modules/manual-receipts/manual-receipts.routes'
+import { uploadsRoutes } from './modules/uploads/uploads.routes'
+import { bodyMeasurementsRoutes } from './modules/body-measurements/body-measurements.routes'
 import { PUBLIC_ROUTES } from './shared/constants/public-routes'
 import './domain-event-handlers'
 
@@ -139,6 +141,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await packagesRoutes(app)
   await accountsPayableRoutes(app)
   await manualReceiptsRoutes(app)
+  await uploadsRoutes(app)
+  await bodyMeasurementsRoutes(app)
 
   return app
 }

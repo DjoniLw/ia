@@ -21,7 +21,62 @@ Testes NÃO são apenas técnicos. Eles representam **regras de negócio e contr
 Se um teste falhar:
 
 ➡️ **ASSUMA que o código está errado**
-➡️ **NÃO permita alterar o teste** sem justificativa forte e confirmação do PO
+➡️ **NÃO permita alterar o teste** sem identificar o tipo de falha e, se for regra de negócio, sem confirmação explícita do PO
+
+---
+
+## Classificação Obrigatória de Falha de Teste
+
+Todo teste que quebra deve ser classificado pelo test-guardian em um de dois tipos **antes de qualquer decisão**:
+
+### Tipo 1 — Falha Estrutural (pode ser corrigida)
+
+O teste quebrou porque a **estrutura** do código mudou, mas nenhuma regra de negócio foi violada.
+
+Características:
+- A regra de negócio que o teste protege **continua válida**
+- O que mudou foi a forma: novo campo obrigatório, método renomeado, DTO com nova propriedade, assinatura de função alterada
+- O teste precisa ser **adaptado** para refletir a nova estrutura, sem relaxar a asserção
+
+**Exemplo:**
+> Feature adiciona campo `roomId` como obrigatório. O teste de criação de agendamento quebra porque não passa `roomId`. A regra de negócio não foi violada — o teste só precisa incluir o campo na chamada.
+
+**Ação:** test-guardian pode adaptar o teste, mantendo todas as asserções de valor e comportamento intactas.
+
+---
+
+### Tipo 2 — Falha de Regra de Negócio (BLOQUEIA — nunca consertar o teste)
+
+O teste quebrou porque o **comportamento do sistema mudou** de uma forma que viola uma regra de negócio estabelecida.
+
+Características:
+- A asserção do teste era correta e protegia um comportamento essencial
+- O que quebrou foi o **comportamento do sistema**, não a estrutura
+- "Consertar" o teste significaria remover a proteção de uma regra de negócio
+
+**Exemplo:**
+> Teste protege a regra: `não permitir dois agendamentos para o mesmo profissional no mesmo horário`. Uma implementação remove a verificação de conflito e o teste começa a falhar. O teste está certo: o código criou uma regressão crítica.
+
+**Ação obrigatória:**
+1. 🚨 **BLOQUEAR** — o código está errado, não o teste
+2. Emitir: `🚨 FALHA DE REGRA DE NEGÓCIO — {teste} — a implementação violou: {regra}`
+3. Reportar ao implementador para corrigir o código
+4. **PROIBIDO** alterar o teste independentemente de qualquer argumento de prazo ou conveniência
+
+**Exceção — única situação em que o teste pode ser alterado no Tipo 2:**
+> O PO documentou e aprovou explicitamente que a regra de negócio mudou, com justificativa de produto registrada na issue ou spec. Neste caso, o PO deve especificar **qual regra foi alterada**, **por quê**, e o teste deve ser atualizado para refletir a **nova** regra — nunca simplesmente removido ou enfraquecido.
+
+---
+
+### Tabela Rápida de Decisão
+
+| Pergunta | Tipo 1 — Estrutural | Tipo 2 — Regra de Negócio |
+|----------|---------------------|---------------------------|
+| A regra de negócio que o teste protege ainda é válida? | Sim | Sim (mas o código violou) |
+| O que quebrou foi a estrutura (campo novo, assinatura)? | Sim | Não |
+| O comportamento do sistema mudou indevidamente? | Não | Sim |
+| Posso adaptar o teste? | Sim, sem relaxar assertions | NÃO — corrigir o código |
+| Precisa de aprovação do PO para alterar o teste? | Não | Sim — obrigatório |
 
 ---
 
@@ -79,9 +134,8 @@ Para cada teste analisado:
 
 ### PERMITIDO alterar teste SOMENTE SE
 
-1. A regra de negócio mudou oficialmente
-2. O PO confirmou e documentou a mudança
-3. Uma justificativa clara foi fornecida no PR
+1. **Tipo 1 (Estrutural):** a estrutura mudou mas a regra de negócio continua válida — adaptar o teste sem relaxar assertions
+2. **Tipo 2 (Regra de Negócio):** a regra de negócio mudou **e** o PO documentou e aprovou explicitamente a mudança com justificativa registrada na issue ou spec
 
 ---
 

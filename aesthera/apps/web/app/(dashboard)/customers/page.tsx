@@ -41,6 +41,7 @@ import { useRole } from '@/lib/hooks/use-role'
 import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
+import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
 import {
   WALLET_ENTRY_TYPE_LABELS,
   WALLET_ENTRY_TYPE_COLORS,
@@ -942,7 +943,7 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
 
 // ──── Customer Detail Panel ────────────────────────────────────────────────────
 
-type DetailTab = 'profile' | 'history' | 'wallet' | 'prontuario' | 'contracts'
+type DetailTab = 'profile' | 'history' | 'wallet' | 'prontuario' | 'contracts' | 'evolucao'
 
 // Types for the new-entry form
 type EntryType = ClinicalRecord['type']
@@ -1194,7 +1195,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos']] as const).map(([id, label]) => (
+        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos'], ['evolucao', 'Evolução']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -1890,6 +1891,15 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             Os contratos serão enviados via WhatsApp com link único para assinatura online.
           </p>
         </div>
+      )}
+
+      {/* ── Evolução corporal ──────────────────────────────────────── */}
+      {detailTab === 'evolucao' && (
+        <EvolutionTab customer={{
+          id: customer.id,
+          name: customer.name,
+          bodyDataConsentAt: customer.bodyDataConsentAt,
+        }} />
       )}
 
       <div className="flex justify-end gap-2 border-t pt-3">

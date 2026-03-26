@@ -81,7 +81,7 @@ vi.mock('../../config/company.config', () => ({
 }))
 vi.mock('bcryptjs', () => ({ default: mockBcrypt }))
 vi.mock('../notifications/notifications.service', () => ({
-  NotificationsService: vi.fn(() => ({ sendEmail: vi.fn().mockResolvedValue(undefined) })),
+  NotificationsService: vi.fn().mockImplementation(() => ({ sendEmail: vi.fn().mockResolvedValue(undefined) })),
 }))
 vi.mock('../../shared/logger/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
