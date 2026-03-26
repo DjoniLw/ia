@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MeasurementSheetsService } from './measurement-sheets.service'
 import { MeasurementSheetsRepository } from './measurement-sheets.repository'
-import { ValidationError, ConflictError, NotFoundError, ForbiddenError } from '../../shared/errors/app-error'
+import { ValidationError, ConflictError, ForbiddenError } from '../../shared/errors/app-error'
 
 vi.mock('./measurement-sheets.repository')
 
 const CLINIC_ID = 'clinic-1'
 const SHEET_ID = 'sheet-1'
 const FIELD_ID = 'field-1'
-const COL_ID = 'col-1'
 
 function makeSheet(overrides = {}) {
   return {

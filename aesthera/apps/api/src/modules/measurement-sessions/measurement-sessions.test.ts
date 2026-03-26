@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MeasurementSessionsService } from './measurement-sessions.service'
 import { MeasurementSessionsRepository } from './measurement-sessions.repository'
-import { ValidationError, ForbiddenError, NotFoundError } from '../../shared/errors/app-error'
+import { ForbiddenError } from '../../shared/errors/app-error'
 
 vi.mock('./measurement-sessions.repository')
 

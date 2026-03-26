@@ -129,7 +129,7 @@ export class MeasurementSheetsService {
     return this.repo.updateField(fieldId, clinicId, dto)
   }
 
-  async deleteField(sheetId: string, fieldId: string, clinicId: string) {
+  async deleteField(_sheetId: string, fieldId: string, clinicId: string) {
     const field = await this.repo.findFieldById(fieldId, clinicId)
     if (!field) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
@@ -159,7 +159,7 @@ export class MeasurementSheetsService {
 
   // ─── Sub-colunas ──────────────────────────────────────────────────────────
 
-  async createSubColumn(sheetId: string, fieldId: string, clinicId: string, dto: CreateSubColumnDto) {
+  async createSubColumn(_sheetId: string, fieldId: string, clinicId: string, dto: CreateSubColumnDto) {
     const field = await this.repo.findFieldById(fieldId, clinicId)
     if (!field) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
@@ -181,7 +181,7 @@ export class MeasurementSheetsService {
     return this.repo.createSubColumn(fieldId, dto)
   }
 
-  async updateSubColumn(sheetId: string, fieldId: string, colId: string, clinicId: string, dto: UpdateSubColumnDto) {
+  async updateSubColumn(_sheetId: string, fieldId: string, colId: string, clinicId: string, dto: UpdateSubColumnDto) {
     const field = await this.repo.findFieldById(fieldId, clinicId)
     if (!field) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
@@ -192,7 +192,7 @@ export class MeasurementSheetsService {
     return this.repo.updateSubColumn(colId, fieldId, dto)
   }
 
-  async deleteSubColumn(sheetId: string, fieldId: string, colId: string, clinicId: string) {
+  async deleteSubColumn(_sheetId: string, fieldId: string, colId: string, clinicId: string) {
     const field = await this.repo.findFieldById(fieldId, clinicId)
     if (!field) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
