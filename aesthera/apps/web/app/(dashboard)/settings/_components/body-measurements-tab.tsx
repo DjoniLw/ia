@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect } from 'react'
 import {
@@ -62,37 +62,37 @@ const MAX_SHEET_COLUMNS = 10
 // â”€â”€ Schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const sheetSchema = z.object({
-  name: z.string().min(1, 'Nome obrigatÃ³rio').max(100),
+  name: z.string().min(1, 'Nome obrigatório').max(100),
   type: z.enum(['SIMPLE', 'TABULAR']),
 })
 type SheetForm = z.infer<typeof sheetSchema>
 
 const fieldSchema = z.object({
-  name: z.string().min(1, 'Nome obrigatÃ³rio').max(100),
+  name: z.string().min(1, 'Nome obrigatório').max(100),
   inputType: z.enum(['INPUT', 'CHECK']),
   unit: z.string().max(20).optional(),
 })
 type FieldForm = z.infer<typeof fieldSchema>
 
 const columnSchema = z.object({
-  name: z.string().min(1, 'Nome obrigatÃ³rio').max(100),
+  name: z.string().min(1, 'Nome obrigatório').max(100),
   inputType: z.enum(['INPUT', 'CHECK']),
   unit: z.string().max(20).optional(),
 })
 type ColumnForm = z.infer<typeof columnSchema>
 
-// â”€â”€ UtilitÃ¡rios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€ Utilitários â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function inputTypeBadge(inputType: MeasurementInputType) {
   if (inputType === 'INPUT')
     return (
       <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
-        DigitaÃ§Ã£o
+        Digitação
       </span>
     )
   return (
     <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-      MarcaÃ§Ã£o
+      Marcação
     </span>
   )
 }
@@ -155,7 +155,7 @@ function SheetDialog({
       if (code === 'MAX_SHEETS_REACHED') {
         toast.error(`Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido`)
       } else if (code === 'CONFLICT') {
-        toast.error('JÃ¡ existe uma ficha com este nome')
+        toast.error('Já existe uma ficha com este nome')
       } else {
         toast.error('Erro ao salvar ficha')
       }
@@ -172,7 +172,7 @@ function SheetDialog({
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
-        {/* Tipo da ficha â€” somente na criaÃ§Ã£o */}
+        {/* Tipo da ficha — somente na criação */}
         {!sheet && (
           <div className="space-y-2">
             <Label>Tipo da ficha *</Label>
@@ -194,15 +194,15 @@ function SheetDialog({
                   </div>
                   <p className="text-xs text-muted-foreground leading-snug">
                     {t === 'SIMPLE'
-                      ? 'Uma lista de campos. Cada um pode ser digitaÃ§Ã£o ou marcaÃ§Ã£o.'
-                      : 'Uma tabela: linhas sÃ£o os campos, colunas sÃ£o definidas por vocÃª.'}
+                      ? 'Uma lista de campos. Cada um pode ser digitação ou marcação.'
+                      : 'Uma tabela: linhas são os campos, colunas são definidas por você.'}
                   </p>
                 </label>
               ))}
             </div>
             {selectedType === 'TABULAR' && (
               <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
-                Exemplo: Perimetria com colunas FEG 1, FEG 2, Adiposidade â€” e linhas BraÃ§o, PescoÃ§o, Cintura.
+                Exemplo: Perimetria com colunas FEG 1, FEG 2, Adiposidade — e linhas Braço, Pescoço, Cintura.
               </p>
             )}
           </div>
@@ -282,7 +282,7 @@ function FieldDialog({
       if (code === 'MAX_FIELDS_REACHED') {
         toast.error(`Limite de ${MAX_ACTIVE_FIELDS} campos atingido`)
       } else if (code === 'CONFLICT') {
-        toast.error('JÃ¡ existe um campo com este nome')
+        toast.error('Já existe um campo com este nome')
       } else {
         toast.error('Erro ao salvar campo')
       }
@@ -298,12 +298,12 @@ function FieldDialog({
           <Input
             id="field-name"
             {...register('name')}
-            placeholder={sheetType === 'TABULAR' ? 'Ex: BraÃ§o, PescoÃ§o, Cintura' : 'Ex: Peso, Altura, IMC'}
+            placeholder={sheetType === 'TABULAR' ? 'Ex: Braço, Pescoço, Cintura' : 'Ex: Peso, Altura, IMC'}
           />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
-        {/* Tipo de entrada â€” somente em fichas SIMPLE */}
+        {/* Tipo de entrada — somente em fichas SIMPLE */}
         {sheetType === 'SIMPLE' && (
           <div className="space-y-2">
             <Label>Tipo de entrada *</Label>
@@ -319,14 +319,14 @@ function FieldDialog({
                   ].join(' ')}
                 >
                   <input type="radio" value={t} {...register('inputType')} className="sr-only" />
-                  {t === 'INPUT' ? 'DigitaÃ§Ã£o' : 'MarcaÃ§Ã£o'}
+                  {t === 'INPUT' ? 'Digitação' : 'Marcação'}
                 </label>
               ))}
             </div>
           </div>
         )}
 
-        {/* Unidade â€” somente para SIMPLE + INPUT */}
+        {/* Unidade — somente para SIMPLE + INPUT */}
         {sheetType === 'SIMPLE' && inputType === 'INPUT' && (
           <div className="space-y-1.5">
             <Label htmlFor="field-unit">Unidade</Label>
@@ -337,7 +337,7 @@ function FieldDialog({
         {/* Em fichas TABULAR, o tipo de entrada fica nas colunas */}
         {sheetType === 'TABULAR' && (
           <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
-            Em fichas tabulares, o tipo de entrada (digitaÃ§Ã£o/marcaÃ§Ã£o) Ã© definido por coluna, nÃ£o por campo.
+            Em fichas tabulares, o tipo de entrada (digitação/marcação) é definido por coluna, não por campo.
           </p>
         )}
 
@@ -414,7 +414,7 @@ function ColumnDialog({
       if (code === 'MAX_COLUMNS_REACHED') {
         toast.error(`Limite de ${MAX_SHEET_COLUMNS} colunas atingido`)
       } else if (code === 'CONFLICT') {
-        toast.error('JÃ¡ existe uma coluna com este nome')
+        toast.error('Já existe uma coluna com este nome')
       } else {
         toast.error('Erro ao salvar coluna')
       }
@@ -445,7 +445,7 @@ function ColumnDialog({
                 ].join(' ')}
               >
                 <input type="radio" value={t} {...register('inputType')} className="sr-only" />
-                {t === 'INPUT' ? 'DigitaÃ§Ã£o' : 'MarcaÃ§Ã£o'}
+                {t === 'INPUT' ? 'Digitação' : 'Marcação'}
               </label>
             ))}
           </div>
@@ -622,17 +622,17 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
   const handleToggleField = async (field: MeasurementField) => {
     try {
       await updateField.mutateAsync({ sheetId: sheet.id, fieldId: field.id, active: !field.active })
-      toast.success(field.active ? `"${field.name}" desativado` : `"${field.name}" reativado`)
+      toast.success(field.active ? `Campo "${field.name}" desativado` : `Campo "${field.name}" reativado`)
     } catch { toast.error('Erro ao atualizar campo') }
   }
 
   const handleDeleteField = async (field: MeasurementField) => {
     try {
       await deleteField.mutateAsync({ sheetId: sheet.id, fieldId: field.id })
-      toast.success(`"${field.name}" removido`)
+      toast.success(`Campo "${field.name}" removido`)
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      toast.error(code === 'HAS_HISTORY' ? 'Campo possui histÃ³rico â€” desative em vez de excluir.' : 'Erro ao remover campo')
+      toast.error(code === 'HAS_HISTORY' ? 'Campo possui histórico — desative em vez de excluir.' : 'Erro ao remover campo')
     }
   }
 
@@ -655,7 +655,7 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
       toast.success(`Coluna "${col.name}" removida`)
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      toast.error(code === 'HAS_HISTORY' ? 'Coluna possui histÃ³rico â€” nÃ£o pode ser excluÃ­da.' : 'Erro ao remover coluna')
+      toast.error(code === 'HAS_HISTORY' ? 'Coluna possui histórico — não pode ser excluída.' : 'Erro ao remover coluna')
     }
   }
 
@@ -688,13 +688,13 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
       toast.success(`Ficha "${sheet.name}" removida`)
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      toast.error(code === 'HAS_HISTORY' ? 'Ficha possui histÃ³rico â€” desative em vez de excluir.' : 'Erro ao remover ficha')
+      toast.error(code === 'HAS_HISTORY' ? 'Ficha possui histórico — desative em vez de excluir.' : 'Erro ao remover ficha')
     }
   }
 
   return (
     <div className="space-y-4">
-      {/* Barra de aÃ§Ãµes da ficha */}
+      {/* Barra de ações da ficha */}
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">{activeFieldCount} / {MAX_ACTIVE_FIELDS} campos ativos</p>
         <div className="flex gap-1">
@@ -710,7 +710,7 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
         </div>
       </div>
 
-      {/* â”€â”€ SeÃ§Ã£o COLUNAS (apenas fichas TABULAR) â”€â”€ */}
+      {/* â”€â”€ Seção COLUNAS (apenas fichas TABULAR) â”€â”€ */}
       {sheet.type === 'TABULAR' && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -747,7 +747,7 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
         </div>
       )}
 
-      {/* â”€â”€ SeÃ§Ã£o CAMPOS (linhas) â”€â”€ */}
+      {/* â”€â”€ Seção CAMPOS (linhas) â”€â”€ */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -765,7 +765,7 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
         </div>
 
         {localFields.length === 0 ? (
-          <p className="text-xs text-muted-foreground py-1">Nenhum campo. Adicione o primeiro abaixo.</p>
+          <p className="text-xs text-muted-foreground py-1">Nenhum campo configurado.</p>
         ) : (
           <DndContext collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
             <SortableContext items={localFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
@@ -899,7 +899,7 @@ export function BodyMeasurementsTab() {
     <div className="mt-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium">Fichas de avaliaÃ§Ã£o</p>
+          <p className="text-sm font-medium">Fichas de avaliação</p>
           <p className="text-xs text-muted-foreground mt-0.5">{activeCount} / {MAX_ACTIVE_SHEETS} fichas ativas</p>
         </div>
         <Button
@@ -919,7 +919,7 @@ export function BodyMeasurementsTab() {
       ) : localSheets.length === 0 ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <Ruler className="mx-auto mb-2 h-8 w-8 opacity-30" />
-          <p className="text-sm">Nenhuma ficha de avaliaÃ§Ã£o configurada.</p>
+          <p className="text-sm">Nenhuma ficha de avaliação configurada.</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => { setEditingSheet(undefined); setSheetDialogOpen(true) }}>
             Criar primeira ficha
           </Button>
