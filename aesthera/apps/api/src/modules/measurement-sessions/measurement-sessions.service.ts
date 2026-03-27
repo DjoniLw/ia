@@ -47,16 +47,16 @@ export class MeasurementSessionsService {
     const fieldsOwned = await this.repo.validateFieldsOwnership(allFieldIds, clinicId)
     if (!fieldsOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
-    // 5. Cross-tenant: columnIds são consistentes com fieldIds
-    const columnFieldMap = new Map<string, string>()
+    // 5. Cross-tenant: columnIds pertencem às sheets correspondentes
+    const columnSheetMap = new Map<string, string>()
     for (const sr of dto.sheetRecords) {
       for (const tv of sr.tabularValues) {
-        columnFieldMap.set(tv.columnId, tv.fieldId)
+        columnSheetMap.set(tv.columnId, sr.sheetId)
       }
     }
     const columnsValid = await this.repo.validateColumnsOwnership(
-      Array.from(columnFieldMap.keys()),
-      columnFieldMap,
+      Array.from(columnSheetMap.keys()),
+      columnSheetMap,
     )
     if (!columnsValid) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
@@ -107,17 +107,17 @@ export class MeasurementSessionsService {
       )
       if (!hasAnyValues) throw new ValidationError('EMPTY_SESSION')
 
-      // Validar consistência columnId → fieldId
-      const columnFieldMap = new Map<string, string>()
+      // Validar consistência columnId → sheetId
+      const columnSheetMap = new Map<string, string>()
       for (const sr of dto.sheetRecords) {
         for (const tv of sr.tabularValues ?? []) {
-          columnFieldMap.set(tv.columnId, tv.fieldId)
+          columnSheetMap.set(tv.columnId, sr.sheetId)
         }
       }
-      if (columnFieldMap.size > 0) {
+      if (columnSheetMap.size > 0) {
         const columnsValid = await this.repo.validateColumnsOwnership(
-          Array.from(columnFieldMap.keys()),
-          columnFieldMap,
+          Array.from(columnSheetMap.keys()),
+          columnSheetMap,
         )
         if (!columnsValid) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
       }

@@ -3,14 +3,15 @@ import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
 import {
   CreateFieldDto,
+  CreateSheetColumnDto,
   CreateSheetDto,
-  CreateSubColumnDto,
   ListSheetsQuery,
   ReorderFieldsDto,
+  ReorderSheetColumnsDto,
   ReorderSheetsDto,
   UpdateFieldDto,
+  UpdateSheetColumnDto,
   UpdateSheetDto,
-  UpdateSubColumnDto,
 } from './measurement-sheets.dto'
 import { MeasurementSheetsService } from './measurement-sheets.service'
 
@@ -127,38 +128,59 @@ export async function measurementSheetsRoutes(app: FastifyInstance) {
     },
   )
 
-  // ─── Sub-colunas ─────────────────────────────────────────────────────────────
+  // ─── Colunas (fichas TABULAR) ─────────────────────────────────────────────────
 
-  /** POST /measurement-sheets/:sheetId/fields/:fieldId/columns — cria sub-coluna (admin only) */
+  /** GET /measurement-sheets/:sheetId/columns — lista colunas de uma ficha */
+  app.get(
+    '/measurement-sheets/:sheetId/columns',
+    { preHandler: [jwtClinicGuard] },
+    async (req, reply) => {
+      const { sheetId } = req.params as { sheetId: string }
+      return reply.send(await svc.listSheetColumns(sheetId, req.clinicId))
+    },
+  )
+
+  /** POST /measurement-sheets/:sheetId/columns — cria coluna (admin only) */
   app.post(
-    '/measurement-sheets/:sheetId/fields/:fieldId/columns',
+    '/measurement-sheets/:sheetId/columns',
     { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
     async (req, reply) => {
-      const { sheetId, fieldId } = req.params as { sheetId: string; fieldId: string }
-      const dto = CreateSubColumnDto.parse(req.body)
-      return reply.status(201).send(await svc.createSubColumn(sheetId, fieldId, req.clinicId, dto))
+      const { sheetId } = req.params as { sheetId: string }
+      const dto = CreateSheetColumnDto.parse(req.body)
+      return reply.status(201).send(await svc.createSheetColumn(sheetId, req.clinicId, dto))
     },
   )
 
-  /** PATCH /measurement-sheets/:sheetId/fields/:fieldId/columns/:colId — atualiza sub-coluna (admin only) */
+  /** PATCH /measurement-sheets/:sheetId/columns/:colId — atualiza coluna (admin only) */
   app.patch(
-    '/measurement-sheets/:sheetId/fields/:fieldId/columns/:colId',
+    '/measurement-sheets/:sheetId/columns/:colId',
     { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
     async (req, reply) => {
-      const { sheetId, fieldId, colId } = req.params as { sheetId: string; fieldId: string; colId: string }
-      const dto = UpdateSubColumnDto.parse(req.body)
-      return reply.send(await svc.updateSubColumn(sheetId, fieldId, colId, req.clinicId, dto))
+      const { sheetId, colId } = req.params as { sheetId: string; colId: string }
+      const dto = UpdateSheetColumnDto.parse(req.body)
+      return reply.send(await svc.updateSheetColumn(sheetId, colId, req.clinicId, dto))
     },
   )
 
-  /** DELETE /measurement-sheets/:sheetId/fields/:fieldId/columns/:colId — exclui sub-coluna (admin only) */
+  /** DELETE /measurement-sheets/:sheetId/columns/:colId — exclui coluna (admin only) */
   app.delete(
-    '/measurement-sheets/:sheetId/fields/:fieldId/columns/:colId',
+    '/measurement-sheets/:sheetId/columns/:colId',
     { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
     async (req, reply) => {
-      const { sheetId, fieldId, colId } = req.params as { sheetId: string; fieldId: string; colId: string }
-      await svc.deleteSubColumn(sheetId, fieldId, colId, req.clinicId)
+      const { sheetId, colId } = req.params as { sheetId: string; colId: string }
+      await svc.deleteSheetColumn(sheetId, colId, req.clinicId)
       return reply.status(204).send()
+    },
+  )
+
+  /** POST /measurement-sheets/:sheetId/columns/reorder — reordena colunas (admin only) */
+  app.post(
+    '/measurement-sheets/:sheetId/columns/reorder',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const { sheetId } = req.params as { sheetId: string }
+      const dto = ReorderSheetColumnsDto.parse(req.body)
+      return reply.send(await svc.reorderSheetColumns(sheetId, req.clinicId, dto))
     },
   )
 }

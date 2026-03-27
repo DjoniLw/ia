@@ -1,11 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import {
   ChevronDown,
   ChevronUp,
-  ClipboardList,
-  Copy,
   GripVertical,
   Loader2,
   Pencil,
@@ -13,6 +11,8 @@ import {
   Power,
   Ruler,
   Trash2,
+  Table2,
+  List,
 } from 'lucide-react'
 import {
   DndContext,
@@ -26,7 +26,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
@@ -44,72 +44,76 @@ import {
   useUpdateMeasurementField,
   useDeleteMeasurementField,
   useReorderMeasurementFields,
-  useCreateSubColumn,
+  useCreateSheetColumn,
+  useUpdateSheetColumn,
+  useDeleteSheetColumn,
+  useReorderSheetColumns,
   type MeasurementSheet,
   type MeasurementField,
-  type MeasurementFieldType,
+  type MeasurementSheetColumn,
+  type MeasurementSheetType,
+  type MeasurementInputType,
 } from '@/lib/hooks/use-measurement-sheets'
 
 const MAX_ACTIVE_SHEETS = 20
 const MAX_ACTIVE_FIELDS = 30
+const MAX_SHEET_COLUMNS = 10
 
-// ── Schemas ───────────────────────────────────────────────────────────────────
+// â”€â”€ Schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const sheetSchema = z.object({
-  name: z.string().min(1, 'Nome obrigatório').max(100),
+  name: z.string().min(1, 'Nome obrigatÃ³rio').max(100),
+  type: z.enum(['SIMPLE', 'TABULAR']),
 })
 type SheetForm = z.infer<typeof sheetSchema>
 
-const subColumnSchema = z.object({
-  name: z.string().min(1, 'Nome obrigatório').max(100),
-  unit: z.string().min(1, 'Unidade obrigatória').max(20),
+const fieldSchema = z.object({
+  name: z.string().min(1, 'Nome obrigatÃ³rio').max(100),
+  inputType: z.enum(['INPUT', 'CHECK']),
+  unit: z.string().max(20).optional(),
 })
-
-const fieldSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('SIMPLE'),
-    name: z.string().min(1, 'Nome obrigatório').max(100),
-    unit: z.string().min(1, 'Unidade obrigatória para campo simples').max(20),
-    subColumns: z.array(subColumnSchema).optional(),
-  }),
-  z.object({
-    type: z.literal('TABULAR'),
-    name: z.string().min(1, 'Nome obrigatório').max(100),
-    unit: z.string().optional(),
-    subColumns: z.array(subColumnSchema).min(1, 'Adicione ao menos uma sub-coluna').max(10),
-  }),
-  z.object({
-    type: z.literal('CHECK'),
-    name: z.string().min(1, 'Nome obrigatório').max(100),
-    unit: z.string().optional(),
-    subColumns: z.array(subColumnSchema).optional(),
-  }),
-])
 type FieldForm = z.infer<typeof fieldSchema>
 
-// ── Utilitários ───────────────────────────────────────────────────────────────
+const columnSchema = z.object({
+  name: z.string().min(1, 'Nome obrigatÃ³rio').max(100),
+  inputType: z.enum(['INPUT', 'CHECK']),
+  unit: z.string().max(20).optional(),
+})
+type ColumnForm = z.infer<typeof columnSchema>
 
-function fieldTypeBadge(type: MeasurementFieldType) {
-  if (type === 'SIMPLE')
+// â”€â”€ UtilitÃ¡rios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function inputTypeBadge(inputType: MeasurementInputType) {
+  if (inputType === 'INPUT')
     return (
       <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
-        Simples
-      </span>
-    )
-  if (type === 'CHECK')
-    return (
-      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-        Marcação
+        DigitaÃ§Ã£o
       </span>
     )
   return (
-    <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
-      Tabular
+    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+      MarcaÃ§Ã£o
     </span>
   )
 }
 
-// ── Dialog de Ficha ───────────────────────────────────────────────────────────
+function sheetTypeBadge(type: MeasurementSheetType) {
+  if (type === 'TABULAR')
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
+        <Table2 className="h-3 w-3" />
+        Tabular
+      </span>
+    )
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      <List className="h-3 w-3" />
+      Simples
+    </span>
+  )
+}
+
+// â”€â”€ Dialog de Ficha â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SheetDialog({
   open,
@@ -127,20 +131,23 @@ function SheetDialog({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isDirty },
   } = useForm<SheetForm>({
     resolver: zodResolver(sheetSchema),
-    defaultValues: { name: sheet?.name ?? '' },
+    defaultValues: { name: sheet?.name ?? '', type: sheet?.type ?? 'SIMPLE' },
   })
+
+  const selectedType = watch('type')
 
   const onSubmit = handleSubmit(async (data) => {
     try {
       if (sheet) {
-        await updateMutation.mutateAsync({ id: sheet.id, ...data })
-        toast.success('Ficha atualizada com sucesso')
+        await updateMutation.mutateAsync({ id: sheet.id, name: data.name })
+        toast.success('Ficha atualizada')
       } else {
-        await createMutation.mutateAsync(data)
-        toast.success('Ficha criada com sucesso')
+        await createMutation.mutateAsync({ name: data.name, type: data.type })
+        toast.success('Ficha criada')
       }
       onClose()
     } catch (err: unknown) {
@@ -148,7 +155,7 @@ function SheetDialog({
       if (code === 'MAX_SHEETS_REACHED') {
         toast.error(`Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido`)
       } else if (code === 'CONFLICT') {
-        toast.error('Já existe uma ficha com este nome')
+        toast.error('JÃ¡ existe uma ficha com este nome')
       } else {
         toast.error('Erro ao salvar ficha')
       }
@@ -161,9 +168,46 @@ function SheetDialog({
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="sheet-name">Nome da ficha *</Label>
-          <Input id="sheet-name" {...register('name')} placeholder="Ex: Perimetria, Dobras Cutâneas" />
+          <Input id="sheet-name" {...register('name')} placeholder="Ex: Perimetria, Plicometria" />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
+
+        {/* Tipo da ficha â€” somente na criaÃ§Ã£o */}
+        {!sheet && (
+          <div className="space-y-2">
+            <Label>Tipo da ficha *</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['SIMPLE', 'TABULAR'] as MeasurementSheetType[]).map((t) => (
+                <label
+                  key={t}
+                  className={[
+                    'cursor-pointer rounded-lg border p-3 transition-colors',
+                    selectedType === t
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50',
+                  ].join(' ')}
+                >
+                  <input type="radio" value={t} {...register('type')} className="sr-only" />
+                  <div className="flex items-center gap-2 mb-1">
+                    {t === 'SIMPLE' ? <List className="h-4 w-4" /> : <Table2 className="h-4 w-4" />}
+                    <span className="text-sm font-medium">{t === 'SIMPLE' ? 'Simples' : 'Tabular'}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    {t === 'SIMPLE'
+                      ? 'Uma lista de campos. Cada um pode ser digitaÃ§Ã£o ou marcaÃ§Ã£o.'
+                      : 'Uma tabela: linhas sÃ£o os campos, colunas sÃ£o definidas por vocÃª.'}
+                  </p>
+                </label>
+              ))}
+            </div>
+            {selectedType === 'TABULAR' && (
+              <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
+                Exemplo: Perimetria com colunas FEG 1, FEG 2, Adiposidade â€” e linhas BraÃ§o, PescoÃ§o, Cintura.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isPending}>
             Cancelar
@@ -178,56 +222,40 @@ function SheetDialog({
   )
 }
 
-// ── Dialog de Campo ───────────────────────────────────────────────────────────
-
-type FieldPrefill = {
-  type: MeasurementFieldType
-  unit?: string
-  subColumns?: Array<{ name: string; unit: string }>
-}
+// â”€â”€ Dialog de Campo (linha) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function FieldDialog({
   open,
   sheetId,
+  sheetType,
   field,
-  prefill,
   onClose,
 }: {
   open: boolean
   sheetId: string
+  sheetType: MeasurementSheetType
   field?: MeasurementField
-  prefill?: FieldPrefill
   onClose: () => void
 }) {
   const createField = useCreateMeasurementField(sheetId)
   const updateField = useUpdateMeasurementField()
-  const createSubColumn = useCreateSubColumn()
-  const isPending = createField.isPending || updateField.isPending || createSubColumn.isPending
-
-  const defaultValues = field
-    ? {
-        type: field.type,
-        name: field.name,
-        unit: field.unit ?? '',
-        subColumns: field.columns.map((c) => ({ name: c.name, unit: c.unit })),
-      }
-    : prefill
-    ? { type: prefill.type, name: '', unit: prefill.unit ?? '', subColumns: prefill.subColumns ?? [] }
-    : { type: 'SIMPLE' as MeasurementFieldType, name: '', unit: '', subColumns: [] }
+  const isPending = createField.isPending || updateField.isPending
 
   const {
     register,
     handleSubmit,
     watch,
-    control,
     formState: { errors, isDirty },
   } = useForm<FieldForm>({
     resolver: zodResolver(fieldSchema),
-    defaultValues,
+    defaultValues: {
+      name: field?.name ?? '',
+      inputType: field?.inputType ?? 'INPUT',
+      unit: field?.unit ?? '',
+    },
   })
 
-  const { fields: subCols, append, remove } = useFieldArray({ control, name: 'subColumns' as never })
-  const fieldType = watch('type') as MeasurementFieldType
+  const inputType = watch('inputType')
 
   const onSubmit = handleSubmit(async (data) => {
     try {
@@ -236,36 +264,25 @@ function FieldDialog({
           sheetId,
           fieldId: field.id,
           name: data.name,
-          unit: data.type === 'SIMPLE' ? data.unit : undefined,
+          ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' ? { unit: data.unit || undefined } : {}),
+          inputType: data.inputType,
         })
         toast.success('Campo atualizado')
       } else {
-        const created = await createField.mutateAsync({
-          type: data.type,
+        await createField.mutateAsync({
           name: data.name,
-          unit: data.type === 'SIMPLE' ? data.unit : undefined,
+          inputType: data.inputType,
+          ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' ? { unit: data.unit || undefined } : {}),
         })
-        // Criar sub-colunas em sequência para TABULAR
-        if (data.type === 'TABULAR' && data.subColumns?.length) {
-          for (let i = 0; i < data.subColumns.length; i++) {
-            await createSubColumn.mutateAsync({
-              sheetId,
-              fieldId: created.id,
-              name: data.subColumns[i].name,
-              unit: data.subColumns[i].unit,
-              order: i,
-            })
-          }
-        }
-        toast.success('Campo criado com sucesso')
+        toast.success('Campo criado')
       }
       onClose()
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
       if (code === 'MAX_FIELDS_REACHED') {
-        toast.error(`Limite de ${MAX_ACTIVE_FIELDS} campos ativos atingido`)
+        toast.error(`Limite de ${MAX_ACTIVE_FIELDS} campos atingido`)
       } else if (code === 'CONFLICT') {
-        toast.error('Já existe um campo com este nome na ficha')
+        toast.error('JÃ¡ existe um campo com este nome')
       } else {
         toast.error('Erro ao salvar campo')
       }
@@ -273,118 +290,55 @@ function FieldDialog({
   })
 
   return (
-    <Dialog open={open} onClose={onClose} isDirty={isDirty} className="max-w-lg">
+    <Dialog open={open} onClose={onClose} isDirty={isDirty} className="max-w-sm">
       <DialogTitle>{field ? 'Editar campo' : 'Novo campo'}</DialogTitle>
       <form onSubmit={onSubmit} className="space-y-4">
-        {/* Nome */}
         <div className="space-y-1.5">
           <Label htmlFor="field-name">Nome *</Label>
-          <Input id="field-name" {...register('name')} placeholder="Ex: Peso, Cintura, FEG" />
+          <Input
+            id="field-name"
+            {...register('name')}
+            placeholder={sheetType === 'TABULAR' ? 'Ex: BraÃ§o, PescoÃ§o, Cintura' : 'Ex: Peso, Altura, IMC'}
+          />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
-        {/* Tipo */}
-        {!field && (
-          <div className="space-y-1.5">
-            <Label>Tipo *</Label>
+        {/* Tipo de entrada â€” somente em fichas SIMPLE */}
+        {sheetType === 'SIMPLE' && (
+          <div className="space-y-2">
+            <Label>Tipo de entrada *</Label>
             <div className="flex gap-2">
-              {(['SIMPLE', 'TABULAR', 'CHECK'] as MeasurementFieldType[]).map((t) => {
-                const label = t === 'SIMPLE' ? 'Simples' : t === 'TABULAR' ? 'Tabular' : 'Marcação (Sim/Não)'
-                return (
-                  <label
-                    key={t}
-                    className={[
-                      'flex-1 cursor-pointer rounded-lg border px-3 py-2.5 text-center text-sm transition-colors',
-                      fieldType === t
-                        ? 'border-primary bg-primary/5 font-medium text-primary'
-                        : 'border-border text-muted-foreground hover:border-primary/50',
-                    ].join(' ')}
-                  >
-                    <input type="radio" value={t} {...register('type')} className="sr-only" />
-                    {label}
-                  </label>
-                )
-              })}
+              {(['INPUT', 'CHECK'] as MeasurementInputType[]).map((t) => (
+                <label
+                  key={t}
+                  className={[
+                    'flex-1 cursor-pointer rounded-lg border px-3 py-2.5 text-center text-sm transition-colors',
+                    inputType === t
+                      ? 'border-primary bg-primary/5 font-medium text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/50',
+                  ].join(' ')}
+                >
+                  <input type="radio" value={t} {...register('inputType')} className="sr-only" />
+                  {t === 'INPUT' ? 'DigitaÃ§Ã£o' : 'MarcaÃ§Ã£o'}
+                </label>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Unidade — somente para SIMPLE */}
-        {fieldType === 'SIMPLE' && (
+        {/* Unidade â€” somente para SIMPLE + INPUT */}
+        {sheetType === 'SIMPLE' && inputType === 'INPUT' && (
           <div className="space-y-1.5">
-            <Label htmlFor="field-unit">Unidade *</Label>
-            <Input id="field-unit" {...register('unit')} placeholder="Ex: kg, cm, %, mm" />
-            {errors.unit && <p className="text-xs text-destructive">{errors.unit.message}</p>}
+            <Label htmlFor="field-unit">Unidade</Label>
+            <Input id="field-unit" {...register('unit')} placeholder="Ex: kg, cm, mm, %" />
           </div>
         )}
 
-        {/* CHECK: sem unidade, sem sub-colunas */}
-        {fieldType === 'CHECK' && (
+        {/* Em fichas TABULAR, o tipo de entrada fica nas colunas */}
+        {sheetType === 'TABULAR' && (
           <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
-            Campo de marcação — apenas Sim / Não. Sem unidade ou sub-colunas.
+            Em fichas tabulares, o tipo de entrada (digitaÃ§Ã£o/marcaÃ§Ã£o) Ã© definido por coluna, nÃ£o por campo.
           </p>
-        )}
-
-        {/* Sub-colunas — somente para TABULAR em modo criação */}
-        {field && field.type === 'TABULAR' && (
-          <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
-            Sub-colunas não podem ser editadas após a criação do campo. Para alterar a estrutura, crie um novo campo.
-          </p>
-        )}
-        {fieldType === 'TABULAR' && !field && (
-          <div className="space-y-2">
-            <Label>Sub-colunas *</Label>
-            <p className="text-xs text-muted-foreground -mt-1">Cada sub-coluna representa uma medida dentro do campo tabular.</p>
-            {(subCols as Array<{ id: string }>).map((sc, idx) => (
-              <div key={sc.id} className="flex gap-2 items-start">
-                <div className="flex-1 space-y-1">
-                  <Input
-                    placeholder="Nome da coluna"
-                    {...register(`subColumns.${idx}.name` as const)}
-                  />
-                  {'subColumns' in errors && (errors as { subColumns?: { [key: number]: { name?: { message?: string } } } }).subColumns?.[idx]?.name && (
-                    <p className="text-xs text-destructive">
-                      {(errors as { subColumns?: { [key: number]: { name?: { message?: string } } } }).subColumns?.[idx]?.name?.message}
-                    </p>
-                  )}
-                </div>
-                <div className="w-24 space-y-1">
-                  <Input
-                    placeholder="Unidade"
-                    {...register(`subColumns.${idx}.unit` as const)}
-                  />
-                  {'subColumns' in errors && (errors as { subColumns?: { [key: number]: { unit?: { message?: string } } } }).subColumns?.[idx]?.unit && (
-                    <p className="text-xs text-destructive">
-                      {(errors as { subColumns?: { [key: number]: { unit?: { message?: string } } } }).subColumns?.[idx]?.unit?.message}
-                    </p>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 shrink-0 mt-0.5"
-                  onClick={() => remove(idx)}
-                  aria-label="Remover sub-coluna"
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => append({ name: '', unit: '' })}
-              disabled={(subCols as Array<unknown>).length >= 10}
-            >
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              Sub-coluna
-            </Button>
-            {'subColumns' in errors && typeof errors.subColumns?.message === 'string' && (
-              <p className="text-xs text-destructive">{errors.subColumns.message}</p>
-            )}
-          </div>
         )}
 
         <div className="flex justify-end gap-2 pt-1">
@@ -401,24 +355,141 @@ function FieldDialog({
   )
 }
 
-// ── Item de campo ordenável via DnD ─────────────────────────────────────────
+// â”€â”€ Dialog de Coluna (fichas TABULAR) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function ColumnDialog({
+  open,
+  sheetId,
+  column,
+  onClose,
+}: {
+  open: boolean
+  sheetId: string
+  column?: MeasurementSheetColumn
+  onClose: () => void
+}) {
+  const createColumn = useCreateSheetColumn()
+  const updateColumn = useUpdateSheetColumn()
+  const isPending = createColumn.isPending || updateColumn.isPending
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isDirty },
+  } = useForm<ColumnForm>({
+    resolver: zodResolver(columnSchema),
+    defaultValues: {
+      name: column?.name ?? '',
+      inputType: column?.inputType ?? 'INPUT',
+      unit: column?.unit ?? '',
+    },
+  })
+
+  const inputType = watch('inputType')
+
+  const onSubmit = handleSubmit(async (data) => {
+    try {
+      if (column) {
+        await updateColumn.mutateAsync({
+          sheetId,
+          colId: column.id,
+          name: data.name,
+          inputType: data.inputType,
+          unit: data.inputType === 'INPUT' ? (data.unit || undefined) : undefined,
+        })
+        toast.success('Coluna atualizada')
+      } else {
+        await createColumn.mutateAsync({
+          sheetId,
+          name: data.name,
+          inputType: data.inputType,
+          unit: data.inputType === 'INPUT' ? (data.unit || undefined) : undefined,
+        })
+        toast.success('Coluna criada')
+      }
+      onClose()
+    } catch (err: unknown) {
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
+      if (code === 'MAX_COLUMNS_REACHED') {
+        toast.error(`Limite de ${MAX_SHEET_COLUMNS} colunas atingido`)
+      } else if (code === 'CONFLICT') {
+        toast.error('JÃ¡ existe uma coluna com este nome')
+      } else {
+        toast.error('Erro ao salvar coluna')
+      }
+    }
+  })
+
+  return (
+    <Dialog open={open} onClose={onClose} isDirty={isDirty} className="max-w-sm">
+      <DialogTitle>{column ? 'Editar coluna' : 'Nova coluna'}</DialogTitle>
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="col-name">Nome *</Label>
+          <Input id="col-name" {...register('name')} placeholder="Ex: FEG 1, FEG 2, Adiposidade" />
+          {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tipo de entrada *</Label>
+          <div className="flex gap-2">
+            {(['INPUT', 'CHECK'] as MeasurementInputType[]).map((t) => (
+              <label
+                key={t}
+                className={[
+                  'flex-1 cursor-pointer rounded-lg border px-3 py-2.5 text-center text-sm transition-colors',
+                  inputType === t
+                    ? 'border-primary bg-primary/5 font-medium text-primary'
+                    : 'border-border text-muted-foreground hover:border-primary/50',
+                ].join(' ')}
+              >
+                <input type="radio" value={t} {...register('inputType')} className="sr-only" />
+                {t === 'INPUT' ? 'DigitaÃ§Ã£o' : 'MarcaÃ§Ã£o'}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {inputType === 'INPUT' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="col-unit">Unidade</Label>
+            <Input id="col-unit" {...register('unit')} placeholder="Ex: cm, mm, %" />
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isPending}>
+            Cancelar
+          </Button>
+          <Button type="submit" size="sm" disabled={isPending || !isDirty}>
+            {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+            {column ? 'Salvar' : 'Criar'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+// â”€â”€ Item de campo sortable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SortableFieldItem({
   field,
+  sheetType,
   reorderPending,
   updatePending,
   deletePending,
   onEdit,
-  onDuplicate,
   onToggle,
   onDelete,
 }: {
   field: MeasurementField
+  sheetType: MeasurementSheetType
   reorderPending: boolean
   updatePending: boolean
   deletePending: boolean
   onEdit: () => void
-  onDuplicate: () => void
   onToggle: () => void
   onDelete: () => void
 }) {
@@ -429,65 +500,32 @@ function SortableFieldItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={[
-        'flex items-center gap-2 px-3 py-2.5 bg-card text-sm',
-        !field.active && 'opacity-50',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      className={['flex items-center gap-2 px-3 py-2.5 bg-card text-sm', !field.active && 'opacity-50'].filter(Boolean).join(' ')}
     >
       <button
         type="button"
         {...attributes}
         {...listeners}
         className="cursor-grab active:cursor-grabbing shrink-0 touch-none"
-        aria-label="Arrastar para reordenar"
         disabled={reorderPending}
+        aria-label="Arrastar"
       >
-        <GripVertical className="h-4 w-4 text-muted-foreground/40" aria-hidden />
+        <GripVertical className="h-4 w-4 text-muted-foreground/40" />
       </button>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium truncate">{field.name}</span>
-          {fieldTypeBadge(field.type)}
-          {field.unit && (
-            <span className="text-xs text-muted-foreground">{field.unit}</span>
-          )}
-          {/* B-03: Badge Inativo visível mesmo com opacity-50 */}
-          {!field.active && (
-            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-              Inativo
-            </span>
-          )}
-        </div>
-        {field.type === 'TABULAR' && field.columns.length > 0 && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {field.columns.map((c) => `${c.name} (${c.unit})`).join(' · ')}
-          </p>
+      <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+        <span className="font-medium truncate">{field.name}</span>
+        {sheetType === 'SIMPLE' && inputTypeBadge(field.inputType)}
+        {sheetType === 'SIMPLE' && field.inputType === 'INPUT' && field.unit && (
+          <span className="text-xs text-muted-foreground">{field.unit}</span>
+        )}
+        {!field.active && (
+          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Inativo</span>
         )}
       </div>
 
       <div className="flex gap-0.5 shrink-0">
-        {/* M-02: Duplicar campo */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={onDuplicate}
-          aria-label="Duplicar campo"
-          title="Duplicar (pré-preenche novo campo)"
-        >
-          <Copy className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={onEdit}
-          aria-label="Editar campo"
-          title="Editar"
-        >
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onEdit} aria-label="Editar">
           <Pencil className="h-3.5 w-3.5" />
         </Button>
         <Button
@@ -496,8 +534,7 @@ function SortableFieldItem({
           className="h-6 w-6"
           onClick={onToggle}
           disabled={updatePending}
-          aria-label={field.active ? 'Desativar campo' : 'Reativar campo'}
-          title={field.active ? 'Desativar' : 'Reativar'}
+          aria-label={field.active ? 'Desativar' : 'Reativar'}
         >
           <Power className="h-3.5 w-3.5" />
         </Button>
@@ -507,8 +544,7 @@ function SortableFieldItem({
           className="h-6 w-6"
           onClick={onDelete}
           disabled={deletePending}
-          aria-label="Excluir campo"
-          title="Excluir"
+          aria-label="Excluir"
         >
           <Trash2 className="h-3.5 w-3.5 text-destructive" />
         </Button>
@@ -517,71 +553,117 @@ function SortableFieldItem({
   )
 }
 
-// ── Painel inline de uma Ficha ────────────────────────────────────────────────
+// â”€â”€ Item de coluna sortable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function SheetPanel({
-  sheet,
-  onEditSheet,
+function SortableColumnItem({
+  column,
+  deletePending,
+  onEdit,
+  onDelete,
 }: {
-  sheet: MeasurementSheet
-  onEditSheet: (sheet: MeasurementSheet) => void
+  column: MeasurementSheetColumn
+  deletePending: boolean
+  onEdit: () => void
+  onDelete: () => void
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: column.id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 px-3 py-2 bg-card text-sm"
+    >
+      <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing shrink-0 touch-none" aria-label="Arrastar">
+        <GripVertical className="h-4 w-4 text-muted-foreground/40" />
+      </button>
+      <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+        <span className="font-medium truncate">{column.name}</span>
+        {inputTypeBadge(column.inputType)}
+        {column.inputType === 'INPUT' && column.unit && (
+          <span className="text-xs text-muted-foreground">{column.unit}</span>
+        )}
+      </div>
+      <div className="flex gap-0.5 shrink-0">
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onEdit} aria-label="Editar">
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onDelete} disabled={deletePending} aria-label="Excluir">
+          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// â”€â”€ Painel inline de uma Ficha â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditSheet: (s: MeasurementSheet) => void }) {
   const updateMutation = useUpdateMeasurementSheet()
   const deleteSheet = useDeleteMeasurementSheet()
   const updateField = useUpdateMeasurementField()
   const deleteField = useDeleteMeasurementField()
   const reorderFields = useReorderMeasurementFields()
+  const deleteColumn = useDeleteSheetColumn()
+  const reorderColumns = useReorderSheetColumns()
 
   const [fieldDialogOpen, setFieldDialogOpen] = useState(false)
   const [editingField, setEditingField] = useState<MeasurementField | undefined>()
-  const [fieldPrefill, setFieldPrefill] = useState<FieldPrefill | undefined>()
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false)
+  const [editingColumn, setEditingColumn] = useState<MeasurementSheetColumn | undefined>()
 
   const sortedFields = [...sheet.fields].sort((a, b) => a.order - b.order)
+  const sortedColumns = [...sheet.columns].sort((a, b) => a.order - b.order)
   const activeFieldCount = sortedFields.filter((f) => f.active).length
 
   const handleToggleField = async (field: MeasurementField) => {
     try {
-      await updateField.mutateAsync({
-        sheetId: sheet.id,
-        fieldId: field.id,
-        active: !field.active,
-      })
-      toast.success(field.active ? `Campo "${field.name}" desativado` : `Campo "${field.name}" reativado`)
-    } catch {
-      toast.error('Erro ao atualizar campo')
-    }
+      await updateField.mutateAsync({ sheetId: sheet.id, fieldId: field.id, active: !field.active })
+      toast.success(field.active ? `"${field.name}" desativado` : `"${field.name}" reativado`)
+    } catch { toast.error('Erro ao atualizar campo') }
   }
 
   const handleDeleteField = async (field: MeasurementField) => {
     try {
       await deleteField.mutateAsync({ sheetId: sheet.id, fieldId: field.id })
-      toast.success(`Campo "${field.name}" removido`)
+      toast.success(`"${field.name}" removido`)
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      if (code === 'HAS_HISTORY') {
-        toast.error('Não é possível excluir: campo possui histórico de valores. Desative em vez disso.')
-      } else {
-        toast.error('Erro ao remover campo')
-      }
+      toast.error(code === 'HAS_HISTORY' ? 'Campo possui histÃ³rico â€” desative em vez de excluir.' : 'Erro ao remover campo')
     }
   }
 
-  // B-04: Reordenação por DnD
   const handleFieldDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-
     const oldIndex = sortedFields.findIndex((f) => f.id === active.id)
     const newIndex = sortedFields.findIndex((f) => f.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-
     const reordered = arrayMove(sortedFields, oldIndex, newIndex)
-    const payload = reordered.map((f, i) => ({ id: f.id, order: i }))
+    try { await reorderFields.mutateAsync({ sheetId: sheet.id, fields: reordered.map((f, i) => ({ id: f.id, order: i })) }) }
+    catch { toast.error('Erro ao reordenar campos') }
+  }
+
+  const handleDeleteColumn = async (col: MeasurementSheetColumn) => {
     try {
-      await reorderFields.mutateAsync({ sheetId: sheet.id, fields: payload })
-    } catch {
-      toast.error('Erro ao reordenar campos')
+      await deleteColumn.mutateAsync({ sheetId: sheet.id, colId: col.id })
+      toast.success(`Coluna "${col.name}" removida`)
+    } catch (err: unknown) {
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
+      toast.error(code === 'HAS_HISTORY' ? 'Coluna possui histÃ³rico â€” nÃ£o pode ser excluÃ­da.' : 'Erro ao remover coluna')
     }
+  }
+
+  const handleColumnDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = sortedColumns.findIndex((c) => c.id === active.id)
+    const newIndex = sortedColumns.findIndex((c) => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = arrayMove(sortedColumns, oldIndex, newIndex)
+    try { await reorderColumns.mutateAsync({ sheetId: sheet.id, columns: reordered.map((c, i) => ({ id: c.id, order: i })) }) }
+    catch { toast.error('Erro ao reordenar colunas') }
   }
 
   const handleToggleSheet = async () => {
@@ -590,11 +672,7 @@ function SheetPanel({
       toast.success(sheet.active ? 'Ficha desativada' : 'Ficha reativada')
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      if (code === 'MAX_SHEETS_REACHED') {
-        toast.error(`Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido`)
-      } else {
-        toast.error('Erro ao atualizar ficha')
-      }
+      toast.error(code === 'MAX_SHEETS_REACHED' ? `Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido` : 'Erro ao atualizar ficha')
     }
   }
 
@@ -604,129 +682,130 @@ function SheetPanel({
       toast.success(`Ficha "${sheet.name}" removida`)
     } catch (err: unknown) {
       const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      if (code === 'HAS_HISTORY') {
-        toast.error('Não é possível excluir: ficha possui histórico de registros. Desative em vez disso.')
-      } else {
-        toast.error('Erro ao remover ficha')
-      }
+      toast.error(code === 'HAS_HISTORY' ? 'Ficha possui histÃ³rico â€” desative em vez de excluir.' : 'Erro ao remover ficha')
     }
   }
 
-  // M-02: Abrir diálogo com pre-preenchimento do último campo
-  const openAddFieldDialog = (prefill?: FieldPrefill) => {
-    setEditingField(undefined)
-    setFieldPrefill(prefill)
-    setFieldDialogOpen(true)
-  }
-
   return (
-    <div className="space-y-3">
-      {/* Barra de ações da ficha */}
+    <div className="space-y-4">
+      {/* Barra de aÃ§Ãµes da ficha */}
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          {activeFieldCount} / {MAX_ACTIVE_FIELDS} campos ativos
-        </p>
+        <p className="text-xs text-muted-foreground">{activeFieldCount} / {MAX_ACTIVE_FIELDS} campos ativos</p>
         <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => onEditSheet(sheet)}
-          >
-            <Pencil className="mr-1 h-3 w-3" />
-            Renomear
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onEditSheet(sheet)}>
+            <Pencil className="mr-1 h-3 w-3" /> Renomear
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={handleToggleSheet}
-            disabled={updateMutation.isPending}
-          >
-            <Power className="mr-1 h-3 w-3" />
-            {sheet.active ? 'Desativar' : 'Reativar'}
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleToggleSheet} disabled={updateMutation.isPending}>
+            <Power className="mr-1 h-3 w-3" />{sheet.active ? 'Desativar' : 'Reativar'}
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-destructive hover:text-destructive"
-            onClick={handleDeleteSheet}
-            disabled={deleteSheet.isPending}
-          >
-            <Trash2 className="mr-1 h-3 w-3" />
-            Excluir
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={handleDeleteSheet} disabled={deleteSheet.isPending}>
+            <Trash2 className="mr-1 h-3 w-3" /> Excluir
           </Button>
         </div>
       </div>
 
-      {/* Lista de campos com DnD (B-04) */}
-      {sortedFields.length === 0 ? (
-        <p className="text-xs text-muted-foreground py-2">Nenhum campo. Adicione o primeiro abaixo.</p>
-      ) : (
-        <DndContext collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
-          <SortableContext items={sortedFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-            <div className="rounded-xl border divide-y overflow-hidden">
-              {sortedFields.map((field) => (
-                <SortableFieldItem
-                  key={field.id}
-                  field={field}
-                  reorderPending={reorderFields.isPending}
-                  updatePending={updateField.isPending}
-                  deletePending={deleteField.isPending}
-                  onEdit={() => { setEditingField(field); setFieldPrefill(undefined); setFieldDialogOpen(true) }}
-                  onDuplicate={() =>
-                    openAddFieldDialog({
-                      type: field.type,
-                      unit: field.unit ?? undefined,
-                      subColumns: field.columns.map((c) => ({ name: c.name, unit: c.unit })),
-                    })
-                  }
-                  onToggle={() => handleToggleField(field)}
-                  onDelete={() => handleDeleteField(field)}
-                />
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
+      {/* â”€â”€ SeÃ§Ã£o COLUNAS (apenas fichas TABULAR) â”€â”€ */}
+      {sheet.type === 'TABULAR' && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Colunas</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-xs px-2"
+              onClick={() => { setEditingColumn(undefined); setColumnDialogOpen(true) }}
+              disabled={sortedColumns.length >= MAX_SHEET_COLUMNS}
+            >
+              <Plus className="mr-1 h-3 w-3" /> Coluna
+            </Button>
+          </div>
+          {sortedColumns.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-1">Nenhuma coluna. Adicione pelo menos uma para usar a ficha.</p>
+          ) : (
+            <DndContext collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+              <SortableContext items={sortedColumns.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                <div className="rounded-xl border divide-y overflow-hidden">
+                  {sortedColumns.map((col) => (
+                    <SortableColumnItem
+                      key={col.id}
+                      column={col}
+                      deletePending={deleteColumn.isPending}
+                      onEdit={() => { setEditingColumn(col); setColumnDialogOpen(true) }}
+                      onDelete={() => handleDeleteColumn(col)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
       )}
 
-      {/* M-02: Botão "Adicionar campo" pré-preenche com último campo */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          const last = sortedFields[sortedFields.length - 1]
-          openAddFieldDialog(
-            last
-              ? {
-                  type: last.type,
-                  unit: last.unit ?? undefined,
-                  subColumns: last.columns.map((c) => ({ name: c.name, unit: c.unit })),
-                }
-              : undefined
-          )
-        }}
-        disabled={activeFieldCount >= MAX_ACTIVE_FIELDS}
-        title={activeFieldCount >= MAX_ACTIVE_FIELDS ? `Limite de ${MAX_ACTIVE_FIELDS} campos atingido` : undefined}
-      >
-        <Plus className="mr-1 h-3.5 w-3.5" />
-        Adicionar campo
-      </Button>
+      {/* â”€â”€ SeÃ§Ã£o CAMPOS (linhas) â”€â”€ */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {sheet.type === 'TABULAR' ? 'Linhas (campos)' : 'Campos'}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 text-xs px-2"
+            onClick={() => { setEditingField(undefined); setFieldDialogOpen(true) }}
+            disabled={activeFieldCount >= MAX_ACTIVE_FIELDS}
+          >
+            <Plus className="mr-1 h-3 w-3" /> Campo
+          </Button>
+        </div>
 
+        {sortedFields.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-1">Nenhum campo. Adicione o primeiro abaixo.</p>
+        ) : (
+          <DndContext collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
+            <SortableContext items={sortedFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+              <div className="rounded-xl border divide-y overflow-hidden">
+                {sortedFields.map((field) => (
+                  <SortableFieldItem
+                    key={field.id}
+                    field={field}
+                    sheetType={sheet.type}
+                    reorderPending={reorderFields.isPending}
+                    updatePending={updateField.isPending}
+                    deletePending={deleteField.isPending}
+                    onEdit={() => { setEditingField(field); setFieldDialogOpen(true) }}
+                    onToggle={() => handleToggleField(field)}
+                    onDelete={() => handleDeleteField(field)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        )}
+      </div>
+
+      {/* Dialogs */}
       {fieldDialogOpen && (
         <FieldDialog
           open={fieldDialogOpen}
           sheetId={sheet.id}
+          sheetType={sheet.type}
           field={editingField}
-          prefill={editingField ? undefined : fieldPrefill}
-          onClose={() => { setFieldDialogOpen(false); setEditingField(undefined); setFieldPrefill(undefined) }}
+          onClose={() => { setFieldDialogOpen(false); setEditingField(undefined) }}
+        />
+      )}
+      {columnDialogOpen && (
+        <ColumnDialog
+          open={columnDialogOpen}
+          sheetId={sheet.id}
+          column={editingColumn}
+          onClose={() => { setColumnDialogOpen(false); setEditingColumn(undefined) }}
         />
       )}
     </div>
   )
 }
 
-// ── Item de ficha ordenável via DnD ─────────────────────────────────────────
+// â”€â”€ Item de ficha sortable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SortableSheetItem({
   sheet,
@@ -737,7 +816,7 @@ function SortableSheetItem({
   sheet: MeasurementSheet
   isExpanded: boolean
   onToggleExpand: () => void
-  onEditSheet: (sheet: MeasurementSheet) => void
+  onEditSheet: (s: MeasurementSheet) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: sheet.id })
   const style = { transform: CSS.Transform.toString(transform), transition }
@@ -746,65 +825,43 @@ function SortableSheetItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={[
-        'rounded-xl border overflow-hidden',
-        !sheet.active && 'opacity-60',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+      className={['rounded-xl border overflow-hidden', !sheet.active && 'opacity-60'].filter(Boolean).join(' ')}
     >
-      {/* Cabeçalho da ficha */}
       <div className="w-full flex items-center gap-2 px-4 py-3 bg-card">
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing shrink-0 touch-none"
-          aria-label="Arrastar para reordenar ficha"
-        >
-          <GripVertical className="h-4 w-4 text-muted-foreground/40" aria-hidden />
+        <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing shrink-0 touch-none" aria-label="Arrastar">
+          <GripVertical className="h-4 w-4 text-muted-foreground/40" />
         </button>
         <button
           type="button"
-          className="flex-1 flex items-center gap-3 text-left hover:bg-transparent transition-colors"
+          className="flex-1 flex items-center gap-3 text-left"
           onClick={onToggleExpand}
           aria-expanded={isExpanded}
         >
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium truncate">{sheet.name}</span>
-              <span className="text-xs text-muted-foreground">
-                ({sheet.fields.filter((f) => f.active).length} campos)
-              </span>
-              {!sheet.active && (
-                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  Inativa
-                </span>
-              )}
-            </div>
+          <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium truncate">{sheet.name}</span>
+            {sheetTypeBadge(sheet.type)}
+            <span className="text-xs text-muted-foreground">
+              ({sheet.fields.filter((f) => f.active).length} campos
+              {sheet.type === 'TABULAR' && `, ${sheet.columns.length} colunas`})
+            </span>
+            {!sheet.active && (
+              <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Inativa</span>
+            )}
           </div>
-          {isExpanded ? (
-            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          )}
+          {isExpanded ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
         </button>
       </div>
 
-      {/* Painel inline */}
       {isExpanded && (
         <div className="border-t px-4 py-4 bg-muted/20">
-          <SheetPanel
-            sheet={sheet}
-            onEditSheet={onEditSheet}
-          />
+          <SheetPanel sheet={sheet} onEditSheet={onEditSheet} />
         </div>
       )}
     </div>
   )
 }
 
-// ── Componente principal ───────────────────────────────────────────────────────
+// â”€â”€ Componente principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function BodyMeasurementsTab() {
   const { data: sheets = [], isLoading } = useMeasurementSheets({ includeInactive: true })
@@ -815,36 +872,25 @@ export function BodyMeasurementsTab() {
 
   const activeCount = sheets.filter((s) => s.active).length
   const atLimit = activeCount >= MAX_ACTIVE_SHEETS
-
   const sortedSheets = [...sheets].sort((a, b) => a.order - b.order)
 
-  // M-03: Reordenação de fichas por DnD
   const handleSheetDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-
     const oldIndex = sortedSheets.findIndex((s) => s.id === active.id)
     const newIndex = sortedSheets.findIndex((s) => s.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-
     const reordered = arrayMove(sortedSheets, oldIndex, newIndex)
-    const payload = reordered.map((s, i) => ({ id: s.id, order: i }))
-    try {
-      await reorderSheets.mutateAsync(payload)
-    } catch {
-      toast.error('Erro ao reordenar fichas')
-    }
+    try { await reorderSheets.mutateAsync(reordered.map((s, i) => ({ id: s.id, order: i }))) }
+    catch { toast.error('Erro ao reordenar fichas') }
   }
 
   return (
     <div className="mt-6 space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium">Fichas de avaliação</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {activeCount} / {MAX_ACTIVE_SHEETS} fichas ativas
-          </p>
+          <p className="text-sm font-medium">Fichas de avaliaÃ§Ã£o</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{activeCount} / {MAX_ACTIVE_SHEETS} fichas ativas</p>
         </div>
         <Button
           size="sm"
@@ -852,12 +898,10 @@ export function BodyMeasurementsTab() {
           disabled={atLimit}
           title={atLimit ? `Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido` : undefined}
         >
-          <Plus className="mr-1 h-3.5 w-3.5" />
-          Nova ficha
+          <Plus className="mr-1 h-3.5 w-3.5" /> Nova ficha
         </Button>
       </div>
 
-      {/* Lista de fichas */}
       {isLoading ? (
         <div className="flex justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -865,13 +909,8 @@ export function BodyMeasurementsTab() {
       ) : sortedSheets.length === 0 ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <Ruler className="mx-auto mb-2 h-8 w-8 opacity-30" />
-          <p className="text-sm">Nenhuma ficha de avaliação configurada.</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => { setEditingSheet(undefined); setSheetDialogOpen(true) }}
-          >
+          <p className="text-sm">Nenhuma ficha de avaliaÃ§Ã£o configurada.</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => { setEditingSheet(undefined); setSheetDialogOpen(true) }}>
             Criar primeira ficha
           </Button>
         </div>
@@ -893,7 +932,6 @@ export function BodyMeasurementsTab() {
         </DndContext>
       )}
 
-      {/* Dialog de ficha */}
       {sheetDialogOpen && (
         <SheetDialog
           open={sheetDialogOpen}
@@ -904,3 +942,4 @@ export function BodyMeasurementsTab() {
     </div>
   )
 }
+

@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 export const CreateSheetDto = z.object({
   name: z.string().min(1).max(100),
+  type: z.enum(['SIMPLE', 'TABULAR']).default('SIMPLE'),
   order: z.number().int().nonnegative().optional(),
 })
 export type CreateSheetDto = z.infer<typeof CreateSheetDto>
@@ -20,11 +21,37 @@ export const ListSheetsQuery = z.object({
 })
 export type ListSheetsQuery = z.infer<typeof ListSheetsQuery>
 
-// ─── Campos ───────────────────────────────────────────────────────────────────
+// ─── Colunas (fichas TABULAR) ─────────────────────────────────────────────────
+
+export const CreateSheetColumnDto = z.object({
+  name: z.string().min(1).max(100),
+  inputType: z.enum(['INPUT', 'CHECK']).default('INPUT'),
+  unit: z.string().min(1).max(20).optional(),
+  order: z.number().int().nonnegative().optional(),
+})
+export type CreateSheetColumnDto = z.infer<typeof CreateSheetColumnDto>
+
+export const UpdateSheetColumnDto = z.object({
+  name: z.string().min(1).max(100).optional(),
+  inputType: z.enum(['INPUT', 'CHECK']).optional(),
+  unit: z.string().min(1).max(20).optional(),
+  order: z.number().int().nonnegative().optional(),
+})
+export type UpdateSheetColumnDto = z.infer<typeof UpdateSheetColumnDto>
+
+export const ReorderSheetColumnsDto = z.array(
+  z.object({
+    id: z.string().uuid(),
+    order: z.number().int().nonnegative(),
+  }),
+)
+export type ReorderSheetColumnsDto = z.infer<typeof ReorderSheetColumnsDto>
+
+// ─── Campos (linhas da ficha) ─────────────────────────────────────────────────
 
 export const CreateFieldDto = z.object({
   name: z.string().min(1).max(100),
-  type: z.enum(['SIMPLE', 'TABULAR', 'CHECK']),
+  inputType: z.enum(['INPUT', 'CHECK']).default('INPUT'),
   unit: z.string().min(1).max(20).optional(),
   order: z.number().int().nonnegative().optional(),
 })
@@ -32,6 +59,7 @@ export type CreateFieldDto = z.infer<typeof CreateFieldDto>
 
 export const UpdateFieldDto = z.object({
   name: z.string().min(1).max(100).optional(),
+  inputType: z.enum(['INPUT', 'CHECK']).optional(),
   unit: z.string().min(1).max(20).optional(),
   order: z.number().int().nonnegative().optional(),
   active: z.boolean().optional(),
@@ -54,24 +82,8 @@ export const ReorderSheetsDto = z.array(
 )
 export type ReorderSheetsDto = z.infer<typeof ReorderSheetsDto>
 
-// ─── Sub-colunas ──────────────────────────────────────────────────────────────
-
-export const CreateSubColumnDto = z.object({
-  name: z.string().min(1).max(100),
-  unit: z.string().min(1).max(20),
-  order: z.number().int().nonnegative().optional(),
-})
-export type CreateSubColumnDto = z.infer<typeof CreateSubColumnDto>
-
-export const UpdateSubColumnDto = z.object({
-  name: z.string().min(1).max(100).optional(),
-  unit: z.string().min(1).max(20).optional(),
-  order: z.number().int().nonnegative().optional(),
-})
-export type UpdateSubColumnDto = z.infer<typeof UpdateSubColumnDto>
-
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 export const MAX_ACTIVE_SHEETS = 20
 export const MAX_ACTIVE_FIELDS = 30
-export const MAX_SUB_COLUMNS = 10
+export const MAX_SHEET_COLUMNS = 10
