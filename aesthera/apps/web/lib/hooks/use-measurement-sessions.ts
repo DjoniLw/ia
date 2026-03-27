@@ -12,20 +12,20 @@ export interface MeasurementValue {
     id: string
     name: string
     unit: string | null
-    type: string
+    inputType: string
   }
 }
 
 export interface MeasurementTabularValue {
   id: string
   fieldId: string
-  columnId: string
+  sheetColumnId: string
   value: string
   field: {
     id: string
     name: string
   }
-  column: {
+  sheetColumn: {
     id: string
     name: string
     unit: string

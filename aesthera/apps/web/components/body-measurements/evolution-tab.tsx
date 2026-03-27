@@ -281,9 +281,11 @@ function SheetFormSection({
     })
   }
 
-  const simpleFields = activeFields.filter((f) => f.type === 'SIMPLE')
-  const tabularFields = activeFields.filter((f) => f.type === 'TABULAR')
-  const checkFields = activeFields.filter((f) => f.type === 'CHECK')
+  const simpleFields = activeFields.filter((f) => f.inputType === 'INPUT')
+  const checkFields = activeFields.filter((f) => f.inputType === 'CHECK')
+
+  // Para fichas TABULAR, colunas são definidas na ficha
+  const sheetColumns = sheet.type === 'TABULAR' ? [...sheet.columns].sort((a, b) => a.order - b.order) : []
 
   // IMC calculado
   const weightField = simpleFields.find((f) => f.name.toLowerCase().includes('peso'))
@@ -312,8 +314,8 @@ function SheetFormSection({
 
       {open && (
         <div className="px-4 py-4 space-y-4">
-          {/* Campos simples */}
-          {simpleFields.length > 0 && (
+          {/* Campos de entrada numérica (fichas SIMPLES) */}
+          {sheet.type === 'SIMPLE' && simpleFields.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {simpleFields.map((field) => (
                 <div key={field.id} className="space-y-1">
@@ -342,28 +344,34 @@ function SheetFormSection({
             </div>
           )}
 
-          {/* Campos tabulares */}
-          {tabularFields.map((field) => (
-            <div key={field.id}>
-              <p className="text-xs font-medium text-muted-foreground mb-2">{field.name}</p>
-              {field.columns.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhuma sub-coluna configurada.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs border-collapse">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        {field.columns.map((col) => (
-                          <th key={col.id} className="border px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
-                            {col.name} <span className="font-normal">({col.unit})</span>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        {field.columns.map((col) => (
-                          <td key={col.id} className="border px-3 py-2">
+          {/* Ficha TABULAR: grade campo × coluna */}
+          {sheet.type === 'TABULAR' && sheetColumns.length > 0 && activeFields.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="border px-3 py-2 text-left font-medium text-muted-foreground">Campo</th>
+                    {sheetColumns.map((col) => (
+                      <th key={col.id} className="border px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
+                        {col.name}{col.unit && <span className="font-normal"> ({col.unit})</span>}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeFields.map((field) => (
+                    <tr key={field.id}>
+                      <td className="border px-3 py-2 font-medium whitespace-nowrap">{field.name}</td>
+                      {sheetColumns.map((col) => (
+                        <td key={col.id} className="border px-3 py-2">
+                          {col.inputType === 'CHECK' ? (
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-input"
+                              checked={(state.tabularValues[field.id] ?? {})[col.id] === '1'}
+                              onChange={(e) => setTabular(field.id, col.id, e.target.checked ? '1' : '0')}
+                            />
+                          ) : (
                             <Input
                               type="number"
                               step="any"
@@ -372,18 +380,22 @@ function SheetFormSection({
                               value={(state.tabularValues[field.id] ?? {})[col.id] ?? ''}
                               onChange={(e) => setTabular(field.id, col.id, e.target.value)}
                             />
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
 
-          {/* M-04: Campos de marcação (CHECK) */}
-          {checkFields.length > 0 && (
+          {sheet.type === 'TABULAR' && sheetColumns.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nenhuma coluna configurada nesta ficha.</p>
+          )}
+
+          {/* Campos de marcação (fichas SIMPLES) */}
+          {sheet.type === 'SIMPLE' && checkFields.length > 0 && (
             <div className="space-y-2">
               {checkFields.map((field) => (
                 <label key={field.id} className="flex items-center gap-3 cursor-pointer">
@@ -399,7 +411,7 @@ function SheetFormSection({
             </div>
           )}
 
-          {simpleFields.length === 0 && tabularFields.length === 0 && checkFields.length === 0 && (
+          {activeFields.length === 0 && (
             <p className="text-xs text-muted-foreground">Nenhum campo ativo nesta ficha.</p>
           )}
         </div>
@@ -443,7 +455,7 @@ function SessionFormModal({
         const sheetRecord = sessionToEdit.sheetRecords.find((sr) => sr.sheetId === sheet.id)
         if (sheetRecord) {
           for (const v of sheetRecord.values) {
-            if (v.field.type === 'CHECK') {
+            if (v.field.inputType === 'CHECK') {
               checkValues[v.fieldId] = Number(v.value) === 1
             } else {
               simpleValues[v.fieldId] = String(Number(v.value))
@@ -451,7 +463,7 @@ function SessionFormModal({
           }
           for (const v of sheetRecord.tabularValues) {
             if (!tabularValues[v.fieldId]) tabularValues[v.fieldId] = {}
-            tabularValues[v.fieldId][v.columnId] = String(Number(v.value))
+            tabularValues[v.fieldId][v.sheetColumnId] = String(Number(v.value))
           }
         }
       }
@@ -679,7 +691,7 @@ function CompareModal({
     const map = new Map<string, { name: string; unit: string; value: number }>()
     for (const sr of session.sheetRecords) {
       for (const v of sr.values) {
-        if (v.field.type !== 'SIMPLE') continue
+        if (v.field.inputType !== 'INPUT') continue
         map.set(v.fieldId, { name: v.field.name, unit: v.field.unit ?? '', value: Number(v.value) })
       }
     }
@@ -891,8 +903,8 @@ function SessionCard({
         <div className="px-4 pb-4 space-y-4 border-t">
           {/* Valores por ficha */}
           {session.sheetRecords.map((sr) => {
-            const simpleVals = sr.values.filter((v) => v.field.type === 'SIMPLE')
-            const checkVals = sr.values.filter((v) => v.field.type === 'CHECK')
+            const simpleVals = sr.values.filter((v) => v.field.inputType === 'INPUT')
+            const checkVals = sr.values.filter((v) => v.field.inputType === 'CHECK')
             const tabularFields = sr.tabularValues.reduce<Record<string, { name: string; cols: typeof sr.tabularValues }>>(
               (acc, v) => {
                 if (!acc[v.fieldId]) acc[v.fieldId] = { name: v.field.name, cols: [] }
@@ -928,8 +940,8 @@ function SessionCard({
                         <thead>
                           <tr>
                             {tf.cols.map((v) => (
-                              <th key={v.columnId} className="text-left font-medium pr-3 pb-1 whitespace-nowrap text-muted-foreground">
-                                {v.column.name} ({v.column.unit})
+                              <th key={v.sheetColumnId} className="text-left font-medium pr-3 pb-1 whitespace-nowrap text-muted-foreground">
+                                {v.sheetColumn.name}{v.sheetColumn.unit ? ` (${v.sheetColumn.unit})` : ''}
                               </th>
                             ))}
                           </tr>
@@ -937,7 +949,7 @@ function SessionCard({
                         <tbody>
                           <tr>
                             {tf.cols.map((v) => (
-                              <td key={v.columnId} className="pr-3 text-sm font-medium">
+                              <td key={v.sheetColumnId} className="pr-3 text-sm font-medium">
                                 {Number(v.value).toLocaleString('pt-BR')}
                               </td>
                             ))}
