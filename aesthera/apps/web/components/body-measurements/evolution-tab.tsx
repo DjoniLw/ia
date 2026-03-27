@@ -456,7 +456,7 @@ function SessionFormModal({
         if (sheetRecord) {
           for (const v of sheetRecord.values) {
             if (v.field.inputType === 'CHECK') {
-              checkValues[v.fieldId] = Number(v.value) === 1
+              if (Number(v.value) === 1) checkValues[v.fieldId] = true
             } else {
               simpleValues[v.fieldId] = String(Number(v.value))
             }
@@ -560,9 +560,10 @@ function SessionFormModal({
             ...Object.entries(state.simpleValues)
               .filter(([, v]) => v !== '' && !isNaN(Number(v)))
               .map(([fieldId, value]) => ({ fieldId, value: Number(value) })),
-            // M-04: CHECK fields stored as 1/0
+            // M-04: CHECK fields — only send checked=true (absence = Não)
             ...Object.entries(state.checkValues ?? {})
-              .map(([fieldId, checked]) => ({ fieldId, value: checked ? 1 : 0 })),
+              .filter(([, checked]) => checked)
+              .map(([fieldId]) => ({ fieldId, value: 1 })),
           ]
           const tabularValues = Object.entries(state.tabularValues).flatMap(([fieldId, cols]) =>
             Object.entries(cols)

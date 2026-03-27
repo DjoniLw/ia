@@ -123,6 +123,11 @@ export class MeasurementSheetsService {
     if (!field) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
+    const targetInputType = dto.inputType ?? field.inputType
+    if (targetInputType === 'CHECK' && dto.unit !== undefined) {
+      throw new ValidationError('Campos de marcação não devem ter unidade')
+    }
+
     if (dto.name && dto.name.toLowerCase() !== field.name.toLowerCase()) {
       const existing = await this.repo.findFieldByName(sheetId, dto.name)
       if (existing) {

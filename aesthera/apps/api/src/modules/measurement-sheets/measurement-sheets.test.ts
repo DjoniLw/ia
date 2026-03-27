@@ -97,6 +97,14 @@ describe('MeasurementSheetsService', () => {
     expect(result).toBeDefined()
   })
 
+  it('deve rejeitar campo CHECK com unidade', async () => {
+    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet() as any)
+
+    await expect(
+      svc.createField(SHEET_ID, CLINIC_ID, { name: 'Marcacao', inputType: 'CHECK', unit: 'cm' }),
+    ).rejects.toThrow(ValidationError)
+  })
+
   it('deve retornar 422 MAX_FIELDS_REACHED ao atingir 30 campos ativos', async () => {
     vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet() as any)
     vi.mocked(repo.countActiveFields).mockResolvedValue(30)
@@ -130,6 +138,26 @@ describe('MeasurementSheetsService', () => {
     vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ clinicId: 'other-clinic' }) as any)
 
     await expect(svc.updateSheet(SHEET_ID, CLINIC_ID, { name: 'Novo' })).rejects.toThrow(ForbiddenError)
+  })
+
+  // ─── reorderSheets ────────────────────────────────────────────────────────
+
+  it('deve retornar 403 ao reordenar fichas de outra clínica', async () => {
+    vi.mocked(repo.validateSheetsOwnedByClinic).mockResolvedValue(false)
+
+    await expect(
+      svc.reorderSheets(CLINIC_ID, [{ id: 'foreign-sheet', order: 0 }]),
+    ).rejects.toThrow(ForbiddenError)
+  })
+
+  it('deve reordenar fichas e retornar lista atualizada', async () => {
+    vi.mocked(repo.validateSheetsOwnedByClinic).mockResolvedValue(true)
+    vi.mocked(repo.reorderSheets).mockResolvedValue(undefined as any)
+    vi.mocked(repo.listSheets).mockResolvedValue([makeSheet()] as any)
+
+    const result = await svc.reorderSheets(CLINIC_ID, [{ id: SHEET_ID, order: 0 }])
+    expect(repo.reorderSheets).toHaveBeenCalledWith(CLINIC_ID, [{ id: SHEET_ID, order: 0 }])
+    expect(result).toHaveLength(1)
   })
 
   // ─── reorderFields ─────────────────────────────────────────────────────────

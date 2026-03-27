@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -613,9 +613,11 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
   const [columnDialogOpen, setColumnDialogOpen] = useState(false)
   const [editingColumn, setEditingColumn] = useState<MeasurementSheetColumn | undefined>()
 
-  const sortedFields = [...sheet.fields].sort((a, b) => a.order - b.order)
-  const sortedColumns = [...sheet.columns].sort((a, b) => a.order - b.order)
-  const activeFieldCount = sortedFields.filter((f) => f.active).length
+  const [localFields, setLocalFields] = useState(() => [...sheet.fields].sort((a, b) => a.order - b.order))
+  const [localColumns, setLocalColumns] = useState(() => [...sheet.columns].sort((a, b) => a.order - b.order))
+  useEffect(() => { setLocalFields([...sheet.fields].sort((a, b) => a.order - b.order)) }, [sheet.fields])
+  useEffect(() => { setLocalColumns([...sheet.columns].sort((a, b) => a.order - b.order)) }, [sheet.columns])
+  const activeFieldCount = localFields.filter((f) => f.active).length
 
   const handleToggleField = async (field: MeasurementField) => {
     try {
@@ -637,12 +639,14 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
   const handleFieldDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = sortedFields.findIndex((f) => f.id === active.id)
-    const newIndex = sortedFields.findIndex((f) => f.id === over.id)
+    const oldIndex = localFields.findIndex((f) => f.id === active.id)
+    const newIndex = localFields.findIndex((f) => f.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-    const reordered = arrayMove(sortedFields, oldIndex, newIndex)
+    const previous = localFields
+    const reordered = arrayMove(localFields, oldIndex, newIndex)
+    setLocalFields(reordered)
     try { await reorderFields.mutateAsync({ sheetId: sheet.id, fields: reordered.map((f, i) => ({ id: f.id, order: i })) }) }
-    catch { toast.error('Erro ao reordenar campos') }
+    catch { setLocalFields(previous); toast.error('Erro ao reordenar campos') }
   }
 
   const handleDeleteColumn = async (col: MeasurementSheetColumn) => {
@@ -658,12 +662,14 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
   const handleColumnDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = sortedColumns.findIndex((c) => c.id === active.id)
-    const newIndex = sortedColumns.findIndex((c) => c.id === over.id)
+    const oldIndex = localColumns.findIndex((c) => c.id === active.id)
+    const newIndex = localColumns.findIndex((c) => c.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-    const reordered = arrayMove(sortedColumns, oldIndex, newIndex)
+    const previous = localColumns
+    const reordered = arrayMove(localColumns, oldIndex, newIndex)
+    setLocalColumns(reordered)
     try { await reorderColumns.mutateAsync({ sheetId: sheet.id, columns: reordered.map((c, i) => ({ id: c.id, order: i })) }) }
-    catch { toast.error('Erro ao reordenar colunas') }
+    catch { setLocalColumns(previous); toast.error('Erro ao reordenar colunas') }
   }
 
   const handleToggleSheet = async () => {
@@ -714,18 +720,18 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
               size="sm"
               className="h-6 text-xs px-2"
               onClick={() => { setEditingColumn(undefined); setColumnDialogOpen(true) }}
-              disabled={sortedColumns.length >= MAX_SHEET_COLUMNS}
+              disabled={localColumns.length >= MAX_SHEET_COLUMNS}
             >
               <Plus className="mr-1 h-3 w-3" /> Coluna
             </Button>
           </div>
-          {sortedColumns.length === 0 ? (
+          {localColumns.length === 0 ? (
             <p className="text-xs text-muted-foreground py-1">Nenhuma coluna. Adicione pelo menos uma para usar a ficha.</p>
           ) : (
             <DndContext collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
-              <SortableContext items={sortedColumns.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={localColumns.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                 <div className="rounded-xl border divide-y overflow-hidden">
-                  {sortedColumns.map((col) => (
+                  {localColumns.map((col) => (
                     <SortableColumnItem
                       key={col.id}
                       column={col}
@@ -758,13 +764,13 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
           </Button>
         </div>
 
-        {sortedFields.length === 0 ? (
+        {localFields.length === 0 ? (
           <p className="text-xs text-muted-foreground py-1">Nenhum campo. Adicione o primeiro abaixo.</p>
         ) : (
           <DndContext collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
-            <SortableContext items={sortedFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={localFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
               <div className="rounded-xl border divide-y overflow-hidden">
-                {sortedFields.map((field) => (
+                {localFields.map((field) => (
                   <SortableFieldItem
                     key={field.id}
                     field={field}
@@ -870,19 +876,23 @@ export function BodyMeasurementsTab() {
   const [sheetDialogOpen, setSheetDialogOpen] = useState(false)
   const [editingSheet, setEditingSheet] = useState<MeasurementSheet | undefined>()
 
+  const [localSheets, setLocalSheets] = useState(() => [...sheets].sort((a, b) => a.order - b.order))
+  useEffect(() => { setLocalSheets([...sheets].sort((a, b) => a.order - b.order)) }, [sheets])
+
   const activeCount = sheets.filter((s) => s.active).length
   const atLimit = activeCount >= MAX_ACTIVE_SHEETS
-  const sortedSheets = [...sheets].sort((a, b) => a.order - b.order)
 
   const handleSheetDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = sortedSheets.findIndex((s) => s.id === active.id)
-    const newIndex = sortedSheets.findIndex((s) => s.id === over.id)
+    const oldIndex = localSheets.findIndex((s) => s.id === active.id)
+    const newIndex = localSheets.findIndex((s) => s.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-    const reordered = arrayMove(sortedSheets, oldIndex, newIndex)
+    const previous = localSheets
+    const reordered = arrayMove(localSheets, oldIndex, newIndex)
+    setLocalSheets(reordered)
     try { await reorderSheets.mutateAsync(reordered.map((s, i) => ({ id: s.id, order: i }))) }
-    catch { toast.error('Erro ao reordenar fichas') }
+    catch { setLocalSheets(previous); toast.error('Erro ao reordenar fichas') }
   }
 
   return (
@@ -906,7 +916,7 @@ export function BodyMeasurementsTab() {
         <div className="flex justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-      ) : sortedSheets.length === 0 ? (
+      ) : localSheets.length === 0 ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <Ruler className="mx-auto mb-2 h-8 w-8 opacity-30" />
           <p className="text-sm">Nenhuma ficha de avaliaÃ§Ã£o configurada.</p>
@@ -916,9 +926,9 @@ export function BodyMeasurementsTab() {
         </div>
       ) : (
         <DndContext collisionDetection={closestCenter} onDragEnd={handleSheetDragEnd}>
-          <SortableContext items={sortedSheets.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={localSheets.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
-              {sortedSheets.map((sheet) => (
+              {localSheets.map((sheet) => (
                 <SortableSheetItem
                   key={sheet.id}
                   sheet={sheet}
