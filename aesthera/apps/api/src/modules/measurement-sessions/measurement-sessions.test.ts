@@ -137,7 +137,7 @@ describe('MeasurementSessionsService', () => {
     vi.mocked(repo.updateSession).mockResolvedValue(makeSession() as any)
 
     const dto = { notes: 'Atualizado' }
-    const result = await svc.updateSession(SESSION_ID, CLINIC_ID, USER_ID, 'admin', dto as any)
+    const result = await svc.updateSession(SESSION_ID, CLINIC_ID, USER_ID, 'admin', dto as any, MOCK_LOGGER)
     expect(result).toBeDefined()
   })
 
@@ -147,7 +147,7 @@ describe('MeasurementSessionsService', () => {
     vi.mocked(repo.validateFieldsOwnership).mockResolvedValue(true)
     vi.mocked(repo.updateSession).mockResolvedValue(makeSession() as any)
 
-    const result = await svc.updateSession(SESSION_ID, CLINIC_ID, USER_ID, 'professional', { notes: 'Ok' } as any)
+    const result = await svc.updateSession(SESSION_ID, CLINIC_ID, USER_ID, 'professional', { notes: 'Ok' } as any, MOCK_LOGGER)
     expect(result).toBeDefined()
   })
 
@@ -155,7 +155,7 @@ describe('MeasurementSessionsService', () => {
     vi.mocked(repo.findSessionById).mockResolvedValue(makeSession({ createdById: OTHER_USER_ID }) as any)
 
     await expect(
-      svc.updateSession(SESSION_ID, CLINIC_ID, USER_ID, 'professional', { notes: 'Tentativa' } as any),
+      svc.updateSession(SESSION_ID, CLINIC_ID, USER_ID, 'professional', { notes: 'Tentativa' } as any, MOCK_LOGGER),
     ).rejects.toThrow(ForbiddenError)
   })
 

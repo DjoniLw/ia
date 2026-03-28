@@ -3,13 +3,17 @@ import { api } from '@/lib/api'
 
 // ──── Types ────────────────────────────────────────────────────────────────────
 
-export type MeasurementFieldType = 'SIMPLE' | 'TABULAR'
+export type MeasurementSheetType = 'SIMPLE' | 'TABULAR'
+export type MeasurementInputType = 'INPUT' | 'CHECK'
 
-export interface MeasurementSubColumn {
+export interface MeasurementSheetColumn {
   id: string
-  fieldId: string
+  sheetId: string
   name: string
-  unit: string
+  inputType: MeasurementInputType
+  unit: string | null
+  isTextual: boolean
+  defaultValue: string | null
   order: number
 }
 
@@ -18,29 +22,33 @@ export interface MeasurementField {
   sheetId: string
   clinicId: string
   name: string
+  inputType: MeasurementInputType
   unit: string | null
-  type: MeasurementFieldType
+  isTextual: boolean
+  defaultValue: string | null
+  subColumns: string[]
   order: number
   active: boolean
-  columns: MeasurementSubColumn[]
 }
 
 export interface MeasurementSheet {
   id: string
   clinicId: string
   name: string
+  type: MeasurementSheetType
   active: boolean
   order: number
   createdAt: string
   updatedAt: string
+  columns: MeasurementSheetColumn[]
   fields: MeasurementField[]
 }
-
 
 // ──── Input types ──────────────────────────────────────────────────────────────
 
 interface CreateSheetInput {
   name: string
+  type: MeasurementSheetType
   order?: number
 }
 
@@ -53,18 +61,25 @@ interface UpdateSheetInput {
 
 interface CreateFieldInput {
   name: string
-  type: MeasurementFieldType
+  inputType: MeasurementInputType
   unit?: string
   order?: number
+  isTextual?: boolean
+  defaultValue?: string
+  subColumns?: string[]
 }
 
 interface UpdateFieldInput {
   fieldId: string
   sheetId: string
   name?: string
+  inputType?: MeasurementInputType
   unit?: string
   order?: number
   active?: boolean
+  isTextual?: boolean
+  defaultValue?: string | null
+  subColumns?: string[]
 }
 
 interface ReorderFieldsInput {
@@ -72,26 +87,29 @@ interface ReorderFieldsInput {
   fields: Array<{ id: string; order: number }>
 }
 
-interface CreateSubColumnInput {
+interface CreateSheetColumnInput {
   sheetId: string
-  fieldId: string
   name: string
-  unit: string
-  order?: number
-}
-
-interface UpdateSubColumnInput {
-  sheetId: string
-  fieldId: string
-  colId: string
-  name?: string
+  inputType: MeasurementInputType
   unit?: string
   order?: number
+  isTextual?: boolean
+  defaultValue?: string
 }
 
-interface DeleteSubColumnInput {
+interface UpdateSheetColumnInput {
   sheetId: string
-  fieldId: string
+  colId: string
+  name?: string
+  inputType?: MeasurementInputType
+  unit?: string
+  order?: number
+  isTextual?: boolean
+  defaultValue?: string | null
+}
+
+interface DeleteSheetColumnInput {
+  sheetId: string
   colId: string
 }
 
@@ -150,17 +168,6 @@ export function useDeleteMeasurementSheet() {
 
 // ──── Campos (Fields) ──────────────────────────────────────────────────────────
 
-export function useMeasurementSheetFields(sheetId: string, enabled = true) {
-  return useQuery({
-    queryKey: ['measurement-sheet-fields', sheetId],
-    queryFn: async () => {
-      const res = await api.get<MeasurementField[]>(`/measurement-sheets/${sheetId}/fields`)
-      return res.data
-    },
-    enabled: enabled && !!sheetId,
-  })
-}
-
 export function useCreateMeasurementField(sheetId: string) {
   const qc = useQueryClient()
   return useMutation({
@@ -173,7 +180,6 @@ export function useCreateMeasurementField(sheetId: string) {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
-      void qc.invalidateQueries({ queryKey: ['measurement-sheet-fields', sheetId] })
     },
   })
 }
@@ -188,9 +194,8 @@ export function useUpdateMeasurementField() {
       )
       return res.data
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
-      void qc.invalidateQueries({ queryKey: ['measurement-sheet-fields', vars.sheetId] })
     },
   })
 }
@@ -201,9 +206,8 @@ export function useDeleteMeasurementField() {
     mutationFn: async ({ sheetId, fieldId }: { sheetId: string; fieldId: string }) => {
       await api.delete(`/measurement-sheets/${sheetId}/fields/${fieldId}`)
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
-      void qc.invalidateQueries({ queryKey: ['measurement-sheet-fields', vars.sheetId] })
     },
   })
 }
@@ -214,58 +218,78 @@ export function useReorderMeasurementFields() {
     mutationFn: async ({ sheetId, fields }: ReorderFieldsInput) => {
       await api.post(`/measurement-sheets/${sheetId}/fields/reorder`, fields)
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
-      void qc.invalidateQueries({ queryKey: ['measurement-sheet-fields', vars.sheetId] })
     },
   })
 }
 
-// ──── Sub-colunas (Sub-columns) ─────────────────────────────────────────────────
-
-export function useCreateSubColumn() {
+export function useReorderMeasurementSheets() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ sheetId, fieldId, ...input }: CreateSubColumnInput) => {
-      const res = await api.post<MeasurementSubColumn>(
-        `/measurement-sheets/${sheetId}/fields/${fieldId}/columns`,
+    mutationFn: async (sheets: Array<{ id: string; order: number }>) => {
+      await api.post('/measurement-sheets/reorder', sheets)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
+    },
+  })
+}
+
+// ──── Colunas das fichas TABULAR ───────────────────────────────────────────────
+
+export function useCreateSheetColumn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ sheetId, ...input }: CreateSheetColumnInput) => {
+      const res = await api.post<MeasurementSheetColumn>(
+        `/measurement-sheets/${sheetId}/columns`,
         input,
       )
       return res.data
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
-      void qc.invalidateQueries({ queryKey: ['measurement-sheet-fields', vars.sheetId] })
     },
   })
 }
 
-export function useUpdateSubColumn() {
+export function useUpdateSheetColumn() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ sheetId, fieldId, colId, ...input }: UpdateSubColumnInput) => {
-      const res = await api.patch<MeasurementSubColumn>(
-        `/measurement-sheets/${sheetId}/fields/${fieldId}/columns/${colId}`,
+    mutationFn: async ({ sheetId, colId, ...input }: UpdateSheetColumnInput) => {
+      const res = await api.patch<MeasurementSheetColumn>(
+        `/measurement-sheets/${sheetId}/columns/${colId}`,
         input,
       )
       return res.data
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
-      void qc.invalidateQueries({ queryKey: ['measurement-sheet-fields', vars.sheetId] })
     },
   })
 }
 
-export function useDeleteSubColumn() {
+export function useDeleteSheetColumn() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ sheetId, fieldId, colId }: DeleteSubColumnInput) => {
-      await api.delete(`/measurement-sheets/${sheetId}/fields/${fieldId}/columns/${colId}`)
+    mutationFn: async ({ sheetId, colId }: DeleteSheetColumnInput) => {
+      await api.delete(`/measurement-sheets/${sheetId}/columns/${colId}`)
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
-      void qc.invalidateQueries({ queryKey: ['measurement-sheet-fields', vars.sheetId] })
+    },
+  })
+}
+
+export function useReorderSheetColumns() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ sheetId, columns }: { sheetId: string; columns: Array<{ id: string; order: number }> }) => {
+      await api.post(`/measurement-sheets/${sheetId}/columns/reorder`, columns)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
     },
   })
 }

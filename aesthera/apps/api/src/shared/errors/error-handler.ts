@@ -21,6 +21,18 @@ export function errorHandler(
 
   // Custom app errors
   if (error instanceof AppError) {
+    // Log 4xx como warn (negócio), 5xx como error (infra)
+    if (error.statusCode >= 500) {
+      logger.error(
+        { err: error, code: error.code, status: error.statusCode },
+        `AppError 5xx: ${error.message}`,
+      )
+    } else if (error.statusCode >= 400) {
+      logger.warn(
+        { code: error.code, status: error.statusCode, message: error.message },
+        `AppError ${error.statusCode}: ${error.message}`,
+      )
+    }
     reply.status(error.statusCode).send({
       error: error.code ?? 'APP_ERROR',
       message: error.message,

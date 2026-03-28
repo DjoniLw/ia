@@ -1,12 +1,15 @@
 import { prisma } from '../../database/prisma/client'
+import { MeasurementInputType } from '@prisma/client'
 import type {
   CreateFieldDto,
+  CreateSheetColumnDto,
   CreateSheetDto,
-  CreateSubColumnDto,
   ReorderFieldsDto,
+  ReorderSheetColumnsDto,
+  ReorderSheetsDto,
   UpdateFieldDto,
+  UpdateSheetColumnDto,
   UpdateSheetDto,
-  UpdateSubColumnDto,
 } from './measurement-sheets.dto'
 
 export class MeasurementSheetsRepository {
@@ -23,12 +26,10 @@ export class MeasurementSheetsRepository {
       where: { clinicId, ...(activeOnly ? { active: true } : {}) },
       orderBy: { order: 'asc' },
       include: {
+        columns: { orderBy: { order: 'asc' } },
         fields: {
           ...(activeOnly ? { where: { active: true } } : {}),
           orderBy: { order: 'asc' },
-          include: {
-            columns: { orderBy: { order: 'asc' } },
-          },
         },
       },
     })
@@ -46,8 +47,8 @@ export class MeasurementSheetsRepository {
 
   async createSheet(clinicId: string, dto: CreateSheetDto) {
     return prisma.measurementSheet.create({
-      data: { clinicId, name: dto.name, order: dto.order ?? 0 },
-      include: { fields: true },
+      data: { clinicId, name: dto.name, type: dto.type, order: dto.order ?? 0 },
+      include: { columns: true, fields: true },
     })
   }
 
@@ -58,7 +59,7 @@ export class MeasurementSheetsRepository {
     })
     return prisma.measurementSheet.findFirst({
       where: { id, clinicId },
-      include: { fields: { include: { columns: true } } },
+      include: { columns: { orderBy: { order: 'asc' } }, fields: { orderBy: { order: 'asc' } } },
     })
   }
 
@@ -83,7 +84,6 @@ export class MeasurementSheetsRepository {
     return prisma.measurementField.findMany({
       where: { sheetId },
       orderBy: { order: 'asc' },
-      include: { columns: { orderBy: { order: 'asc' } } },
     })
   }
 
@@ -103,12 +103,14 @@ export class MeasurementSheetsRepository {
         sheetId,
         clinicId,
         name: dto.name,
-        type: dto.type,
+        inputType: dto.inputType as MeasurementInputType,
         unit: dto.unit ?? null,
+        isTextual: dto.isTextual ?? false,
+        defaultValue: dto.defaultValue ?? null,
+        subColumns: dto.subColumns ?? [],
         order: dto.order ?? 0,
         active: true,
       },
-      include: { columns: true },
     })
   }
 
@@ -117,23 +119,16 @@ export class MeasurementSheetsRepository {
       where: { id, clinicId },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.inputType !== undefined && { inputType: dto.inputType as MeasurementInputType }),
         ...(dto.unit !== undefined && { unit: dto.unit }),
+        ...(dto.isTextual !== undefined && { isTextual: dto.isTextual }),
+        ...(dto.defaultValue !== undefined && { defaultValue: dto.defaultValue ?? null }),
+        ...(dto.subColumns !== undefined && { subColumns: dto.subColumns }),
         ...(dto.order !== undefined && { order: dto.order }),
         ...(dto.active !== undefined && { active: dto.active }),
       },
     })
-    // Cascata: desativar campo TABULAR cascateia sub-colunas via desativação lógica
-    if (dto.active === false) {
-      const field = await prisma.measurementField.findFirst({ where: { id, clinicId } })
-      if (field?.type === 'TABULAR') {
-        // Sub-colunas não têm campo active, apenas são removidas ou mantidas históricamente
-        // Não há cascade necessário pois sub-colunas são read-only após inativação do campo
-      }
-    }
-    return prisma.measurementField.findFirst({
-      where: { id, clinicId },
-      include: { columns: true },
-    })
+    return prisma.measurementField.findFirst({ where: { id, clinicId } })
   }
 
   async fieldHasHistory(id: string): Promise<boolean> {
@@ -145,12 +140,7 @@ export class MeasurementSheetsRepository {
   }
 
   async deleteField(id: string, clinicId: string) {
-    // CASCADE sub-colunas
-    const field = await this.findFieldById(id, clinicId)
-    if (field) {
-      await prisma.measurementSubColumn.deleteMany({ where: { fieldId: id } })
-      await prisma.measurementField.deleteMany({ where: { id, clinicId } })
-    }
+    await prisma.measurementField.deleteMany({ where: { id, clinicId } })
   }
 
   async reorderFields(sheetId: string, clinicId: string, items: ReorderFieldsDto) {
@@ -171,46 +161,95 @@ export class MeasurementSheetsRepository {
     return count === fieldIds.length
   }
 
-  // ─── Sub-colunas ──────────────────────────────────────────────────────────
+  // ─── Colunas da ficha (fichas TABULAR) ────────────────────────────────────
 
-  async countSubColumns(fieldId: string): Promise<number> {
-    return prisma.measurementSubColumn.count({ where: { fieldId } })
+  async countSheetColumns(sheetId: string): Promise<number> {
+    return prisma.measurementSheetColumn.count({ where: { sheetId } })
   }
 
-  async findSubColumnById(id: string, fieldId: string) {
-    return prisma.measurementSubColumn.findFirst({ where: { id, fieldId } })
-  }
-
-  async findSubColumnByName(fieldId: string, name: string) {
-    return prisma.measurementSubColumn.findFirst({
-      where: { fieldId, name: { equals: name, mode: 'insensitive' } },
+  async listSheetColumns(sheetId: string) {
+    return prisma.measurementSheetColumn.findMany({
+      where: { sheetId },
+      orderBy: { order: 'asc' },
     })
   }
 
-  async createSubColumn(fieldId: string, dto: CreateSubColumnDto) {
-    return prisma.measurementSubColumn.create({
-      data: { fieldId, name: dto.name, unit: dto.unit, order: dto.order ?? 0 },
+  async findSheetColumnById(id: string, sheetId: string) {
+    return prisma.measurementSheetColumn.findFirst({ where: { id, sheetId } })
+  }
+
+  async findSheetColumnByName(sheetId: string, name: string) {
+    return prisma.measurementSheetColumn.findFirst({
+      where: { sheetId, name: { equals: name, mode: 'insensitive' } },
     })
   }
 
-  async updateSubColumn(id: string, fieldId: string, dto: UpdateSubColumnDto) {
-    await prisma.measurementSubColumn.updateMany({
-      where: { id, fieldId },
+  async createSheetColumn(sheetId: string, dto: CreateSheetColumnDto) {
+    return prisma.measurementSheetColumn.create({
+      data: {
+        sheetId,
+        name: dto.name,
+        inputType: dto.inputType as MeasurementInputType,
+        unit: dto.unit ?? null,
+        isTextual: dto.isTextual ?? false,
+        defaultValue: dto.defaultValue ?? null,
+        order: dto.order ?? 0,
+      },
+    })
+  }
+
+  async updateSheetColumn(id: string, sheetId: string, dto: UpdateSheetColumnDto) {
+    await prisma.measurementSheetColumn.updateMany({
+      where: { id, sheetId },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.inputType !== undefined && { inputType: dto.inputType as MeasurementInputType }),
         ...(dto.unit !== undefined && { unit: dto.unit }),
+        ...(dto.isTextual !== undefined && { isTextual: dto.isTextual }),
+        ...(dto.defaultValue !== undefined && { defaultValue: dto.defaultValue }),
         ...(dto.order !== undefined && { order: dto.order }),
       },
     })
-    return prisma.measurementSubColumn.findFirst({ where: { id, fieldId } })
+    return prisma.measurementSheetColumn.findFirst({ where: { id, sheetId } })
   }
 
-  async columnHasHistory(id: string): Promise<boolean> {
-    const count = await prisma.measurementTabularValue.count({ where: { columnId: id } })
+  async sheetColumnHasHistory(id: string): Promise<boolean> {
+    const count = await prisma.measurementTabularValue.count({ where: { sheetColumnId: id } })
     return count > 0
   }
 
-  async deleteSubColumn(id: string, fieldId: string) {
-    await prisma.measurementSubColumn.deleteMany({ where: { id, fieldId } })
+  async deleteSheetColumn(id: string, sheetId: string) {
+    await prisma.measurementSheetColumn.deleteMany({ where: { id, sheetId } })
+  }
+
+  async reorderSheetColumns(sheetId: string, items: ReorderSheetColumnsDto) {
+    return prisma.$transaction(
+      items.map((item) =>
+        prisma.measurementSheetColumn.updateMany({
+          where: { id: item.id, sheetId },
+          data: { order: item.order },
+        }),
+      ),
+    )
+  }
+
+  // ─── Fichas ───────────────────────────────────────────────────────────────
+
+  async reorderSheets(clinicId: string, items: ReorderSheetsDto) {
+    return prisma.$transaction(
+      items.map((item) =>
+        prisma.measurementSheet.updateMany({
+          where: { id: item.id, clinicId },
+          data: { order: item.order },
+        }),
+      ),
+    )
+  }
+
+  async validateSheetsOwnedByClinic(sheetIds: string[], clinicId: string): Promise<boolean> {
+    const count = await prisma.measurementSheet.count({
+      where: { id: { in: sheetIds }, clinicId },
+    })
+    return count === sheetIds.length
   }
 }

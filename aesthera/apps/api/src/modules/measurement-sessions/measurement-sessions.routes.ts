@@ -27,11 +27,11 @@ export async function measurementSessionsRoutes(app: FastifyInstance) {
 
   /**
    * POST /measurement-sessions
-   * Guard: admin, staff
+   * Guard: admin, staff, professional
    */
   app.post(
     '/measurement-sessions',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff', 'professional'])] },
     async (req, reply) => {
       const dto = CreateSessionDto.parse(req.body)
       return reply.status(201).send(
@@ -51,7 +51,7 @@ export async function measurementSessionsRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string }
       const dto = UpdateSessionDto.parse(req.body)
       return reply.send(
-        await svc.updateSession(id, req.clinicId, req.user.sub, req.user.role, dto),
+        await svc.updateSession(id, req.clinicId, req.user.sub, req.user.role, dto, req.log),
       )
     },
   )

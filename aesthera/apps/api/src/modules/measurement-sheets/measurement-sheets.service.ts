@@ -2,15 +2,17 @@ import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '.
 import {
   MAX_ACTIVE_FIELDS,
   MAX_ACTIVE_SHEETS,
-  MAX_SUB_COLUMNS,
+  MAX_SHEET_COLUMNS,
   type CreateFieldDto,
+  type CreateSheetColumnDto,
   type CreateSheetDto,
-  type CreateSubColumnDto,
   type ListSheetsQuery,
   type ReorderFieldsDto,
+  type ReorderSheetColumnsDto,
+  type ReorderSheetsDto,
   type UpdateFieldDto,
+  type UpdateSheetColumnDto,
   type UpdateSheetDto,
-  type UpdateSubColumnDto,
 } from './measurement-sheets.dto'
 import { MeasurementSheetsRepository } from './measurement-sheets.repository'
 
@@ -38,7 +40,6 @@ export class MeasurementSheetsService {
 
     return this.repo.createSheet(clinicId, dto)
   }
-
   async updateSheet(id: string, clinicId: string, dto: UpdateSheetDto) {
     const sheet = await this.repo.findSheetById(id, clinicId)
     if (!sheet) throw new NotFoundError('MeasurementSheet')
@@ -91,12 +92,15 @@ export class MeasurementSheetsService {
     if (!sheet) throw new NotFoundError('MeasurementSheet')
     if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
-    // Validação de tipo
-    if (dto.type === 'SIMPLE' && !dto.unit) {
-      throw new ValidationError('Unidade é obrigatória para campos do tipo SIMPLES')
+    // Em fichas TABULAR, a unidade é definida na coluna (não no campo)
+    if (sheet.type === 'TABULAR' && dto.unit) {
+      throw new ValidationError('Campos de ficha tabular não devem ter unidade — a unidade é definida em cada coluna')
     }
-    if (dto.type === 'TABULAR' && dto.unit) {
-      throw new ValidationError('Campos TABULARES não devem ter unidade — a unidade fica em cada sub-coluna')
+
+    // Em fichas SIMPLE com INPUT, unidade é recomendada mas não obrigatória
+    // Em fichas SIMPLE com CHECK, não faz sentido ter unidade
+    if (dto.inputType === 'CHECK' && dto.unit) {
+      throw new ValidationError('Campos de marcação não devem ter unidade')
     }
 
     // Limite de campos
@@ -118,6 +122,11 @@ export class MeasurementSheetsService {
     const field = await this.repo.findFieldById(fieldId, clinicId)
     if (!field) throw new NotFoundError('MeasurementField')
     if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    const targetInputType = dto.inputType ?? field.inputType
+    if (targetInputType === 'CHECK' && dto.unit !== undefined) {
+      throw new ValidationError('Campos de marcação não devem ter unidade')
+    }
 
     if (dto.name && dto.name.toLowerCase() !== field.name.toLowerCase()) {
       const existing = await this.repo.findFieldByName(sheetId, dto.name)
@@ -157,54 +166,73 @@ export class MeasurementSheetsService {
     return this.repo.listFields(sheetId)
   }
 
-  // ─── Sub-colunas ──────────────────────────────────────────────────────────
-
-  async createSubColumn(sheetId: string, fieldId: string, clinicId: string, dto: CreateSubColumnDto) {
-    const field = await this.repo.findFieldById(fieldId, clinicId)
-    if (!field || field.sheetId !== sheetId) throw new NotFoundError('MeasurementField')
-    if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
-
-    if (field.type !== 'TABULAR') {
-      throw new ValidationError('Sub-colunas são permitidas apenas em campos do tipo TABULAR')
-    }
-
-    const count = await this.repo.countSubColumns(fieldId)
-    if (count >= MAX_SUB_COLUMNS) {
-      throw new ValidationError('MAX_COLUMNS_REACHED')
-    }
-
-    const existing = await this.repo.findSubColumnByName(fieldId, dto.name)
-    if (existing) {
-      throw new ConflictError('Nome de sub-coluna já existe neste campo')
-    }
-
-    return this.repo.createSubColumn(fieldId, dto)
+  async reorderSheets(clinicId: string, dto: ReorderSheetsDto) {
+    const sheetIds = dto.map((d) => d.id)
+    const allOwned = await this.repo.validateSheetsOwnedByClinic(sheetIds, clinicId)
+    if (!allOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+    await this.repo.reorderSheets(clinicId, dto)
+    return this.repo.listSheets(clinicId, false)
   }
 
-  async updateSubColumn(sheetId: string, fieldId: string, colId: string, clinicId: string, dto: UpdateSubColumnDto) {
-    const field = await this.repo.findFieldById(fieldId, clinicId)
-    if (!field || field.sheetId !== sheetId) throw new NotFoundError('MeasurementField')
-    if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+  // ─── Colunas (fichas TABULAR) ──────────────────────────────────────────────
 
-    const col = await this.repo.findSubColumnById(colId, fieldId)
-    if (!col) throw new NotFoundError('MeasurementSubColumn')
-
-    return this.repo.updateSubColumn(colId, fieldId, dto)
+  async listSheetColumns(sheetId: string, clinicId: string) {
+    const sheet = await this.repo.findSheetById(sheetId, clinicId)
+    if (!sheet) throw new NotFoundError('MeasurementSheet')
+    if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+    return this.repo.listSheetColumns(sheetId)
   }
 
-  async deleteSubColumn(sheetId: string, fieldId: string, colId: string, clinicId: string) {
-    const field = await this.repo.findFieldById(fieldId, clinicId)
-    if (!field || field.sheetId !== sheetId) throw new NotFoundError('MeasurementField')
-    if (field.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+  async createSheetColumn(sheetId: string, clinicId: string, dto: CreateSheetColumnDto) {
+    const sheet = await this.repo.findSheetById(sheetId, clinicId)
+    if (!sheet) throw new NotFoundError('MeasurementSheet')
+    if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+    if (sheet.type !== 'TABULAR') throw new ValidationError('Colunas são permitidas apenas em fichas do tipo TABULAR')
 
-    const col = await this.repo.findSubColumnById(colId, fieldId)
-    if (!col) throw new NotFoundError('MeasurementSubColumn')
+    const count = await this.repo.countSheetColumns(sheetId)
+    if (count >= MAX_SHEET_COLUMNS) throw new ValidationError('MAX_COLUMNS_REACHED')
 
-    const hasHistory = await this.repo.columnHasHistory(colId)
-    if (hasHistory) {
-      throw new ValidationError('HAS_HISTORY')
+    const existing = await this.repo.findSheetColumnByName(sheetId, dto.name)
+    if (existing) throw new ConflictError('Nome de coluna já existe nesta ficha')
+
+    return this.repo.createSheetColumn(sheetId, dto)
+  }
+
+  async updateSheetColumn(sheetId: string, colId: string, clinicId: string, dto: UpdateSheetColumnDto) {
+    const sheet = await this.repo.findSheetById(sheetId, clinicId)
+    if (!sheet) throw new NotFoundError('MeasurementSheet')
+    if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    const col = await this.repo.findSheetColumnById(colId, sheetId)
+    if (!col) throw new NotFoundError('MeasurementSheetColumn')
+
+    if (dto.name && dto.name.toLowerCase() !== col.name.toLowerCase()) {
+      const existing = await this.repo.findSheetColumnByName(sheetId, dto.name)
+      if (existing) throw new ConflictError('Nome de coluna já existe nesta ficha')
     }
 
-    await this.repo.deleteSubColumn(colId, fieldId)
+    return this.repo.updateSheetColumn(colId, sheetId, dto)
+  }
+
+  async deleteSheetColumn(sheetId: string, colId: string, clinicId: string) {
+    const sheet = await this.repo.findSheetById(sheetId, clinicId)
+    if (!sheet) throw new NotFoundError('MeasurementSheet')
+    if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    const col = await this.repo.findSheetColumnById(colId, sheetId)
+    if (!col) throw new NotFoundError('MeasurementSheetColumn')
+
+    const hasHistory = await this.repo.sheetColumnHasHistory(colId)
+    if (hasHistory) throw new ValidationError('HAS_HISTORY')
+
+    await this.repo.deleteSheetColumn(colId, sheetId)
+  }
+
+  async reorderSheetColumns(sheetId: string, clinicId: string, items: ReorderSheetColumnsDto) {
+    const sheet = await this.repo.findSheetById(sheetId, clinicId)
+    if (!sheet) throw new NotFoundError('MeasurementSheet')
+    if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+    await this.repo.reorderSheetColumns(sheetId, items)
+    return this.repo.listSheetColumns(sheetId)
   }
 }

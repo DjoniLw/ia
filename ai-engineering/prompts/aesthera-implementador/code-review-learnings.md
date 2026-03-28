@@ -147,7 +147,17 @@ Se a resposta for não → revise antes de prosseguir.
 
 ### Textos e Internacionalização (PT-BR)
 
-<!-- Itens serão adicionados automaticamente após code reviews -->
+- [ ] **Arquivos `.tsx` com acentuação PT-BR devem ser salvos em UTF-8 sem BOM — verificar antes de commitar no Windows**
+  - 🔴 Anti-padrão: salvar arquivos `.tsx` com BOM (`﻿`, U+FEFF) ou com double-encoding (`ÃO`, `Ã§`, `Ã£`, etc.) — ocorre ao copiar texto de terminais Windows, usar editores como Notepad, ou ao configurar incorretamente o VS Code. Resultado: todos os textos da interface são renderizados como lixo no browser (`'DigitaÃ§Ã£o'`, `'Nome obrigatÃ³rio'`)
+  - ✅ Correto: garantir que o arquivo está em UTF-8 sem BOM antes de commitar:
+    1. No VS Code: clicar no seletor de encoding (canto inferior direito) → `Save with Encoding` → `UTF-8`
+    2. Ou via `Ctrl+Shift+P` → `Change File Encoding` → `Save with Encoding` → `UTF-8`
+    3. Se houver BOM, ele aparece como `﻿'use client'` no topo do arquivo — remover o caractere U+FEFF antes de salvar
+  - 📌 Mapeamento dos padrões de double-encoding mais comuns (Latin-1 interpretado como UTF-8):
+    - `Ã³` → `ó` | `Ã§` → `ç` | `Ã£` → `ã` | `Ã¡` → `á`
+    - `Ãª` → `ê` | `Ã©` → `é` | `â€"` → `—` | `Ã£o` → `ão`
+  - 📌 Regra geral: o VS Code exibe o encoding no canto inferior direito da barra de status. Em qualquer arquivo `.tsx` com texto PT-BR, confirmar que mostra `UTF-8` (sem "BOM" na label). Se mostrar `UTF-8 with BOM`, salvar novamente como `UTF-8`
+  - 📅 Aprendido em: 26/03/2026 — revisão de PR #128 (`body-measurements-tab.tsx` com BOM + double-encoding, tornando toda a tela de medidas corporais inutilizável em produção)
 
 ### Acessibilidade e Cores
 
@@ -338,5 +348,6 @@ Se a resposta for não → revise antes de prosseguir.
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: fluxo presign/confirm de upload — `presign` deve persistir `PendingUpload` no banco; `confirm` valida pelo `id` server-side com `clinicId`, nunca aceita `storageKey` bruto do cliente |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: CTA em empty state nunca usa `<button>` nativo com underline — padrão correto é `<Button variant="outline" size="sm" className="mt-3">` dentro de container `rounded-lg border bg-card py-16 text-center text-muted-foreground` (ui-standards.md §2.3) |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: teste existente quebrando = nunca alterar o teste, acionar test-guardian; assumir que o código está errado por padrão |
+| 26/03/2026 | PR #128 | 1 padrão adicionado pelo treinador-agent: arquivos `.tsx` com acentuação PT-BR devem ser salvos em UTF-8 sem BOM no Windows — BOM (U+FEFF) e double-encoding causam corrupção total de texto na interface; correção via VS Code → `Save with Encoding` → UTF-8 |
 | 25/03/2026 | — | 4 padrões adicionados pelo treinador-agent (issue #124 — revisão transversal de filtros): (1) `<select>` para entidades cadastradas é BLOQUEANTE — usar `<ComboboxSearch>`; (2) `<select>` para status fixo → corrigir para pills; (3) legenda descritiva + botão "Restaurar padrão" obrigatórios em toda tela com filtros; (4) URL sync via `useSearchParams` em filtros de telas financeiras |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: após abrir qualquer PR, adicionar cenários de teste manual como comentário (não no corpo) via `mcp_github_add_issue_comment` — tabela Markdown por área (Settings, Ficha do Cliente, API/Multi-tenancy, Scripts) com colunas #, Cenário, Resultado esperado; cobrir fluxo feliz, casos de borda, permissões por papel e estados vazios/negativos |

@@ -11,6 +11,20 @@ const accessKeyId = process.env.R2_ACCESS_KEY_ID ?? ''
 const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY ?? ''
 const bucketName = process.env.R2_BUCKET_NAME ?? ''
 
+// Validação de variáveis de ambiente obrigatórias — diagnóstico precoce de B-02 (503 em produção)
+if (process.env.NODE_ENV !== 'test' && (!accountId || !accessKeyId || !secretAccessKey || !bucketName)) {
+  const missing = [
+    !accountId && 'R2_ACCOUNT_ID',
+    !accessKeyId && 'R2_ACCESS_KEY_ID',
+    !secretAccessKey && 'R2_SECRET_ACCESS_KEY',
+    !bucketName && 'R2_BUCKET_NAME',
+  ].filter(Boolean).join(', ')
+  console.error(
+    `[r2] VARIÁVEIS AUSENTES: ${missing}. ` +
+    'A funcionalidade de upload falhará com 503. Configure essas variáveis no Railway antes de usar o módulo de uploads.',
+  )
+}
+
 let _r2Client: S3Client | null = null
 
 function getR2Client(): S3Client {

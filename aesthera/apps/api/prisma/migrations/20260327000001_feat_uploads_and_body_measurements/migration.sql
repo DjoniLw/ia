@@ -6,14 +6,17 @@
 -- DropTable (deprecado — substituído por modelos normalizados)
 DROP TABLE IF EXISTS "customer_measurements";
 
--- CreateEnum
-CREATE TYPE "FileCategory" AS ENUM ('BEFORE_PHOTO', 'AFTER_PHOTO', 'MEASUREMENT', 'EXAM', 'OTHER');
+-- CreateEnum (idempotente via bloco DO)
+DO $$ BEGIN
+  CREATE TYPE "FileCategory" AS ENUM ('BEFORE_PHOTO', 'AFTER_PHOTO', 'MEASUREMENT', 'EXAM', 'OTHER');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- AlterTable — Coluna de consentimento LGPD Art. 11I nos dados corporais sensíveis
-ALTER TABLE "customers" ADD COLUMN "body_data_consent_at" TIMESTAMP(3);
+-- AlterTable — Coluna de consentimento LGPD Art. 11 nos dados corporais sensíveis
+ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "body_data_consent_at" TIMESTAMP(3);
 
 -- CreateTable: customer_files
-CREATE TABLE "customer_files" (
+CREATE TABLE IF NOT EXISTS "customer_files" (
     "id"             TEXT         NOT NULL,
     "clinic_id"      TEXT         NOT NULL,
     "customer_id"    TEXT         NOT NULL,
@@ -31,7 +34,7 @@ CREATE TABLE "customer_files" (
 );
 
 -- CreateTable: body_measurement_fields
-CREATE TABLE "body_measurement_fields" (
+CREATE TABLE IF NOT EXISTS "body_measurement_fields" (
     "id"         TEXT         NOT NULL,
     "clinic_id"  TEXT         NOT NULL,
     "name"       TEXT         NOT NULL,
@@ -45,7 +48,7 @@ CREATE TABLE "body_measurement_fields" (
 );
 
 -- CreateTable: body_measurement_records
-CREATE TABLE "body_measurement_records" (
+CREATE TABLE IF NOT EXISTS "body_measurement_records" (
     "id"             TEXT         NOT NULL,
     "clinic_id"      TEXT         NOT NULL,
     "customer_id"    TEXT         NOT NULL,
@@ -58,7 +61,7 @@ CREATE TABLE "body_measurement_records" (
 );
 
 -- CreateTable: body_measurement_values
-CREATE TABLE "body_measurement_values" (
+CREATE TABLE IF NOT EXISTS "body_measurement_values" (
     "id"         TEXT           NOT NULL,
     "clinic_id"  TEXT           NOT NULL,
     "record_id"  TEXT           NOT NULL,
@@ -68,49 +71,73 @@ CREATE TABLE "body_measurement_values" (
     CONSTRAINT "body_measurement_values_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "customer_files_storage_key_key"
+-- CreateIndex (IF NOT EXISTS para idempotência)
+CREATE UNIQUE INDEX IF NOT EXISTS "customer_files_storage_key_key"
     ON "customer_files"("storage_key");
 
-CREATE INDEX "customer_files_clinic_id_customer_id_idx"
+CREATE INDEX IF NOT EXISTS "customer_files_clinic_id_customer_id_idx"
     ON "customer_files"("clinic_id", "customer_id");
 
-CREATE INDEX "customer_files_clinic_id_record_id_idx"
+CREATE INDEX IF NOT EXISTS "customer_files_clinic_id_record_id_idx"
     ON "customer_files"("clinic_id", "record_id");
 
-CREATE INDEX "body_measurement_fields_clinic_id_active_idx"
+CREATE INDEX IF NOT EXISTS "body_measurement_fields_clinic_id_active_idx"
     ON "body_measurement_fields"("clinic_id", "active");
 
-CREATE INDEX "body_measurement_fields_clinic_id_order_idx"
+CREATE INDEX IF NOT EXISTS "body_measurement_fields_clinic_id_order_idx"
     ON "body_measurement_fields"("clinic_id", "order");
 
-CREATE INDEX "body_measurement_records_clinic_id_customer_id_recorded_at_idx"
+CREATE INDEX IF NOT EXISTS "body_measurement_records_clinic_id_customer_id_recorded_at_idx"
     ON "body_measurement_records"("clinic_id", "customer_id", "recorded_at");
 
-CREATE INDEX "body_measurement_values_clinic_id_record_id_idx"
+CREATE INDEX IF NOT EXISTS "body_measurement_values_clinic_id_record_id_idx"
     ON "body_measurement_values"("clinic_id", "record_id");
 
--- AddForeignKey
-ALTER TABLE "customer_files" ADD CONSTRAINT "customer_files_clinic_id_fkey"
-    FOREIGN KEY ("clinic_id") REFERENCES "clinics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey (idempotente via DO)
+DO $$ BEGIN
+  ALTER TABLE "customer_files" ADD CONSTRAINT "customer_files_clinic_id_fkey"
+      FOREIGN KEY ("clinic_id") REFERENCES "clinics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "customer_files" ADD CONSTRAINT "customer_files_customer_id_fkey"
-    FOREIGN KEY ("customer_id") REFERENCES "customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "customer_files" ADD CONSTRAINT "customer_files_customer_id_fkey"
+      FOREIGN KEY ("customer_id") REFERENCES "customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "customer_files" ADD CONSTRAINT "customer_files_record_id_fkey"
-    FOREIGN KEY ("record_id") REFERENCES "body_measurement_records"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "customer_files" ADD CONSTRAINT "customer_files_record_id_fkey"
+      FOREIGN KEY ("record_id") REFERENCES "body_measurement_records"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "body_measurement_fields" ADD CONSTRAINT "body_measurement_fields_clinic_id_fkey"
-    FOREIGN KEY ("clinic_id") REFERENCES "clinics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "body_measurement_fields" ADD CONSTRAINT "body_measurement_fields_clinic_id_fkey"
+      FOREIGN KEY ("clinic_id") REFERENCES "clinics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "body_measurement_records" ADD CONSTRAINT "body_measurement_records_clinic_id_fkey"
-    FOREIGN KEY ("clinic_id") REFERENCES "clinics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "body_measurement_records" ADD CONSTRAINT "body_measurement_records_clinic_id_fkey"
+      FOREIGN KEY ("clinic_id") REFERENCES "clinics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "body_measurement_records" ADD CONSTRAINT "body_measurement_records_customer_id_fkey"
-    FOREIGN KEY ("customer_id") REFERENCES "customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "body_measurement_records" ADD CONSTRAINT "body_measurement_records_customer_id_fkey"
+      FOREIGN KEY ("customer_id") REFERENCES "customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "body_measurement_values" ADD CONSTRAINT "body_measurement_values_record_id_fkey"
-    FOREIGN KEY ("record_id") REFERENCES "body_measurement_records"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "body_measurement_values" ADD CONSTRAINT "body_measurement_values_record_id_fkey"
+      FOREIGN KEY ("record_id") REFERENCES "body_measurement_records"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-ALTER TABLE "body_measurement_values" ADD CONSTRAINT "body_measurement_values_field_id_fkey"
-    FOREIGN KEY ("field_id") REFERENCES "body_measurement_fields"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "body_measurement_values" ADD CONSTRAINT "body_measurement_values_field_id_fkey"
+      FOREIGN KEY ("field_id") REFERENCES "body_measurement_fields"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

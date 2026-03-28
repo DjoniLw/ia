@@ -149,9 +149,14 @@ enum NotificationStatus {
   failed
 }
 
-enum MeasurementFieldType {
+enum MeasurementSheetType {
   SIMPLE
   TABULAR
+}
+
+enum MeasurementInputType {
+  INPUT
+  CHECK
 }
 
 enum RecurrenceType {
@@ -1237,16 +1242,18 @@ model BodyMeasurementValue {
 
 // Ficha de Avaliação Corporal — configurável por clínica
 model MeasurementSheet {
-  id        String   @id @default(uuid())
-  clinicId  String   @map("clinic_id")
+  id        String              @id @default(uuid())
+  clinicId  String              @map("clinic_id")
   name      String
-  active    Boolean  @default(true)
-  order     Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt      @map("updated_at")
+  type      MeasurementSheetType @default(SIMPLE)  // SIMPLE ou TABULAR
+  active    Boolean             @default(true)
+  order     Int                 @default(0)
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt      @map("updated_at")
 
-  clinic       Clinic                   @relation(fields: [clinicId], references: [id])
+  clinic       Clinic                    @relation(fields: [clinicId], references: [id])
   fields       MeasurementField[]
+  columns      MeasurementSheetColumn[]  // colunas da ficha TABULAR
   sheetRecords MeasurementSheetRecord[]
 
   @@unique([clinicId, name])
@@ -1254,19 +1261,43 @@ model MeasurementSheet {
   @@map("measurement_sheets")
 }
 
-// Campo de uma Ficha — SIMPLE (um valor numérico) ou TABULAR (sub-colunas)
-model MeasurementField {
-  id       String               @id @default(uuid())
-  sheetId  String               @map("sheet_id")
-  clinicId String               @map("clinic_id")
-  name     String
-  unit     String?              // obrigatório para SIMPLE, nulo para TABULAR
-  type     MeasurementFieldType @default(SIMPLE)
-  order    Int                  @default(0)
-  active   Boolean              @default(true)
+// Coluna de ficha TABULAR — definida no nível da ficha (mesma para todas as linhas)
+model MeasurementSheetColumn {
+  id           String               @id @default(uuid())
+  sheetId      String               @map("sheet_id")
+  name         String
+  inputType    MeasurementInputType @default(INPUT) @map("input_type")
+  unit         String?              // opcional; usado quando inputType = INPUT e não isTextual
+  isTextual    Boolean              @default(false) @map("is_textual")  // true: texto livre; false: numérico
+  defaultValue String?              @map("default_value")              // valor pré-preenchido para campos textuais
+  order        Int                  @default(0)
 
-  sheet         MeasurementSheet        @relation(fields: [sheetId], references: [id])
-  columns       MeasurementSubColumn[]
+  sheet         MeasurementSheet         @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  tabularValues MeasurementTabularValue[]
+
+  @@unique([sheetId, name])
+  @@index([sheetId, order])
+  @@map("measurement_sheet_columns")
+}
+
+// Campo/Linha de uma Ficha
+// - Em fichas SIMPLE: inputType define se é teclado (INPUT) ou marcação (CHECK); unit para INPUT
+// - Em fichas TABULAR: apenas name (colunas e inputType ficam em MeasurementSheetColumn)
+// - subColumns: para campos que têm sub-divisões (ex: ["D","E"] para Direita/Esquerda)
+model MeasurementField {
+  id           String               @id @default(uuid())
+  sheetId      String               @map("sheet_id")
+  clinicId     String               @map("clinic_id")
+  name         String
+  inputType    MeasurementInputType @default(INPUT) @map("input_type")
+  unit         String?              // usado em fichas SIMPLE com inputType INPUT e não isTextual
+  isTextual    Boolean              @default(false) @map("is_textual")  // true: texto livre (fichas SIMPLE)
+  defaultValue String?              @map("default_value")              // override do defaultValue da coluna para este campo
+  subColumns   String[]             @default([])    @map("sub_columns")  // ex: ["D","E"] — sub-colunas por campo em fichas TABULAR
+  order        Int                  @default(0)
+  active       Boolean              @default(true)
+
+  sheet         MeasurementSheet         @relation(fields: [sheetId], references: [id])
   values        MeasurementValue[]
   tabularValues MeasurementTabularValue[]
 
@@ -1274,22 +1305,6 @@ model MeasurementField {
   @@index([sheetId, active, order])
   @@index([clinicId])
   @@map("measurement_fields")
-}
-
-// Sub-coluna de campo tabular
-model MeasurementSubColumn {
-  id      String @id @default(uuid())
-  fieldId String @map("field_id")
-  name    String
-  unit    String
-  order   Int    @default(0)
-
-  field         MeasurementField         @relation(fields: [fieldId], references: [id])
-  tabularValues MeasurementTabularValue[]
-
-  @@unique([fieldId, name])
-  @@index([fieldId, order])
-  @@map("measurement_sub_columns")
 }
 
 // Sessão de Evolução — agrupa fichas preenchidas em uma data
@@ -1328,12 +1343,14 @@ model MeasurementSheetRecord {
   @@map("measurement_sheet_records")
 }
 
-// Valor simples (tipo SIMPLE)
+// Valor de campo SIMPLE — numérico (INPUT) ou booleano (CHECK) ou texto (INPUT + isTextual)
 model MeasurementValue {
-  id            String  @id @default(uuid())
-  sheetRecordId String  @map("sheet_record_id")
-  fieldId       String  @map("field_id")
-  value         Decimal @db.Decimal(10, 2)
+  id            String   @id @default(uuid())
+  sheetRecordId String   @map("sheet_record_id")
+  fieldId       String   @map("field_id")
+  value         Decimal? @db.Decimal(10, 2)  // null quando inputType = CHECK ou isTextual = true
+  checked       Boolean  @default(false)      // usado quando inputType = CHECK
+  textValue     String?  @map("text_value")   // usado quando field.isTextual = true
 
   sheetRecord MeasurementSheetRecord @relation(fields: [sheetRecordId], references: [id])
   field       MeasurementField       @relation(fields: [fieldId], references: [id])
@@ -1342,18 +1359,22 @@ model MeasurementValue {
   @@map("measurement_values")
 }
 
-// Valor tabular (tipo TABULAR — por sub-coluna)
+// Valor de célula TABULAR — cruzamento (linha=field, coluna=sheetColumn)
+// subColumn: vazio para campos normais; "D"/"E" etc. para campos com field.subColumns
 model MeasurementTabularValue {
-  id            String  @id @default(uuid())
-  sheetRecordId String  @map("sheet_record_id")
-  fieldId       String  @map("field_id")
-  columnId      String  @map("column_id")
-  value         Decimal @db.Decimal(10, 2)
+  id            String   @id @default(uuid())
+  sheetRecordId String   @map("sheet_record_id")
+  fieldId       String   @map("field_id")
+  sheetColumnId String   @map("sheet_column_id")
+  subColumn     String   @default("") @map("sub_column")  // "" = sem sub-coluna; "D","E" etc.
+  value         Decimal? @db.Decimal(10, 2)  // null quando coluna.inputType = CHECK ou isTextual = true
+  checked       Boolean  @default(false)      // usado quando coluna.inputType = CHECK
+  textValue     String?  @map("text_value")   // usado quando coluna.isTextual = true
 
-  sheetRecord MeasurementSheetRecord @relation(fields: [sheetRecordId], references: [id])
-  field       MeasurementField       @relation(fields: [fieldId], references: [id])
-  column      MeasurementSubColumn   @relation(fields: [columnId], references: [id])
+  sheetRecord  MeasurementSheetRecord  @relation(fields: [sheetRecordId], references: [id])
+  field        MeasurementField        @relation(fields: [fieldId], references: [id])
+  sheetColumn  MeasurementSheetColumn  @relation(fields: [sheetColumnId], references: [id])
 
-  @@unique([sheetRecordId, fieldId, columnId])
+  @@unique([sheetRecordId, fieldId, sheetColumnId, subColumn])
   @@map("measurement_tabular_values")
 }

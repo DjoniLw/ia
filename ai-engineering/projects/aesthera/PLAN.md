@@ -278,6 +278,48 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-28] — Logging diagnóstico para HTTP 403 em updateSession (issue #126 / PR #128)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/shared/errors/error-handler.ts` *(logging de AppError 4xx/5xx)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.service.ts` *(logger.warn antes de cada ForbiddenError)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.routes.ts` *(req.log passado para updateSession)*
+- **O que foi feito:**
+  - **error-handler.ts:** AppError 4xx agora emite `logger.warn`, AppError 5xx emite `logger.error`, com `code`, `status` e `message` — antes, esses erros respondiam HTTP sem nenhum log de aplicação.
+  - **updateSession:** 5 pontos de `ForbiddenError` agora precedidos de `logger.warn` com contexto diagnóstico: `sessionId`, `clinicId`, `userId`, `userRole`, `sheetIds`, `fieldIds`, `columnMap` — permite identificar exatamente qual validação falhou ao reproduzir o 403 em produção.
+  - **routes:** `req.log` (logger por-request do Fastify/Pino) passado como 6º argumento a `updateSession`, mantendo rastreabilidade de request ID.
+- **Impacto:** Apenas backend. Sem migração de schema. Após deploy, os logs do Railway revelarão a causa exata do 403.
+
+### [2026-03-29] — feat(#126): sub-colunas, campos textuais e valor padrão em fichas de medidas (PR #128)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(4 modelos atualizados)*
+  - `aesthera/apps/api/prisma/migrations/20260329000001_feat_measurement_sub_columns_textual/migration.sql` *(criada)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.dto.ts`
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.repository.ts`
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.service.ts`
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.dto.ts`
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.repository.ts`
+  - `aesthera/apps/web/lib/hooks/use-measurement-sessions.ts`
+  - `aesthera/apps/web/lib/hooks/use-measurement-sheets.ts`
+  - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx`
+- **O que foi feito:**
+  - **Feature 1 — Sub-colunas por campo:** `MeasurementField.subColumns String[]` — ex: `["D","E"]` para campos Direita/Esquerda. No formulário, cada célula da grade tabular é dividida em N sub-inputs lado a lado com label (ex: `D=` / `E=`). A chave de estado usa `colId::subCol` (forma composta). O `@@unique` de `MeasurementTabularValue` foi atualizado para incluir `subColumn`.
+  - **Feature 2 — Campos textuais com valor padrão:** `MeasurementSheetColumn.isTextual Boolean + defaultValue String?` e `MeasurementField.isTextual Boolean`. Campos textuais exibem `<Input type="text">` ao invés de `number`, com `placeholder={col.defaultValue}`. `textValue` adicionado a `MeasurementValue` e `MeasurementTabularValue`.
+  - **Feature 3 — Posição nas medidas:** Implementada via ficha TABULAR com coluna `isTextual=true` + `defaultValue` (ex: "00 cm acima do umbigo") — usuário edita apenas o valor, sem novo tipo de ficha.
+  - **Histórico:** `SessionCard` exibe `textValue` em campos textuais e agrupa sub-colunas na mesma célula da tabela.
+  - **Comparação:** `CompareModal` exibe campos textuais sem indicadores ↑/↓ e sub-colunas na mesma célula.
+- **Commit:** `f48174e`
+
+### [2026-03-27] — Correções e melhorias na aba Evolução — fichas tabulares e simples (issue #126 / PR #128)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx` *(bug de gravação, SessionCard, CompareModal)*
+  - `aesthera/apps/web/lib/hooks/use-measurement-sessions.ts` *(type `sheetColumn.order` adicionado)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.repository.ts` *(`order` incluído no select do `sheetColumn`)*
+- **O que foi feito:**
+  - **Bug de gravação:** A validação de "ao menos 1 valor" foi movida para depois da montagem do `sheetRecords` (verificação no array resultante real, alinhada à lógica do backend). O erro `EMPTY_SESSION` intermitente ocorria porque `hasAnyValue` aprovava o formulário mesmo quando todos os campos tinham estado inválido (`NaN` ou não numérico) que eram descartados no filtro de construção do payload.
+  - **Histórico de fichas (`SessionCard`):** Substituída a exibição de fichas TABULAR (por campo separado) por uma grade linha × coluna unificada com cabeçalho de colunas. Badge de tipo (Simples/Tabular) exibido no cabeçalho de cada ficha tanto no card expandido quanto nos badges do resumo colapsado. Colunas ordenadas por `order`.
+  - **Botão "Comparar com anterior" (`CompareModal`):** Incluída comparação de valores TABULAR (`fieldId::columnId`). O modal agora exibe seções separadas "Medidas simples" e "Medidas tabulares". IMC calculado mantido na seção de simples.
+- **Impacto:** Apenas frontend + 1 linha de backend (select). Sem migração de schema.
+
 ### [2026-03-25] — Treinamento dos agentes: padrões de filtros nos learnings (issue #124)
 - **Arquivo(s) afetado(s):**
   - `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md`

@@ -1908,35 +1908,22 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
       {/* ── Contratos ─────────────────────────────────────────────────── */}
       {detailTab === 'contracts' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileSignature className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contratos Digitais</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <FileSignature className="h-3.5 w-3.5 text-muted-foreground" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Consentimento LGPD</p>
           </div>
-
-          {/* Contract type templates */}
-          <div className="space-y-2">
-            {[
-              { name: 'Autorização de uso de imagem', desc: 'Permite o uso de fotos para fins clínicos' },
-              { name: 'Termo de consentimento de tratamento', desc: 'Consentimento informado para procedimentos' },
-              { name: 'Contrato de prestação de serviços', desc: 'Acordo de prestação de serviços estéticos' },
-            ].map((tpl) => (
-              <div key={tpl.name} className="flex items-center justify-between rounded-lg border bg-muted/10 px-3 py-2.5">
-                <div>
-                  <p className="text-xs font-medium text-foreground">{tpl.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{tpl.desc}</p>
-                </div>
-                <button className="rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50">
-                  Gerar link
-                </button>
-              </div>
-            ))}
+          <div className="rounded-xl border p-4 space-y-3">
+            <p className="text-sm font-semibold">Consentimento LGPD (Art. 11)</p>
+            {customer.bodyDataConsentAt ? (
+              <p className="text-sm text-muted-foreground">
+                Registrado em {new Date(customer.bodyDataConsentAt).toLocaleDateString('pt-BR')}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Consentimento não registrado</p>
+            )}
           </div>
-
-          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-900/30 dark:bg-blue-950/10 dark:text-blue-300">
-            💡 A geração e assinatura de contratos digitais estará disponível em breve.
-            Os contratos serão enviados via WhatsApp com link único para assinatura online.
+          <p className="rounded-lg border border-muted px-3 py-2 text-xs text-muted-foreground">
+            Para registrar ou revogar o consentimento, clique em &quot;Editar&quot; e acesse a aba &quot;Contratos &amp; LGPD&quot;.
           </p>
         </div>
       )}

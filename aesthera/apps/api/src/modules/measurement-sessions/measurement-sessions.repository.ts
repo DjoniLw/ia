@@ -7,13 +7,13 @@ const SESSION_INCLUDE = {
       sheet: { select: { id: true, name: true } },
       values: {
         include: {
-          field: { select: { id: true, name: true, unit: true, type: true } },
+          field: { select: { id: true, name: true, unit: true, inputType: true, isTextual: true } },
         },
       },
       tabularValues: {
         include: {
-          field: { select: { id: true, name: true, type: true } },
-          column: { select: { id: true, name: true, unit: true } },
+          field: { select: { id: true, name: true, inputType: true, isTextual: true, defaultValue: true, subColumns: true } },
+          sheetColumn: { select: { id: true, name: true, unit: true, order: true, isTextual: true, defaultValue: true, inputType: true } },
         },
       },
     },
@@ -76,13 +76,13 @@ export class MeasurementSessionsRepository {
 
   async validateColumnsOwnership(
     columnIds: string[],
-    fieldIdsMap: Map<string, string>, // columnId → fieldId
+    sheetIdsMap: Map<string, string>, // columnId → sheetId
   ): Promise<boolean> {
     if (columnIds.length === 0) return true
-    const entries = Array.from(fieldIdsMap.entries())
-    for (const [colId, fieldId] of entries) {
-      const col = await prisma.measurementSubColumn.findFirst({
-        where: { id: colId, fieldId },
+    const entries = Array.from(sheetIdsMap.entries())
+    for (const [colId, sheetId] of entries) {
+      const col = await prisma.measurementSheetColumn.findFirst({
+        where: { id: colId, sheetId },
       })
       if (!col) return false
     }
@@ -115,7 +115,8 @@ export class MeasurementSessionsRepository {
             data: sr.values.map((v) => ({
               sheetRecordId: record.id,
               fieldId: v.fieldId,
-              value: v.value,
+              value: v.textValue ? null : (v.value ?? null),
+              textValue: v.textValue ?? null,
             })),
           })
         }
@@ -125,8 +126,10 @@ export class MeasurementSessionsRepository {
             data: sr.tabularValues.map((v) => ({
               sheetRecordId: record.id,
               fieldId: v.fieldId,
-              columnId: v.columnId,
-              value: v.value,
+              sheetColumnId: v.columnId,
+              subColumn: v.subColumn ?? '',
+              value: v.textValue ? null : (v.value ?? null),
+              textValue: v.textValue ?? null,
             })),
           })
         }
@@ -186,7 +189,8 @@ export class MeasurementSessionsRepository {
               data: sr.values.map((v) => ({
                 sheetRecordId: record.id,
                 fieldId: v.fieldId,
-                value: v.value,
+                value: v.textValue ? null : (v.value ?? null),
+                textValue: v.textValue ?? null,
               })),
             })
           }
@@ -195,8 +199,10 @@ export class MeasurementSessionsRepository {
               data: sr.tabularValues.map((v) => ({
                 sheetRecordId: record.id,
                 fieldId: v.fieldId,
-                columnId: v.columnId,
-                value: v.value,
+                sheetColumnId: v.columnId,
+                subColumn: v.subColumn ?? '',
+                value: v.textValue ? null : (v.value ?? null),
+                textValue: v.textValue ?? null,
               })),
             })
           }
