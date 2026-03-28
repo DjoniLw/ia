@@ -798,21 +798,31 @@ function SessionFormModal({
 
 function CompareModal({
   current,
-  previous,
+  allSessions,
   sheets,
   onClose,
 }: {
   current: MeasurementSession
-  previous: MeasurementSession
+  allSessions: MeasurementSession[]
   sheets: MeasurementSheet[]
   onClose: () => void
 }) {
-  // IDs de fichas presentes em AMBAS as sessões (interseção, não união)
-  const currentSheetIds = new Set(current.sheetRecords.map((sr) => sr.sheetId))
-  const previousSheetIds = new Set(previous.sheetRecords.map((sr) => sr.sheetId))
-  const allSheetIds = [...currentSheetIds].filter((id) => previousSheetIds.has(id))
+  // Para cada ficha do registro atual, busca o último registro ANTERIOR que contém essa ficha
+  const currentIdx = allSessions.findIndex((s) => s.id === current.id)
+  const prevSessionBySheetId = new Map<string, MeasurementSession>()
+  if (currentIdx >= 0) {
+    const olderSessions = allSessions.slice(currentIdx + 1)
+    for (const sr of current.sheetRecords) {
+      const prev = olderSessions.find((s) => s.sheetRecords.some((r) => r.sheetId === sr.sheetId))
+      if (prev) prevSessionBySheetId.set(sr.sheetId, prev)
+    }
+  }
+  // Apenas fichas que têm um registro anterior (independente da sessão)
+  const comparableSheetIds = current.sheetRecords
+    .filter((sr) => prevSessionBySheetId.has(sr.sheetId))
+    .map((sr) => sr.sheetId)
 
-  const hasAnyData = allSheetIds.length > 0
+  const hasAnyData = comparableSheetIds.length > 0
 
   const renderCompareRow = (
     prevVal: number | null,
@@ -869,26 +879,21 @@ function CompareModal({
       </div>
 
       <div className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
-        {/* Cabeçalho das colunas */}
-        <div className="grid grid-cols-[1fr_120px_1fr] gap-2">
-          <div className="rounded-lg bg-muted/30 px-3 py-2 text-center">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Anterior</p>
-            <p className="text-sm font-medium mt-0.5">{formatDate(previous.recordedAt)}</p>
-          </div>
-          <div />
-          <div className="rounded-lg bg-muted/30 px-3 py-2 text-center">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Atual</p>
-            <p className="text-sm font-medium mt-0.5">{formatDate(current.recordedAt)}</p>
-          </div>
+        {/* Cabeçalho — apenas data atual (anterior varia por ficha) */}
+        <div className="rounded-lg bg-muted/30 px-4 py-2.5 text-center">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Registro atual</p>
+          <p className="text-sm font-medium mt-0.5">{formatDate(current.recordedAt)}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Comparado com o último registro de cada ficha</p>
         </div>
 
         {!hasAnyData ? (
           <p className="text-center text-sm text-muted-foreground py-4">
-            Nenhuma medida registrada em ambos os registros.
+            Nenhuma ficha possui registro anterior para comparar.
           </p>
         ) : (
           <div className="space-y-6">
-            {allSheetIds.map((sheetId) => {
+            {comparableSheetIds.map((sheetId) => {
+              const previous = prevSessionBySheetId.get(sheetId)!
               const sheetDef = sheets.find((s) => s.id === sheetId)
               const currSR = current.sheetRecords.find((sr) => sr.sheetId === sheetId)
               const prevSR = previous.sheetRecords.find((sr) => sr.sheetId === sheetId)
@@ -1098,6 +1103,12 @@ function CompareModal({
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{sheetName}</p>
                       <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-muted text-muted-foreground">Simples</span>
                     </div>
+                    {/* Cabeçalho de datas por ficha */}
+                    <div className="grid grid-cols-[1fr_120px_1fr] gap-2 mb-1">
+                      <div className="text-center text-[10px] text-muted-foreground">{formatDate(previous.recordedAt)}</div>
+                      <div />
+                      <div className="text-center text-[10px] text-muted-foreground font-medium">{formatDate(current.recordedAt)}</div>
+                    </div>
                     {fieldIds.map((fieldId) => {
                       const meta = currSimpleMap.get(fieldId) ?? prevSimpleMap.get(fieldId) ?? { name: fieldId, unit: '', value: 0 }
                       if (meta.isTextual) {
@@ -1127,16 +1138,10 @@ function CompareModal({
           </div>
         )}
 
-        {(previous.notes || current.notes) && (
-          <div className="grid grid-cols-2 gap-4 pt-1">
-            <div className="rounded-lg bg-muted/20 p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-1">Observações (anterior)</p>
-              <p className="text-sm">{previous.notes ?? '—'}</p>
-            </div>
-            <div className="rounded-lg bg-muted/20 p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-1">Observações (atual)</p>
-              <p className="text-sm">{current.notes ?? '—'}</p>
-            </div>
+        {current.notes && (
+          <div className="rounded-lg bg-muted/20 p-3">
+            <p className="text-xs font-medium text-muted-foreground mb-1">Observações (atual)</p>
+            <p className="text-sm">{current.notes}</p>
           </div>
         )}
       </div>
@@ -1148,7 +1153,7 @@ function CompareModal({
 
 function SessionCard({
   session,
-  previousSession,
+  allSessions,
   canEdit,
   isAdmin,
   onEdit,
@@ -1156,7 +1161,7 @@ function SessionCard({
   sheets,
 }: {
   session: MeasurementSession
-  previousSession?: MeasurementSession
+  allSessions: MeasurementSession[]
   canEdit: boolean
   isAdmin: boolean
   onEdit: () => void
@@ -1166,6 +1171,10 @@ function SessionCard({
   const [expanded, setExpanded] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
+  const currentIdx = allSessions.findIndex((s) => s.id === session.id)
+  const hasAnyComparableSheet = currentIdx >= 0 && session.sheetRecords.some((sr) =>
+    allSessions.slice(currentIdx + 1).some((s) => s.sheetRecords.some((r) => r.sheetId === sr.sheetId)),
+  )
   const [fileUrls, setFileUrls] = useState<Record<string, string>>({})
   const [loadingUrls, setLoadingUrls] = useState(false)
   const [lightboxFile, setLightboxFile] = useState<string | null>(null)
@@ -1449,7 +1458,7 @@ function SessionCard({
           {/* Ações */}
           <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
             <div className="flex gap-1">
-              {previousSession && (
+              {hasAnyComparableSheet && (
                 <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground hover:text-foreground" onClick={() => setCompareOpen(true)}>
                   <ArrowLeftRight className="mr-1 h-3 w-3" />
                   Comparar com anterior
@@ -1493,8 +1502,8 @@ function SessionCard({
         </Dialog>
       )}
 
-      {compareOpen && previousSession && (
-        <CompareModal current={session} previous={previousSession} sheets={sheets} onClose={() => setCompareOpen(false)} />
+      {compareOpen && hasAnyComparableSheet && (
+        <CompareModal current={session} allSessions={allSessions} sheets={sheets} onClose={() => setCompareOpen(false)} />
       )}
     </div>
   )
@@ -1600,7 +1609,7 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
               <SessionCard
                 key={session.id}
                 session={session}
-                previousSession={sessions[i + 1]}
+                allSessions={sessions}
                 canEdit={canEdit}
                 isAdmin={isAdmin}
                 onEdit={() => { setEditingSession(session); setModalOpen(true) }}
