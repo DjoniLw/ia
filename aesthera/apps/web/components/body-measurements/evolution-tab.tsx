@@ -335,11 +335,16 @@ function SheetFormSection({
                     {!field.isTextual && field.unit && <span className="text-muted-foreground"> ({field.unit})</span>}
                   </Label>
                   {field.isTextual ? (
-                    <Input
-                      type="text"
+                    <textarea
                       placeholder="—"
+                      rows={2}
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring overflow-hidden"
                       value={(state.textualValues ?? {})[field.id] ?? ''}
-                      onChange={(e) => setTextual(field.id, e.target.value)}
+                      onChange={(e) => {
+                        e.target.style.height = 'auto'
+                        e.target.style.height = `${e.target.scrollHeight}px`
+                        setTextual(field.id, e.target.value)
+                      }}
                     />
                   ) : (
                     <Input
@@ -394,12 +399,16 @@ function SheetFormSection({
                                 onChange={(e) => setTabular(field.id, col.id, e.target.checked ? '1' : '0')}
                               />
                             ) : col.isTextual && !hasSubCols ? (
-                              <Input
-                                type="text"
+                              <textarea
                                 placeholder={field.defaultValue ?? col.defaultValue ?? '—'}
-                                className="h-8 text-xs min-w-[140px]"
+                                rows={1}
+                                className="w-full min-w-[140px] rounded-md border bg-background px-2 py-1.5 text-xs resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring overflow-hidden"
                                 value={(state.tabularValues[field.id] ?? {})[col.id] ?? (field.defaultValue ?? col.defaultValue ?? '')}
-                                onChange={(e) => setTabular(field.id, col.id, e.target.value)}
+                                onChange={(e) => {
+                                  e.target.style.height = 'auto'
+                                  e.target.style.height = `${e.target.scrollHeight}px`
+                                  setTabular(field.id, col.id, e.target.value)
+                                }}
                               />
                             ) : hasSubCols ? (
                               <div className="flex gap-1">
@@ -416,12 +425,16 @@ function SheetFormSection({
                                           onChange={(e) => setTabular(field.id, colKey, e.target.checked ? '1' : '0')}
                                         />
                                       ) : col.isTextual ? (
-                                        <Input
-                                          type="text"
+                                        <textarea
                                           placeholder={col.defaultValue ?? sub}
-                                          className="h-7 text-xs w-20"
+                                          rows={1}
+                                          className="w-20 rounded-md border bg-background px-1.5 py-1 text-xs resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring overflow-hidden"
                                           value={(state.tabularValues[field.id] ?? {})[colKey] ?? ''}
-                                          onChange={(e) => setTabular(field.id, colKey, e.target.value)}
+                                          onChange={(e) => {
+                                            e.target.style.height = 'auto'
+                                            e.target.style.height = `${e.target.scrollHeight}px`
+                                            setTabular(field.id, colKey, e.target.value)
+                                          }}
                                         />
                                       ) : (
                                         <Input
@@ -914,88 +927,110 @@ function CompareModal({
 
                 if (columns.length === 0 || fields.length === 0) return null
 
+                // Renderiza uma tabela para um dataMap (anterior ou atual)
+                type _CellMap = Record<string, Record<string, _TabCellVal>>
+                const renderTabularTable = (dataMap: _CellMap, compareMap: _CellMap | null) => (
+                  <div className="overflow-x-auto rounded-b-lg border border-t-0">
+                    <table className="text-xs w-full border-collapse">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="border-b px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Campo</th>
+                          {columns.map((col) => (
+                            <th key={col.id} className="border-b px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
+                              {col.name}{col.unit ? ` (${col.unit})` : ''}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fields.map((field) => (
+                          <tr key={field.id} className="border-b last:border-0 hover:bg-muted/20">
+                            <td className="px-3 py-2 font-medium whitespace-nowrap">{field.name}</td>
+                            {columns.map((col) => {
+                              const colDef = sheetDef?.columns.find((c) => c.id === col.id) ?? col
+                              const isTextualCol = (colDef as { isTextual?: boolean }).isTextual ?? false
+                              const subCols = (field as { subColumns?: string[] }).subColumns ?? []
+                              if (subCols.length) {
+                                return (
+                                  <td key={col.id} className="px-3 py-2">
+                                    <div className="flex gap-2 flex-wrap">
+                                      {subCols.map((sub) => {
+                                        const key = `${col.id}::${sub}`
+                                        const cell = dataMap[field.id]?.[key]
+                                        const cmpCell = compareMap?.[field.id]?.[key]
+                                        const trend = !isTextualCol && compareMap && cell?.num !== null && cmpCell?.num !== null && cell?.num !== undefined && cmpCell?.num !== undefined
+                                          ? (cmpCell.num > cell.num ? 'up' : cmpCell.num < cell.num ? 'down' : 'same')
+                                          : 'same'
+                                        const cls = trend === 'up' ? 'text-green-600 dark:text-green-400' : trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
+                                        return (
+                                          <span key={sub} className="whitespace-nowrap">
+                                            <span className="text-[10px] text-muted-foreground">{sub}=</span>
+                                            <span className={`font-semibold ${cls}`}>
+                                              {isTextualCol ? (cell?.text ?? '—') : (cell?.num !== null && cell?.num !== undefined ? cell.num.toLocaleString('pt-BR') : '—')}
+                                            </span>
+                                            {trend === 'up' && <span className="text-[10px] text-green-600 dark:text-green-400 ml-0.5">↑</span>}
+                                            {trend === 'down' && <span className="text-[10px] text-red-600 dark:text-red-400 ml-0.5">↓</span>}
+                                          </span>
+                                        )
+                                      })}
+                                    </div>
+                                  </td>
+                                )
+                              }
+                              const cell = dataMap[field.id]?.[col.id]
+                              const cmpCell = compareMap?.[field.id]?.[col.id]
+                              if (isTextualCol) {
+                                return (
+                                  <td key={col.id} className="px-3 py-2 text-sm">
+                                    <span className="whitespace-pre-wrap break-words">{cell?.text ?? '—'}</span>
+                                  </td>
+                                )
+                              }
+                              const trend = compareMap && cell?.num !== null && cmpCell?.num !== null && cell?.num !== undefined && cmpCell?.num !== undefined
+                                ? (cmpCell.num > cell.num ? 'up' : cmpCell.num < cell.num ? 'down' : 'same')
+                                : 'same'
+                              const cls = trend === 'up' ? 'text-green-600 dark:text-green-400' : trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
+                              return (
+                                <td key={col.id} className="px-3 py-2">
+                                  <span className={`font-semibold ${cls}`}>
+                                    {cell?.num !== null && cell?.num !== undefined ? cell.num.toLocaleString('pt-BR') : '—'}
+                                  </span>
+                                  {trend === 'up' && <span className="text-green-600 dark:text-green-400 ml-0.5 text-[11px]">↑</span>}
+                                  {trend === 'down' && <span className="text-red-600 dark:text-red-400 ml-0.5 text-[11px]">↓</span>}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+
                 return (
-                  <div key={sheetId} className="space-y-2">
+                  <div key={sheetId} className="space-y-3">
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{sheetName}</p>
                       <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Tabular</span>
                     </div>
-                    <div className="overflow-x-auto rounded-lg border">
-                      <table className="text-xs w-full border-collapse">
-                        <thead className="bg-muted/50">
-                          <tr>
-                            <th className="border-b px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Campo</th>
-                            {columns.map((col) => (
-                              <th key={col.id} className="border-b px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
-                                {col.name}{col.unit ? ` (${col.unit})` : ''}
-                                <div className="flex gap-1 text-[10px] font-normal mt-0.5 text-muted-foreground/60">
-                                  <span>Ant.</span><span>→</span><span>Atual</span>
-                                </div>
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fields.map((field) => (
-                            <tr key={field.id} className="border-b last:border-0 hover:bg-muted/20">
-                              <td className="px-3 py-2 font-medium whitespace-nowrap">{field.name}</td>
-                              {columns.map((col) => {
-                                const colDef = sheetDef?.columns.find((c) => c.id === col.id) ?? col
-                                const isTextualCol = (colDef as { isTextual?: boolean }).isTextual ?? false
-                                const hasSubCols = (field as { subColumns?: string[] }).subColumns?.length
-                                return (
-                                  <td key={col.id} className="px-3 py-2">
-                                    {hasSubCols ? (
-                                      <div className="flex gap-2">
-                                        {(field as { subColumns: string[] }).subColumns.map((sub) => {
-                                          const subKey = `${col.id}::${sub}`
-                                          const pCell = prevMap[field.id]?.[subKey]
-                                          const cCell = currMap[field.id]?.[subKey]
-                                          return (
-                                            <span key={sub} className="whitespace-nowrap text-xs">
-                                              <span className="text-muted-foreground/60">{sub}=</span>
-                                              {isTextualCol ? (
-                                                <><span>{pCell?.text ?? '—'}</span><span className="text-muted-foreground/40">→</span><span>{cCell?.text ?? '—'}</span></>
-                                              ) : (
-                                                <><span className="text-muted-foreground">{pCell?.num !== null && pCell?.num !== undefined ? pCell.num.toLocaleString('pt-BR') : '—'}</span><span className="text-muted-foreground/40">→</span><span>{cCell?.num !== null && cCell?.num !== undefined ? cCell.num.toLocaleString('pt-BR') : '—'}</span></>
-                                              )}
-                                            </span>
-                                          )
-                                        })}
-                                      </div>
-                                    ) : isTextualCol ? (
-                                      <div className="flex items-center gap-1 whitespace-nowrap text-xs">
-                                        <span className="text-muted-foreground">{prevMap[field.id]?.[col.id]?.text ?? '—'}</span>
-                                        <span className="text-muted-foreground/40">→</span>
-                                        <span>{currMap[field.id]?.[col.id]?.text ?? '—'}</span>
-                                      </div>
-                                    ) : (() => {
-                                      const prevVal = prevMap[field.id]?.[col.id]?.num ?? null
-                                      const currVal = currMap[field.id]?.[col.id]?.num ?? null
-                                      const trend =
-                                        prevVal !== null && currVal !== null
-                                          ? currVal > prevVal ? 'up' : currVal < prevVal ? 'down' : 'same'
-                                          : 'same'
-                                      const currClass =
-                                        trend === 'up' ? 'text-green-600 dark:text-green-400' :
-                                        trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
-                                      return (
-                                        <div className="flex items-center gap-1 whitespace-nowrap">
-                                          <span className="text-muted-foreground">{prevVal !== null ? prevVal.toLocaleString('pt-BR') : '—'}</span>
-                                          <span className="text-muted-foreground/40">→</span>
-                                          <span className={currClass}>{currVal !== null ? currVal.toLocaleString('pt-BR') : '—'}</span>
-                                          {trend === 'up' && <span className="text-green-600 dark:text-green-400">↑</span>}
-                                          {trend === 'down' && <span className="text-red-600 dark:text-red-400">↓</span>}
-                                        </div>
-                                      )
-                                    })()}
-                                  </td>
-                                )
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+
+                    {/* Anterior */}
+                    <div>
+                      <div className="rounded-t-lg bg-muted/30 px-3 py-1.5 flex items-center gap-2 border border-b-0">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Anterior</span>
+                        <span className="text-xs font-medium">{formatDate(previous.recordedAt)}</span>
+                      </div>
+                      {renderTabularTable(prevMap, null)}
+                    </div>
+
+                    {/* Atual */}
+                    <div>
+                      <div className="rounded-t-lg bg-primary/5 border border-primary/20 border-b-0 px-3 py-1.5 flex items-center gap-2">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-primary/70">Atual</span>
+                        <span className="text-xs font-medium">{formatDate(current.recordedAt)}</span>
+                        <span className="text-[10px] text-muted-foreground ml-auto">↑ maior ↓ menor que anterior</span>
+                      </div>
+                      {renderTabularTable(currMap, prevMap)}
                     </div>
                   </div>
                 )
@@ -1190,13 +1225,13 @@ function SessionCard({
             const simpleVals = sr.values.filter((v) => v.field.inputType === 'INPUT')
             const checkVals = sr.values.filter((v) => v.field.inputType === 'CHECK')
 
-            // Para fichas TABULAR: usar definição completa da ficha (mostra linhas/colunas mesmo sem resposta)
-            const tabularColumns = isTabular && sheetDef
+            // Para fichas TABULAR: somente linhas e colunas com ao menos um valor preenchido
+            const tabularColumnsAll = isTabular && sheetDef
               ? [...sheetDef.columns].sort((a, b) => a.order - b.order)
               : isTabular
                 ? [...new Map(sr.tabularValues.map((v) => [v.sheetColumnId, v.sheetColumn])).values()].sort((a, b) => a.order - b.order)
                 : []
-            const tabularRows = isTabular && sheetDef
+            const tabularRowsAll = isTabular && sheetDef
               ? sheetDef.fields.filter((f) => f.active).sort((a, b) => a.order - b.order)
               : isTabular
                 ? [...new Map(sr.tabularValues.map((v) => [v.fieldId, v.field])).values()]
@@ -1210,6 +1245,18 @@ function SessionCard({
                 : (v.value ?? '')
               return acc
             }, {})
+
+            // Filtra: só mostra linhas e colunas que têm pelo menos um valor preenchido
+            const hasVal = (fieldId: string, colId: string, subCols?: string[]) => {
+              if (subCols?.length) return subCols.some((s) => tabularMap[fieldId]?.[`${colId}::${s}`] !== undefined)
+              return tabularMap[fieldId]?.[colId] !== undefined
+            }
+            const tabularRows = tabularRowsAll.filter((f) =>
+              tabularColumnsAll.some((c) => hasVal(f.id, c.id, (f as { subColumns?: string[] }).subColumns ?? []))
+            )
+            const tabularColumns = tabularColumnsAll.filter((c) =>
+              tabularRowsAll.some((f) => hasVal(f.id, c.id, (f as { subColumns?: string[] }).subColumns ?? []))
+            )
 
             return (
               <div key={sr.id} className="pt-3">

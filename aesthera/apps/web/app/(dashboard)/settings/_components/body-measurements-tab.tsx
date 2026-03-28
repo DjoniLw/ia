@@ -155,11 +155,11 @@ function SheetDialog({
       }
       onClose()
     } catch (err: unknown) {
-      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      if (code === 'MAX_SHEETS_REACHED') {
-        toast.error(`Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido`)
-      } else if (code === 'CONFLICT') {
+      const d = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data
+      if (d?.error === 'CONFLICT') {
         toast.error('Já existe uma ficha com este nome')
+      } else if (d?.message === 'MAX_SHEETS_REACHED') {
+        toast.error(`Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido`)
       } else {
         toast.error('Erro ao salvar ficha')
       }
@@ -233,12 +233,14 @@ function FieldDialog({
   sheetId,
   sheetType,
   field,
+  nextOrder,
   onClose,
 }: {
   open: boolean
   sheetId: string
   sheetType: MeasurementSheetType
   field?: MeasurementField
+  nextOrder?: number
   onClose: () => void
 }) {
   const createField = useCreateMeasurementField(sheetId)
@@ -307,16 +309,17 @@ function FieldDialog({
           isTextual: data.isTextual,
           defaultValue: sheetType === 'TABULAR' ? (overrideDefault ? (data.defaultValue ?? '') : undefined) : undefined,
           subColumns: sheetType === 'TABULAR' ? subColumns : [],
+          order: nextOrder,
         })
         toast.success('Campo criado')
       }
       onClose()
     } catch (err: unknown) {
-      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      if (code === 'MAX_FIELDS_REACHED') {
-        toast.error(`Limite de ${MAX_ACTIVE_FIELDS} campos atingido`)
-      } else if (code === 'CONFLICT') {
-        toast.error('Já existe um campo com este nome')
+      const d = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data
+      if (d?.error === 'CONFLICT') {
+        toast.error('Já existe um campo com este nome nesta ficha')
+      } else if (d?.message === 'MAX_FIELDS_REACHED') {
+        toast.error(`Limite de ${MAX_ACTIVE_FIELDS} campos ativos atingido`)
       } else {
         toast.error('Erro ao salvar campo')
       }
@@ -497,11 +500,13 @@ function ColumnDialog({
   open,
   sheetId,
   column,
+  nextOrder,
   onClose,
 }: {
   open: boolean
   sheetId: string
   column?: MeasurementSheetColumn
+  nextOrder?: number
   onClose: () => void
 }) {
   const createColumn = useCreateSheetColumn()
@@ -548,16 +553,17 @@ function ColumnDialog({
           unit: data.inputType === 'INPUT' && !data.isTextual ? (data.unit || undefined) : undefined,
           isTextual: data.isTextual,
           defaultValue: data.isTextual ? (data.defaultValue || undefined) : undefined,
+          order: nextOrder,
         })
         toast.success('Coluna criada')
       }
       onClose()
     } catch (err: unknown) {
-      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      if (code === 'MAX_COLUMNS_REACHED') {
+      const d = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data
+      if (d?.error === 'CONFLICT') {
+        toast.error('Já existe uma coluna com este nome nesta ficha')
+      } else if (d?.message === 'MAX_COLUMNS_REACHED') {
         toast.error(`Limite de ${MAX_SHEET_COLUMNS} colunas atingido`)
-      } else if (code === 'CONFLICT') {
-        toast.error('Já existe uma coluna com este nome')
       } else {
         toast.error('Erro ao salvar coluna')
       }
@@ -787,7 +793,14 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
     try {
       await updateField.mutateAsync({ sheetId: sheet.id, fieldId: field.id, active: !field.active })
       toast.success(field.active ? `Campo "${field.name}" desativado` : `Campo "${field.name}" reativado`)
-    } catch { toast.error('Erro ao atualizar campo') }
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { message?: string } } })?.response?.data
+      if (d?.message === 'MAX_FIELDS_REACHED') {
+        toast.error(`Limite de ${MAX_ACTIVE_FIELDS} campos ativos atingido`)
+      } else {
+        toast.error('Erro ao atualizar campo')
+      }
+    }
   }
 
   const handleDeleteField = async (field: MeasurementField) => {
@@ -795,8 +808,8 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
       await deleteField.mutateAsync({ sheetId: sheet.id, fieldId: field.id })
       toast.success(`Campo "${field.name}" removido`)
     } catch (err: unknown) {
-      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      toast.error(code === 'HAS_HISTORY' ? 'Campo possui histórico — desative em vez de excluir.' : 'Erro ao remover campo')
+      const d = (err as { response?: { data?: { message?: string } } })?.response?.data
+      toast.error(d?.message === 'HAS_HISTORY' ? `Não é possível excluir "${field.name}" pois possui histórico — desative em vez de excluir.` : 'Erro ao remover campo')
     }
   }
 
@@ -818,8 +831,8 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
       await deleteColumn.mutateAsync({ sheetId: sheet.id, colId: col.id })
       toast.success(`Coluna "${col.name}" removida`)
     } catch (err: unknown) {
-      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      toast.error(code === 'HAS_HISTORY' ? 'Coluna possui histórico — não pode ser excluída.' : 'Erro ao remover coluna')
+      const d = (err as { response?: { data?: { message?: string } } })?.response?.data
+      toast.error(d?.message === 'HAS_HISTORY' ? `Não é possível excluir "${col.name}" pois possui histórico registrado.` : 'Erro ao remover coluna')
     }
   }
 
@@ -841,8 +854,8 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
       await updateMutation.mutateAsync({ id: sheet.id, active: !sheet.active })
       toast.success(sheet.active ? 'Ficha desativada' : 'Ficha reativada')
     } catch (err: unknown) {
-      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      toast.error(code === 'MAX_SHEETS_REACHED' ? `Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido` : 'Erro ao atualizar ficha')
+      const d = (err as { response?: { data?: { message?: string } } })?.response?.data
+      toast.error(d?.message === 'MAX_SHEETS_REACHED' ? `Limite de ${MAX_ACTIVE_SHEETS} fichas ativas atingido` : 'Erro ao atualizar ficha')
     }
   }
 
@@ -851,8 +864,8 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
       await deleteSheet.mutateAsync(sheet.id)
       toast.success(`Ficha "${sheet.name}" removida`)
     } catch (err: unknown) {
-      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code
-      toast.error(code === 'HAS_HISTORY' ? 'Ficha possui histórico — desative em vez de excluir.' : 'Erro ao remover ficha')
+      const d = (err as { response?: { data?: { message?: string } } })?.response?.data
+      toast.error(d?.message === 'HAS_HISTORY' ? `Não é possível excluir "${sheet.name}" pois possui histórico — desative em vez de excluir.` : 'Erro ao remover ficha')
     }
   }
 
@@ -960,6 +973,7 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
           sheetId={sheet.id}
           sheetType={sheet.type}
           field={editingField}
+          nextOrder={editingField ? undefined : localFields.length}
           onClose={() => { setFieldDialogOpen(false); setEditingField(undefined) }}
         />
       )}
@@ -968,6 +982,7 @@ function SheetPanel({ sheet, onEditSheet }: { sheet: MeasurementSheet; onEditShe
           open={columnDialogOpen}
           sheetId={sheet.id}
           column={editingColumn}
+          nextOrder={editingColumn ? undefined : localColumns.length}
           onClose={() => { setColumnDialogOpen(false); setEditingColumn(undefined) }}
         />
       )}
