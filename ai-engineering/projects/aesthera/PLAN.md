@@ -289,6 +289,26 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - **routes:** `req.log` (logger por-request do Fastify/Pino) passado como 6º argumento a `updateSession`, mantendo rastreabilidade de request ID.
 - **Impacto:** Apenas backend. Sem migração de schema. Após deploy, os logs do Railway revelarão a causa exata do 403.
 
+### [2026-03-29] — feat(#126): sub-colunas, campos textuais e valor padrão em fichas de medidas (PR #128)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(4 modelos atualizados)*
+  - `aesthera/apps/api/prisma/migrations/20260329000001_feat_measurement_sub_columns_textual/migration.sql` *(criada)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.dto.ts`
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.repository.ts`
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.service.ts`
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.dto.ts`
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.repository.ts`
+  - `aesthera/apps/web/lib/hooks/use-measurement-sessions.ts`
+  - `aesthera/apps/web/lib/hooks/use-measurement-sheets.ts`
+  - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx`
+- **O que foi feito:**
+  - **Feature 1 — Sub-colunas por campo:** `MeasurementField.subColumns String[]` — ex: `["D","E"]` para campos Direita/Esquerda. No formulário, cada célula da grade tabular é dividida em N sub-inputs lado a lado com label (ex: `D=` / `E=`). A chave de estado usa `colId::subCol` (forma composta). O `@@unique` de `MeasurementTabularValue` foi atualizado para incluir `subColumn`.
+  - **Feature 2 — Campos textuais com valor padrão:** `MeasurementSheetColumn.isTextual Boolean + defaultValue String?` e `MeasurementField.isTextual Boolean`. Campos textuais exibem `<Input type="text">` ao invés de `number`, com `placeholder={col.defaultValue}`. `textValue` adicionado a `MeasurementValue` e `MeasurementTabularValue`.
+  - **Feature 3 — Posição nas medidas:** Implementada via ficha TABULAR com coluna `isTextual=true` + `defaultValue` (ex: "00 cm acima do umbigo") — usuário edita apenas o valor, sem novo tipo de ficha.
+  - **Histórico:** `SessionCard` exibe `textValue` em campos textuais e agrupa sub-colunas na mesma célula da tabela.
+  - **Comparação:** `CompareModal` exibe campos textuais sem indicadores ↑/↓ e sub-colunas na mesma célula.
+- **Commit:** `f48174e`
+
 ### [2026-03-27] — Correções e melhorias na aba Evolução — fichas tabulares e simples (issue #126 / PR #128)
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx` *(bug de gravação, SessionCard, CompareModal)*
