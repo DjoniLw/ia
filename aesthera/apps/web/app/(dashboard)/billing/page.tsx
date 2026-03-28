@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { ExternalLink, Info } from 'lucide-react'
+import { ExternalLink, Info, Search } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -206,12 +206,16 @@ function BillingPageContent() {
             </button>
           ))}
           </div>
-          <Input
-            placeholder="Buscar por cliente…"
-            value={customerSearch}
-            onChange={(e) => setCustomerSearch(e.target.value)}
-            className="h-8 w-48 text-sm"
-          />
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar por cliente…"
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary w-48"
+            />
+          </div>
         </div>
 
         {/* Legenda descritiva */}

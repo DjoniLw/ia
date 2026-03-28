@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { PackageOpen, Plus, Pencil, Trash2, ShoppingBag } from 'lucide-react'
+import { Info, PackageOpen, Plus, Pencil, Search, Trash2, ShoppingBag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -147,6 +147,9 @@ function SupplyForm({
 
 // ──── Page ────────────────────────────────────────────────────────────────────
 
+type StatusFilter = 'all' | 'active' | 'inactive'
+const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
+
 export default function SuppliesPage() {
   const { data, isLoading } = useSupplies()
   const createSupply = useCreateSupply()
@@ -155,6 +158,34 @@ export default function SuppliesPage() {
   const [editing, setEditing] = useState<Supply | null>(null)
   const [deleting, setDeleting] = useState<Supply | null>(null)
   const [converting, setConverting] = useState<Supply | null>(null)
+
+  // ── Filters ──
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
+  const filtered = (data?.items ?? []).filter((s) => {
+    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && s.active) ||
+      (statusFilter === 'inactive' && !s.active)
+    return matchesSearch && matchesStatus
+  })
+
+  const isDefaultFilters = search === '' && statusFilter === 'all'
+
+  function resetFilters() {
+    setSearch('')
+    setStatusFilter('all')
+  }
+
+  function buildFilterLabel(): string {
+    const parts: string[] = []
+    const statusMap: Record<StatusFilter, string> = { all: 'todos', active: 'apenas ativos', inactive: 'apenas inativos' }
+    parts.push(statusMap[statusFilter])
+    if (search) parts.push(`busca: ${search}`)
+    return parts.join(' · ')
+  }
 
   async function handleCreate(d: Parameters<typeof createSupply.mutateAsync>[0]) {
     try {
@@ -182,12 +213,56 @@ export default function SuppliesPage() {
         </Button>
       </div>
 
+      {/* Filters */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome…"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                statusFilter === s
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              {STATUS_LABELS[s]}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button type="button" onClick={resetFilters} className="ml-auto shrink-0 font-medium text-primary hover:underline">
+              Restaurar padrão
+            </button>
+          )}
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
       ) : !data || data.items.length === 0 ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <PackageOpen className="mx-auto mb-2 h-8 w-8 opacity-30" />
           <p className="text-sm">Nenhum insumo cadastrado.</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
+          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
         </div>
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -204,7 +279,7 @@ export default function SuppliesPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {data.items.map((s) => (
+              {filtered.map((s) => (
                 <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-medium">
                     {s.name}

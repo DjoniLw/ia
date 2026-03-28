@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, FileSignature, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User, Wallet } from 'lucide-react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, FileSignature, Info, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User, Wallet } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -1950,6 +1950,13 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 export default function CustomersPage() {
   const [search, setSearch] = useState('')
   const { data, isLoading } = useCustomers(search ? { name: search } : undefined)
+
+  const isDefaultFilters = search === ''
+
+  function buildFilterLabel(): string {
+    if (search) return `buscando: ${search}`
+    return 'todos os clientes'
+  }
   const createCustomer = useCreateCustomer()
   const deleteCustomer = useDeleteCustomer()
 
@@ -2009,15 +2016,32 @@ export default function CustomersPage() {
         <Button onClick={() => setCreating(true)}>+ Novo Cliente</Button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className="pl-9"
-          placeholder="Buscar por nome…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Search + Legenda */}
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome…"
+            className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}

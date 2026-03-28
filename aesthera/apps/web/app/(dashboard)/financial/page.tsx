@@ -245,7 +245,7 @@ function FinancialPageContent() {
 
       {/* Filters */}
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           {/* Presets de data */}
           <div className="flex flex-wrap gap-1">
             {(

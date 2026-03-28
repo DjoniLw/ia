@@ -623,6 +623,7 @@ function PackageCard({
 
 export default function PackagesPage() {
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
+  const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -636,16 +637,24 @@ export default function PackagesPage() {
     { value: false, label: 'Inativos' },
   ]
 
-  const isDefaultFilters = activeFilter === undefined
+  const filteredPackages = (data?.items ?? []).filter((pkg) =>
+    pkg.name.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  const isDefaultFilters = activeFilter === undefined && search === ''
 
   function resetFilters() {
     setActiveFilter(undefined)
+    setSearch('')
   }
 
   function buildFilterLabel(): string {
-    if (activeFilter === true) return 'apenas ativos'
-    if (activeFilter === false) return 'apenas inativos'
-    return 'todos os pacotes'
+    const parts: string[] = []
+    if (activeFilter === true) parts.push('apenas ativos')
+    else if (activeFilter === false) parts.push('apenas inativos')
+    else parts.push('todos os pacotes')
+    if (search) parts.push(`busca: ${search}`)
+    return parts.join(' · ')
   }
 
   return (
@@ -665,7 +674,17 @@ export default function PackagesPage() {
 
       {/* Filters */}
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome…"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
           {filterOptions.map((opt) => (
             <button
               key={String(opt.value)}
@@ -713,7 +732,13 @@ export default function PackagesPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {data.items.map((pkg) => (
+          {filteredPackages.length === 0 && (
+            <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-8 text-center shadow-sm">
+              <PackageIcon className="h-8 w-8 text-muted-foreground/30" />
+              <p className="text-sm text-muted-foreground">Nenhum pacote encontrado para os filtros selecionados.</p>
+            </div>
+          )}
+          {filteredPackages.map((pkg) => (
             <PackageCard
               key={pkg.id}
               pkg={pkg}

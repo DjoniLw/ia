@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   type CreatePromotionInput,
@@ -318,6 +318,7 @@ function UsageCell({ promotion }: { promotion: Promotion }) {
 
 export default function PromotionsPage() {
   const [statusFilter, setStatusFilter] = useState<PromotionStatus | ''>('')
+  const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Promotion | undefined>()
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -325,20 +326,29 @@ export default function PromotionsPage() {
   const params = statusFilter ? { status: statusFilter } : undefined
   const { data, isLoading } = usePromotions(params)
 
-  const isDefaultFilters = statusFilter === ''
+  const filtered = (data?.items ?? []).filter((p) =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.code.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  const isDefaultFilters = statusFilter === '' && search === ''
 
   function resetFilters() {
     setStatusFilter('')
+    setSearch('')
   }
 
   function buildFilterLabel(): string {
+    const parts: string[] = []
     const map: Record<string, string> = {
       '': 'todos os status',
       active: 'Ativo',
       inactive: 'Inativo',
       expired: 'Expirado',
     }
-    return map[statusFilter] ?? statusFilter
+    parts.push(map[statusFilter] ?? statusFilter)
+    if (search) parts.push(`busca: ${search}`)
+    return parts.join(' · ')
   }
 
   const statusOptions: Array<{ value: PromotionStatus | ''; label: string }> = [
@@ -365,7 +375,17 @@ export default function PromotionsPage() {
 
       {/* Filters */}
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome ou código…"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
           {statusOptions.map((s) => (
             <button
               key={s.value}
@@ -426,7 +446,10 @@ export default function PromotionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {data.items.map((promo) => (
+                {filtered.length === 0 && (
+                  <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Nenhuma promoção encontrada para os filtros selecionados.</td></tr>
+                )}
+                {filtered.map((promo) => (
                   <>
                     <tr key={promo.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3">

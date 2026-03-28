@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Pencil, Trash2, Plus, Wrench } from 'lucide-react'
+import { Info, Pencil, Search, Trash2, Plus, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -179,6 +179,21 @@ export default function EquipmentPage() {
     return matchesSearch && matchesStatus
   })
 
+  const isDefaultFilters = search === '' && statusFilter === 'all'
+
+  function resetFilters() {
+    setSearch('')
+    setStatusFilter('all')
+  }
+
+  function buildFilterLabel(): string {
+    const parts: string[] = []
+    const statusMap: Record<StatusFilter, string> = { all: 'todos', active: 'apenas ativos', inactive: 'apenas inativos' }
+    parts.push(statusMap[statusFilter])
+    if (search) parts.push(`busca: ${search}`)
+    return parts.join(' · ')
+  }
+
   async function handleCreate(data: { name: string; description: string }) {
     try {
       await createEquipment.mutateAsync(data)
@@ -207,27 +222,43 @@ export default function EquipmentPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder="Buscar por nome…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-8 w-48 text-sm"
-        />
-        {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={[
-              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-              statusFilter === s
-                ? 'bg-primary text-primary-foreground'
-                : 'border border-input text-muted-foreground hover:bg-accent',
-            ].join(' ')}
-          >
-            {STATUS_LABELS[s]}
-          </button>
-        ))}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome…"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                statusFilter === s
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              {STATUS_LABELS[s]}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button type="button" onClick={resetFilters} className="ml-auto shrink-0 font-medium text-primary hover:underline">
+              Restaurar padrão
+            </button>
+          )}
+        </div>
       </div>
 
       {/* List */}

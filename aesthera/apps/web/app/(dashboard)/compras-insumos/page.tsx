@@ -428,7 +428,7 @@ export default function SupplyPurchasesPage() {
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-3 rounded-xl border bg-card p-4">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
             <Label>Insumo</Label>
             <ComboboxSearch
