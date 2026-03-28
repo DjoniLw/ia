@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -72,6 +72,7 @@ const fieldSchema = z.object({
   inputType: z.enum(['INPUT', 'CHECK']),
   unit: z.string().max(20).optional(),
   isTextual: z.boolean().default(false),
+  defaultValue: z.string().max(500).optional(),
 })
 type FieldForm = z.infer<typeof fieldSchema>
 
@@ -247,6 +248,8 @@ function FieldDialog({
   // Estado local para sub-colunas (tags), independente do RHF
   const [subColumns, setSubColumns] = useState<string[]>(field?.subColumns ?? [])
   const [subColInput, setSubColInput] = useState('')
+  const initialSubCols = useRef(field?.subColumns ?? [])
+  const isSubColsDirty = JSON.stringify(subColumns) !== JSON.stringify(initialSubCols.current)
 
   const addSubCol = () => {
     const val = subColInput.trim()
@@ -269,6 +272,7 @@ function FieldDialog({
       inputType: field?.inputType ?? 'INPUT',
       unit: field?.unit ?? '',
       isTextual: field?.isTextual ?? false,
+      defaultValue: field?.defaultValue ?? '',
     },
   })
 
@@ -285,6 +289,7 @@ function FieldDialog({
           ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' && !data.isTextual ? { unit: data.unit || undefined } : {}),
           inputType: data.inputType,
           isTextual: data.isTextual,
+          defaultValue: sheetType === 'TABULAR' ? (data.defaultValue || null) : null,
           subColumns: sheetType === 'TABULAR' ? subColumns : [],
         })
         toast.success('Campo atualizado')
@@ -294,6 +299,7 @@ function FieldDialog({
           inputType: data.inputType,
           ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' && !data.isTextual ? { unit: data.unit || undefined } : {}),
           isTextual: data.isTextual,
+          defaultValue: sheetType === 'TABULAR' ? (data.defaultValue || undefined) : undefined,
           subColumns: sheetType === 'TABULAR' ? subColumns : [],
         })
         toast.success('Campo criado')
@@ -423,6 +429,25 @@ function FieldDialog({
           </div>
         )}
 
+        {/* Valor padrão por campo — somente fichas TABULAR */}
+        {sheetType === 'TABULAR' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="field-default">
+              Valor padrão por campo{' '}
+              <span className="text-muted-foreground font-normal">(opcional)</span>
+            </Label>
+            <Input
+              id="field-default"
+              {...register('defaultValue')}
+              placeholder="Ex: 00 cm abaixo do umbigo"
+              className="h-8 text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Sobrescreve o valor padrão da coluna para este campo específico.
+            </p>
+          </div>
+        )}
+
         {/* Em fichas TABULAR, o tipo de entrada fica nas colunas */}
         {sheetType === 'TABULAR' && (
           <p className="text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
@@ -434,7 +459,7 @@ function FieldDialog({
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isPending}>
             Cancelar
           </Button>
-          <Button type="submit" size="sm" disabled={isPending || !isDirty}>
+          <Button type="submit" size="sm" disabled={isPending || (!isDirty && !isSubColsDirty)}>
             {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
             {field ? 'Salvar' : 'Criar'}
           </Button>

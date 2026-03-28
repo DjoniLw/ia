@@ -25,6 +25,7 @@ export interface MeasurementField {
   inputType: MeasurementInputType
   unit: string | null
   isTextual: boolean
+  defaultValue: string | null
   subColumns: string[]
   order: number
   active: boolean
@@ -64,6 +65,7 @@ interface CreateFieldInput {
   unit?: string
   order?: number
   isTextual?: boolean
+  defaultValue?: string
   subColumns?: string[]
 }
 
@@ -76,6 +78,7 @@ interface UpdateFieldInput {
   order?: number
   active?: boolean
   isTextual?: boolean
+  defaultValue?: string | null
   subColumns?: string[]
 }
 

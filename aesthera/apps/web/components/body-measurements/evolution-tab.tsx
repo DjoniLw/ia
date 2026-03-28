@@ -396,9 +396,9 @@ function SheetFormSection({
                             ) : col.isTextual && !hasSubCols ? (
                               <Input
                                 type="text"
-                                placeholder={col.defaultValue ?? '—'}
+                                placeholder={field.defaultValue ?? col.defaultValue ?? '—'}
                                 className="h-8 text-xs min-w-[140px]"
-                                value={(state.tabularValues[field.id] ?? {})[col.id] ?? (col.defaultValue ?? '')}
+                                value={(state.tabularValues[field.id] ?? {})[col.id] ?? (field.defaultValue ?? col.defaultValue ?? '')}
                                 onChange={(e) => setTabular(field.id, col.id, e.target.value)}
                               />
                             ) : hasSubCols ? (

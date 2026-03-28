@@ -58,6 +58,7 @@ export const CreateFieldDto = z.object({
   inputType: z.enum(['INPUT', 'CHECK']).default('INPUT'),
   unit: z.string().min(1).max(20).optional(),
   isTextual: z.boolean().default(false),
+  defaultValue: z.string().max(500).optional(),
   subColumns: z.array(z.string().min(1).max(50)).max(8).default([]),
   order: z.number().int().nonnegative().optional(),
 })
@@ -68,6 +69,7 @@ export const UpdateFieldDto = z.object({
   inputType: z.enum(['INPUT', 'CHECK']).optional(),
   unit: z.string().min(1).max(20).optional(),
   isTextual: z.boolean().optional(),
+  defaultValue: z.string().max(500).nullish(),
   subColumns: z.array(z.string().min(1).max(50)).max(8).optional(),
   order: z.number().int().nonnegative().optional(),
   active: z.boolean().optional(),

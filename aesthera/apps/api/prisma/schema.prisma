@@ -1292,6 +1292,7 @@ model MeasurementField {
   inputType    MeasurementInputType @default(INPUT) @map("input_type")
   unit         String?              // usado em fichas SIMPLE com inputType INPUT e não isTextual
   isTextual    Boolean              @default(false) @map("is_textual")  // true: texto livre (fichas SIMPLE)
+  defaultValue String?              @map("default_value")              // override do defaultValue da coluna para este campo
   subColumns   String[]             @default([])    @map("sub_columns")  // ex: ["D","E"] — sub-colunas por campo em fichas TABULAR
   order        Int                  @default(0)
   active       Boolean              @default(true)

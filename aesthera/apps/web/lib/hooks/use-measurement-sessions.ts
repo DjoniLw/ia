@@ -29,6 +29,7 @@ export interface MeasurementTabularValue {
     id: string
     name: string
     isTextual: boolean
+    defaultValue: string | null
     subColumns: string[]
   }
   sheetColumn: {
