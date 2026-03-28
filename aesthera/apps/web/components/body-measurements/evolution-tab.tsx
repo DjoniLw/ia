@@ -254,42 +254,42 @@ function SheetFormSection({
 }: {
   sheet: MeasurementSheet
   state: SheetFormState
-  onStateChange: (next: SheetFormState) => void
+  onStateChange: (updater: SheetFormState | ((prev: SheetFormState) => SheetFormState)) => void
   defaultOpen?: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const activeFields = sheet.fields.filter((f) => f.active).sort((a, b) => a.order - b.order)
 
   const setSimple = (fieldId: string, val: string) => {
-    onStateChange({
-      ...state,
-      simpleValues: { ...state.simpleValues, [fieldId]: val },
-    })
+    onStateChange((prev) => ({
+      ...prev,
+      simpleValues: { ...prev.simpleValues, [fieldId]: val },
+    }))
   }
 
   const setTextual = (fieldId: string, val: string) => {
-    onStateChange({
-      ...state,
-      textualValues: { ...(state.textualValues ?? {}), [fieldId]: val },
-    })
+    onStateChange((prev) => ({
+      ...prev,
+      textualValues: { ...(prev.textualValues ?? {}), [fieldId]: val },
+    }))
   }
 
   // colKey: columnId para campos normais; "columnId::subColumn" para sub-colunas
   const setTabular = (fieldId: string, colKey: string, val: string) => {
-    onStateChange({
-      ...state,
+    onStateChange((prev) => ({
+      ...prev,
       tabularValues: {
-        ...state.tabularValues,
-        [fieldId]: { ...(state.tabularValues[fieldId] ?? {}), [colKey]: val },
+        ...prev.tabularValues,
+        [fieldId]: { ...(prev.tabularValues[fieldId] ?? {}), [colKey]: val },
       },
-    })
+    }))
   }
 
   const setCheck = (fieldId: string, checked: boolean) => {
-    onStateChange({
-      ...state,
-      checkValues: { ...(state.checkValues ?? {}), [fieldId]: checked },
-    })
+    onStateChange((prev) => ({
+      ...prev,
+      checkValues: { ...(prev.checkValues ?? {}), [fieldId]: checked },
+    }))
   }
 
   const simpleFields = activeFields.filter((f) => f.inputType === 'INPUT')
@@ -747,8 +747,12 @@ function SessionFormModal({
               <SheetFormSection
                 key={sheet.id}
                 sheet={sheet}
-                state={formState[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {} }}
-                onStateChange={(next) => setFormState((prev) => ({ ...prev, [sheet.id]: next }))}
+                state={formState[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {}, textualValues: {} }}
+                onStateChange={(updater) => setFormState((prev) => {
+                  const current = prev[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {}, textualValues: {} }
+                  const next = typeof updater === 'function' ? updater(current) : updater
+                  return { ...prev, [sheet.id]: next }
+                })}
                 defaultOpen={index === 0}
               />
             ))}
@@ -799,11 +803,10 @@ function CompareModal({
   sheets: MeasurementSheet[]
   onClose: () => void
 }) {
-  // IDs de fichas presentes em qualquer uma das sessões (ordem: current primeiro)
-  const allSheetIds = [...new Set([
-    ...current.sheetRecords.map((sr) => sr.sheetId),
-    ...previous.sheetRecords.map((sr) => sr.sheetId),
-  ])]
+  // IDs de fichas presentes em AMBAS as sessões (interseção, não união)
+  const currentSheetIds = new Set(current.sheetRecords.map((sr) => sr.sheetId))
+  const previousSheetIds = new Set(previous.sheetRecords.map((sr) => sr.sheetId))
+  const allSheetIds = [...currentSheetIds].filter((id) => previousSheetIds.has(id))
 
   const hasAnyData = allSheetIds.length > 0
 
