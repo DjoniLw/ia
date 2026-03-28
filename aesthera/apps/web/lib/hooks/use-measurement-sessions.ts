@@ -7,12 +7,14 @@ import type { MeasurementSheet } from './use-measurement-sheets'
 export interface MeasurementValue {
   id: string
   fieldId: string
-  value: string
+  value: string | null
+  textValue: string | null
   field: {
     id: string
     name: string
     unit: string | null
     inputType: string
+    isTextual: boolean
   }
 }
 
@@ -20,16 +22,22 @@ export interface MeasurementTabularValue {
   id: string
   fieldId: string
   sheetColumnId: string
-  value: string
+  subColumn: string
+  value: string | null
+  textValue: string | null
   field: {
     id: string
     name: string
+    isTextual: boolean
+    subColumns: string[]
   }
   sheetColumn: {
     id: string
     name: string
     unit: string
     order: number
+    isTextual: boolean
+    defaultValue: string | null
   }
 }
 
@@ -75,8 +83,8 @@ interface Paginated<T> {
 
 interface SheetRecordInput {
   sheetId: string
-  values?: Array<{ fieldId: string; value: number }>
-  tabularValues?: Array<{ fieldId: string; columnId: string; value: number }>
+  values?: Array<{ fieldId: string; value?: number; textValue?: string }>
+  tabularValues?: Array<{ fieldId: string; columnId: string; subColumn?: string; value?: number; textValue?: string }>
 }
 
 export interface CreateSessionInput {

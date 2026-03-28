@@ -5,7 +5,11 @@ import { z } from 'zod'
 const SheetRecordDto = z.object({
   sheetId: z.string().uuid(),
   values: z
-    .array(z.object({ fieldId: z.string().uuid(), value: z.number() }))
+    .array(z.object({
+      fieldId: z.string().uuid(),
+      value: z.number().optional(),
+      textValue: z.string().max(500).optional(),
+    }))
     .optional()
     .default([]),
   tabularValues: z
@@ -13,7 +17,9 @@ const SheetRecordDto = z.object({
       z.object({
         fieldId: z.string().uuid(),
         columnId: z.string().uuid(),
-        value: z.number(),
+        subColumn: z.string().max(50).default(''),
+        value: z.number().optional(),
+        textValue: z.string().max(500).optional(),
       }),
     )
     .optional()

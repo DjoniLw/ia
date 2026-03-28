@@ -7,13 +7,13 @@ const SESSION_INCLUDE = {
       sheet: { select: { id: true, name: true } },
       values: {
         include: {
-          field: { select: { id: true, name: true, unit: true, inputType: true } },
+          field: { select: { id: true, name: true, unit: true, inputType: true, isTextual: true } },
         },
       },
       tabularValues: {
         include: {
-          field: { select: { id: true, name: true, inputType: true } },
-          sheetColumn: { select: { id: true, name: true, unit: true, order: true } },
+          field: { select: { id: true, name: true, inputType: true, isTextual: true, subColumns: true } },
+          sheetColumn: { select: { id: true, name: true, unit: true, order: true, isTextual: true, defaultValue: true } },
         },
       },
     },
@@ -115,7 +115,8 @@ export class MeasurementSessionsRepository {
             data: sr.values.map((v) => ({
               sheetRecordId: record.id,
               fieldId: v.fieldId,
-              value: v.value,
+              value: v.textValue ? null : (v.value ?? null),
+              textValue: v.textValue ?? null,
             })),
           })
         }
@@ -126,7 +127,9 @@ export class MeasurementSessionsRepository {
               sheetRecordId: record.id,
               fieldId: v.fieldId,
               sheetColumnId: v.columnId,
-              value: v.value,
+              subColumn: v.subColumn ?? '',
+              value: v.textValue ? null : (v.value ?? null),
+              textValue: v.textValue ?? null,
             })),
           })
         }
@@ -186,7 +189,8 @@ export class MeasurementSessionsRepository {
               data: sr.values.map((v) => ({
                 sheetRecordId: record.id,
                 fieldId: v.fieldId,
-                value: v.value,
+                value: v.textValue ? null : (v.value ?? null),
+                textValue: v.textValue ?? null,
               })),
             })
           }
@@ -196,7 +200,9 @@ export class MeasurementSessionsRepository {
                 sheetRecordId: record.id,
                 fieldId: v.fieldId,
                 sheetColumnId: v.columnId,
-                value: v.value,
+                subColumn: v.subColumn ?? '',
+                value: v.textValue ? null : (v.value ?? null),
+                textValue: v.textValue ?? null,
               })),
             })
           }

@@ -12,6 +12,8 @@ export interface MeasurementSheetColumn {
   name: string
   inputType: MeasurementInputType
   unit: string | null
+  isTextual: boolean
+  defaultValue: string | null
   order: number
 }
 
@@ -22,6 +24,8 @@ export interface MeasurementField {
   name: string
   inputType: MeasurementInputType
   unit: string | null
+  isTextual: boolean
+  subColumns: string[]
   order: number
   active: boolean
 }

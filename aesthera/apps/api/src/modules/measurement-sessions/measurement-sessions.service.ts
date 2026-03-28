@@ -28,9 +28,11 @@ export class MeasurementSessionsService {
     const customer = await this.repo.findCustomerInClinic(dto.customerId, clinicId)
     if (!customer) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
-    // 2. Ao menos 1 sheetRecord com ao menos 1 valor
+    // 2. Ao menos 1 sheetRecord com ao menos 1 valor (numérico ou texto)
     const hasAnyValue = dto.sheetRecords.some(
-      (sr) => (sr.values?.length ?? 0) + (sr.tabularValues?.length ?? 0) > 0,
+      (sr) =>
+        sr.values.some((v) => v.value !== undefined || (v.textValue !== undefined && v.textValue !== '')) ||
+        sr.tabularValues.some((v) => v.value !== undefined || (v.textValue !== undefined && v.textValue !== '')),
     )
     if (!hasAnyValue) throw new ValidationError('EMPTY_SESSION')
 
