@@ -88,7 +88,11 @@ const MAX_SIZE = 10 * 1024 * 1024
 
 function formatDate(iso: string) {
   const d = new Date(iso)
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' })
+}
+
+function localDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function calcBMI(weight: number, height: number): string | null {
@@ -569,7 +573,7 @@ function SessionFormModal({
   const { register, handleSubmit, formState: { errors, isDirty: metaDirty } } = useForm<SessionMetaForm>({
     resolver: zodResolver(sessionMetaSchema),
     defaultValues: {
-      recordedAt: sessionToEdit ? sessionToEdit.recordedAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      recordedAt: sessionToEdit ? sessionToEdit.recordedAt.slice(0, 10) : localDateStr(),
       notes: sessionToEdit?.notes ?? '',
     },
   })
@@ -735,7 +739,7 @@ function SessionFormModal({
           {/* Data */}
           <div className="space-y-1.5">
             <Label htmlFor="session-date">Data da avaliação</Label>
-            <Input id="session-date" type="date" max={new Date().toISOString().slice(0, 10)} {...register('recordedAt')} />
+            <Input id="session-date" type="date" max={localDateStr()} {...register('recordedAt')} />
             {errors.recordedAt && <p className="text-xs text-destructive">{errors.recordedAt.message}</p>}
           </div>
 
@@ -952,6 +956,7 @@ function CompareModal({
                             {columns.map((col) => {
                               const colDef = sheetDef?.columns.find((c) => c.id === col.id) ?? col
                               const isTextualCol = (colDef as { isTextual?: boolean }).isTextual ?? false
+                              const isCheck = (colDef as { inputType?: string }).inputType === 'CHECK'
                               const subCols = (field as { subColumns?: string[] }).subColumns ?? []
                               if (subCols.length) {
                                 return (
@@ -961,16 +966,21 @@ function CompareModal({
                                         const key = `${col.id}::${sub}`
                                         const cell = dataMap[field.id]?.[key]
                                         const cmpCell = compareMap?.[field.id]?.[key]
-                                        const trend = !isTextualCol && compareMap && cell?.num !== null && cmpCell?.num !== null && cell?.num !== undefined && cmpCell?.num !== undefined
-                                          ? (cmpCell.num > cell.num ? 'up' : cmpCell.num < cell.num ? 'down' : 'same')
+                                        const trend = !isTextualCol && !isCheck && compareMap && cell?.num !== null && cmpCell?.num !== null && cell?.num !== undefined && cmpCell?.num !== undefined
+                                          ? (cell.num > cmpCell.num ? 'up' : cell.num < cmpCell.num ? 'down' : 'same')
                                           : 'same'
                                         const cls = trend === 'up' ? 'text-green-600 dark:text-green-400' : trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
                                         return (
                                           <span key={sub} className="whitespace-nowrap">
                                             <span className="text-[10px] text-muted-foreground">{sub}=</span>
-                                            <span className={`font-semibold ${cls}`}>
-                                              {isTextualCol ? (cell?.text ?? '—') : (cell?.num !== null && cell?.num !== undefined ? cell.num.toLocaleString('pt-BR') : '—')}
-                                            </span>
+                                            {isCheck
+                                              ? (cell?.num === 1
+                                                ? <span className="font-semibold text-emerald-600 dark:text-emerald-400">✓</span>
+                                                : <span className="text-muted-foreground">—</span>)
+                                              : <span className={`font-semibold ${cls}`}>
+                                                  {isTextualCol ? (cell?.text ?? '—') : (cell?.num !== null && cell?.num !== undefined ? cell.num.toLocaleString('pt-BR') : '—')}
+                                                </span>
+                                            }
                                             {trend === 'up' && <span className="text-[10px] text-green-600 dark:text-green-400 ml-0.5">↑</span>}
                                             {trend === 'down' && <span className="text-[10px] text-red-600 dark:text-red-400 ml-0.5">↓</span>}
                                           </span>
@@ -989,8 +999,18 @@ function CompareModal({
                                   </td>
                                 )
                               }
+                              if (isCheck) {
+                                return (
+                                  <td key={col.id} className="px-3 py-2">
+                                    {cell?.num === 1
+                                      ? <span className="font-semibold text-emerald-600 dark:text-emerald-400">✓</span>
+                                      : <span className="text-muted-foreground">—</span>
+                                    }
+                                  </td>
+                                )
+                              }
                               const trend = compareMap && cell?.num !== null && cmpCell?.num !== null && cell?.num !== undefined && cmpCell?.num !== undefined
-                                ? (cmpCell.num > cell.num ? 'up' : cmpCell.num < cell.num ? 'down' : 'same')
+                                ? (cell.num > cmpCell.num ? 'up' : cell.num < cmpCell.num ? 'down' : 'same')
                                 : 'same'
                               const cls = trend === 'up' ? 'text-green-600 dark:text-green-400' : trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
                               return (
@@ -1326,14 +1346,17 @@ function SessionCard({
                                         return (
                                           <span key={sub} className="whitespace-nowrap">
                                             <span className="text-[10px] text-muted-foreground">{sub}=</span>
-                                            <span className="font-semibold">
-                                              {isCheck
-                                                ? (subVal === '1' ? '✓' : '—')
-                                                : isTextualCol
-                                                  ? (subVal || '—')
-                                                  : subVal !== undefined ? Number(subVal).toLocaleString('pt-BR') : '—'
-                                              }
-                                            </span>
+                                            {isCheck
+                                              ? (subVal === '1'
+                                                ? <span className="text-emerald-600 dark:text-emerald-400 font-semibold">✓</span>
+                                                : <span className="text-muted-foreground">—</span>)
+                                              : <span className="font-semibold">
+                                                  {isTextualCol
+                                                    ? (subVal || '—')
+                                                    : subVal !== undefined ? Number(subVal).toLocaleString('pt-BR') : '—'
+                                                  }
+                                                </span>
+                                            }
                                           </span>
                                         )
                                       })}
