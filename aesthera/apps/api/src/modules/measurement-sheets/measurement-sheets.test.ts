@@ -82,7 +82,7 @@ describe('MeasurementSheetsService', () => {
     vi.mocked(repo.findFieldByName).mockResolvedValue(null)
     vi.mocked(repo.createField).mockResolvedValue(makeField() as any)
 
-    const result = await svc.createField(SHEET_ID, CLINIC_ID, { name: 'Peso', inputType: 'INPUT', unit: 'kg' })
+    const result = await svc.createField(SHEET_ID, CLINIC_ID, { name: 'Peso', inputType: 'INPUT', unit: 'kg', isTextual: false, subColumns: [] })
     expect(result).toBeDefined()
   })
 
@@ -93,7 +93,7 @@ describe('MeasurementSheetsService', () => {
     vi.mocked(repo.findFieldByName).mockResolvedValue(null)
     vi.mocked(repo.createField).mockResolvedValue(checkField as any)
 
-    const result = await svc.createField(SHEET_ID, CLINIC_ID, { name: 'Marcacao', inputType: 'CHECK' })
+    const result = await svc.createField(SHEET_ID, CLINIC_ID, { name: 'Marcacao', inputType: 'CHECK', isTextual: false, subColumns: [] })
     expect(result).toBeDefined()
   })
 
@@ -101,7 +101,7 @@ describe('MeasurementSheetsService', () => {
     vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet() as any)
 
     await expect(
-      svc.createField(SHEET_ID, CLINIC_ID, { name: 'Marcacao', inputType: 'CHECK', unit: 'cm' }),
+      svc.createField(SHEET_ID, CLINIC_ID, { name: 'Marcacao', inputType: 'CHECK', unit: 'cm', isTextual: false, subColumns: [] }),
     ).rejects.toThrow(ValidationError)
   })
 
@@ -110,7 +110,7 @@ describe('MeasurementSheetsService', () => {
     vi.mocked(repo.countActiveFields).mockResolvedValue(30)
 
     await expect(
-      svc.createField(SHEET_ID, CLINIC_ID, { name: 'Campo Extra', inputType: 'INPUT', unit: 'cm' }),
+      svc.createField(SHEET_ID, CLINIC_ID, { name: 'Campo Extra', inputType: 'INPUT', unit: 'cm', isTextual: false, subColumns: [] }),
     ).rejects.toThrow('MAX_FIELDS_REACHED')
   })
 
