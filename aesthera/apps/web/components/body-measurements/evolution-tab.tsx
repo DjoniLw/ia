@@ -52,6 +52,7 @@ import {
   useUpdateMeasurementSession,
   useDeleteMeasurementSession,
   type MeasurementSession,
+  type MeasurementSessionFile,
 } from '@/lib/hooks/use-measurement-sessions'
 
 // ──── Types ────────────────────────────────────────────────────────────────────
