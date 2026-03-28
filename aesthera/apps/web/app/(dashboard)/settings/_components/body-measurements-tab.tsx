@@ -71,6 +71,9 @@ const fieldSchema = z.object({
   name: z.string().min(1, 'Nome obrigatório').max(100),
   inputType: z.enum(['INPUT', 'CHECK']),
   unit: z.string().max(20).optional(),
+  isTextual: z.boolean().default(false),
+  // Sub-colunas: texto livre separado por vírgula, ex: "D, E"
+  subColumnsRaw: z.string().max(200).optional(),
 })
 type FieldForm = z.infer<typeof fieldSchema>
 
@@ -78,6 +81,8 @@ const columnSchema = z.object({
   name: z.string().min(1, 'Nome obrigatório').max(100),
   inputType: z.enum(['INPUT', 'CHECK']),
   unit: z.string().max(20).optional(),
+  isTextual: z.boolean().default(false),
+  defaultValue: z.string().max(500).optional(),
 })
 type ColumnForm = z.infer<typeof columnSchema>
 
@@ -252,10 +257,17 @@ function FieldDialog({
       name: field?.name ?? '',
       inputType: field?.inputType ?? 'INPUT',
       unit: field?.unit ?? '',
+      isTextual: field?.isTextual ?? false,
+      subColumnsRaw: field?.subColumns?.join(', ') ?? '',
     },
   })
 
   const inputType = watch('inputType')
+  const isTextual = watch('isTextual')
+
+  // Converte "D, E" → ["D", "E"] removendo vazios
+  const parseSubColumns = (raw: string) =>
+    raw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 8)
 
   const onSubmit = handleSubmit(async (data) => {
     try {
@@ -264,15 +276,19 @@ function FieldDialog({
           sheetId,
           fieldId: field.id,
           name: data.name,
-          ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' ? { unit: data.unit || undefined } : {}),
+          ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' && !data.isTextual ? { unit: data.unit || undefined } : {}),
           inputType: data.inputType,
+          isTextual: data.isTextual,
+          subColumns: sheetType === 'TABULAR' ? parseSubColumns(data.subColumnsRaw ?? '') : [],
         })
         toast.success('Campo atualizado')
       } else {
         await createField.mutateAsync({
           name: data.name,
           inputType: data.inputType,
-          ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' ? { unit: data.unit || undefined } : {}),
+          ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' && !data.isTextual ? { unit: data.unit || undefined } : {}),
+          isTextual: data.isTextual,
+          subColumns: sheetType === 'TABULAR' ? parseSubColumns(data.subColumnsRaw ?? '') : [],
         })
         toast.success('Campo criado')
       }
@@ -326,11 +342,32 @@ function FieldDialog({
           </div>
         )}
 
-        {/* Unidade — somente para SIMPLE + INPUT */}
-        {sheetType === 'SIMPLE' && inputType === 'INPUT' && (
+        {/* Unidade — somente para SIMPLE + INPUT (não-textual) */}
+        {sheetType === 'SIMPLE' && inputType === 'INPUT' && !isTextual && (
           <div className="space-y-1.5">
             <Label htmlFor="field-unit">Unidade</Label>
             <Input id="field-unit" {...register('unit')} placeholder="Ex: kg, cm, mm, %" />
+          </div>
+        )}
+
+        {/* Campo textual — somente SIMPLE + INPUT */}
+        {sheetType === 'SIMPLE' && inputType === 'INPUT' && (
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" {...register('isTextual')} className="h-4 w-4 rounded border-input" />
+            <span className="text-sm">Campo de texto livre (não numérico)</span>
+          </label>
+        )}
+
+        {/* Sub-colunas — somente fichas TABULAR */}
+        {sheetType === 'TABULAR' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="field-subcols">Sub-colunas <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+            <Input
+              id="field-subcols"
+              {...register('subColumnsRaw')}
+              placeholder="Ex: D, E  (Direita e Esquerda)"
+            />
+            <p className="text-[11px] text-muted-foreground">Separe por vírgula. Cada sub-coluna cria um campo separado dentro da célula (máx. 8).</p>
           </div>
         )}
 
@@ -383,10 +420,13 @@ function ColumnDialog({
       name: column?.name ?? '',
       inputType: column?.inputType ?? 'INPUT',
       unit: column?.unit ?? '',
+      isTextual: column?.isTextual ?? false,
+      defaultValue: column?.defaultValue ?? '',
     },
   })
 
   const inputType = watch('inputType')
+  const isTextual = watch('isTextual')
 
   const onSubmit = handleSubmit(async (data) => {
     try {
@@ -396,7 +436,9 @@ function ColumnDialog({
           colId: column.id,
           name: data.name,
           inputType: data.inputType,
-          unit: data.inputType === 'INPUT' ? (data.unit || undefined) : undefined,
+          unit: data.inputType === 'INPUT' && !data.isTextual ? (data.unit || undefined) : undefined,
+          isTextual: data.isTextual,
+          defaultValue: data.isTextual ? (data.defaultValue || null) : null,
         })
         toast.success('Coluna atualizada')
       } else {
@@ -404,7 +446,9 @@ function ColumnDialog({
           sheetId,
           name: data.name,
           inputType: data.inputType,
-          unit: data.inputType === 'INPUT' ? (data.unit || undefined) : undefined,
+          unit: data.inputType === 'INPUT' && !data.isTextual ? (data.unit || undefined) : undefined,
+          isTextual: data.isTextual,
+          defaultValue: data.isTextual ? (data.defaultValue || undefined) : undefined,
         })
         toast.success('Coluna criada')
       }
@@ -451,10 +495,31 @@ function ColumnDialog({
           </div>
         </div>
 
-        {inputType === 'INPUT' && (
+        {inputType === 'INPUT' && !isTextual && (
           <div className="space-y-1.5">
             <Label htmlFor="col-unit">Unidade</Label>
             <Input id="col-unit" {...register('unit')} placeholder="Ex: cm, mm, %" />
+          </div>
+        )}
+
+        {/* Coluna textual — valor padrão e sem unidade */}
+        {inputType === 'INPUT' && (
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" {...register('isTextual')} className="h-4 w-4 rounded border-input" />
+            <span className="text-sm">Coluna de texto livre (não numérica)</span>
+          </label>
+        )}
+
+        {/* Valor padrão — somente para colunas textuais */}
+        {isTextual && (
+          <div className="space-y-1.5">
+            <Label htmlFor="col-default">Valor padrão <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+            <Input
+              id="col-default"
+              {...register('defaultValue')}
+              placeholder="Ex: 00 cm acima do umbigo"
+            />
+            <p className="text-[11px] text-muted-foreground">Pré-preenche o campo ao abrir o formulário de registro.</p>
           </div>
         )}
 

@@ -63,6 +63,8 @@ interface CreateFieldInput {
   inputType: MeasurementInputType
   unit?: string
   order?: number
+  isTextual?: boolean
+  subColumns?: string[]
 }
 
 interface UpdateFieldInput {
@@ -73,6 +75,8 @@ interface UpdateFieldInput {
   unit?: string
   order?: number
   active?: boolean
+  isTextual?: boolean
+  subColumns?: string[]
 }
 
 interface ReorderFieldsInput {
@@ -86,6 +90,8 @@ interface CreateSheetColumnInput {
   inputType: MeasurementInputType
   unit?: string
   order?: number
+  isTextual?: boolean
+  defaultValue?: string
 }
 
 interface UpdateSheetColumnInput {
@@ -95,6 +101,8 @@ interface UpdateSheetColumnInput {
   inputType?: MeasurementInputType
   unit?: string
   order?: number
+  isTextual?: boolean
+  defaultValue?: string | null
 }
 
 interface DeleteSheetColumnInput {
