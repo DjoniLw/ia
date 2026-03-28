@@ -51,7 +51,7 @@ export async function measurementSessionsRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string }
       const dto = UpdateSessionDto.parse(req.body)
       return reply.send(
-        await svc.updateSession(id, req.clinicId, req.user.sub, req.user.role, dto),
+        await svc.updateSession(id, req.clinicId, req.user.sub, req.user.role, dto, req.log),
       )
     },
   )
