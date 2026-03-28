@@ -72,8 +72,6 @@ const fieldSchema = z.object({
   inputType: z.enum(['INPUT', 'CHECK']),
   unit: z.string().max(20).optional(),
   isTextual: z.boolean().default(false),
-  // Sub-colunas: texto livre separado por vírgula, ex: "D, E"
-  subColumnsRaw: z.string().max(200).optional(),
 })
 type FieldForm = z.infer<typeof fieldSchema>
 
@@ -246,6 +244,19 @@ function FieldDialog({
   const updateField = useUpdateMeasurementField()
   const isPending = createField.isPending || updateField.isPending
 
+  // Estado local para sub-colunas (tags), independente do RHF
+  const [subColumns, setSubColumns] = useState<string[]>(field?.subColumns ?? [])
+  const [subColInput, setSubColInput] = useState('')
+
+  const addSubCol = () => {
+    const val = subColInput.trim()
+    if (!val || subColumns.includes(val) || subColumns.length >= 8) return
+    setSubColumns((prev) => [...prev, val])
+    setSubColInput('')
+  }
+
+  const removeSubCol = (col: string) => setSubColumns((prev) => prev.filter((c) => c !== col))
+
   const {
     register,
     handleSubmit,
@@ -258,16 +269,11 @@ function FieldDialog({
       inputType: field?.inputType ?? 'INPUT',
       unit: field?.unit ?? '',
       isTextual: field?.isTextual ?? false,
-      subColumnsRaw: field?.subColumns?.join(', ') ?? '',
     },
   })
 
   const inputType = watch('inputType')
   const isTextual = watch('isTextual')
-
-  // Converte "D, E" → ["D", "E"] removendo vazios
-  const parseSubColumns = (raw: string) =>
-    raw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 8)
 
   const onSubmit = handleSubmit(async (data) => {
     try {
@@ -279,7 +285,7 @@ function FieldDialog({
           ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' && !data.isTextual ? { unit: data.unit || undefined } : {}),
           inputType: data.inputType,
           isTextual: data.isTextual,
-          subColumns: sheetType === 'TABULAR' ? parseSubColumns(data.subColumnsRaw ?? '') : [],
+          subColumns: sheetType === 'TABULAR' ? subColumns : [],
         })
         toast.success('Campo atualizado')
       } else {
@@ -288,7 +294,7 @@ function FieldDialog({
           inputType: data.inputType,
           ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' && !data.isTextual ? { unit: data.unit || undefined } : {}),
           isTextual: data.isTextual,
-          subColumns: sheetType === 'TABULAR' ? parseSubColumns(data.subColumnsRaw ?? '') : [],
+          subColumns: sheetType === 'TABULAR' ? subColumns : [],
         })
         toast.success('Campo criado')
       }
@@ -360,14 +366,60 @@ function FieldDialog({
 
         {/* Sub-colunas — somente fichas TABULAR */}
         {sheetType === 'TABULAR' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="field-subcols">Sub-colunas <span className="text-muted-foreground font-normal">(opcional)</span></Label>
-            <Input
-              id="field-subcols"
-              {...register('subColumnsRaw')}
-              placeholder="Ex: D, E  (Direita e Esquerda)"
-            />
-            <p className="text-[11px] text-muted-foreground">Separe por vírgula. Cada sub-coluna cria um campo separado dentro da célula (máx. 8).</p>
+          <div className="space-y-2">
+            <Label>
+              Sub-colunas{' '}
+              <span className="text-muted-foreground font-normal">(opcional — máx. 8)</span>
+            </Label>
+            {/* Tags existentes */}
+            {subColumns.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {subColumns.map((col) => (
+                  <span
+                    key={col}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+                  >
+                    {col}
+                    <button
+                      type="button"
+                      onClick={() => removeSubCol(col)}
+                      className="ml-0.5 rounded-full hover:text-destructive focus:outline-none"
+                      aria-label={`Remover sub-coluna ${col}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Input para adicionar */}
+            {subColumns.length < 8 && (
+              <div className="flex gap-2">
+                <Input
+                  value={subColInput}
+                  onChange={(e) => setSubColInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); addSubCol() }
+                  }}
+                  placeholder="Ex: D (Direita)"
+                  className="h-8 text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addSubCol}
+                  disabled={!subColInput.trim() || subColumns.includes(subColInput.trim())}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Adicionar
+                </Button>
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Cada sub-coluna cria um campo separado dentro da célula.
+              Ex: <strong>D</strong> + <strong>E</strong> → Direita e Esquerda.
+            </p>
           </div>
         )}
 
