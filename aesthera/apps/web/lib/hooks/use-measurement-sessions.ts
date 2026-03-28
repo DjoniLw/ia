@@ -37,6 +37,7 @@ export interface MeasurementTabularValue {
     name: string
     unit: string
     order: number
+    inputType: string
     isTextual: boolean
     defaultValue: string | null
   }

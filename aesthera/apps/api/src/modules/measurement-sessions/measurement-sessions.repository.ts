@@ -13,7 +13,7 @@ const SESSION_INCLUDE = {
       tabularValues: {
         include: {
           field: { select: { id: true, name: true, inputType: true, isTextual: true, defaultValue: true, subColumns: true } },
-          sheetColumn: { select: { id: true, name: true, unit: true, order: true, isTextual: true, defaultValue: true } },
+          sheetColumn: { select: { id: true, name: true, unit: true, order: true, isTextual: true, defaultValue: true, inputType: true } },
         },
       },
     },
