@@ -40,10 +40,11 @@ export class MeasurementSessionsService {
     if (!sheetsOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
     // 4. Cross-tenant: fieldIds pertencem à clínica
-    const allFieldIds = [
+    // Deduplicar: fichas TABULAR podem ter o mesmo fieldId em múltiplas colunas
+    const allFieldIds = [...new Set([
       ...dto.sheetRecords.flatMap((sr) => sr.values.map((v) => v.fieldId)),
       ...dto.sheetRecords.flatMap((sr) => sr.tabularValues.map((v) => v.fieldId)),
-    ]
+    ])]
     const fieldsOwned = await this.repo.validateFieldsOwnership(allFieldIds, clinicId)
     if (!fieldsOwned) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
@@ -102,10 +103,11 @@ export class MeasurementSessionsService {
         throw new ForbiddenError('CROSS_TENANT_VIOLATION')
       }
 
-      const allFieldIds = [
+      // Deduplicar: fichas TABULAR podem ter o mesmo fieldId em múltiplas colunas
+      const allFieldIds = [...new Set([
         ...dto.sheetRecords.flatMap((sr) => sr.values?.map((v) => v.fieldId) ?? []),
         ...dto.sheetRecords.flatMap((sr) => sr.tabularValues?.map((v) => v.fieldId) ?? []),
-      ]
+      ])]
       const fieldsOwned = await this.repo.validateFieldsOwnership(allFieldIds, clinicId)
       if (!fieldsOwned) {
         logger.warn({ sessionId: id, clinicId, allFieldIds }, 'updateSession: field ownership validation failed')
