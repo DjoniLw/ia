@@ -251,6 +251,11 @@ function FieldDialog({
   const initialSubCols = useRef(field?.subColumns ?? [])
   const isSubColsDirty = JSON.stringify(subColumns) !== JSON.stringify(initialSubCols.current)
 
+  // Estado para override do valor padrão por campo (null = herda coluna, string = override)
+  const initialOverrideDefault = field?.defaultValue !== null && field?.defaultValue !== undefined
+  const [overrideDefault, setOverrideDefault] = useState(initialOverrideDefault)
+  const isOverrideDirty = overrideDefault !== initialOverrideDefault
+
   const addSubCol = () => {
     const val = subColInput.trim()
     if (!val || subColumns.includes(val) || subColumns.length >= 8) return
@@ -264,6 +269,7 @@ function FieldDialog({
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<FieldForm>({
     resolver: zodResolver(fieldSchema),
@@ -289,7 +295,7 @@ function FieldDialog({
           ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' && !data.isTextual ? { unit: data.unit || undefined } : {}),
           inputType: data.inputType,
           isTextual: data.isTextual,
-          defaultValue: sheetType === 'TABULAR' ? (data.defaultValue || null) : null,
+          defaultValue: sheetType === 'TABULAR' ? (overrideDefault ? (data.defaultValue ?? '') : null) : null,
           subColumns: sheetType === 'TABULAR' ? subColumns : [],
         })
         toast.success('Campo atualizado')
@@ -299,7 +305,7 @@ function FieldDialog({
           inputType: data.inputType,
           ...(sheetType === 'SIMPLE' && data.inputType === 'INPUT' && !data.isTextual ? { unit: data.unit || undefined } : {}),
           isTextual: data.isTextual,
-          defaultValue: sheetType === 'TABULAR' ? (data.defaultValue || undefined) : undefined,
+          defaultValue: sheetType === 'TABULAR' ? (overrideDefault ? (data.defaultValue ?? '') : undefined) : undefined,
           subColumns: sheetType === 'TABULAR' ? subColumns : [],
         })
         toast.success('Campo criado')
@@ -431,20 +437,36 @@ function FieldDialog({
 
         {/* Valor padrão por campo — somente fichas TABULAR */}
         {sheetType === 'TABULAR' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="field-default">
-              Valor padrão por campo{' '}
-              <span className="text-muted-foreground font-normal">(opcional)</span>
-            </Label>
-            <Input
-              id="field-default"
-              {...register('defaultValue')}
-              placeholder="Ex: 00 cm abaixo do umbigo"
-              className="h-8 text-sm"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Sobrescreve o valor padrão da coluna para este campo específico.
-            </p>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={overrideDefault}
+                onChange={(e) => {
+                  setOverrideDefault(e.target.checked)
+                  if (!e.target.checked) setValue('defaultValue', '')
+                }}
+                className="h-4 w-4 rounded border-input"
+              />
+              <span className="text-sm">Personalizar valor padrão deste campo</span>
+            </label>
+            {overrideDefault ? (
+              <div className="space-y-1">
+                <Input
+                  id="field-default"
+                  {...register('defaultValue')}
+                  placeholder="Ex: 00 cm abaixo do umbigo"
+                  className="h-8 text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Sobrescreve o padrão da coluna. Deixe vazio para que este campo não exiba nenhum valor padrão.
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Este campo usará o valor padrão definido em cada coluna.
+              </p>
+            )}
           </div>
         )}
 
@@ -459,7 +481,7 @@ function FieldDialog({
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isPending}>
             Cancelar
           </Button>
-          <Button type="submit" size="sm" disabled={isPending || (!isDirty && !isSubColsDirty)}>
+          <Button type="submit" size="sm" disabled={isPending || (!isDirty && !isSubColsDirty && !isOverrideDirty)}>
             {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
             {field ? 'Salvar' : 'Criar'}
           </Button>
