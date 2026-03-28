@@ -278,6 +278,17 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-28] — Logging diagnóstico para HTTP 403 em updateSession (issue #126 / PR #128)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/shared/errors/error-handler.ts` *(logging de AppError 4xx/5xx)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.service.ts` *(logger.warn antes de cada ForbiddenError)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.routes.ts` *(req.log passado para updateSession)*
+- **O que foi feito:**
+  - **error-handler.ts:** AppError 4xx agora emite `logger.warn`, AppError 5xx emite `logger.error`, com `code`, `status` e `message` — antes, esses erros respondiam HTTP sem nenhum log de aplicação.
+  - **updateSession:** 5 pontos de `ForbiddenError` agora precedidos de `logger.warn` com contexto diagnóstico: `sessionId`, `clinicId`, `userId`, `userRole`, `sheetIds`, `fieldIds`, `columnMap` — permite identificar exatamente qual validação falhou ao reproduzir o 403 em produção.
+  - **routes:** `req.log` (logger por-request do Fastify/Pino) passado como 6º argumento a `updateSession`, mantendo rastreabilidade de request ID.
+- **Impacto:** Apenas backend. Sem migração de schema. Após deploy, os logs do Railway revelarão a causa exata do 403.
+
 ### [2026-03-27] — Correções e melhorias na aba Evolução — fichas tabulares e simples (issue #126 / PR #128)
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx` *(bug de gravação, SessionCard, CompareModal)*
