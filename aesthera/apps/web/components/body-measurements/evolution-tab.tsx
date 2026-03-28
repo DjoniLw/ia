@@ -527,6 +527,11 @@ function SessionFormModal({
   const updateSession = useUpdateMeasurementSession()
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [uploading, setUploading] = useState(false)
+  // Fotos já salvas na sessão em edição — preservadas e exibidas no formulário
+  const [existingFiles, setExistingFiles] = useState<MeasurementSessionFile[]>(
+    sessionToEdit?.files ?? [],
+  )
+  const [existingFileUrls, setExistingFileUrls] = useState<Record<string, string>>({})
 
   // Pre-populate state for editing
   const buildInitialState = (): FormState => {
@@ -567,6 +572,22 @@ function SessionFormModal({
   // Cleanup object URLs when modal closes
   useEffect(() => {
     return () => { pendingFiles.forEach((f) => URL.revokeObjectURL(f.preview)) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Carrega URLs das fotos já salvas para exibição no formulário de edição
+  useEffect(() => {
+    if (existingFiles.length === 0) return
+    let cancelled = false
+    Promise.all(
+      existingFiles.map(async (f) => {
+        const { url } = await getUploadUrl(f.id)
+        return [f.id, url] as [string, string]
+      }),
+    ).then((entries) => {
+      if (!cancelled) setExistingFileUrls(Object.fromEntries(entries))
+    })
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -637,7 +658,9 @@ function SessionFormModal({
 
     setUploading(true)
     try {
-      const fileIds = await doUploadFiles()
+      const newFileIds = await doUploadFiles()
+      // Combina IDs das fotos existentes (preservadas) + novas uploadadas
+      const fileIds = [...existingFiles.map((f) => f.id), ...newFileIds]
 
       const sheetRecords = Object.entries(formState)
         .map(([sheetId, state]) => {
@@ -776,6 +799,36 @@ function SessionFormModal({
           {/* Upload de fotos */}
           <div>
             <p className="text-sm font-medium mb-3">Fotos</p>
+            {/* Fotos já salvas (edição) */}
+            {existingFiles.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <p className="text-xs text-muted-foreground">Fotos salvas</p>
+                {existingFiles.map((f) => (
+                  <div key={f.id} className="flex items-center gap-3 rounded-lg border p-2 bg-muted/20">
+                    {existingFileUrls[f.id] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={existingFileUrls[f.id]} alt="" className="h-12 w-12 rounded object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-12 w-12 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                        <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{f.name}</p>
+                      <p className="text-xs text-muted-foreground">{FILE_CATEGORY_LABELS[f.category as FileCategory] ?? f.category}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                      onClick={() => setExistingFiles((prev) => prev.filter((x) => x.id !== f.id))}
+                      aria-label="Remover foto"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <UploadArea files={pendingFiles} onChange={setPendingFiles} consentAt={customer.bodyDataConsentAt} />
           </div>
         </div>
@@ -1179,6 +1232,30 @@ function SessionCard({
   const [loadingUrls, setLoadingUrls] = useState(false)
   const [lightboxFile, setLightboxFile] = useState<string | null>(null)
 
+  // Carrega URLs das fotos sempre que o card estiver expandido e houver arquivos sem URL
+  useEffect(() => {
+    if (!expanded || session.files.length === 0) return
+    const unloaded = session.files.filter((f) => !fileUrls[f.id])
+    if (unloaded.length === 0) return
+    let cancelled = false
+    setLoadingUrls(true)
+    Promise.all(
+      unloaded.map(async (f) => {
+        const { url } = await getUploadUrl(f.id)
+        return [f.id, url] as [string, string]
+      }),
+    )
+      .then((entries) => {
+        if (!cancelled) setFileUrls((prev) => ({ ...prev, ...Object.fromEntries(entries) }))
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingUrls(false)
+      })
+    return () => { cancelled = true }
+    // fileUrls excluído das deps intencionalmente — inclui-lo causaria re-fetch em loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.files, expanded])
+
   const totalSimpleValues = session.sheetRecords.reduce(
     (sum, sr) => sum + sr.values.length,
     0,
@@ -1192,27 +1269,8 @@ function SessionCard({
     isTabular: sr.tabularValues.length > 0,
   }))
 
-  const loadFileUrls = async () => {
-    if (session.files.length === 0) return
-    setLoadingUrls(true)
-    try {
-      const urls: Record<string, string> = {}
-      await Promise.all(session.files.map(async (f) => {
-        const { url } = await getUploadUrl(f.id)
-        urls[f.id] = url
-      }))
-      setFileUrls(urls)
-    } finally {
-      setLoadingUrls(false)
-    }
-  }
-
   const handleExpand = () => {
-    const next = !expanded
-    setExpanded(next)
-    if (next && session.files.length > 0 && Object.keys(fileUrls).length === 0) {
-      void loadFileUrls()
-    }
+    setExpanded((v) => !v)
   }
 
   return (
