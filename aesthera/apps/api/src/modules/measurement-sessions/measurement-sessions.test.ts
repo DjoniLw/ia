@@ -177,4 +177,99 @@ describe('MeasurementSessionsService', () => {
       svc.listSessions(CLINIC_ID, { customerId: CUSTOMER_ID, page: 1, limit: 20 }),
     ).rejects.toThrow(ForbiddenError)
   })
+
+  // ─── Cross-tenant: createSession ───────────────────────────────────────────
+
+  it('deve retornar 403 ao criar sessão com cliente de outra clínica', async () => {
+    vi.mocked(repo.findCustomerInClinic).mockResolvedValue(null)
+
+    await expect(
+      svc.createSession(CLINIC_ID, USER_ID, makeCreateDto() as any, MOCK_LOGGER),
+    ).rejects.toThrow(ForbiddenError)
+  })
+
+  it('deve retornar 403 ao criar sessão com sheetId de outra clínica', async () => {
+    vi.mocked(repo.findCustomerInClinic).mockResolvedValue({ id: CUSTOMER_ID } as any)
+    vi.mocked(repo.validateSheetsOwnership).mockResolvedValue(false)
+
+    await expect(
+      svc.createSession(CLINIC_ID, USER_ID, makeCreateDto() as any, MOCK_LOGGER),
+    ).rejects.toThrow(ForbiddenError)
+  })
+
+  it('deve retornar 403 ao criar sessão com fieldId não pertencente à clínica', async () => {
+    vi.mocked(repo.findCustomerInClinic).mockResolvedValue({ id: CUSTOMER_ID } as any)
+    vi.mocked(repo.validateSheetsOwnership).mockResolvedValue(true)
+    vi.mocked(repo.validateFieldsOwnership).mockResolvedValue(false)
+
+    await expect(
+      svc.createSession(CLINIC_ID, USER_ID, makeCreateDto() as any, MOCK_LOGGER),
+    ).rejects.toThrow(ForbiddenError)
+  })
+
+  it('deve retornar 403 ao criar sessão com columnId de sheet diferente', async () => {
+    const dto = makeCreateDto({
+      sheetRecords: [
+        {
+          sheetId: 'sheet-1',
+          values: [{ fieldId: 'field-1', value: 70 }],
+          tabularValues: [{ fieldId: 'field-tab', columnId: 'col-foreign', value: 12.5 }],
+        },
+      ],
+    })
+
+    vi.mocked(repo.findCustomerInClinic).mockResolvedValue({ id: CUSTOMER_ID } as any)
+    vi.mocked(repo.validateSheetsOwnership).mockResolvedValue(true)
+    vi.mocked(repo.validateFieldsOwnership).mockResolvedValue(true)
+    vi.mocked(repo.validateColumnsOwnership).mockResolvedValue(false)
+
+    await expect(
+      svc.createSession(CLINIC_ID, USER_ID, dto as any, MOCK_LOGGER),
+    ).rejects.toThrow(ForbiddenError)
+  })
+
+  it('não deve emitir warning para sessão retroativa com data ≤ 7 dias atrás', async () => {
+    const recentDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+    const dto = makeCreateDto({ recordedAt: recentDate.toISOString().slice(0, 10) })
+
+    vi.mocked(repo.findCustomerInClinic).mockResolvedValue({ id: CUSTOMER_ID } as any)
+    vi.mocked(repo.validateSheetsOwnership).mockResolvedValue(true)
+    vi.mocked(repo.validateFieldsOwnership).mockResolvedValue(true)
+    vi.mocked(repo.validateColumnsOwnership).mockResolvedValue(true)
+    vi.mocked(repo.createSession).mockResolvedValue(makeSession() as any)
+
+    await svc.createSession(CLINIC_ID, USER_ID, dto as any, MOCK_LOGGER)
+    expect(MOCK_LOGGER.warn).not.toHaveBeenCalled()
+  })
+
+  // ─── updateSession: EMPTY_SESSION ──────────────────────────────────────────
+
+  it('deve retornar 422 EMPTY_SESSION ao atualizar sessão sem nenhum valor preenchido', async () => {
+    vi.mocked(repo.findSessionById).mockResolvedValue(makeSession() as any)
+    vi.mocked(repo.validateSheetsOwnership).mockResolvedValue(true)
+    vi.mocked(repo.validateFieldsOwnership).mockResolvedValue(true)
+
+    const dto = { sheetRecords: [{ sheetId: 'sheet-1', values: [], tabularValues: [] }] }
+
+    await expect(
+      svc.updateSession(SESSION_ID, CLINIC_ID, USER_ID, 'admin', dto as any, MOCK_LOGGER),
+    ).rejects.toThrow('EMPTY_SESSION')
+  })
+
+  // ─── listSessions: isolamento de tenant ────────────────────────────────────
+
+  it('deve passar clinicId correto ao repositório na listagem e retornar os itens', async () => {
+    vi.mocked(repo.findCustomerInClinic).mockResolvedValue({ id: CUSTOMER_ID } as any)
+    vi.mocked(repo.listSessions).mockResolvedValue({
+      items: [makeSession()],
+      total: 1,
+      page: 1,
+      limit: 20,
+    } as any)
+
+    const result = await svc.listSessions(CLINIC_ID, { customerId: CUSTOMER_ID, page: 1, limit: 20 })
+    expect(repo.listSessions).toHaveBeenCalledWith(CLINIC_ID, { customerId: CUSTOMER_ID, page: 1, limit: 20 })
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0].clinicId).toBe(CLINIC_ID)
+  })
 })

@@ -278,6 +278,15 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-28] — Testes unitários — Módulo de Medidas Corporais (issue #129)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.test.ts`
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.test.ts`
+- **O que foi feito:**
+  - **measurement-sheets.test.ts:** Adicionados 14 novos casos de teste cobrindo: (1) criação de ficha tipo TABULAR; (2) reativação com MAX_SHEETS_REACHED e reativação com sucesso; (3) campo com unidade em ficha TABULAR → ValidationError; (4) `deleteField` com histórico → HAS_HISTORY; (5) `deleteField` sem histórico → hard-delete; (6) `deleteField` cross-tenant → 403; (7) `createSheetColumn` em ficha SIMPLE → ValidationError; (8) `createSheetColumn` MAX_COLUMNS_REACHED; (9) `createSheetColumn` cross-tenant → 403; (10) `deleteSheetColumn` com histórico → HAS_HISTORY; (11) `deleteSheetColumn` sem histórico → hard-delete; (12) `deleteSheetColumn` cross-tenant → 403. Adicionados `COL_ID` e factory `makeColumn()`.
+  - **measurement-sessions.test.ts:** Adicionados 7 novos casos de teste cobrindo: (1) `createSession` com cliente de outra clínica → 403; (2) `createSession` com sheetId de outra clínica → 403; (3) `createSession` com fieldId de outra clínica → 403; (4) `createSession` com columnId de sheet diferente → 403; (5) `createSession` com data retroativa ≤ 7 dias → sem logger.warn; (6) `updateSession` resultando em sessão vazia → EMPTY_SESSION; (7) `listSessions` passa `clinicId` correto ao repositório.
+- **Impacto:** Cobertura dos serviços de medidas corporais expandida. Regras críticas de multi-tenancy, limites e validação de sessão agora protegidas por testes. Seções 1.1–1.6 e 2.1–2.3 da issue #129 cobertas. Seções 3 (integração Prisma real) e 4 (frontend) requerem setup adicional — não implementadas nesta entrega.
+
 ### [2026-03-28] — Logging diagnóstico para HTTP 403 em updateSession (issue #126 / PR #128)
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/api/src/shared/errors/error-handler.ts` *(logging de AppError 4xx/5xx)*
