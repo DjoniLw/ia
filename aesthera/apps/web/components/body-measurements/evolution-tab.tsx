@@ -683,67 +683,21 @@ function SessionFormModal({
 function CompareModal({
   current,
   previous,
+  sheets,
   onClose,
 }: {
   current: MeasurementSession
   previous: MeasurementSession
+  sheets: MeasurementSheet[]
   onClose: () => void
 }) {
-  // Coleta todos os valores simples (INPUT) de uma sessão em um mapa fieldId → dados
-  const flattenSimple = (session: MeasurementSession) => {
-    const map = new Map<string, { name: string; unit: string; value: number }>()
-    for (const sr of session.sheetRecords) {
-      for (const v of sr.values) {
-        if (v.field.inputType !== 'INPUT') continue
-        map.set(v.fieldId, { name: v.field.name, unit: v.field.unit ?? '', value: Number(v.value) })
-      }
-    }
-    return map
-  }
+  // IDs de fichas presentes em qualquer uma das sessões (ordem: current primeiro)
+  const allSheetIds = [...new Set([
+    ...current.sheetRecords.map((sr) => sr.sheetId),
+    ...previous.sheetRecords.map((sr) => sr.sheetId),
+  ])]
 
-  // Coleta valores TABULAR de uma sessão em mapa `fieldId::columnId` → dados
-  const flattenTabular = (session: MeasurementSession) => {
-    const map = new Map<string, { fieldName: string; colName: string; unit: string; value: number }>()
-    for (const sr of session.sheetRecords) {
-      for (const v of sr.tabularValues) {
-        const key = `${v.fieldId}::${v.sheetColumnId}`
-        map.set(key, {
-          fieldName: v.field.name,
-          colName: v.sheetColumn.name,
-          unit: v.sheetColumn.unit ?? '',
-          value: Number(v.value),
-        })
-      }
-    }
-    return map
-  }
-
-  const prevSimple = flattenSimple(previous)
-  const currSimple = flattenSimple(current)
-  const allSimpleIds = [...new Set([...prevSimple.keys(), ...currSimple.keys()])]
-
-  const prevTabular = flattenTabular(previous)
-  const currTabular = flattenTabular(current)
-  const allTabularKeys = [...new Set([...prevTabular.keys(), ...currTabular.keys()])]
-
-  const getSimpleMeta = (id: string) =>
-    currSimple.get(id) ?? prevSimple.get(id) ?? { name: id, unit: '' }
-
-  const getTabularMeta = (key: string) =>
-    currTabular.get(key) ?? prevTabular.get(key) ?? { fieldName: key, colName: '', unit: '' }
-
-  const prevBMI = (() => {
-    const w = [...prevSimple.values()].find((v) => v.name.toLowerCase().includes('peso'))
-    const h = [...prevSimple.values()].find((v) => v.name.toLowerCase().includes('altura'))
-    return w && h ? calcBMI(w.value, h.value) : null
-  })()
-  const currBMI = (() => {
-    const w = [...currSimple.values()].find((v) => v.name.toLowerCase().includes('peso'))
-    const h = [...currSimple.values()].find((v) => v.name.toLowerCase().includes('altura'))
-    return w && h ? calcBMI(w.value, h.value) : null
-  })()
-
-  const hasAnyData = allSimpleIds.length > 0 || allTabularKeys.length > 0
+  const hasAnyData = allSheetIds.length > 0
 
   const renderCompareRow = (
     prevVal: number | null,
@@ -818,43 +772,143 @@ function CompareModal({
             Nenhuma medida registrada em ambos os registros.
           </p>
         ) : (
-          <div className="space-y-4">
-            {/* Campos SIMPLES */}
-            {allSimpleIds.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Medidas simples</p>
-                {allSimpleIds.map((fieldId) => {
-                  const meta = getSimpleMeta(fieldId)
-                  const prevVal = prevSimple.get(fieldId)?.value ?? null
-                  const currVal = currSimple.get(fieldId)?.value ?? null
-                  return renderCompareRow(prevVal, currVal, meta.name, meta.unit, fieldId)
-                })}
+          <div className="space-y-6">
+            {allSheetIds.map((sheetId) => {
+              const sheetDef = sheets.find((s) => s.id === sheetId)
+              const currSR = current.sheetRecords.find((sr) => sr.sheetId === sheetId)
+              const prevSR = previous.sheetRecords.find((sr) => sr.sheetId === sheetId)
+              const sheetName = sheetDef?.name ?? currSR?.sheet.name ?? prevSR?.sheet.name ?? sheetId
+              const isTabular =
+                sheetDef?.type === 'TABULAR' ||
+                (currSR?.tabularValues.length ?? 0) > 0 ||
+                (prevSR?.tabularValues.length ?? 0) > 0
 
-                {/* IMC calculado */}
-                {(prevBMI !== null || currBMI !== null) && renderCompareRow(
-                  prevBMI !== null ? Number(prevBMI) : null,
-                  currBMI !== null ? Number(currBMI) : null,
-                  'IMC (calculado)',
-                  'kg/m²',
-                  '__bmi__',
-                  true,
-                )}
-              </div>
-            )}
+              if (isTabular) {
+                // Colunas e campos da definição; fallback: extrair dos valores gravados
+                const allTabVals = [...(currSR?.tabularValues ?? []), ...(prevSR?.tabularValues ?? [])]
+                type _TabCol = { id: string; name: string; unit: string; order: number }
+                type _TabField = { id: string; name: string }
+                const colFallbackMap = new Map<string, _TabCol>()
+                const fieldFallbackMap = new Map<string, _TabField>()
+                for (const tv of allTabVals) {
+                  colFallbackMap.set(tv.sheetColumnId, tv.sheetColumn)
+                  fieldFallbackMap.set(tv.fieldId, tv.field)
+                }
+                const columns = sheetDef
+                  ? [...sheetDef.columns].sort((a, b) => a.order - b.order)
+                  : [...colFallbackMap.values()].sort((a, b) => a.order - b.order)
+                const fields = sheetDef
+                  ? sheetDef.fields.filter((f) => f.active).sort((a, b) => a.order - b.order)
+                  : [...fieldFallbackMap.values()]
 
-            {/* Campos TABULAR */}
-            {allTabularKeys.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Medidas tabulares</p>
-                {allTabularKeys.map((key) => {
-                  const meta = getTabularMeta(key)
-                  const prevVal = prevTabular.get(key)?.value ?? null
-                  const currVal = currTabular.get(key)?.value ?? null
-                  const label = `${meta.fieldName} — ${meta.colName}`
-                  return renderCompareRow(prevVal, currVal, label, meta.unit, key)
-                })}
-              </div>
-            )}
+                const prevMap = (prevSR?.tabularValues ?? []).reduce<Record<string, Record<string, number>>>
+                  ((acc, v) => { if (!acc[v.fieldId]) acc[v.fieldId] = {}; acc[v.fieldId][v.sheetColumnId] = Number(v.value); return acc }, {})
+                const currMap = (currSR?.tabularValues ?? []).reduce<Record<string, Record<string, number>>>
+                  ((acc, v) => { if (!acc[v.fieldId]) acc[v.fieldId] = {}; acc[v.fieldId][v.sheetColumnId] = Number(v.value); return acc }, {})
+
+                if (columns.length === 0 || fields.length === 0) return null
+
+                return (
+                  <div key={sheetId} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{sheetName}</p>
+                      <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Tabular</span>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border">
+                      <table className="text-xs w-full border-collapse">
+                        <thead className="bg-muted/50">
+                          <tr>
+                            <th className="border-b px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Campo</th>
+                            {columns.map((col) => (
+                              <th key={col.id} className="border-b px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
+                                {col.name}{col.unit ? ` (${col.unit})` : ''}
+                                <div className="flex gap-1 text-[10px] font-normal mt-0.5 text-muted-foreground/60">
+                                  <span>Ant.</span><span>→</span><span>Atual</span>
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fields.map((field) => (
+                            <tr key={field.id} className="border-b last:border-0 hover:bg-muted/20">
+                              <td className="px-3 py-2 font-medium whitespace-nowrap">{field.name}</td>
+                              {columns.map((col) => {
+                                const prevVal = prevMap[field.id]?.[col.id] ?? null
+                                const currVal = currMap[field.id]?.[col.id] ?? null
+                                const trend =
+                                  prevVal !== null && currVal !== null
+                                    ? currVal > prevVal ? 'up' : currVal < prevVal ? 'down' : 'same'
+                                    : 'same'
+                                const currClass =
+                                  trend === 'up' ? 'text-green-600 dark:text-green-400' :
+                                  trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
+                                return (
+                                  <td key={col.id} className="px-3 py-2">
+                                    <div className="flex items-center gap-1 whitespace-nowrap">
+                                      <span className="text-muted-foreground">{prevVal !== null ? prevVal.toLocaleString('pt-BR') : '—'}</span>
+                                      <span className="text-muted-foreground/40">→</span>
+                                      <span className={currClass}>{currVal !== null ? currVal.toLocaleString('pt-BR') : '—'}</span>
+                                      {trend === 'up' && <span className="text-green-600 dark:text-green-400">↑</span>}
+                                      {trend === 'down' && <span className="text-red-600 dark:text-red-400">↓</span>}
+                                    </div>
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              } else {
+                // Ficha SIMPLES
+                const prevSimpleMap = new Map<string, { name: string; unit: string; value: number }>()
+                const currSimpleMap = new Map<string, { name: string; unit: string; value: number }>()
+                for (const v of prevSR?.values ?? []) {
+                  if (v.field.inputType !== 'INPUT') continue
+                  prevSimpleMap.set(v.fieldId, { name: v.field.name, unit: v.field.unit ?? '', value: Number(v.value) })
+                }
+                for (const v of currSR?.values ?? []) {
+                  if (v.field.inputType !== 'INPUT') continue
+                  currSimpleMap.set(v.fieldId, { name: v.field.name, unit: v.field.unit ?? '', value: Number(v.value) })
+                }
+                const fieldIds = [...new Set([...prevSimpleMap.keys(), ...currSimpleMap.keys()])]
+                if (fieldIds.length === 0) return null
+
+                const prevBMI = (() => {
+                  const w = [...prevSimpleMap.values()].find((v) => v.name.toLowerCase().includes('peso'))
+                  const h = [...prevSimpleMap.values()].find((v) => v.name.toLowerCase().includes('altura'))
+                  return w && h ? calcBMI(w.value, h.value) : null
+                })()
+                const currBMI = (() => {
+                  const w = [...currSimpleMap.values()].find((v) => v.name.toLowerCase().includes('peso'))
+                  const h = [...currSimpleMap.values()].find((v) => v.name.toLowerCase().includes('altura'))
+                  return w && h ? calcBMI(w.value, h.value) : null
+                })()
+
+                return (
+                  <div key={sheetId} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{sheetName}</p>
+                      <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium bg-muted text-muted-foreground">Simples</span>
+                    </div>
+                    {fieldIds.map((fieldId) => {
+                      const meta = currSimpleMap.get(fieldId) ?? prevSimpleMap.get(fieldId) ?? { name: fieldId, unit: '' }
+                      const prevVal = prevSimpleMap.get(fieldId)?.value ?? null
+                      const currVal = currSimpleMap.get(fieldId)?.value ?? null
+                      return renderCompareRow(prevVal, currVal, meta.name, meta.unit, `${sheetId}::${fieldId}`)
+                    })}
+                    {(prevBMI !== null || currBMI !== null) && renderCompareRow(
+                      prevBMI !== null ? Number(prevBMI) : null,
+                      currBMI !== null ? Number(currBMI) : null,
+                      'IMC (calculado)', 'kg/m²', `__bmi__${sheetId}`, true,
+                    )}
+                  </div>
+                )
+              }
+            })}
           </div>
         )}
 
@@ -884,6 +938,7 @@ function SessionCard({
   isAdmin,
   onEdit,
   onDelete,
+  sheets,
 }: {
   session: MeasurementSession
   previousSession?: MeasurementSession
@@ -891,6 +946,7 @@ function SessionCard({
   isAdmin: boolean
   onEdit: () => void
   onDelete: () => void
+  sheets: MeasurementSheet[]
 }) {
   const [expanded, setExpanded] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -972,28 +1028,28 @@ function SessionCard({
         <div className="px-4 pb-4 space-y-4 border-t">
           {/* Valores por ficha */}
           {session.sheetRecords.map((sr) => {
-            const isTabular = sr.tabularValues.length > 0
+            const sheetDef = sheets.find((s) => s.id === sr.sheetId)
+            const isTabular = sheetDef?.type === 'TABULAR' || sr.tabularValues.length > 0
             const simpleVals = sr.values.filter((v) => v.field.inputType === 'INPUT')
             const checkVals = sr.values.filter((v) => v.field.inputType === 'CHECK')
 
-            // Para fichas TABULAR: montar grade campo × coluna
-            // Extrair colunas únicas (ordenadas por order)
-            const tabularColumns = isTabular
-              ? [...new Map(sr.tabularValues.map((v) => [v.sheetColumnId, v.sheetColumn])).values()]
-                  .sort((a, b) => a.order - b.order)
-              : []
-            // Extrair linhas únicas (campos), preservando ordem de inserção
-            const tabularRows = isTabular
-              ? [...new Map(sr.tabularValues.map((v) => [v.fieldId, v.field])).values()]
-              : []
+            // Para fichas TABULAR: usar definição completa da ficha (mostra linhas/colunas mesmo sem resposta)
+            const tabularColumns = isTabular && sheetDef
+              ? [...sheetDef.columns].sort((a, b) => a.order - b.order)
+              : isTabular
+                ? [...new Map(sr.tabularValues.map((v) => [v.sheetColumnId, v.sheetColumn])).values()].sort((a, b) => a.order - b.order)
+                : []
+            const tabularRows = isTabular && sheetDef
+              ? sheetDef.fields.filter((f) => f.active).sort((a, b) => a.order - b.order)
+              : isTabular
+                ? [...new Map(sr.tabularValues.map((v) => [v.fieldId, v.field])).values()]
+                : []
             // Mapa de valores: fieldId → columnId → value
-            const tabularMap = isTabular
-              ? sr.tabularValues.reduce<Record<string, Record<string, string>>>((acc, v) => {
-                  if (!acc[v.fieldId]) acc[v.fieldId] = {}
-                  acc[v.fieldId][v.sheetColumnId] = v.value
-                  return acc
-                }, {})
-              : {}
+            const tabularMap = sr.tabularValues.reduce<Record<string, Record<string, string>>>((acc, v) => {
+              if (!acc[v.fieldId]) acc[v.fieldId] = {}
+              acc[v.fieldId][v.sheetColumnId] = v.value
+              return acc
+            }, {})
 
             return (
               <div key={sr.id} className="pt-3">
@@ -1020,7 +1076,7 @@ function SessionCard({
                   </div>
                 )}
 
-                {/* Ficha TABULAR: grade linha (campo) × coluna */}
+                {/* Ficha TABULAR: grade linha (campo) × coluna — tabela completa mesmo sem respostas */}
                 {isTabular && tabularColumns.length > 0 && tabularRows.length > 0 && (
                   <div className="overflow-x-auto mb-3 rounded-lg border">
                     <table className="text-xs w-full border-collapse">
@@ -1038,13 +1094,24 @@ function SessionCard({
                         {tabularRows.map((field) => (
                           <tr key={field.id} className="border-b last:border-0 hover:bg-muted/20">
                             <td className="px-3 py-2 font-medium whitespace-nowrap">{field.name}</td>
-                            {tabularColumns.map((col) => (
-                              <td key={col.id} className="px-3 py-2 text-sm font-semibold">
-                                {tabularMap[field.id]?.[col.id] !== undefined
-                                  ? Number(tabularMap[field.id][col.id]).toLocaleString('pt-BR')
-                                  : <span className="text-muted-foreground">—</span>}
-                              </td>
-                            ))}
+                            {tabularColumns.map((col) => {
+                              const rawVal = tabularMap[field.id]?.[col.id]
+                              const colDef = sheetDef?.columns.find((c) => c.id === col.id)
+                              const isCheck = colDef?.inputType === 'CHECK'
+                              return (
+                                <td key={col.id} className="px-3 py-2 text-sm font-semibold">
+                                  {isCheck ? (
+                                    rawVal === '1'
+                                      ? <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                                      : <span className="text-muted-foreground">—</span>
+                                  ) : (
+                                    rawVal !== undefined
+                                      ? <>{Number(rawVal).toLocaleString('pt-BR')}{col.unit && <span className="text-xs font-normal text-muted-foreground ml-1">{col.unit}</span>}</>
+                                      : <span className="text-muted-foreground">—</span>
+                                  )}
+                                </td>
+                              )
+                            })}
                           </tr>
                         ))}
                       </tbody>
@@ -1162,7 +1229,7 @@ function SessionCard({
       )}
 
       {compareOpen && previousSession && (
-        <CompareModal current={session} previous={previousSession} onClose={() => setCompareOpen(false)} />
+        <CompareModal current={session} previous={previousSession} sheets={sheets} onClose={() => setCompareOpen(false)} />
       )}
     </div>
   )
@@ -1273,6 +1340,7 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
                 isAdmin={isAdmin}
                 onEdit={() => { setEditingSession(session); setModalOpen(true) }}
                 onDelete={() => void handleDelete(session)}
+                sheets={activeSheets}
               />
             )
           })}
