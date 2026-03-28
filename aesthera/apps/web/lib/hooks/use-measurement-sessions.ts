@@ -29,6 +29,7 @@ export interface MeasurementTabularValue {
     id: string
     name: string
     unit: string
+    order: number
   }
 }
 

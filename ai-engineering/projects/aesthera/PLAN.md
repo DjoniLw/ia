@@ -278,6 +278,17 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-27] — Correções e melhorias na aba Evolução — fichas tabulares e simples (issue #126 / PR #128)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx` *(bug de gravação, SessionCard, CompareModal)*
+  - `aesthera/apps/web/lib/hooks/use-measurement-sessions.ts` *(type `sheetColumn.order` adicionado)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.repository.ts` *(`order` incluído no select do `sheetColumn`)*
+- **O que foi feito:**
+  - **Bug de gravação:** A validação de "ao menos 1 valor" foi movida para depois da montagem do `sheetRecords` (verificação no array resultante real, alinhada à lógica do backend). O erro `EMPTY_SESSION` intermitente ocorria porque `hasAnyValue` aprovava o formulário mesmo quando todos os campos tinham estado inválido (`NaN` ou não numérico) que eram descartados no filtro de construção do payload.
+  - **Histórico de fichas (`SessionCard`):** Substituída a exibição de fichas TABULAR (por campo separado) por uma grade linha × coluna unificada com cabeçalho de colunas. Badge de tipo (Simples/Tabular) exibido no cabeçalho de cada ficha tanto no card expandido quanto nos badges do resumo colapsado. Colunas ordenadas por `order`.
+  - **Botão "Comparar com anterior" (`CompareModal`):** Incluída comparação de valores TABULAR (`fieldId::columnId`). O modal agora exibe seções separadas "Medidas simples" e "Medidas tabulares". IMC calculado mantido na seção de simples.
+- **Impacto:** Apenas frontend + 1 linha de backend (select). Sem migração de schema.
+
 ### [2026-03-25] — Treinamento dos agentes: padrões de filtros nos learnings (issue #124)
 - **Arquivo(s) afetado(s):**
   - `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md`

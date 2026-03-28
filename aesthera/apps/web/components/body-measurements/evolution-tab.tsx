@@ -539,11 +539,6 @@ function SessionFormModal({
   }
 
   const onSubmit = handleSubmit(async (meta) => {
-    if (!hasAnyValue(formState)) {
-      toast.error('Preencha ao menos um valor antes de salvar.')
-      return
-    }
-
     const withoutCategory = pendingFiles.filter((f) => !f.category)
     if (withoutCategory.length > 0) {
       toast.error('Selecione a categoria de todos os arquivos antes de salvar.')
@@ -574,6 +569,13 @@ function SessionFormModal({
           return { sheetId, values, tabularValues }
         })
         .filter(Boolean) as Array<{ sheetId: string; values: { fieldId: string; value: number }[]; tabularValues: { fieldId: string; columnId: string; value: number }[] }>
+
+      // Validar aqui (após montar sheetRecords) para garantir que ao menos 1 valor real foi preenchido
+      if (sheetRecords.length === 0) {
+        toast.error('Preencha ao menos um valor antes de salvar.')
+        setUploading(false)
+        return
+      }
 
       if (sessionToEdit) {
         await updateSession.mutateAsync({
@@ -687,7 +689,7 @@ function CompareModal({
   previous: MeasurementSession
   onClose: () => void
 }) {
-  // Coleta todos os valores simples de uma sessão em um único mapa
+  // Coleta todos os valores simples (INPUT) de uma sessão em um mapa fieldId → dados
   const flattenSimple = (session: MeasurementSession) => {
     const map = new Map<string, { name: string; unit: string; value: number }>()
     for (const sr of session.sheetRecords) {
@@ -699,23 +701,87 @@ function CompareModal({
     return map
   }
 
-  const prevMap = flattenSimple(previous)
-  const currMap = flattenSimple(current)
-  const allFieldIds = [...new Set([...prevMap.keys(), ...currMap.keys()])]
+  // Coleta valores TABULAR de uma sessão em mapa `fieldId::columnId` → dados
+  const flattenTabular = (session: MeasurementSession) => {
+    const map = new Map<string, { fieldName: string; colName: string; unit: string; value: number }>()
+    for (const sr of session.sheetRecords) {
+      for (const v of sr.tabularValues) {
+        const key = `${v.fieldId}::${v.sheetColumnId}`
+        map.set(key, {
+          fieldName: v.field.name,
+          colName: v.sheetColumn.name,
+          unit: v.sheetColumn.unit ?? '',
+          value: Number(v.value),
+        })
+      }
+    }
+    return map
+  }
 
-  const getLabelForField = (id: string) =>
-    currMap.get(id) ?? prevMap.get(id) ?? { name: id, unit: '' }
+  const prevSimple = flattenSimple(previous)
+  const currSimple = flattenSimple(current)
+  const allSimpleIds = [...new Set([...prevSimple.keys(), ...currSimple.keys()])]
+
+  const prevTabular = flattenTabular(previous)
+  const currTabular = flattenTabular(current)
+  const allTabularKeys = [...new Set([...prevTabular.keys(), ...currTabular.keys()])]
+
+  const getSimpleMeta = (id: string) =>
+    currSimple.get(id) ?? prevSimple.get(id) ?? { name: id, unit: '' }
+
+  const getTabularMeta = (key: string) =>
+    currTabular.get(key) ?? prevTabular.get(key) ?? { fieldName: key, colName: '', unit: '' }
 
   const prevBMI = (() => {
-    const w = [...prevMap.values()].find((v) => v.name.toLowerCase().includes('peso'))
-    const h = [...prevMap.values()].find((v) => v.name.toLowerCase().includes('altura'))
+    const w = [...prevSimple.values()].find((v) => v.name.toLowerCase().includes('peso'))
+    const h = [...prevSimple.values()].find((v) => v.name.toLowerCase().includes('altura'))
     return w && h ? calcBMI(w.value, h.value) : null
   })()
   const currBMI = (() => {
-    const w = [...currMap.values()].find((v) => v.name.toLowerCase().includes('peso'))
-    const h = [...currMap.values()].find((v) => v.name.toLowerCase().includes('altura'))
+    const w = [...currSimple.values()].find((v) => v.name.toLowerCase().includes('peso'))
+    const h = [...currSimple.values()].find((v) => v.name.toLowerCase().includes('altura'))
     return w && h ? calcBMI(w.value, h.value) : null
   })()
+
+  const hasAnyData = allSimpleIds.length > 0 || allTabularKeys.length > 0
+
+  const renderCompareRow = (
+    prevVal: number | null,
+    currVal: number | null,
+    label: string,
+    unit: string,
+    keyStr: string,
+    dashed = false,
+  ) => {
+    const trend: 'up' | 'down' | 'same' =
+      prevVal !== null && currVal !== null
+        ? currVal > prevVal ? 'up' : currVal < prevVal ? 'down' : 'same'
+        : 'same'
+    const currClass =
+      trend === 'up' ? 'text-green-600 dark:text-green-400' :
+      trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
+
+    return (
+      <div key={keyStr} className={`grid grid-cols-[1fr_120px_1fr] items-center gap-2 rounded-lg border px-3 py-2 ${dashed ? 'bg-muted/20 border-dashed' : 'bg-muted/10'}`}>
+        <div className="text-right">
+          {prevVal !== null ? (
+            <span className="text-sm font-medium">{prevVal.toLocaleString('pt-BR')}{unit && ` ${unit}`}</span>
+          ) : <span className="text-xs text-muted-foreground">—</span>}
+        </div>
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground truncate">{label}</p>
+          {trend === 'up' && <span className="text-xs font-semibold text-green-600 dark:text-green-400">↑</span>}
+          {trend === 'down' && <span className="text-xs font-semibold text-red-600 dark:text-red-400">↓</span>}
+          {trend === 'same' && prevVal !== null && currVal !== null && <span className="text-xs text-muted-foreground">—</span>}
+        </div>
+        <div className="text-left">
+          {currVal !== null ? (
+            <span className={`text-sm font-medium ${currClass}`}>{currVal.toLocaleString('pt-BR')}{unit && ` ${unit}`}</span>
+          ) : <span className="text-xs text-muted-foreground">—</span>}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <Dialog open onClose={onClose} className="max-w-3xl p-0">
@@ -747,59 +813,46 @@ function CompareModal({
           </div>
         </div>
 
-        {allFieldIds.length === 0 ? (
+        {!hasAnyData ? (
           <p className="text-center text-sm text-muted-foreground py-4">
-            Nenhuma medida simples registrada em ambos os registros.
+            Nenhuma medida registrada em ambos os registros.
           </p>
         ) : (
-          <div className="space-y-2">
-            {allFieldIds.map((fieldId) => {
-              const meta = getLabelForField(fieldId)
-              const prevVal = prevMap.get(fieldId)?.value ?? null
-              const currVal = currMap.get(fieldId)?.value ?? null
-              const trend: 'up' | 'down' | 'same' =
-                prevVal !== null && currVal !== null
-                  ? currVal > prevVal ? 'up' : currVal < prevVal ? 'down' : 'same'
-                  : 'same'
-              const currClass =
-                trend === 'up' ? 'text-green-600 dark:text-green-400' :
-                trend === 'down' ? 'text-red-600 dark:text-red-400' : ''
+          <div className="space-y-4">
+            {/* Campos SIMPLES */}
+            {allSimpleIds.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Medidas simples</p>
+                {allSimpleIds.map((fieldId) => {
+                  const meta = getSimpleMeta(fieldId)
+                  const prevVal = prevSimple.get(fieldId)?.value ?? null
+                  const currVal = currSimple.get(fieldId)?.value ?? null
+                  return renderCompareRow(prevVal, currVal, meta.name, meta.unit, fieldId)
+                })}
 
-              return (
-                <div key={fieldId} className="grid grid-cols-[1fr_120px_1fr] items-center gap-2 rounded-lg bg-muted/10 border px-3 py-2">
-                  <div className="text-right">
-                    {prevVal !== null ? (
-                      <span className="text-sm font-medium">{prevVal.toLocaleString('pt-BR')} {meta.unit}</span>
-                    ) : <span className="text-xs text-muted-foreground">—</span>}
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground truncate">{meta.name}</p>
-                    {trend === 'up' && <span className="text-xs font-semibold text-green-600 dark:text-green-400">↑</span>}
-                    {trend === 'down' && <span className="text-xs font-semibold text-red-600 dark:text-red-400">↓</span>}
-                  </div>
-                  <div className="text-left">
-                    {currVal !== null ? (
-                      <span className={`text-sm font-medium ${currClass}`}>{currVal.toLocaleString('pt-BR')} {meta.unit}</span>
-                    ) : <span className="text-xs text-muted-foreground">—</span>}
-                  </div>
-                </div>
-              )
-            })}
+                {/* IMC calculado */}
+                {(prevBMI !== null || currBMI !== null) && renderCompareRow(
+                  prevBMI !== null ? Number(prevBMI) : null,
+                  currBMI !== null ? Number(currBMI) : null,
+                  'IMC (calculado)',
+                  'kg/m²',
+                  '__bmi__',
+                  true,
+                )}
+              </div>
+            )}
 
-            {(prevBMI !== null || currBMI !== null) && (
-              <div className="grid grid-cols-[1fr_120px_1fr] items-center gap-2 rounded-lg bg-muted/20 border border-dashed px-3 py-2">
-                <div className="text-right">
-                  {prevBMI ? <span className="text-sm font-medium">{prevBMI} kg/m²</span> : <span className="text-xs text-muted-foreground">—</span>}
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">IMC</p>
-                  <p className="text-[10px] text-muted-foreground">calculado</p>
-                </div>
-                <div className="text-left">
-                  {currBMI ? (
-                    <span className={`text-sm font-medium ${prevBMI && Number(currBMI) > Number(prevBMI) ? 'text-green-600 dark:text-green-400' : prevBMI && Number(currBMI) < Number(prevBMI) ? 'text-red-600 dark:text-red-400' : ''}`}>{currBMI} kg/m²</span>
-                  ) : <span className="text-xs text-muted-foreground">—</span>}
-                </div>
+            {/* Campos TABULAR */}
+            {allTabularKeys.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Medidas tabulares</p>
+                {allTabularKeys.map((key) => {
+                  const meta = getTabularMeta(key)
+                  const prevVal = prevTabular.get(key)?.value ?? null
+                  const currVal = currTabular.get(key)?.value ?? null
+                  const label = `${meta.fieldName} — ${meta.colName}`
+                  return renderCompareRow(prevVal, currVal, label, meta.unit, key)
+                })}
               </div>
             )}
           </div>
@@ -846,11 +899,18 @@ function SessionCard({
   const [loadingUrls, setLoadingUrls] = useState(false)
   const [lightboxFile, setLightboxFile] = useState<string | null>(null)
 
-  const totalValues = session.sheetRecords.reduce(
-    (sum, sr) => sum + sr.values.length + sr.tabularValues.length,
+  const totalSimpleValues = session.sheetRecords.reduce(
+    (sum, sr) => sum + sr.values.length,
     0,
   )
-  const sheetBadges = session.sheetRecords.map((sr) => sr.sheet.name)
+  const totalTabularValues = session.sheetRecords.reduce(
+    (sum, sr) => sum + sr.tabularValues.length,
+    0,
+  )
+  const sheetBadges = session.sheetRecords.map((sr) => ({
+    name: sr.sheet.name,
+    isTabular: sr.tabularValues.length > 0,
+  }))
 
   const loadFileUrls = async () => {
     if (session.files.length === 0) return
@@ -886,12 +946,20 @@ function SessionCard({
         <div className="text-left">
           <p className="text-sm font-medium">{formatDate(session.recordedAt)}</p>
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-            {sheetBadges.map((name) => (
-              <span key={name} className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                {name}
+            {sheetBadges.map((badge) => (
+              <span
+                key={badge.name}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] ${badge.isTabular ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-muted text-muted-foreground'}`}
+              >
+                {badge.name}
               </span>
             ))}
-            <span className="text-xs text-muted-foreground">· {totalValues} medida{totalValues !== 1 ? 's' : ''}</span>
+            {totalSimpleValues > 0 && (
+              <span className="text-xs text-muted-foreground">· {totalSimpleValues} campo{totalSimpleValues !== 1 ? 's' : ''}</span>
+            )}
+            {totalTabularValues > 0 && (
+              <span className="text-xs text-muted-foreground">· {totalTabularValues} entrada{totalTabularValues !== 1 ? 's' : ''} tabular{totalTabularValues !== 1 ? 'es' : ''}</span>
+            )}
             {session.files.length > 0 && (
               <span className="text-xs text-muted-foreground">· {session.files.length} foto{session.files.length !== 1 ? 's' : ''}</span>
             )}
@@ -904,22 +972,41 @@ function SessionCard({
         <div className="px-4 pb-4 space-y-4 border-t">
           {/* Valores por ficha */}
           {session.sheetRecords.map((sr) => {
+            const isTabular = sr.tabularValues.length > 0
             const simpleVals = sr.values.filter((v) => v.field.inputType === 'INPUT')
             const checkVals = sr.values.filter((v) => v.field.inputType === 'CHECK')
-            const tabularFields = sr.tabularValues.reduce<Record<string, { name: string; cols: typeof sr.tabularValues }>>(
-              (acc, v) => {
-                if (!acc[v.fieldId]) acc[v.fieldId] = { name: v.field.name, cols: [] }
-                acc[v.fieldId].cols.push(v)
-                return acc
-              },
-              {},
-            )
+
+            // Para fichas TABULAR: montar grade campo × coluna
+            // Extrair colunas únicas (ordenadas por order)
+            const tabularColumns = isTabular
+              ? [...new Map(sr.tabularValues.map((v) => [v.sheetColumnId, v.sheetColumn])).values()]
+                  .sort((a, b) => a.order - b.order)
+              : []
+            // Extrair linhas únicas (campos), preservando ordem de inserção
+            const tabularRows = isTabular
+              ? [...new Map(sr.tabularValues.map((v) => [v.fieldId, v.field])).values()]
+              : []
+            // Mapa de valores: fieldId → columnId → value
+            const tabularMap = isTabular
+              ? sr.tabularValues.reduce<Record<string, Record<string, string>>>((acc, v) => {
+                  if (!acc[v.fieldId]) acc[v.fieldId] = {}
+                  acc[v.fieldId][v.sheetColumnId] = v.value
+                  return acc
+                }, {})
+              : {}
 
             return (
               <div key={sr.id} className="pt-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{sr.sheet.name}</p>
+                {/* Cabeçalho da ficha com badge de tipo */}
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{sr.sheet.name}</p>
+                  <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-medium ${isTabular ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-muted text-muted-foreground'}`}>
+                    {isTabular ? 'Tabular' : 'Simples'}
+                  </span>
+                </div>
 
-                {simpleVals.length > 0 && (
+                {/* Ficha SIMPLES: grade de cards campo/valor */}
+                {!isTabular && simpleVals.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
                     {simpleVals.map((v) => (
                       <div key={v.id} className="rounded-lg bg-muted/30 p-2.5">
@@ -933,36 +1020,40 @@ function SessionCard({
                   </div>
                 )}
 
-                {Object.values(tabularFields).map((tf) => (
-                  <div key={tf.name} className="mb-3">
-                    <p className="text-xs text-muted-foreground mb-1">{tf.name}</p>
-                    <div className="overflow-x-auto">
-                      <table className="text-xs w-full">
-                        <thead>
-                          <tr>
-                            {tf.cols.map((v) => (
-                              <th key={v.sheetColumnId} className="text-left font-medium pr-3 pb-1 whitespace-nowrap text-muted-foreground">
-                                {v.sheetColumn.name}{v.sheetColumn.unit ? ` (${v.sheetColumn.unit})` : ''}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            {tf.cols.map((v) => (
-                              <td key={v.sheetColumnId} className="pr-3 text-sm font-medium">
-                                {Number(v.value).toLocaleString('pt-BR')}
+                {/* Ficha TABULAR: grade linha (campo) × coluna */}
+                {isTabular && tabularColumns.length > 0 && tabularRows.length > 0 && (
+                  <div className="overflow-x-auto mb-3 rounded-lg border">
+                    <table className="text-xs w-full border-collapse">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="border-b px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Campo</th>
+                          {tabularColumns.map((col) => (
+                            <th key={col.id} className="border-b px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
+                              {col.name}{col.unit ? ` (${col.unit})` : ''}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tabularRows.map((field) => (
+                          <tr key={field.id} className="border-b last:border-0 hover:bg-muted/20">
+                            <td className="px-3 py-2 font-medium whitespace-nowrap">{field.name}</td>
+                            {tabularColumns.map((col) => (
+                              <td key={col.id} className="px-3 py-2 text-sm font-semibold">
+                                {tabularMap[field.id]?.[col.id] !== undefined
+                                  ? Number(tabularMap[field.id][col.id]).toLocaleString('pt-BR')
+                                  : <span className="text-muted-foreground">—</span>}
                               </td>
                             ))}
                           </tr>
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
+                )}
 
-                {/* M-04: Campos CHECK */}
-                {checkVals.length > 0 && (
+                {/* M-04: Campos CHECK (fichas SIMPLES) */}
+                {!isTabular && checkVals.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
                     {checkVals.map((v) => (
                       <div key={v.id} className="rounded-lg bg-muted/30 p-2.5">
