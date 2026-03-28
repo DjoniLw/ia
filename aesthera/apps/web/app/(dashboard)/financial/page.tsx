@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Loader2, TrendingUp, TrendingDown, DollarSign, BarChart3 } from 'lucide-react'
+import { useMemo, useState, useEffect, Suspense } from 'react'
+import { Info, Loader2, TrendingUp, TrendingDown, DollarSign, BarChart3 } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useLedger, useLedgerChart, useLedgerSummary } from '@/lib/hooks/use-financial'
 import type { LedgerEntry } from '@/lib/hooks/use-financial'
@@ -12,6 +13,46 @@ function formatCurrency(cents: number) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function toISODate(d: Date) {
+  return d.toISOString().slice(0, 10)
+}
+
+function currentMonthFrom() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+}
+
+function currentMonthTo() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+}
+
+function buildFilterLabel(type: 'credit' | 'debit' | '', from: string, to: string): string {
+  const parts: string[] = []
+
+  const defFrom = currentMonthFrom()
+  const defTo = currentMonthTo()
+
+  if (from === defFrom && to === defTo) {
+    parts.push('mês atual')
+  } else if (from && to) {
+    parts.push(`de ${formatDate(from)} até ${formatDate(to)}`)
+  } else if (from) {
+    parts.push(`a partir de ${formatDate(from)}`)
+  } else {
+    parts.push('todo o período')
+  }
+
+  const typeLabel: Record<string, string> = {
+    '': 'todos os tipos',
+    credit: 'Crédito',
+    debit: 'Débito',
+  }
+  parts.push(typeLabel[type] ?? type)
+
+  return parts.join(' · ')
 }
 
 function buildChartData(items: LedgerEntry[], from: string, to: string) {
@@ -44,15 +85,56 @@ function buildChartData(items: LedgerEntry[], from: string, to: string) {
   return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v)
 }
 
-export default function FinancialPage() {
-  const now = new Date()
-  const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+function FinancialPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-  const [from, setFrom] = useState(defaultFrom)
-  const [to, setTo] = useState(defaultTo)
-  const [type, setType] = useState<'credit' | 'debit' | ''>('')
+  const [from, setFrom] = useState(searchParams.get('from') ?? currentMonthFrom())
+  const [to, setTo] = useState(searchParams.get('to') ?? currentMonthTo())
+  const [type, setType] = useState<'credit' | 'debit' | ''>((searchParams.get('type') as 'credit' | 'debit' | '') ?? '')
   const [page, setPage] = useState(1)
+
+  const isDefaultFilters = from === currentMonthFrom() && to === currentMonthTo() && type === ''
+
+  function resetFilters() {
+    setFrom(currentMonthFrom())
+    setTo(currentMonthTo())
+    setType('')
+    setPage(1)
+  }
+
+  function applyPreset(preset: 'today' | 7 | 30 | '6months' | '1year') {
+    const today = toISODate(new Date())
+    if (preset === 'today') {
+      setFrom(today)
+      setTo(today)
+    } else if (preset === '6months') {
+      const d = new Date()
+      d.setMonth(d.getMonth() - 6)
+      setFrom(toISODate(d))
+      setTo(today)
+    } else if (preset === '1year') {
+      const d = new Date()
+      d.setFullYear(d.getFullYear() - 1)
+      setFrom(toISODate(d))
+      setTo(today)
+    } else {
+      const d = new Date()
+      d.setDate(d.getDate() - preset)
+      setFrom(toISODate(d))
+      setTo(today)
+    }
+    setPage(1)
+  }
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (from) p.set('from', from)
+    if (to) p.set('to', to)
+    if (type) p.set('type', type)
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, from, to, type])
 
   const params = Object.fromEntries(
     Object.entries({ from, to, type, page, limit: 20 }).filter(([, v]) => v !== ''),
@@ -95,6 +177,12 @@ export default function FinancialPage() {
       bg: 'bg-violet-50 dark:bg-violet-950/20',
       count: (summary?.creditCount ?? 0) + (summary?.debitCount ?? 0),
     },
+  ]
+
+  const typeOptions: Array<{ value: 'credit' | 'debit' | ''; label: string }> = [
+    { value: '', label: 'Todos' },
+    { value: 'credit', label: 'Crédito' },
+    { value: 'debit', label: 'Débito' },
   ]
 
   return (
@@ -156,36 +244,85 @@ export default function FinancialPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">De</label>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => { setFrom(e.target.value); setPage(1) }}
-            className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Presets de data */}
+          <div className="flex flex-wrap gap-1">
+            {(
+              [
+                { label: 'Hoje', preset: 'today' },
+                { label: '7 dias', preset: 7 },
+                { label: '30 dias', preset: 30 },
+                { label: '6 meses', preset: '6months' },
+                { label: '1 ano', preset: '1year' },
+              ] as const
+            ).map(({ label, preset }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                className="rounded-full border border-input bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Date range */}
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-xs text-muted-foreground">De</label>
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => { setFrom(e.target.value); setPage(1) }}
+                className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-xs text-muted-foreground">Até</label>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => { setTo(e.target.value); setPage(1) }}
+                className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          {/* Tipo pills */}
+          <div className="flex gap-1">
+            {typeOptions.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => { setType(t.value); setPage(1) }}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  type === t.value
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">Até</label>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => { setTo(e.target.value); setPage(1) }}
-            className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">Tipo</label>
-          <select
-            value={type}
-            onChange={(e) => { setType(e.target.value as 'credit' | 'debit' | ''); setPage(1) }}
-            className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="">Todos</option>
-            <option value="credit">Crédito</option>
-            <option value="debit">Débito</option>
-          </select>
+
+        {/* Legenda descritiva */}
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel(type, from, to)}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
         </div>
       </div>
 
@@ -282,5 +419,13 @@ export default function FinancialPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function FinancialPage() {
+  return (
+    <Suspense>
+      <FinancialPageContent />
+    </Suspense>
   )
 }

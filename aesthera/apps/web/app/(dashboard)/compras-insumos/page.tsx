@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, PackageOpen, Plus, Trash2 } from 'lucide-react'
+import { Info, Loader2, PackageOpen, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
 import { useRole } from '@/lib/hooks/use-role'
 import {
   type Supply,
@@ -331,7 +332,8 @@ export default function SupplyPurchasesPage() {
   const canManage = role === 'admin'
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
-  const [selectedSupplyId, setSelectedSupplyId] = useState('')
+  const [selectedSupply, setSelectedSupply] = useState<ComboboxItem | null>(null)
+  const [supplySearchQuery, setSupplySearchQuery] = useState('')
   const [supplierFilter, setSupplierFilter] = useState('')
   const [{ from, to }, setRange] = useState(currentMonthRange())
   const [page, setPage] = useState(1)
@@ -339,6 +341,45 @@ export default function SupplyPurchasesPage() {
   const createPurchase = useCreateSupplyPurchase()
 
   const suppliesQuery = useSupplies({ active: 'true', limit: '200' })
+
+  const supplyItems = useMemo<ComboboxItem[]>(() => {
+    const q = supplySearchQuery.trim().toLowerCase()
+    return (suppliesQuery.data?.items ?? [])
+      .filter((s) => !q || s.name.toLowerCase().includes(q))
+      .map((s) => ({ value: s.id, label: s.name, sublabel: s.unit }))
+  }, [suppliesQuery.data, supplySearchQuery])
+
+  const selectedSupplyId = selectedSupply?.value ?? ''
+
+  const defaultFrom = currentMonthRange().from
+  const defaultTo = currentMonthRange().to
+  const isDefaultFilters = !selectedSupply && supplierFilter === '' && from === defaultFrom && to === defaultTo
+
+  function resetFilters() {
+    setSelectedSupply(null)
+    setSupplySearchQuery('')
+    setSupplierFilter('')
+    setRange(currentMonthRange())
+    setPage(1)
+  }
+
+  function buildFilterLabel(): string {
+    const parts: string[] = []
+    if (from === defaultFrom && to === defaultTo) {
+      parts.push('mês atual')
+    } else if (from && to) {
+      parts.push(`de ${new Date(from).toLocaleDateString('pt-BR')} até ${new Date(to).toLocaleDateString('pt-BR')}`)
+    }
+    if (selectedSupply) {
+      parts.push(`insumo: ${selectedSupply.label}`)
+    } else {
+      parts.push('todos os insumos')
+    }
+    if (supplierFilter.trim()) {
+      parts.push(`fornecedor: ${supplierFilter.trim()}`)
+    }
+    return parts.join(' · ')
+  }
 
   const params = useMemo(() => ({
     page: String(page),
@@ -386,39 +427,54 @@ export default function SupplyPurchasesPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-3 rounded-xl border bg-card p-4">
-        <div className="space-y-1">
-          <Label>Insumo</Label>
-          <select
-            value={selectedSupplyId}
-            onChange={(event) => setSelectedSupplyId(event.target.value)}
-            className="h-10 min-w-56 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="">Todos os insumos</option>
-            {suppliesQuery.data?.items.map((supply) => (
-              <option key={supply.id} value={supply.id}>{supply.name}</option>
-            ))}
-          </select>
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-3 rounded-xl border bg-card p-4">
+          <div className="space-y-1">
+            <Label>Insumo</Label>
+            <ComboboxSearch
+              value={selectedSupply}
+              onChange={setSelectedSupply}
+              onSearch={setSupplySearchQuery}
+              items={supplyItems}
+              placeholder="Buscar insumo…"
+              className="min-w-56"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Fornecedor</Label>
+            <Input
+              value={supplierFilter}
+              onChange={(event) => setSupplierFilter(event.target.value)}
+              placeholder="Buscar por fornecedor"
+              className="min-w-56"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label>De</Label>
+            <Input type="date" value={from} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Até</Label>
+            <Input type="date" value={to} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} />
+          </div>
         </div>
 
-        <div className="space-y-1">
-          <Label>Fornecedor</Label>
-          <Input
-            value={supplierFilter}
-            onChange={(event) => setSupplierFilter(event.target.value)}
-            placeholder="Buscar por fornecedor"
-            className="min-w-56"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label>De</Label>
-          <Input type="date" value={from} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} />
-        </div>
-
-        <div className="space-y-1">
-          <Label>Até</Label>
-          <Input type="date" value={to} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} />
+        {/* Legenda descritiva */}
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
         </div>
       </div>
 

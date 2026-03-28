@@ -12,6 +12,7 @@ import {
   ShoppingBag,
   CheckCircle2,
   Search,
+  Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCustomers, useServices } from '@/lib/hooks/use-resources'
@@ -635,6 +636,18 @@ export default function PackagesPage() {
     { value: false, label: 'Inativos' },
   ]
 
+  const isDefaultFilters = activeFilter === undefined
+
+  function resetFilters() {
+    setActiveFilter(undefined)
+  }
+
+  function buildFilterLabel(): string {
+    if (activeFilter === true) return 'apenas ativos'
+    if (activeFilter === false) return 'apenas inativos'
+    return 'todos os pacotes'
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -651,21 +664,38 @@ export default function PackagesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        {filterOptions.map((opt) => (
-          <button
-            key={String(opt.value)}
-            onClick={() => setActiveFilter(opt.value)}
-            className={[
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              activeFilter === opt.value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-input bg-card text-muted-foreground hover:bg-accent',
-            ].join(' ')}
-          >
-            {opt.label}
-          </button>
-        ))}
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {filterOptions.map((opt) => (
+            <button
+              key={String(opt.value)}
+              onClick={() => setActiveFilter(opt.value)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                activeFilter === opt.value
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Legenda descritiva */}
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Package list */}
