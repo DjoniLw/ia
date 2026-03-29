@@ -716,7 +716,7 @@ export interface CustomerContract {
   customerId: string
   templateId: string
   status: 'pending' | 'signed'
-  signatureMode: 'assinafy' | 'manual' | null
+  signatureMode: 'assinafy' | 'manual' | 'uploaded' | null
   signLink: string | null
   externalId: string | null
   signedAt: string | null
@@ -764,7 +764,7 @@ export function useSignManual(customerId: string, contractId: string) {
 export interface ContractView {
   id: string
   status: 'pending' | 'signed'
-  signatureMode: 'assinafy' | 'manual' | null
+  signatureMode: 'assinafy' | 'manual' | 'uploaded' | null
   signedAt: string | null
   fileUrl: string | null
   signedFileUrl: string | null
