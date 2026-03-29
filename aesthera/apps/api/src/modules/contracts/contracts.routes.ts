@@ -3,8 +3,10 @@ import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
 import {
   AssinafyWebhookDto,
+  ConfirmSignedUploadDto,
   CreateContractTemplateDto,
   CreateCustomerContractDto,
+  PresignSignedContractDto,
   SendAssinafyDto,
   SendContractWhatsAppDto,
   SignManualDto,
@@ -170,6 +172,34 @@ export async function contractsRoutes(app: FastifyInstance) {
       const { customerId, id } = req.params as { customerId: string; id: string }
       const dto = SendContractWhatsAppDto.parse(req.body)
       return reply.send(await svc.sendContractWhatsApp(req.clinicId, customerId, id, dto))
+    },
+  )
+
+  /**
+   * POST /customers/:customerId/contracts/:id/presign-signed
+   * Gera presigned PUT URL para upload de contrato já assinado fisicamente.
+   */
+  app.post(
+    '/customers/:customerId/contracts/:id/presign-signed',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId, id } = req.params as { customerId: string; id: string }
+      const dto = PresignSignedContractDto.parse(req.body)
+      return reply.send(await svc.presignSignedContract(req.clinicId, customerId, id, dto))
+    },
+  )
+
+  /**
+   * POST /customers/:customerId/contracts/:id/confirm-upload-signed
+   * Confirma o upload do contrato assinado e marca o contrato como assinado.
+   */
+  app.post(
+    '/customers/:customerId/contracts/:id/confirm-upload-signed',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId, id } = req.params as { customerId: string; id: string }
+      const dto = ConfirmSignedUploadDto.parse(req.body)
+      return reply.send(await svc.confirmSignedUpload(req.clinicId, customerId, id, dto))
     },
   )
 

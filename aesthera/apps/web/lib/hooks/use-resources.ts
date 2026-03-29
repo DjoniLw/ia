@@ -784,3 +784,20 @@ export function useSendContractWhatsApp(customerId: string) {
       api.post(`/customers/${customerId}/contracts/${contractId}/send-whatsapp`, { phone }).then((r) => r.data),
   })
 }
+
+export function usePresignSignedContract(customerId: string) {
+  return useMutation({
+    mutationFn: ({ contractId, fileName, mimeType, size }: { contractId: string; fileName: string; mimeType: string; size: number }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/presign-signed`, { fileName, mimeType, size })
+        .then((r) => r.data as { storageKey: string; presignedUrl: string }),
+  })
+}
+
+export function useConfirmSignedUpload(customerId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ contractId, storageKey }: { contractId: string; storageKey: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/confirm-upload-signed`, { storageKey }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, MessageCircle, Package, Pencil, Plus, Scissors, Search, Send, Trash2, User, Wallet } from 'lucide-react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, MessageCircle, Package, Pencil, Plus, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -38,6 +38,8 @@ import {
   useSignManual,
   useGetContractView,
   useSendContractWhatsApp,
+  usePresignSignedContract,
+  useConfirmSignedUpload,
   useContractTemplates,
   type CustomerContract,
   type ContractView,
@@ -1032,6 +1034,10 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const [contractViewData, setContractViewData] = useState<ContractView | null>(null)
   const [sendingWhatsApp, setSendingWhatsApp] = useState<CustomerContract | null>(null)
   const [whatsappPhone, setWhatsappPhone] = useState('')
+  const [uploadingSignedContract, setUploadingSignedContract] = useState<CustomerContract | null>(null)
+  const [uploadSignedFile, setUploadSignedFile] = useState<File | null>(null)
+  const [uploadSignedProgress, setUploadSignedProgress] = useState<'idle' | 'uploading' | 'confirming'>('idle')
+  const uploadSignedInputRef = useRef<HTMLInputElement | null>(null)
 
   const sendAssinafy = useSendAssinafy(
     customer.id,
@@ -1043,6 +1049,8 @@ function ContractsTab({ customer }: { customer: Customer }) {
   )
   const getContractView = useGetContractView(customer.id)
   const sendContractWhatsApp = useSendContractWhatsApp(customer.id)
+  const presignSignedContract = usePresignSignedContract(customer.id)
+  const confirmSignedUpload = useConfirmSignedUpload(customer.id)
 
   async function handleAddContract() {
     if (!selectedTemplateId) { toast.error('Selecione um modelo'); return }
@@ -1104,6 +1112,38 @@ function ContractsTab({ customer }: { customer: Customer }) {
     }
   }
 
+  async function handleUploadSigned() {
+    if (!uploadingSignedContract || !uploadSignedFile) return
+    try {
+      setUploadSignedProgress('uploading')
+      const { storageKey, presignedUrl } = await presignSignedContract.mutateAsync({
+        contractId: uploadingSignedContract.id,
+        fileName: uploadSignedFile.name,
+        mimeType: uploadSignedFile.type || 'application/pdf',
+        size: uploadSignedFile.size,
+      })
+      // Upload direto ao R2
+      const uploadRes = await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': uploadSignedFile.type || 'application/pdf' },
+        body: uploadSignedFile,
+      })
+      if (!uploadRes.ok) {
+        throw new Error(`Falha no upload: ${uploadRes.status}`)
+      }
+      setUploadSignedProgress('confirming')
+      await confirmSignedUpload.mutateAsync({ contractId: uploadingSignedContract.id, storageKey })
+      toast.success('Contrato assinado enviado com sucesso')
+      setUploadingSignedContract(null)
+      setUploadSignedFile(null)
+      setUploadSignedProgress('idle')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao enviar contrato assinado')
+      setUploadSignedProgress('idle')
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* LGPD info */}
@@ -1162,6 +1202,9 @@ function ContractsTab({ customer }: { customer: Customer }) {
                     {c.signatureMode === 'manual' && (
                       <span className="text-xs text-muted-foreground">Assinatura manual</span>
                     )}
+                    {c.signatureMode === 'uploaded' && (
+                      <span className="text-xs text-muted-foreground">Contrato carregado</span>
+                    )}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
                     <span>Enviado: {c.sentAt ? new Date(c.sentAt).toLocaleDateString('pt-BR') : '—'}</span>
@@ -1206,6 +1249,15 @@ function ContractsTab({ customer }: { customer: Customer }) {
                       >
                         <Pencil className="h-3.5 w-3.5 mr-1.5" />
                         Manual
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setUploadingSignedContract(c); setUploadSignedFile(null); setUploadSignedProgress('idle') }}
+                        title="Carregar contrato já assinado (impresso/escaneado)"
+                      >
+                        <Upload className="h-3.5 w-3.5 mr-1.5" />
+                        Carregar assinado
                       </Button>
                     </>
                   )}
@@ -1406,6 +1458,78 @@ function ContractsTab({ customer }: { customer: Customer }) {
                 {sendContractWhatsApp.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
                 <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
                 Enviar
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: carregar contrato já assinado */}
+      {uploadingSignedContract && (
+        <Dialog open onClose={() => { if (uploadSignedProgress === 'idle') { setUploadingSignedContract(null); setUploadSignedFile(null) } }}>
+          <DialogTitle>Carregar contrato assinado</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Contrato: <strong>{uploadingSignedContract.template.name}</strong>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Selecione o PDF do contrato impresso e assinado manualmente.
+            </p>
+            <div className="space-y-2">
+              <input
+                ref={uploadSignedInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => setUploadSignedFile(e.target.files?.[0] ?? null)}
+              />
+              {uploadSignedFile ? (
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/50">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate flex-1">{uploadSignedFile.name}</span>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => { setUploadSignedFile(null); if (uploadSignedInputRef.current) uploadSignedInputRef.current.value = '' }}
+                  >
+                    Remover
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => uploadSignedInputRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  Selecionar PDF
+                </Button>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setUploadingSignedContract(null); setUploadSignedFile(null); setUploadSignedProgress('idle') }}
+                disabled={uploadSignedProgress !== 'idle'}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleUploadSigned()}
+                disabled={!uploadSignedFile || uploadSignedProgress !== 'idle'}
+              >
+                {uploadSignedProgress !== 'idle' && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                {uploadSignedProgress === 'uploading' && 'Enviando...'}
+                {uploadSignedProgress === 'confirming' && 'Confirmando...'}
+                {uploadSignedProgress === 'idle' && (
+                  <>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    Salvar contrato assinado
+                  </>
+                )}
               </Button>
             </div>
           </div>

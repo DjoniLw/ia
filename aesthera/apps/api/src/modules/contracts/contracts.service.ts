@@ -12,8 +12,10 @@ import {
 import { prisma } from '../../database/prisma/client'
 import type {
   AssinafyWebhookDto,
+  ConfirmSignedUploadDto,
   CreateContractTemplateDto,
   CreateCustomerContractDto,
+  PresignSignedContractDto,
   SendAssinafyDto,
   SendContractWhatsAppDto,
   SignManualDto,
@@ -308,5 +310,53 @@ export class ContractsService {
     })
 
     return { sent: true }
+  }
+
+  /**
+   * Gera presigned PUT URL para upload de contrato já assinado (impresso/escaneado).
+   */
+  async presignSignedContract(
+    clinicId: string,
+    customerId: string,
+    contractId: string,
+    dto: PresignSignedContractDto,
+  ) {
+    const contract = await this.repo.findContractById(clinicId, contractId)
+    if (!contract) throw new NotFoundError('CustomerContract')
+    if (contract.customerId !== customerId) throw new NotFoundError('CustomerContract')
+
+    if (contract.status === 'signed') {
+      throw new ConflictError('Este contrato já foi assinado.')
+    }
+
+    const ext = path.extname(dto.fileName).toLowerCase() || '.pdf'
+    const storageKey = `signed-contracts/${clinicId}/${customerId}/${crypto.randomUUID()}${ext}`
+    const presignedUrl = await generatePresignedPutUrl(storageKey, dto.mimeType, 3600)
+    return { storageKey, presignedUrl }
+  }
+
+  /**
+   * Confirma o upload do contrato assinado e marca o contrato como assinado.
+   */
+  async confirmSignedUpload(
+    clinicId: string,
+    customerId: string,
+    contractId: string,
+    dto: ConfirmSignedUploadDto,
+  ) {
+    const contract = await this.repo.findContractById(clinicId, contractId)
+    if (!contract) throw new NotFoundError('CustomerContract')
+    if (contract.customerId !== customerId) throw new NotFoundError('CustomerContract')
+
+    if (contract.status === 'signed') {
+      throw new ConflictError('Este contrato já foi assinado.')
+    }
+
+    return this.repo.updateContract(contract.id, {
+      status: 'signed',
+      signatureMode: 'uploaded',
+      signedPdfKey: dto.storageKey,
+      signedAt: new Date(),
+    })
   }
 }

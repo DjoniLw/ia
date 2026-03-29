@@ -58,7 +58,25 @@ export const SendContractWhatsAppDto = z.object({
   phone: z.string().min(10, 'Telefone inválido (mín. 10 dígitos)'),
 })
 export type SendContractWhatsAppDto = z.infer<typeof SendContractWhatsAppDto>
+// ─── Upload de Contrato Assinado (físico/escaneado) ───────────────────────────────────────
 
+export const PresignSignedContractDto = z.object({
+  fileName: z.string().min(1).max(255),
+  mimeType: z.enum(['application/pdf'], {
+    errorMap: () => ({ message: 'Apenas arquivos PDF são aceitos.' }),
+  }),
+  size: z
+    .number()
+    .int()
+    .positive()
+    .max(20 * 1024 * 1024, 'Tamanho máximo: 20 MB'),
+})
+export type PresignSignedContractDto = z.infer<typeof PresignSignedContractDto>
+
+export const ConfirmSignedUploadDto = z.object({
+  storageKey: z.string().min(1, 'storageKey é obrigatório'),
+})
+export type ConfirmSignedUploadDto = z.infer<typeof ConfirmSignedUploadDto>
 // ─── Template Presign ──────────────────────────────────────────────────────────
 
 export const TemplatePresignDto = z.object({
