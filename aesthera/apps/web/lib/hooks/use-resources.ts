@@ -825,7 +825,7 @@ export function useConfirmStandaloneSigned(customerId: string) {
 export function useSendRemoteSignLink(customerId: string, contractId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { phone: string }) =>
+    mutationFn: (data: { phone?: string; email?: string }) =>
       api.post(`/customers/${customerId}/contracts/${contractId}/send-remote-sign`, data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
   })

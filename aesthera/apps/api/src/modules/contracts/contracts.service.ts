@@ -501,16 +501,39 @@ export class ContractsService {
 
     const signUrl = `${appConfig.frontendUrl}/sign/${token}`
     const contractName = contract.label ?? contract.template?.name ?? 'contrato'
-    const message = `Olá, ${customer.name}! 👋\n\nVocê recebeu um contrato para assinar: *${contractName}*.\n\nAcesse o link abaixo para ler e assinar diretamente pelo seu celular:\n\n${signUrl}\n\n_O link expira em 48 horas._`
 
     const notificationsService = new NotificationsService()
-    await notificationsService.sendWhatsApp({
-      clinicId,
-      phone: dto.phone,
-      message,
-      event: 'contract.remote_sign_link',
-      customerId,
-    })
+
+    if (dto.phone) {
+      const message = `Olá, ${customer.name}! 👋\n\nVocê recebeu um contrato para assinar: *${contractName}*.\n\nAcesse o link abaixo para ler e assinar diretamente pelo seu celular:\n\n${signUrl}\n\n_O link expira em 48 horas._`
+      await notificationsService.sendWhatsApp({
+        clinicId,
+        phone: dto.phone,
+        message,
+        event: 'contract.remote_sign_link',
+        customerId,
+      })
+    }
+
+    if (dto.email) {
+      await notificationsService.sendEmail({
+        clinicId,
+        email: dto.email,
+        subject: `Contrato para assinar: ${contractName}`,
+        htmlBody: `
+<p>Olá, ${customer.name}!</p>
+<p>Você recebeu um contrato para assinar: <strong>${contractName}</strong>.</p>
+<p>Clique no botão abaixo para ler e assinar diretamente pelo seu dispositivo:</p>
+<p style="margin:24px 0">
+  <a href="${signUrl}" style="background:#7c3aed;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+    Assinar contrato
+  </a>
+</p>
+<p style="color:#888;font-size:12px">O link expira em 48 horas. Se não solicitou esta assinatura, ignore este e-mail.</p>`,
+        event: 'contract.remote_sign_link',
+        customerId,
+      })
+    }
 
     return updated
   }

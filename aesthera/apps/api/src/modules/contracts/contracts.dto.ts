@@ -41,8 +41,12 @@ export const SignManualDto = z.object({
 export type SignManualDto = z.infer<typeof SignManualDto>
 
 export const SendRemoteSignDto = z.object({
-  phone: z.string().min(10, 'Telefone inválido (mín. 10 dígitos)'),
-})
+  phone: z.string().min(10, 'Telefone inválido (mín. 10 dígitos)').optional(),
+  email: z.string().email('E-mail inválido').optional(),
+}).refine(
+  (d) => d.phone || d.email,
+  { message: 'Informe ao menos um telefone ou e-mail' },
+)
 export type SendRemoteSignDto = z.infer<typeof SendRemoteSignDto>
 
 export const SignRemoteDto = z.object({
