@@ -424,7 +424,7 @@ function FinancialPageContent() {
 
 export default function FinancialPage() {
   return (
-    <Suspense>
+    <Suspense fallback={null}>
       <FinancialPageContent />
     </Suspense>
   )

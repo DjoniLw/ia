@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Info, Loader2, Package, Plus, ShoppingCart } from 'lucide-react'
+import { Info, Loader2, Package, Plus, Search, ShoppingCart } from 'lucide-react'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
@@ -294,13 +294,14 @@ function SalesPageContent() {
               className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Buscar</label>
-            <Input
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
               placeholder="Buscar por produto ou cliente…"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              className="h-8 w-48 text-sm"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
         </div>
@@ -430,7 +431,7 @@ function SalesPageContent() {
 
 export default function SalesPage() {
   return (
-    <Suspense>
+    <Suspense fallback={null}>
       <SalesPageContent />
     </Suspense>
   )

@@ -947,7 +947,7 @@ function CarteiraPageContent() {
 
 export default function CarteiraPage() {
   return (
-    <Suspense>
+    <Suspense fallback={null}>
       <CarteiraPageContent />
     </Suspense>
   )

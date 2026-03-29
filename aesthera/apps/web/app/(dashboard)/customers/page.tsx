@@ -48,6 +48,7 @@ import {
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
+import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
 import { api } from '@/lib/api'
 import Link from 'next/link'
 import { useRole } from '@/lib/hooks/use-role'
@@ -1028,7 +1029,11 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const createContract = useCreateCustomerContract(customer.id)
 
   const [addingContract, setAddingContract] = useState(false)
-  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [selectedTemplateItem, setSelectedTemplateItem] = useState<ComboboxItem | null>(null)
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('')
+  const templateComboItems = activeTemplates
+    .filter(t => !templateSearchQuery || t.name.toLowerCase().includes(templateSearchQuery.toLowerCase()))
+    .map(t => ({ value: t.id, label: t.name }))
   const [signingContract, setSigningContract] = useState<CustomerContract | null>(null)
   const [sendingAssinafy, setSendingAssinafy] = useState<CustomerContract | null>(null)
   const [assinafyEmail, setAssinafyEmail] = useState(customer.email ?? '')
@@ -1062,12 +1067,13 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const confirmStandalone = useConfirmStandaloneSigned(customer.id)
 
   async function handleAddContract() {
-    if (!selectedTemplateId) { toast.error('Selecione um modelo'); return }
+    if (!selectedTemplateItem) { toast.error('Selecione um modelo'); return }
     try {
-      await createContract.mutateAsync({ templateId: selectedTemplateId })
+      await createContract.mutateAsync({ templateId: selectedTemplateItem.value })
       toast.success('Contrato adicionado')
       setAddingContract(false)
-      setSelectedTemplateId('')
+      setSelectedTemplateItem(null)
+      setTemplateSearchQuery('')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao adicionar contrato')
@@ -1317,29 +1323,25 @@ function ContractsTab({ customer }: { customer: Customer }) {
 
       {/* Dialog: adicionar contrato */}
       {addingContract && (
-        <Dialog open onClose={() => setAddingContract(false)}>
+        <Dialog open onClose={() => { setAddingContract(false); setSelectedTemplateItem(null); setTemplateSearchQuery('') }}>
           <DialogTitle>Adicionar contrato</DialogTitle>
           <div className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label htmlFor="add-tpl">Modelo de contrato</Label>
-              <select
-                id="add-tpl"
-                value={selectedTemplateId}
-                onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="h-8 w-full rounded-md border border-input bg-card px-3 text-sm"
-              >
-                <option value="">Selecione um modelo</option>
-                {activeTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
+              <Label>Modelo de contrato</Label>
+              <ComboboxSearch
+                value={selectedTemplateItem}
+                onChange={setSelectedTemplateItem}
+                onSearch={setTemplateSearchQuery}
+                items={templateComboItems}
+                placeholder="Buscar modelo…"
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setAddingContract(false)}>Cancelar</Button>
+              <Button variant="outline" size="sm" onClick={() => { setAddingContract(false); setSelectedTemplateItem(null); setTemplateSearchQuery('') }}>Cancelar</Button>
               <Button
                 size="sm"
                 onClick={() => void handleAddContract()}
-                disabled={createContract.isPending || !selectedTemplateId}
+                disabled={createContract.isPending || !selectedTemplateItem}
               >
                 {createContract.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
                 Adicionar

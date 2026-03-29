@@ -343,7 +343,7 @@ function BillingPageContent() {
 
 export default function BillingPage() {
   return (
-    <Suspense>
+    <Suspense fallback={null}>
       <BillingPageContent />
     </Suspense>
   )

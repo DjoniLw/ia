@@ -122,9 +122,7 @@ function TemplateForm({ initial, onClose }: TemplateFormProps) {
       <div className="space-y-2">
         <Label>Arquivo (PDF ou DOC)</Label>
         {initial?.storageKey && !file && (
-          <p className="text-xs text-muted-foreground">
-            Arquivo atual: {initial.storageKey.split('/').pop()}
-          </p>
+          <p className="text-xs text-muted-foreground">Arquivo atual vinculado</p>
         )}
         <div className="flex items-center gap-2">
           <Button
@@ -208,6 +206,10 @@ export function ContractTemplatesTab() {
           <p className="text-xs text-muted-foreground mt-1">
             Crie modelos de contrato para vincular aos seus clientes.
           </p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Criar primeiro modelo
+          </Button>
         </div>
       ) : (
         <div className="space-y-2">
@@ -228,9 +230,7 @@ export function ContractTemplatesTab() {
                     <p className="text-xs text-muted-foreground">{tpl.description}</p>
                   )}
                   {tpl.storageKey && (
-                    <p className="text-xs text-muted-foreground">
-                      Arquivo: {tpl.storageKey.split('/').pop()}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Arquivo vinculado</p>
                   )}
                 </div>
               </div>

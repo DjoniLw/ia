@@ -673,7 +673,7 @@ function ContasAPagarPageContent() {
 
 export default function ContasAPagarPage() {
   return (
-    <Suspense>
+    <Suspense fallback={null}>
       <ContasAPagarPageContent />
     </Suspense>
   )
