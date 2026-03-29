@@ -171,6 +171,57 @@ Se a resposta for não → revise antes de prosseguir.
 
 ---
 
+- [ ] **Filtragem client-side em telas de listagem é anti-padrão — sempre disparar requisição à API**
+  - 🔴 Anti-padrão: carregar todos os registros da API e aplicar `.filter()` sobre o array local em JavaScript — ex.: `const visible = data.filter(x => x.status === selected)`. Telas afetadas historicamente: `/equipment`, `/rooms`, `/services`, `/supplies`, `/products`, `/carteira` (filtros status/tipo)
+  - ✅ Correto: ao mudar qualquer filtro, enviar os parâmetros como query string para a API e deixar o banco fazer a filtragem:
+    ```ts
+    // Errado
+    const visible = equipments.filter(e => e.status === activeStatus);
+
+    // Correto
+    const { data } = useQuery({
+      queryKey: ['equipments', { status: activeStatus }],
+      queryFn: () => api.get(`/equipment?status=${activeStatus}`),
+    });
+    ```
+  - 📌 Regra geral: **nenhuma tela de listagem pode usar `.filter()` sobre array local**. Qualquer mudança de filtro deve gerar nova chamada à API com os parâmetros corretos. Com centenas ou milhares de registros, carregar o dataset completo no browser antes de filtrar é impraticável.
+  - 📌 Exceção aceita: filtros de UI puramente visual que não alteram os dados buscados (ex.: alternar view de lista/grid sobre os mesmos dados já paginados) — nesses casos não há nova busca.
+  - 📅 Aprendido em: 29/03/2026 — levantamento UX transversal de paginação e filtragem (15 telas de listagem analisadas)
+
+---
+
+- [ ] **Toda nova tela de listagem DEVE incluir `<DataPagination>` e `usePaginatedQuery` desde a primeira implementação**
+  - 🔴 Anti-padrão: criar tela de listagem sem paginação, usando `limit` hardcoded (ex.: `?limit=100` ou `?limit=500`) — funciona inicialmente mas degrada com o volume real de dados da clínica
+  - ✅ Correto: toda tela de listagem nova deve incluir desde o início:
+    1. `usePaginatedQuery` com `page`, `pageSize` e sincronização de URL via `useSearchParams`
+    2. Componente `<DataPagination>` com seletor de 20/50/100 registros por página
+    3. Reset automático de `page` para 1 ao alterar qualquer filtro
+    4. Parâmetros `?page=1&pageSize=20` na URL para preservar contexto ao navegar
+    ```tsx
+    // Padrão obrigatório para toda tela nova
+    const [page, setPage] = useSearchParam('page', 1);
+    const [pageSize, setPageSize] = useSearchParam('pageSize', 20);
+
+    const { data } = usePaginatedQuery(['resource', filters, page, pageSize], () =>
+      api.get('/resource', { params: { ...filters, page, limit: pageSize } })
+    );
+
+    // Na tabela:
+    <DataPagination
+      total={data?.total}
+      page={page}
+      pageSize={pageSize}
+      onPageChange={setPage}
+      onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+    />
+    ```
+  - 📌 Referência visual: `aesthera/apps/web/app/(dashboard)/financial/page.tsx` linhas 396–418 — estilo `border-t px-5 py-3`, botões `<Button variant="outline" size="sm">`.
+  - 📌 Referência canônica de filtros + URL sync: `aesthera/apps/web/app/(dashboard)/carteira/page.tsx`.
+  - 📌 Regra geral: o backend já aceita `page` e `limit` em todos os endpoints (resposta: `{ items, total, page, limit }`). Não há alteração de backend necessária — o custo de implementar paginação é exclusivamente no frontend e deve ser feito desde a tela 0, não como retrofit posterior.
+  - 📅 Aprendido em: 29/03/2026 — levantamento UX transversal: nenhuma das 15 telas de listagem possuía paginação; todas usavam limites hardcoded
+
+---
+
 ### Textos e Internacionalização (PT-BR)
 
 - [ ] **Arquivos `.tsx` com acentuação PT-BR devem ser salvos em UTF-8 sem BOM — verificar antes de commitar no Windows**
