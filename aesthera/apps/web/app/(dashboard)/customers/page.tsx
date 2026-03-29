@@ -1929,8 +1929,9 @@ export default function CustomersPage() {
       await deleteCustomer.mutateAsync(id)
       toast.success('Cliente removido')
       setDeleting(null)
-    } catch {
-      toast.error('Erro ao remover cliente')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao remover cliente')
     }
   }
 
