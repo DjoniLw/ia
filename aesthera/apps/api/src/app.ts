@@ -98,6 +98,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!url || PUBLIC_ROUTES.has(url)) return
     // /pay/:token usa URL dinâmica — acessível sem X-Clinic-Slug (token-based)
     if (url.startsWith('/pay/')) return
+    // /public/sign/:token é rota pública de assinatura remota (token-based)
+    if (url.startsWith('/public/sign/')) return
     await tenantMiddleware(request, reply)
   })
 

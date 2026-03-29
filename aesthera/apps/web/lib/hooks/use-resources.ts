@@ -723,6 +723,8 @@ export interface CustomerContract {
   signedAt: string | null
   sentAt: string | null
   signerIp: string | null
+  signToken: string | null
+  signTokenExpiresAt: string | null
   createdAt: string
   template: { name: string; storageKey: string | null } | null
 }
@@ -816,6 +818,15 @@ export function useConfirmStandaloneSigned(customerId: string) {
   return useMutation({
     mutationFn: (data: { label: string; storageKey: string }) =>
       api.post(`/customers/${customerId}/contracts/confirm-standalone-signed`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export function useSendRemoteSignLink(customerId: string, contractId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { phone: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/send-remote-sign`, data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
   })
 }

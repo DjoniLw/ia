@@ -40,6 +40,22 @@ export const SignManualDto = z.object({
 })
 export type SignManualDto = z.infer<typeof SignManualDto>
 
+export const SendRemoteSignDto = z.object({
+  phone: z.string().min(10, 'Telefone inválido (mín. 10 dígitos)'),
+})
+export type SendRemoteSignDto = z.infer<typeof SendRemoteSignDto>
+
+export const SignRemoteDto = z.object({
+  signature: z
+    .string()
+    .min(1, 'Assinatura é obrigatória')
+    .refine(
+      (v) => v.startsWith('data:image/') || /^[A-Za-z0-9+/]/.test(v),
+      'Formato de assinatura inválido',
+    ),
+})
+export type SignRemoteDto = z.infer<typeof SignRemoteDto>
+
 // ─── Assinafy Webhook ──────────────────────────────────────────────────────────
 
 export const AssinafyWebhookDto = z.object({

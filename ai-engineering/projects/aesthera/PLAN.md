@@ -298,6 +298,27 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - **routes:** `req.log` (logger por-request do Fastify/Pino) passado como 6º argumento a `updateSession`, mantendo rastreabilidade de request ID.
 - **Impacto:** Apenas backend. Sem migração de schema. Após deploy, os logs do Railway revelarão a causa exata do 403.
 
+### [2026-03-29] — feat(#133): assinatura remota por link — cliente assina pelo celular via WhatsApp
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(2 novos campos em `CustomerContract`: `signToken`, `signTokenExpiresAt`)*
+  - `aesthera/apps/api/prisma/migrations/20260329000009_feat_contract_remote_sign/migration.sql` *(criada)*
+  - `aesthera/apps/api/src/modules/contracts/contracts.dto.ts` *(`SendRemoteSignDto` + `SignRemoteDto`)*
+  - `aesthera/apps/api/src/modules/contracts/contracts.service.ts` *(3 novos métodos: `generateSignToken`, `getPublicContractInfo`, `signRemote`)*
+  - `aesthera/apps/api/src/modules/contracts/contracts.routes.ts` *(3 novas rotas: `POST /send-remote-sign` (auth), `GET /public/sign/:token` (pública), `POST /public/sign/:token` (pública))*
+  - `aesthera/apps/api/src/app.ts` *(bypass do tenant middleware para `/public/sign/`)*
+  - `aesthera/apps/api/src/modules/contracts/contracts.service.test.ts` *(12 novos testes — total: 22)*
+  - `aesthera/apps/web/middleware.ts` *(`/sign` adicionado a `PUBLIC_PREFIXES`)*
+  - `aesthera/apps/web/lib/hooks/use-resources.ts` *(interface `CustomerContract` atualizada + hook `useSendRemoteSignLink`)*
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(botão "Enviar para assinar" + dialog + indicador de link pendente)*
+  - `aesthera/apps/web/app/sign/[token]/page.tsx` *(nova página pública de assinatura remota)*
+- **O que foi feito:**
+  - Geração de token UUID v4 com TTL de 48h. Link enviado via WhatsApp (Z-API) no formato `${frontendUrl}/sign/${token}`. Token de uso único — invalidado após assinatura.
+  - Página pública `/sign/[token]` — sem autenticação, mobile-friendly, exibe dados do contrato, link para visualizar o PDF e canvas de assinatura inline. Todo texto em PT-BR.
+  - `signRemote()` reutiliza o mesmo audit trail da #132 (signerIp, signerUserAgent, signerCpf, documentHash).
+  - Indicador visual na lista de contratos quando há link pendente (`signTokenExpiresAt`).
+  - 12 novos testes unitários: `generateSignToken` (3), `getPublicContractInfo` (4), `signRemote` (5).
+- **Impacto:** Backend + frontend. Módulo Contracts. Sem alteração de regras de negócio existentes.
+
 ### [2026-03-29] — feat(#132): audit trail na assinatura manual — IP, timestamp, user-agent, CPF e hash do documento
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/api/prisma/schema.prisma` *(3 novos campos em `CustomerContract`)*

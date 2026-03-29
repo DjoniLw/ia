@@ -1423,11 +1423,13 @@ model CustomerContract {
   signature     String?                                   // base64 assinatura manual
   signedPdfKey  String?        @map("signed_pdf_key")    // R2 key do PDF assinado
   signedAt        DateTime?      @map("signed_at")
-  signerIp        String?        @map("signer_ip")
-  signerUserAgent String?        @map("signer_user_agent")
-  signerCpf       String?        @map("signer_cpf")
-  documentHash    String?        @map("document_hash")
-  sentAt          DateTime?      @map("sent_at")
+  signerIp           String?        @map("signer_ip")
+  signerUserAgent    String?        @map("signer_user_agent")
+  signerCpf          String?        @map("signer_cpf")
+  documentHash       String?        @map("document_hash")
+  signToken          String?        @unique @map("sign_token")
+  signTokenExpiresAt DateTime?      @map("sign_token_expires_at")
+  sentAt             DateTime?      @map("sent_at")
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt      @map("updated_at")
   deletedAt     DateTime?      @map("deleted_at")
