@@ -50,26 +50,26 @@ export class NotificationsService {
       billingId: input.billingId,
     })
 
-    const { instanceId, token, clientToken } = appConfig.whatsapp
-    if (!instanceId || !token || !clientToken) {
+    const { evolutionUrl, evolutionApiKey, evolutionInstance } = appConfig.whatsapp
+    if (!evolutionUrl || !evolutionApiKey || !evolutionInstance) {
       logger.warn({ event: input.event }, 'WhatsApp not configured, skipping send')
       await this.repo.markFailed(log.id, 'WHATSAPP_NOT_CONFIGURED', 1)
       return
     }
 
     try {
-      const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/send-text`
+      const url = `${evolutionUrl}/message/sendText/${evolutionInstance}`
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Client-Token': clientToken,
+          'apikey': evolutionApiKey,
         },
-        body: JSON.stringify({ phone: input.phone, message: input.message }),
+        body: JSON.stringify({ number: input.phone, text: input.message }),
       })
       if (!res.ok) {
         const txt = await res.text()
-        throw new Error(`Z-API ${res.status}: ${txt}`)
+        throw new Error(`Evolution API ${res.status}: ${txt}`)
       }
       await this.repo.markSent(log.id)
       logger.info({ event: input.event, phone: input.phone }, 'WhatsApp sent')

@@ -39,9 +39,9 @@ export const appConfig = {
   },
 
   whatsapp: {
-    instanceId: env.ZAPI_INSTANCE_ID,
-    token: env.ZAPI_TOKEN,
-    clientToken: env.ZAPI_CLIENT_TOKEN,
+    evolutionUrl: env.EVOLUTION_API_URL,
+    evolutionApiKey: env.EVOLUTION_API_KEY,
+    evolutionInstance: env.EVOLUTION_INSTANCE,
   },
 
   ai: {
