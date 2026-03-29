@@ -32,6 +32,7 @@ function formatDate(iso: string | null) {
 
 function buildFilterLabel(
   statusFilter: AccountsPayableStatus | '',
+  supplierSearch: string,
   categoryFilter: string,
   fromFilter: string,
   toFilter: string,
@@ -62,6 +63,7 @@ function buildFilterLabel(
   parts.push(statusLabel[statusFilter] ?? statusFilter)
 
   if (categoryFilter) parts.push(categoryFilter)
+  if (supplierSearch) parts.push(`fornecedor: ${supplierSearch}`)
 
   return parts.join(' · ')
 }
@@ -409,7 +411,11 @@ function ContasAPagarPageContent() {
   }, [router, statusFilter, supplierSearch, categoryFilter, fromFilter, toFilter])
 
   const isDefaultFilters =
-    statusFilter === '' && categoryFilter === '' && fromFilter === '' && toFilter === ''
+    statusFilter === '' &&
+    supplierSearch === '' &&
+    categoryFilter === '' &&
+    fromFilter === '' &&
+    toFilter === ''
 
   function resetFilters() {
     setStatusFilter('')
@@ -568,7 +574,7 @@ function ContasAPagarPageContent() {
         {/* Legenda descritiva */}
         <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <Info className="h-3.5 w-3.5 shrink-0" />
-          <span>Exibindo {buildFilterLabel(statusFilter, categoryFilter, fromFilter, toFilter)}</span>
+          <span>Exibindo {buildFilterLabel(statusFilter, supplierSearchDebounced, categoryFilter, fromFilter, toFilter)}</span>
           {!isDefaultFilters && (
             <button
               type="button"

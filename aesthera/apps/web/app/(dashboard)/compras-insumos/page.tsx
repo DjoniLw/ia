@@ -436,6 +436,7 @@ export default function SupplyPurchasesPage() {
               onChange={setSelectedSupply}
               onSearch={setSupplySearchQuery}
               items={supplyItems}
+              isLoading={suppliesQuery.isLoading}
               placeholder="Buscar insumo…"
               className="min-w-56"
             />

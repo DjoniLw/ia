@@ -212,7 +212,7 @@ function SalesPageContent() {
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, from, to, search, defaultFrom, defaultTo])
 
-  const isDefaultFilters = from === defaultFrom && to === defaultTo && debouncedSearch === ''
+  const isDefaultFilters = from === defaultFrom && to === defaultTo && search === ''
 
   function resetFilters() {
     setFrom(defaultFrom)

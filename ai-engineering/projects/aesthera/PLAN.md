@@ -318,6 +318,36 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - **Comparação:** `CompareModal` exibe campos textuais sem indicadores ↑/↓ e sub-colunas na mesma célula.
 - **Commit:** `f48174e`
 
+### [2026-03-28] — fix(#123): Padronização visual de filtros — busca pill, legenda, alinhamento (PR #130)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/components/ui/combobox-search.tsx` *(componente novo)*
+  - `aesthera/docs/ui-standards.md` *(seção 7 adicionada)*
+  - `aesthera/apps/web/app/(dashboard)/financial/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/contas-a-pagar/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/compras-insumos/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/billing/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/packages/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/sales/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/promotions/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/services/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/professionals/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/equipment/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/rooms/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/supplies/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/products/page.tsx`
+- **O que foi feito:**
+  - `ComboboxSearch` — componente genérico com debounce, `useEffect` cleanup no unmount, foco no input após limpar seleção (handleClear), ref no `<input>`.
+  - Todos os campos de busca padronizados com estilo pill (`rounded-full border`).
+  - Legenda descritiva (`bg-muted/50`) + botão "Restaurar padrão" em todas as telas com filtros.
+  - URL sync (`useSearchParams` + `router.replace`) nas telas: Financeiro, Contas a Pagar, Cobranças, Vendas.
+  - `financial/page.tsx`: alinhamento `items-end` nos filtros de data.
+  - `compras-insumos/page.tsx`: removido card branco wrapper dos filtros; `isLoading` passado ao `ComboboxSearch`.
+  - `contas-a-pagar/page.tsx`: `isDefaultFilters` e `buildFilterLabel` incluem `supplierSearch`.
+  - `sales/page.tsx`: `isDefaultFilters` usa `search` (imediato) ao invés de `debouncedSearch`.
+  - Telas adicionadas do zero com filtro + legenda: `supplies`, `products`, `customers`, `services`, `professionals`, `equipment`, `rooms`.
+- **Closes:** #123
+
 ### [2026-03-27] — Correções e melhorias na aba Evolução — fichas tabulares e simples (issue #126 / PR #128)
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx` *(bug de gravação, SessionCard, CompareModal)*

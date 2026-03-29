@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -28,7 +28,7 @@ interface ComboboxSearchProps {
  * (clientes, serviços, profissionais, insumos etc.).
  *
  * Props:
- * - value / onChange: ítem selecionado (controlado)
+ * - value / onChange: item selecionado (controlado)
  * - onSearch(query): chamada com debounce ao digitar — o pai é responsável por atualizar `items`
  * - items: lista a exibir no dropdown
  * - placeholder: texto do campo vazio
@@ -48,6 +48,9 @@ export function ComboboxSearch({
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => () => clearTimeout(debounceRef.current), [])
 
   function handleInput(v: string) {
     setQuery(v)
@@ -77,6 +80,7 @@ export function ComboboxSearch({
     onChange(null)
     setQuery('')
     onSearch('')
+    inputRef.current?.focus()
   }
 
   return (
@@ -84,6 +88,7 @@ export function ComboboxSearch({
       <div className="flex h-8 items-center gap-2 rounded-full border border-input bg-card px-3">
         <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <input
+          ref={inputRef}
           value={value && !open ? value.label : query}
           onChange={(e) => handleInput(e.target.value)}
           onFocus={handleFocus}
