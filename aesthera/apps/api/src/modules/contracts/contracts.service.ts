@@ -13,9 +13,11 @@ import { prisma } from '../../database/prisma/client'
 import type {
   AssinafyWebhookDto,
   ConfirmSignedUploadDto,
+  ConfirmStandaloneSignedDto,
   CreateContractTemplateDto,
   CreateCustomerContractDto,
   PresignSignedContractDto,
+  PresignStandaloneSignedDto,
   SendAssinafyDto,
   SendContractWhatsAppDto,
   SignManualDto,
@@ -357,6 +359,55 @@ export class ContractsService {
       signatureMode: 'uploaded',
       signedPdfKey: dto.storageKey,
       signedAt: new Date(),
+    })
+  }
+
+  /**
+   * Gera presigned PUT URL para upload avulso (sem template vinculado).
+   */
+  async presignStandaloneSigned(
+    clinicId: string,
+    customerId: string,
+    dto: PresignStandaloneSignedDto,
+  ) {
+    // Verificar se o cliente pertence à clínica
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, clinicId, deletedAt: null },
+    })
+    if (!customer) throw new NotFoundError('Customer')
+
+    const ext = path.extname(dto.fileName).toLowerCase() || '.pdf'
+    const storageKey = `signed-contracts/${clinicId}/${customerId}/${crypto.randomUUID()}${ext}`
+    const presignedUrl = await generatePresignedPutUrl(storageKey, dto.mimeType, 3600)
+    return { storageKey, presignedUrl }
+  }
+
+  /**
+   * Confirma upload avulso e cria o registro CustomerContract já assinado,
+   * sem vínculo com um template.
+   */
+  async confirmStandaloneSigned(
+    clinicId: string,
+    customerId: string,
+    dto: ConfirmStandaloneSignedDto,
+  ) {
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, clinicId, deletedAt: null },
+    })
+    if (!customer) throw new NotFoundError('Customer')
+
+    return prisma.customerContract.create({
+      data: {
+        clinicId,
+        customerId,
+        templateId: null,
+        label: dto.label,
+        status: 'signed',
+        signatureMode: 'uploaded',
+        signedPdfKey: dto.storageKey,
+        signedAt: new Date(),
+      },
+      include: { template: { select: { name: true, storageKey: true } } },
     })
   }
 }

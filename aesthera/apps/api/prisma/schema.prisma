@@ -1414,7 +1414,8 @@ model CustomerContract {
   id            String         @id @default(uuid())
   clinicId      String         @map("clinic_id")
   customerId    String         @map("customer_id")
-  templateId    String         @map("template_id")
+  templateId    String?        @map("template_id")   // null para uploads avulsos
+  label         String?                               // nome exibido quando não há template
   status        ContractStatus @default(pending)
   signatureMode String?        @map("signature_mode")   // 'assinafy' | 'manual'
   externalId    String?        @map("external_id")       // ID no Assinafy
@@ -1428,9 +1429,9 @@ model CustomerContract {
   updatedAt     DateTime       @updatedAt      @map("updated_at")
   deletedAt     DateTime?      @map("deleted_at")
 
-  clinic    Clinic           @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  customer  Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  template  ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  clinic    Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer  Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  template  ContractTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
 
   @@index([clinicId, customerId])
   @@map("customer_contracts")

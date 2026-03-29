@@ -77,6 +77,28 @@ export const ConfirmSignedUploadDto = z.object({
   storageKey: z.string().min(1, 'storageKey é obrigatório'),
 })
 export type ConfirmSignedUploadDto = z.infer<typeof ConfirmSignedUploadDto>
+
+// ─── Upload avulso de contrato já assinado (sem template) ──────────────────────
+
+export const PresignStandaloneSignedDto = z.object({
+  label: z.string().min(1, 'Nome do documento é obrigatório').max(255),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.enum(['application/pdf'], {
+    errorMap: () => ({ message: 'Apenas arquivos PDF são aceitos.' }),
+  }),
+  size: z
+    .number()
+    .int()
+    .positive()
+    .max(20 * 1024 * 1024, 'Tamanho máximo: 20 MB'),
+})
+export type PresignStandaloneSignedDto = z.infer<typeof PresignStandaloneSignedDto>
+
+export const ConfirmStandaloneSignedDto = z.object({
+  label: z.string().min(1, 'Nome do documento é obrigatório').max(255),
+  storageKey: z.string().min(1, 'storageKey é obrigatório'),
+})
+export type ConfirmStandaloneSignedDto = z.infer<typeof ConfirmStandaloneSignedDto>
 // ─── Template Presign ──────────────────────────────────────────────────────────
 
 export const TemplatePresignDto = z.object({

@@ -4,9 +4,11 @@ import { roleGuard } from '../../shared/guards/role.guard'
 import {
   AssinafyWebhookDto,
   ConfirmSignedUploadDto,
+  ConfirmStandaloneSignedDto,
   CreateContractTemplateDto,
   CreateCustomerContractDto,
   PresignSignedContractDto,
+  PresignStandaloneSignedDto,
   SendAssinafyDto,
   SendContractWhatsAppDto,
   SignManualDto,
@@ -200,6 +202,34 @@ export async function contractsRoutes(app: FastifyInstance) {
       const { customerId, id } = req.params as { customerId: string; id: string }
       const dto = ConfirmSignedUploadDto.parse(req.body)
       return reply.send(await svc.confirmSignedUpload(req.clinicId, customerId, id, dto))
+    },
+  )
+
+  /**
+   * POST /customers/:customerId/contracts/presign-standalone-signed
+   * Gera presigned PUT URL para upload avulso de contrato assinado (sem template).
+   */
+  app.post(
+    '/customers/:customerId/contracts/presign-standalone-signed',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId } = req.params as { customerId: string }
+      const dto = PresignStandaloneSignedDto.parse(req.body)
+      return reply.send(await svc.presignStandaloneSigned(req.clinicId, customerId, dto))
+    },
+  )
+
+  /**
+   * POST /customers/:customerId/contracts/confirm-standalone-signed
+   * Confirma upload avulso e cria o registro de contrato assinado sem template.
+   */
+  app.post(
+    '/customers/:customerId/contracts/confirm-standalone-signed',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId } = req.params as { customerId: string }
+      const dto = ConfirmStandaloneSignedDto.parse(req.body)
+      return reply.status(201).send(await svc.confirmStandaloneSigned(req.clinicId, customerId, dto))
     },
   )
 

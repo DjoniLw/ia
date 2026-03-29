@@ -714,7 +714,8 @@ export interface CustomerContract {
   id: string
   clinicId: string
   customerId: string
-  templateId: string
+  templateId: string | null
+  label: string | null
   status: 'pending' | 'signed'
   signatureMode: 'assinafy' | 'manual' | 'uploaded' | null
   signLink: string | null
@@ -723,7 +724,7 @@ export interface CustomerContract {
   sentAt: string | null
   signerIp: string | null
   createdAt: string
-  template: { name: string; storageKey: string | null }
+  template: { name: string; storageKey: string | null } | null
 }
 
 export function useCustomerContracts(customerId: string) {
@@ -798,6 +799,23 @@ export function useConfirmSignedUpload(customerId: string) {
   return useMutation({
     mutationFn: ({ contractId, storageKey }: { contractId: string; storageKey: string }) =>
       api.post(`/customers/${customerId}/contracts/${contractId}/confirm-upload-signed`, { storageKey }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export function usePresignStandaloneSigned(customerId: string) {
+  return useMutation({
+    mutationFn: (data: { label: string; fileName: string; mimeType: string; size: number }) =>
+      api.post(`/customers/${customerId}/contracts/presign-standalone-signed`, data)
+        .then((r) => r.data as { storageKey: string; presignedUrl: string }),
+  })
+}
+
+export function useConfirmStandaloneSigned(customerId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { label: string; storageKey: string }) =>
+      api.post(`/customers/${customerId}/contracts/confirm-standalone-signed`, data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
   })
 }

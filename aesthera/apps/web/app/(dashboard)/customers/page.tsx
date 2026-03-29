@@ -40,6 +40,8 @@ import {
   useSendContractWhatsApp,
   usePresignSignedContract,
   useConfirmSignedUpload,
+  usePresignStandaloneSigned,
+  useConfirmStandaloneSigned,
   useContractTemplates,
   type CustomerContract,
   type ContractView,
@@ -1038,6 +1040,11 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const [uploadSignedFile, setUploadSignedFile] = useState<File | null>(null)
   const [uploadSignedProgress, setUploadSignedProgress] = useState<'idle' | 'uploading' | 'confirming'>('idle')
   const uploadSignedInputRef = useRef<HTMLInputElement | null>(null)
+  const [uploadingStandalone, setUploadingStandalone] = useState(false)
+  const [standaloneLabel, setStandaloneLabel] = useState('')
+  const [standaloneFile, setStandaloneFile] = useState<File | null>(null)
+  const [standaloneProgress, setStandaloneProgress] = useState<'idle' | 'uploading' | 'confirming'>('idle')
+  const standaloneInputRef = useRef<HTMLInputElement | null>(null)
 
   const sendAssinafy = useSendAssinafy(
     customer.id,
@@ -1051,6 +1058,8 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const sendContractWhatsApp = useSendContractWhatsApp(customer.id)
   const presignSignedContract = usePresignSignedContract(customer.id)
   const confirmSignedUpload = useConfirmSignedUpload(customer.id)
+  const presignStandalone = usePresignStandaloneSigned(customer.id)
+  const confirmStandalone = useConfirmStandaloneSigned(customer.id)
 
   async function handleAddContract() {
     if (!selectedTemplateId) { toast.error('Selecione um modelo'); return }
@@ -1144,6 +1153,36 @@ function ContractsTab({ customer }: { customer: Customer }) {
     }
   }
 
+  async function handleUploadStandalone() {
+    if (!standaloneFile || !standaloneLabel.trim()) return
+    try {
+      setStandaloneProgress('uploading')
+      const { storageKey, presignedUrl } = await presignStandalone.mutateAsync({
+        label: standaloneLabel.trim(),
+        fileName: standaloneFile.name,
+        mimeType: standaloneFile.type || 'application/pdf',
+        size: standaloneFile.size,
+      })
+      const uploadRes = await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': standaloneFile.type || 'application/pdf' },
+        body: standaloneFile,
+      })
+      if (!uploadRes.ok) throw new Error(`Falha no upload: ${uploadRes.status}`)
+      setStandaloneProgress('confirming')
+      await confirmStandalone.mutateAsync({ label: standaloneLabel.trim(), storageKey })
+      toast.success('Documento assinado registrado com sucesso')
+      setUploadingStandalone(false)
+      setStandaloneLabel('')
+      setStandaloneFile(null)
+      setStandaloneProgress('idle')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao registrar documento assinado')
+      setStandaloneProgress('idle')
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* LGPD info */}
@@ -1166,12 +1205,22 @@ function ContractsTab({ customer }: { customer: Customer }) {
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Contratos
         </p>
-        {activeTemplates.length > 0 && (
-          <Button size="sm" variant="outline" onClick={() => setAddingContract(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            Adicionar
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { setUploadingStandalone(true); setStandaloneLabel(''); setStandaloneFile(null); setStandaloneProgress('idle') }}
+          >
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            Carregar assinado
           </Button>
-        )}
+          {activeTemplates.length > 0 && (
+            <Button size="sm" variant="outline" onClick={() => setAddingContract(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Adicionar
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Lista de contratos */}
@@ -1191,7 +1240,7 @@ function ContractsTab({ customer }: { customer: Customer }) {
             <div key={c.id} className="rounded-lg border px-4 py-3 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium">{c.template.name}</p>
+                  <p className="text-sm font-medium">{c.label ?? c.template?.name ?? '—'}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${CONTRACT_STATUS_CLASS[c.status]}`}>
                       {CONTRACT_STATUS_LABEL[c.status]}
@@ -1250,15 +1299,6 @@ function ContractsTab({ customer }: { customer: Customer }) {
                         <Pencil className="h-3.5 w-3.5 mr-1.5" />
                         Manual
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => { setUploadingSignedContract(c); setUploadSignedFile(null); setUploadSignedProgress('idle') }}
-                        title="Carregar contrato já assinado (impresso/escaneado)"
-                      >
-                        <Upload className="h-3.5 w-3.5 mr-1.5" />
-                        Carregar assinado
-                      </Button>
                     </>
                   )}
                   {c.status === 'signed' && c.signLink && (
@@ -1315,7 +1355,7 @@ function ContractsTab({ customer }: { customer: Customer }) {
           <DialogTitle>Enviar para assinatura (Assinafy)</DialogTitle>
           <div className="space-y-4 mt-4">
             <p className="text-sm text-muted-foreground">
-              Contrato: <strong>{sendingAssinafy.template.name}</strong>
+              Contrato: <strong>{sendingAssinafy.label ?? sendingAssinafy.template?.name ?? '—'}</strong>
             </p>
             <div className="space-y-2">
               <Label htmlFor="assinafy-email">E-mail do cliente</Label>
@@ -1349,7 +1389,7 @@ function ContractsTab({ customer }: { customer: Customer }) {
           <DialogTitle>Assinar contrato manualmente</DialogTitle>
           <div className="mt-4">
             <p className="text-sm text-muted-foreground mb-3">
-              Contrato: <strong>{signingContract.template.name}</strong>
+              Contrato: <strong>{signingContract.label ?? signingContract.template?.name ?? '—'}</strong>
             </p>
             <SignatureCanvas
               onConfirm={(b64) => void handleSignManual(b64)}
@@ -1366,7 +1406,7 @@ function ContractsTab({ customer }: { customer: Customer }) {
           <DialogTitle>Visualizar contrato</DialogTitle>
           <div className="mt-4 space-y-4">
             <p className="text-sm text-muted-foreground">
-              {viewingContract.template.name}
+              {viewingContract.label ?? viewingContract.template?.name ?? '—'}
             </p>
             {getContractView.isPending && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
@@ -1434,7 +1474,7 @@ function ContractsTab({ customer }: { customer: Customer }) {
           <DialogTitle>Enviar link de assinatura via WhatsApp</DialogTitle>
           <div className="space-y-4 mt-4">
             <p className="text-sm text-muted-foreground">
-              Contrato: <strong>{sendingWhatsApp.template.name}</strong>
+              Contrato: <strong>{sendingWhatsApp.label ?? sendingWhatsApp.template?.name ?? '—'}</strong>
             </p>
             <div className="space-y-2">
               <Label htmlFor="whatsapp-phone">Telefone (WhatsApp)</Label>
@@ -1464,13 +1504,13 @@ function ContractsTab({ customer }: { customer: Customer }) {
         </Dialog>
       )}
 
-      {/* Dialog: carregar contrato já assinado */}
+      {/* Dialog: carregar contrato já assinado (vinculado ao template) */}
       {uploadingSignedContract && (
         <Dialog open onClose={() => { if (uploadSignedProgress === 'idle') { setUploadingSignedContract(null); setUploadSignedFile(null) } }}>
           <DialogTitle>Carregar contrato assinado</DialogTitle>
           <div className="space-y-4 mt-4">
             <p className="text-sm text-muted-foreground">
-              Contrato: <strong>{uploadingSignedContract.template.name}</strong>
+              Contrato: <strong>{uploadingSignedContract.label ?? uploadingSignedContract.template?.name ?? '—'}</strong>
             </p>
             <p className="text-xs text-muted-foreground">
               Selecione o PDF do contrato impresso e assinado manualmente.
@@ -1528,6 +1568,89 @@ function ContractsTab({ customer }: { customer: Customer }) {
                   <>
                     <Upload className="h-3.5 w-3.5 mr-1.5" />
                     Salvar contrato assinado
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: carregar documento assinado avulso (sem template) */}
+      {uploadingStandalone && (
+        <Dialog open onClose={() => { if (standaloneProgress === 'idle') { setUploadingStandalone(false); setStandaloneLabel(''); setStandaloneFile(null) } }}>
+          <DialogTitle>Carregar documento assinado</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-xs text-muted-foreground">
+              Para contratos impressos e assinados fisicamente. Não é necessário selecionar um modelo.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="standalone-label">Nome do documento</Label>
+              <Input
+                id="standalone-label"
+                className="h-8 text-sm"
+                placeholder="Ex.: Contrato de prestação de serviços"
+                value={standaloneLabel}
+                onChange={(e) => setStandaloneLabel(e.target.value)}
+                disabled={standaloneProgress !== 'idle'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Arquivo PDF</Label>
+              <input
+                ref={standaloneInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => setStandaloneFile(e.target.files?.[0] ?? null)}
+              />
+              {standaloneFile ? (
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/50">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate flex-1">{standaloneFile.name}</span>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => { setStandaloneFile(null); if (standaloneInputRef.current) standaloneInputRef.current.value = '' }}
+                    disabled={standaloneProgress !== 'idle'}
+                  >
+                    Remover
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => standaloneInputRef.current?.click()}
+                  disabled={standaloneProgress !== 'idle'}
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  Selecionar PDF
+                </Button>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setUploadingStandalone(false); setStandaloneLabel(''); setStandaloneFile(null); setStandaloneProgress('idle') }}
+                disabled={standaloneProgress !== 'idle'}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleUploadStandalone()}
+                disabled={!standaloneFile || !standaloneLabel.trim() || standaloneProgress !== 'idle'}
+              >
+                {standaloneProgress !== 'idle' && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                {standaloneProgress === 'uploading' && 'Enviando...'}
+                {standaloneProgress === 'confirming' && 'Salvando...'}
+                {standaloneProgress === 'idle' && (
+                  <>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    Salvar documento
                   </>
                 )}
               </Button>
