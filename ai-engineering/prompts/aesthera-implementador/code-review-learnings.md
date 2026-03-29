@@ -280,6 +280,25 @@ Se a resposta for não → revise antes de prosseguir.
 
 ## Geral
 
+### Escopo e Disciplina de PR
+
+- [ ] **PR de padronização de UI não deve incluir novos módulos de backend — features de alto risco exigem PR dedicado**
+  - 🔴 Anti-padrão: adicionar em um único PR de padronização visual (filtros, layout, UX) um módulo de backend completo com rotas, service, repository, DTOs e migrações de banco. Ex: PR de "padronização de filtros" que incluiu todo o módulo de Contratos (backend + frontend + 3 migrações)
+  - ✅ Correto: features de alto risco (integrações externas, contratos, dados jurídicos, armazenamento de arquivos, webhooks) devem ter issue e PR **independentes**, permitindo:
+    - Auditoria isolada de segurança (webhook secret, multi-tenancy, presign/confirm)
+    - Revisão dedicada do arquiteto e do `security-auditor`
+    - Rastreabilidade de issue → PR → deploy
+    - Rollback sem afetar a feature de UI que estava no mesmo PR
+  - 📌 Regra geral: se um PR tem título de "padronização / refactor / UX" e inclui migrations de banco de dados ou novos módulos de API, o escopo foi extrapolado. Separar antes de colocar em review.
+  - 📌 Checklist antes de abrir PR:
+    1. O título do PR descreve **todo** o que há nele?
+    2. Algum dos arquivos modificados está em `prisma/migrations/` sem estar previsto na issue?
+    3. Algum novo módulo (`*.routes.ts`, `*.service.ts`, `*.repository.ts`) foi criado além do escopo?
+    → Se sim a qualquer resposta: separar em PRs distintos
+  - 📅 Aprendido em: 29/03/2026 — revisão de PR #130 (filtros + módulo completo de contratos)
+
+---
+
 ### Testes
 
 - [ ] **Ao injetar nova dependência de serviço em um módulo existente, adicionar `vi.mock()` correspondente no arquivo de teste**
