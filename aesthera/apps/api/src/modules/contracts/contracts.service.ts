@@ -153,7 +153,7 @@ export class ContractsService {
       contractId: contract.id,
       customerName: customer?.name ?? '',
       customerEmail: dto.customerEmail ?? customer?.email ?? '',
-      templateName: contract.template.name,
+      templateName: contract.template?.name ?? '',
       clinicName: clinic?.name ?? '',
     }
 
@@ -253,7 +253,7 @@ export class ContractsService {
     if (contract.customerId !== customerId) throw new NotFoundError('CustomerContract')
 
     let fileUrl: string | null = null
-    if (contract.template.storageKey) {
+    if (contract.template?.storageKey) {
       fileUrl = await generatePresignedGetUrl(contract.template.storageKey, 3600)
     }
 
@@ -300,7 +300,7 @@ export class ContractsService {
     const customer = await prisma.customer.findFirst({ where: { id: customerId, clinicId } })
     const customerName = customer?.name ?? 'Cliente'
 
-    const message = `Olá, ${customerName}! 👋\n\nSegue o link para assinar o contrato *${contract.template.name}*:\n\n${contract.signLink}`
+    const message = `Olá, ${customerName}! 👋\n\nSegue o link para assinar o contrato *${contract.template?.name ?? contract.label ?? 'contrato'}*:\n\n${contract.signLink}`
 
     const notificationsService = new NotificationsService()
     await notificationsService.sendWhatsApp({
