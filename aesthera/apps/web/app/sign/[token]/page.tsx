@@ -275,7 +275,7 @@ export default function SignPage() {
           )}
 
           <p className="text-center text-xs text-muted-foreground">
-            Link válido até {data?.expiresAt ? new Date(data.expiresAt).toLocaleDateString('pt-BR', {
+            Link válido até {data?.expiresAt ? new Date(data.expiresAt).toLocaleString('pt-BR', {
               day: '2-digit',
               month: '2-digit',
               year: 'numeric',

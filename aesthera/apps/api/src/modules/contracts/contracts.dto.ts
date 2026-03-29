@@ -49,13 +49,20 @@ export const SendRemoteSignDto = z.object({
 )
 export type SendRemoteSignDto = z.infer<typeof SendRemoteSignDto>
 
+// Limite de ~3 MB em base64 (4/3 × 3_145_728 ≈ 4_194_304 chars)
+const MAX_SIGNATURE_LENGTH = 4_200_000
+
 export const SignRemoteDto = z.object({
   signature: z
     .string()
     .min(1, 'Assinatura é obrigatória')
+    .max(MAX_SIGNATURE_LENGTH, 'Assinatura muito grande (máx. 3 MB)')
     .refine(
-      (v) => v.startsWith('data:image/') || /^[A-Za-z0-9+/]/.test(v),
-      'Formato de assinatura inválido',
+      (v) =>
+        v.startsWith('data:image/png;base64,') ||
+        v.startsWith('data:image/jpeg;base64,') ||
+        v.startsWith('data:image/jpg;base64,'),
+      'Formato de assinatura inválido (esperado: data:image/png;base64,...)',
     ),
 })
 export type SignRemoteDto = z.infer<typeof SignRemoteDto>

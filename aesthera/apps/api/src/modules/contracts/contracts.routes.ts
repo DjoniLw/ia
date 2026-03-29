@@ -290,6 +290,7 @@ export async function contractsRoutes(app: FastifyInstance) {
    */
   app.get(
     '/public/sign/:token',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (req, reply) => {
       const { token } = req.params as { token: string }
       return reply.send(await svc.getPublicContractInfo(token))
@@ -303,6 +304,7 @@ export async function contractsRoutes(app: FastifyInstance) {
    */
   app.post(
     '/public/sign/:token',
+    { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } },
     async (req, reply) => {
       const { token } = req.params as { token: string }
       const dto = SignRemoteDto.parse(req.body)
