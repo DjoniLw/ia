@@ -656,3 +656,107 @@ export function useAvailableEquipment(scheduledAt: string, durationMinutes: numb
     staleTime: 0,
   })
 }
+
+// ──── Contract Templates ───────────────────────────────────────────────────────
+
+export interface ContractTemplate {
+  id: string
+  name: string
+  description: string | null
+  storageKey: string | null
+  active: boolean
+  createdAt: string
+}
+
+export function useContractTemplates() {
+  return useQuery<ContractTemplate[]>({
+    queryKey: ['contract-templates'],
+    queryFn: () => api.get('/contract-templates').then((r) => r.data),
+  })
+}
+
+export function useCreateContractTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name: string; description?: string; storageKey?: string }) =>
+      api.post('/contract-templates', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract-templates'] }),
+  })
+}
+
+export function useUpdateContractTemplate(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Partial<ContractTemplate>) =>
+      api.patch(`/contract-templates/${id}`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract-templates'] }),
+  })
+}
+
+export function useDeleteContractTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/contract-templates/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract-templates'] }),
+  })
+}
+
+export function usePresignTemplate() {
+  return useMutation({
+    mutationFn: (data: { fileName: string; mimeType: string; size: number }) =>
+      api.post('/contract-templates/presign', data).then((r) => r.data as { storageKey: string; presignedUrl: string }),
+  })
+}
+
+// ──── Customer Contracts ───────────────────────────────────────────────────────
+
+export interface CustomerContract {
+  id: string
+  clinicId: string
+  customerId: string
+  templateId: string
+  status: 'pending' | 'signed'
+  signatureMode: 'assinafy' | 'manual' | null
+  signLink: string | null
+  externalId: string | null
+  signedAt: string | null
+  sentAt: string | null
+  signerIp: string | null
+  createdAt: string
+  template: { name: string; storageKey: string | null }
+}
+
+export function useCustomerContracts(customerId: string) {
+  return useQuery<CustomerContract[]>({
+    queryKey: ['customer-contracts', customerId],
+    queryFn: () => api.get(`/customers/${customerId}/contracts`).then((r) => r.data),
+    enabled: !!customerId,
+  })
+}
+
+export function useCreateCustomerContract(customerId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { templateId: string }) =>
+      api.post(`/customers/${customerId}/contracts`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export function useSendAssinafy(customerId: string, contractId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { customerEmail?: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/send-assinafy`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export function useSignManual(customerId: string, contractId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { signature: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/sign-manual`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}

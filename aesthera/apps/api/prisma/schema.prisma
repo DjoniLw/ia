@@ -48,6 +48,11 @@ enum TransferKind {
   user_invite
 }
 
+enum ContractStatus {
+  pending
+  signed
+}
+
 enum AppointmentStatus {
   draft
   confirmed
@@ -233,6 +238,8 @@ model Clinic {
   bodyMeasurementRecords BodyMeasurementRecord[]
   measurementSheets    MeasurementSheet[]
   measurementSessions  MeasurementSession[]
+  contractTemplates    ContractTemplate[]
+  customerContracts    CustomerContract[]
 
   @@map("clinics")
 }
@@ -497,6 +504,7 @@ model Customer {
   customerFiles        CustomerFile[]
   bodyMeasurementRecords BodyMeasurementRecord[]
   measurementSessions  MeasurementSession[]
+  customerContracts    CustomerContract[]
 
   @@unique([clinicId, email])
   @@unique([clinicId, document])
@@ -1378,4 +1386,52 @@ model MeasurementTabularValue {
 
   @@unique([sheetRecordId, fieldId, sheetColumnId, subColumn])
   @@map("measurement_tabular_values")
+}
+
+
+// ─── Contract Template ─────────────────────────────────────────────────────────
+
+model ContractTemplate {
+  id          String    @id @default(uuid())
+  clinicId    String    @map("clinic_id")
+  name        String
+  description String?
+  storageKey  String?   @map("storage_key")
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt      @map("updated_at")
+
+  clinic    Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  contracts CustomerContract[]
+
+  @@index([clinicId])
+  @@map("contract_templates")
+}
+
+// ─── Customer Contract ─────────────────────────────────────────────────────────
+
+model CustomerContract {
+  id            String         @id @default(uuid())
+  clinicId      String         @map("clinic_id")
+  customerId    String         @map("customer_id")
+  templateId    String         @map("template_id")
+  status        ContractStatus @default(pending)
+  signatureMode String?        @map("signature_mode")   // 'assinafy' | 'manual'
+  externalId    String?        @map("external_id")       // ID no Assinafy
+  signLink      String?        @map("sign_link")          // link de assinatura Assinafy
+  signature     String?                                   // base64 assinatura manual
+  signedPdfKey  String?        @map("signed_pdf_key")    // R2 key do PDF assinado
+  signedAt      DateTime?      @map("signed_at")
+  signerIp      String?        @map("signer_ip")
+  sentAt        DateTime?      @map("sent_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt      @map("updated_at")
+  deletedAt     DateTime?      @map("deleted_at")
+
+  clinic    Clinic           @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer  Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  template  ContractTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, customerId])
+  @@map("customer_contracts")
 }

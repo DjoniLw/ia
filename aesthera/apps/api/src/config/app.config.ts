@@ -61,4 +61,9 @@ export const appConfig = {
   },
 
   frontendUrl: env.FRONTEND_URL,
+
+  contracts: {
+    n8nWebhookUrl: env.N8N_CONTRACTS_WEBHOOK_URL,
+    webhookSecret: env.CONTRACTS_WEBHOOK_SECRET,
+  },
 } as const

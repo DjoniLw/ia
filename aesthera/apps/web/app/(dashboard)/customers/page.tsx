@@ -1,8 +1,8 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, FileSignature, Info, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User, Wallet } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, Scissors, Search, Send, Trash2, User, Wallet } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -32,6 +32,12 @@ import {
   useCustomers,
   useDeleteCustomer,
   useUpdateCustomer,
+  useCustomerContracts,
+  useCreateCustomerContract,
+  useSendAssinafy,
+  useSignManual,
+  useContractTemplates,
+  type CustomerContract,
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
@@ -901,6 +907,352 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
             ))}
           </div>
         )
+      )}
+    </div>
+  )
+}
+
+// ──── Contracts Tab ────────────────────────────────────────────────────────────
+
+const CONTRACT_STATUS_LABEL: Record<CustomerContract['status'], string> = {
+  pending: 'Pendente',
+  signed:  'Assinado',
+}
+const CONTRACT_STATUS_CLASS: Record<CustomerContract['status'], string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  signed:  'bg-green-100 text-green-700',
+}
+
+function SignatureCanvas({
+  onConfirm,
+  onCancel,
+  isPending,
+}: {
+  onConfirm: (base64: string) => void
+  onCancel: () => void
+  isPending: boolean
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const drawing = useRef(false)
+
+  function getPos(e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) {
+    const rect = canvas.getBoundingClientRect()
+    if ('touches' in e) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top }
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }
+
+  function startDraw(e: React.MouseEvent | React.TouchEvent) {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    drawing.current = true
+    const ctx = canvas.getContext('2d')!
+    const pos = getPos(e, canvas)
+    ctx.beginPath()
+    ctx.moveTo(pos.x, pos.y)
+  }
+
+  function draw(e: React.MouseEvent | React.TouchEvent) {
+    if (!drawing.current) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    const pos = getPos(e, canvas)
+    ctx.lineTo(pos.x, pos.y)
+    ctx.strokeStyle = '#111'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.stroke()
+  }
+
+  function stopDraw() { drawing.current = false }
+
+  function handleClear() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
+
+  function handleConfirm() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    onConfirm(canvas.toDataURL('image/png'))
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">Assine abaixo usando o mouse ou toque:</p>
+      <div className="rounded-lg border overflow-hidden bg-white">
+        <canvas
+          ref={canvasRef}
+          width={480}
+          height={200}
+          className="w-full touch-none cursor-crosshair"
+          onMouseDown={startDraw}
+          onMouseMove={draw}
+          onMouseUp={stopDraw}
+          onMouseLeave={stopDraw}
+          onTouchStart={startDraw}
+          onTouchMove={draw}
+          onTouchEnd={stopDraw}
+        />
+      </div>
+      <div className="flex justify-between">
+        <Button variant="outline" size="sm" onClick={handleClear}>Limpar</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
+          <Button size="sm" onClick={handleConfirm} disabled={isPending}>
+            {isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Confirmar assinatura
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ContractsTab({ customer }: { customer: Customer }) {
+  const { data: contracts = [], isLoading } = useCustomerContracts(customer.id)
+  const { data: templates = [] } = useContractTemplates()
+  const activeTemplates = templates.filter((t) => t.active)
+
+  const createContract = useCreateCustomerContract(customer.id)
+
+  const [addingContract, setAddingContract] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [signingContract, setSigningContract] = useState<CustomerContract | null>(null)
+  const [sendingAssinafy, setSendingAssinafy] = useState<CustomerContract | null>(null)
+  const [assinafyEmail, setAssinafyEmail] = useState(customer.email ?? '')
+
+  const sendAssinafy = useSendAssinafy(
+    customer.id,
+    sendingAssinafy?.id ?? '',
+  )
+  const signManual = useSignManual(
+    customer.id,
+    signingContract?.id ?? '',
+  )
+
+  async function handleAddContract() {
+    if (!selectedTemplateId) { toast.error('Selecione um modelo'); return }
+    try {
+      await createContract.mutateAsync({ templateId: selectedTemplateId })
+      toast.success('Contrato adicionado')
+      setAddingContract(false)
+      setSelectedTemplateId('')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao adicionar contrato')
+    }
+  }
+
+  async function handleSendAssinafy() {
+    try {
+      await sendAssinafy.mutateAsync({ customerEmail: assinafyEmail || undefined })
+      toast.success('Contrato enviado para assinatura')
+      setSendingAssinafy(null)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao enviar contrato')
+    }
+  }
+
+  async function handleSignManual(base64: string) {
+    try {
+      await signManual.mutateAsync({ signature: base64 })
+      toast.success('Contrato assinado')
+      setSigningContract(null)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao assinar contrato')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* LGPD info */}
+      <div className="rounded-xl border p-4 space-y-1">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <FileSignature className="h-3.5 w-3.5 text-muted-foreground" />
+          Consentimento LGPD (Art. 11)
+        </p>
+        {customer.bodyDataConsentAt ? (
+          <p className="text-xs text-muted-foreground">
+            Registrado em {new Date(customer.bodyDataConsentAt).toLocaleDateString('pt-BR')}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Consentimento não registrado</p>
+        )}
+      </div>
+
+      {/* Cabeçalho contratos */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Contratos
+        </p>
+        {activeTemplates.length > 0 && (
+          <Button size="sm" variant="outline" onClick={() => setAddingContract(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Adicionar
+          </Button>
+        )}
+      </div>
+
+      {/* Lista de contratos */}
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Carregando contratos...
+        </div>
+      ) : contracts.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-6 text-center">
+          <FileText className="mx-auto h-6 w-6 text-muted-foreground mb-1.5" />
+          <p className="text-xs text-muted-foreground">Nenhum contrato vinculado</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {contracts.map((c) => (
+            <div key={c.id} className="rounded-lg border px-4 py-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">{c.template.name}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${CONTRACT_STATUS_CLASS[c.status]}`}>
+                      {CONTRACT_STATUS_LABEL[c.status]}
+                    </span>
+                    {c.signatureMode === 'assinafy' && (
+                      <span className="text-xs text-muted-foreground">via Assinafy</span>
+                    )}
+                    {c.signatureMode === 'manual' && (
+                      <span className="text-xs text-muted-foreground">Assinatura manual</span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    <span>Enviado: {c.sentAt ? new Date(c.sentAt).toLocaleDateString('pt-BR') : '—'}</span>
+                    <span>Assinado: {c.signedAt ? new Date(c.signedAt).toLocaleDateString('pt-BR') : '—'}</span>
+                  </div>
+                </div>
+                {/* Ações */}
+                {c.status === 'pending' && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setSendingAssinafy(c); setAssinafyEmail(customer.email ?? '') }}
+                      title="Enviar para assinatura (Assinafy)"
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      Assinafy
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSigningContract(c)}
+                      title="Assinar manualmente"
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                      Manual
+                    </Button>
+                  </div>
+                )}
+                {c.status === 'signed' && c.signLink && (
+                  <a href={c.signLink} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="sm" title="Ver link de assinatura">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Button>
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog: adicionar contrato */}
+      {addingContract && (
+        <Dialog open onClose={() => setAddingContract(false)}>
+          <DialogTitle>Adicionar contrato</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="add-tpl">Modelo de contrato</Label>
+              <select
+                id="add-tpl"
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                className="h-8 w-full rounded-md border border-input bg-card px-3 text-sm"
+              >
+                <option value="">Selecione um modelo</option>
+                {activeTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setAddingContract(false)}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={() => void handleAddContract()}
+                disabled={createContract.isPending || !selectedTemplateId}
+              >
+                {createContract.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Adicionar
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: enviar para Assinafy */}
+      {sendingAssinafy && (
+        <Dialog open onClose={() => setSendingAssinafy(null)}>
+          <DialogTitle>Enviar para assinatura (Assinafy)</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Contrato: <strong>{sendingAssinafy.template.name}</strong>
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="assinafy-email">E-mail do cliente</Label>
+              <Input
+                id="assinafy-email"
+                type="email"
+                className="h-8 text-sm"
+                placeholder="email@exemplo.com"
+                value={assinafyEmail}
+                onChange={(e) => setAssinafyEmail(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setSendingAssinafy(null)}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={() => void handleSendAssinafy()}
+                disabled={sendAssinafy.isPending}
+              >
+                {sendAssinafy.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Enviar
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: assinatura manual */}
+      {signingContract && (
+        <Dialog open onClose={() => setSigningContract(null)}>
+          <DialogTitle>Assinar contrato manualmente</DialogTitle>
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground mb-3">
+              Contrato: <strong>{signingContract.template.name}</strong>
+            </p>
+            <SignatureCanvas
+              onConfirm={(b64) => void handleSignManual(b64)}
+              onCancel={() => setSigningContract(null)}
+              isPending={signManual.isPending}
+            />
+          </div>
+        </Dialog>
       )}
     </div>
   )
@@ -1824,25 +2176,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* ── Contratos ─────────────────────────────────────────────────── */}
       {detailTab === 'contracts' && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <FileSignature className="h-3.5 w-3.5 text-muted-foreground" />
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Consentimento LGPD</p>
-          </div>
-          <div className="rounded-xl border p-4 space-y-3">
-            <p className="text-sm font-semibold">Consentimento LGPD (Art. 11)</p>
-            {customer.bodyDataConsentAt ? (
-              <p className="text-sm text-muted-foreground">
-                Registrado em {new Date(customer.bodyDataConsentAt).toLocaleDateString('pt-BR')}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">Consentimento não registrado</p>
-            )}
-          </div>
-          <p className="rounded-lg border border-muted px-3 py-2 text-xs text-muted-foreground">
-            Para registrar ou revogar o consentimento, clique em &quot;Editar&quot; e acesse a aba &quot;Contratos &amp; LGPD&quot;.
-          </p>
-        </div>
+        <ContractsTab customer={customer} />
       )}
 
       {/* ── Evolução corporal ──────────────────────────────────────── */}
