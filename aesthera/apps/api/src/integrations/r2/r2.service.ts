@@ -120,7 +120,9 @@ export async function getObjectFirstBytes(
 export async function getObjectBuffer(storageKey: string): Promise<Buffer> {
   const cmd = new GetObjectCommand({ Bucket: bucketName, Key: storageKey })
   const response = await getR2Client().send(cmd)
-  if (!response.Body) return Buffer.alloc(0)
+  if (!response.Body) {
+    throw new Error(`[r2] Body ausente ao obter objeto (key=${storageKey})`)
+  }
   const chunks: Uint8Array[] = []
   for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
     chunks.push(chunk)

@@ -143,7 +143,8 @@ export async function contractsRoutes(app: FastifyInstance) {
       const { customerId, id } = req.params as { customerId: string; id: string }
       const dto = SignManualDto.parse(req.body)
       const ip = req.ip
-      const userAgent = (req.headers['user-agent'] as string | undefined) ?? undefined
+      const rawUserAgent = req.headers['user-agent']
+      const userAgent = Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent
       return reply.send(await svc.signManual(req.clinicId, customerId, id, dto, ip, userAgent))
     },
   )

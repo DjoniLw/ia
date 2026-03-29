@@ -219,7 +219,13 @@ export class ContractsService {
     if (templateStorageKey) {
       try {
         const pdfBuffer = await getObjectBuffer(templateStorageKey)
-        documentHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
+        if (pdfBuffer.length > 0) {
+          documentHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
+        } else {
+          console.error(
+            `[contracts] Buffer vazio ao obter documento do R2 (templateStorageKey=${templateStorageKey}, contractId=${contractId}). Hash não será calculado.`,
+          )
+        }
       } catch (err) {
         // Erro de infra (R2 indisponível) não deve bloquear a assinatura — registrar no log
         console.error(
