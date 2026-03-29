@@ -143,7 +143,8 @@ export async function contractsRoutes(app: FastifyInstance) {
       const { customerId, id } = req.params as { customerId: string; id: string }
       const dto = SignManualDto.parse(req.body)
       const ip = req.ip
-      return reply.send(await svc.signManual(req.clinicId, customerId, id, dto, ip))
+      const userAgent = (req.headers['user-agent'] as string | undefined) ?? undefined
+      return reply.send(await svc.signManual(req.clinicId, customerId, id, dto, ip, userAgent))
     },
   )
 
@@ -160,6 +161,19 @@ export async function contractsRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { customerId, id } = req.params as { customerId: string; id: string }
       return reply.send(await svc.getContractView(req.clinicId, customerId, id))
+    },
+  )
+
+  /**
+   * GET /customers/:customerId/contracts/:id/audit-trail
+   * Retorna os dados de auditoria do contrato (IP, user-agent, CPF, hash do documento).
+   */
+  app.get(
+    '/customers/:customerId/contracts/:id/audit-trail',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId, id } = req.params as { customerId: string; id: string }
+      return reply.send(await svc.getAuditTrail(req.clinicId, customerId, id))
     },
   )
 

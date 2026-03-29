@@ -112,3 +112,18 @@ export async function getObjectFirstBytes(
   }
   return Buffer.concat(chunks)
 }
+
+/**
+ * Retorna o Buffer completo de um objeto no R2.
+ * Usado para cálculo de hash de documentos (audit trail).
+ */
+export async function getObjectBuffer(storageKey: string): Promise<Buffer> {
+  const cmd = new GetObjectCommand({ Bucket: bucketName, Key: storageKey })
+  const response = await getR2Client().send(cmd)
+  if (!response.Body) return Buffer.alloc(0)
+  const chunks: Uint8Array[] = []
+  for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks)
+}

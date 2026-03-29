@@ -298,6 +298,22 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - **routes:** `req.log` (logger por-request do Fastify/Pino) passado como 6º argumento a `updateSession`, mantendo rastreabilidade de request ID.
 - **Impacto:** Apenas backend. Sem migração de schema. Após deploy, os logs do Railway revelarão a causa exata do 403.
 
+### [2026-03-29] — feat(#132): audit trail na assinatura manual — IP, timestamp, user-agent, CPF e hash do documento
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(3 novos campos em `CustomerContract`)*
+  - `aesthera/apps/api/prisma/migrations/20260329000008_feat_contract_audit_trail/migration.sql` *(criada)*
+  - `aesthera/apps/api/src/integrations/r2/r2.service.ts` *(nova função `getObjectBuffer`)*
+  - `aesthera/apps/api/src/modules/contracts/contracts.service.ts` *(`signManual` atualizado + método `getAuditTrail` criado)*
+  - `aesthera/apps/api/src/modules/contracts/contracts.routes.ts` *(user-agent passado ao `signManual` + nova rota `GET /audit-trail`)*
+  - `aesthera/apps/api/src/modules/contracts/contracts.service.test.ts` *(criado — 10 testes)*
+- **O que foi feito:**
+  - `CustomerContract` recebeu os campos `signerUserAgent`, `signerCpf` e `documentHash` (todos nullable).
+  - `signManual()` agora: captura `User-Agent` do header da request; copia `customer.document` (CPF) como snapshot; calcula SHA-256 do PDF do template via `getObjectBuffer()` (falha de R2 não bloqueia a assinatura — apenas loga o erro e define hash como null).
+  - `signerIp` confirmado corretamente persistido (já estava sendo passado e salvo).
+  - Novo endpoint `GET /customers/:customerId/contracts/:id/audit-trail` — retorna `contractId, status, signatureMode, signedAt, signerIp, signerUserAgent, signerCpf, documentHash`. Requer autenticação (`admin` ou `staff`).
+  - 10 testes unitários cobrindo: caso feliz, cliente sem CPF, template sem PDF, contrato avulso, falha de R2, conflito de contrato já assinado, contrato cruzado (NotFoundError) nos métodos `signManual` e `getAuditTrail`.
+- **Impacto:** Módulo Contracts — apenas backend. Sem alterações de frontend. Conformidade com Lei 14.063/2020 (evidências de autoria e integridade em assinaturas manuais).
+
 ### [2026-03-29] — feat(#126): sub-colunas, campos textuais e valor padrão em fichas de medidas (PR #128)
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/api/prisma/schema.prisma` *(4 modelos atualizados)*

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import path from 'node:path'
 import { appConfig } from '../../config/app.config'
-import { generatePresignedPutUrl, generatePresignedGetUrl } from '../../integrations/r2/r2.service'
+import { generatePresignedPutUrl, generatePresignedGetUrl, getObjectBuffer } from '../../integrations/r2/r2.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import {
   AppError,
@@ -197,6 +197,7 @@ export class ContractsService {
     contractId: string,
     dto: SignManualDto,
     signerIp?: string,
+    signerUserAgent?: string,
   ) {
     const contract = await this.repo.findContractById(clinicId, contractId)
     if (!contract) throw new NotFoundError('CustomerContract')
@@ -206,12 +207,37 @@ export class ContractsService {
       throw new ConflictError('Este contrato já foi assinado.')
     }
 
+    // Buscar CPF do cliente (snapshot no momento da assinatura)
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, clinicId, deletedAt: null },
+      select: { document: true },
+    })
+
+    // Calcular SHA-256 do PDF do template, se disponível
+    let documentHash: string | null = null
+    const templateStorageKey = contract.template?.storageKey
+    if (templateStorageKey) {
+      try {
+        const pdfBuffer = await getObjectBuffer(templateStorageKey)
+        documentHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
+      } catch (err) {
+        // Erro de infra (R2 indisponível) não deve bloquear a assinatura — registrar no log
+        console.error(
+          `[contracts] Falha ao calcular hash do documento (contractId=${contractId}):`,
+          err,
+        )
+      }
+    }
+
     const updated = await this.repo.updateContract(contract.id, {
       status: 'signed',
       signatureMode: 'manual',
       signature: dto.signature,
       signedAt: new Date(),
       signerIp: signerIp ?? null,
+      signerUserAgent: signerUserAgent ?? null,
+      signerCpf: customer?.document ?? null,
+      documentHash,
     })
 
     return updated
@@ -273,6 +299,26 @@ export class ContractsService {
         contract.signatureMode === 'manual' && contract.status === 'signed'
           ? contract.signature
           : null,
+    }
+  }
+
+  /**
+   * Retorna os dados de auditoria do contrato (somente para uso interno da clínica).
+   */
+  async getAuditTrail(clinicId: string, customerId: string, contractId: string) {
+    const contract = await this.repo.findContractById(clinicId, contractId)
+    if (!contract) throw new NotFoundError('CustomerContract')
+    if (contract.customerId !== customerId) throw new NotFoundError('CustomerContract')
+
+    return {
+      contractId: contract.id,
+      status: contract.status,
+      signatureMode: contract.signatureMode,
+      signedAt: contract.signedAt,
+      signerIp: contract.signerIp,
+      signerUserAgent: contract.signerUserAgent,
+      signerCpf: contract.signerCpf,
+      documentHash: contract.documentHash,
     }
   }
 
