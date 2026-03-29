@@ -7,7 +7,6 @@ import {
   ConflictError,
   NotFoundError,
   UnauthorizedError,
-  ValidationError,
 } from '../../shared/errors/app-error'
 import { prisma } from '../../database/prisma/client'
 import type {
@@ -121,7 +120,7 @@ export class ContractsService {
     customerId: string,
     contractId: string,
     dto: SendAssinafyDto,
-    actorIp?: string,
+    _actorIp?: string,
   ) {
     const contract = await this.repo.findContractById(clinicId, contractId)
     if (!contract) throw new NotFoundError('CustomerContract')

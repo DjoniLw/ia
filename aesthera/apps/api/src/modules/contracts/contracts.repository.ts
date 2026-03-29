@@ -30,7 +30,7 @@ export class ContractsRepository {
     })
   }
 
-  async updateTemplate(clinicId: string, id: string, dto: UpdateContractTemplateDto) {
+  async updateTemplate(_clinicId: string, id: string, dto: UpdateContractTemplateDto) {
     return prisma.contractTemplate.update({
       where: { id },
       data: {
@@ -42,7 +42,7 @@ export class ContractsRepository {
     })
   }
 
-  async deleteTemplate(clinicId: string, id: string) {
+  async deleteTemplate(_clinicId: string, id: string) {
     return prisma.contractTemplate.delete({ where: { id } })
   }
 
