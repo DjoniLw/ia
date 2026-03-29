@@ -25,4 +25,5 @@ export const PUBLIC_ROUTES = new Set([
   '/auth/reject-transfer',
   '/payments/webhooks/stripe',      // Stripe não envia X-Clinic-Slug
   '/payments/webhooks/mercadopago', // MercadoPago não envia X-Clinic-Slug
+  '/contracts/webhooks/assinafy',   // Assinafy/n8n não envia X-Clinic-Slug
 ])

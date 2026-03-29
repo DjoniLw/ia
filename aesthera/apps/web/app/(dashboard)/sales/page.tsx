@@ -1,8 +1,9 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2, Package, Plus, ShoppingCart } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Info, Loader2, Package, Plus, Search, ShoppingCart } from 'lucide-react'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -183,21 +184,52 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function SalesPage() {
+function SalesPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [newSale, setNewSale] = useState(false)
   const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [search, setSearch] = useState(searchParams.get('search') ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
   const now = new Date()
   const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
-  const [from, setFrom] = useState(defaultFrom)
-  const [to, setTo] = useState(defaultTo)
+  const [from, setFrom] = useState(searchParams.get('from') ?? defaultFrom)
+  const [to, setTo] = useState(searchParams.get('to') ?? defaultTo)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 250)
     return () => clearTimeout(timer)
   }, [search])
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (from !== defaultFrom) p.set('from', from)
+    if (to !== defaultTo) p.set('to', to)
+    if (search) p.set('search', search)
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, from, to, search, defaultFrom, defaultTo])
+
+  const isDefaultFilters = from === defaultFrom && to === defaultTo && search === ''
+
+  function resetFilters() {
+    setFrom(defaultFrom)
+    setTo(defaultTo)
+    setSearch('')
+    setDebouncedSearch('')
+    setPage(1)
+  }
+
+  function buildFilterLabel(): string {
+    const parts: string[] = []
+    const fromDate = new Date(from + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const toDate = new Date(to + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    parts.push(`${fromDate} a ${toDate}`)
+    if (debouncedSearch) parts.push(`busca: ${debouncedSearch}`)
+    return parts.join(' · ')
+  }
 
   const params: Record<string, string> = {
     page: String(page),
@@ -242,33 +274,51 @@ export default function SalesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">De</label>
-          <input
-            type="date"
-            value={from}
-            onChange={(e) => { setFrom(e.target.value); setPage(1) }}
-            className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">De</label>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => { setFrom(e.target.value); setPage(1) }}
+              className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Até</label>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => { setTo(e.target.value); setPage(1) }}
+              className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar por produto ou cliente…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">Até</label>
-          <input
-            type="date"
-            value={to}
-            onChange={(e) => { setTo(e.target.value); setPage(1) }}
-            className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">Buscar</label>
-          <Input
-            placeholder="Buscar por produto ou cliente…"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            className="h-8 w-48 text-sm"
-          />
+
+        {/* Legenda descritiva */}
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
         </div>
       </div>
 
@@ -374,5 +424,15 @@ export default function SalesPage() {
         </Dialog>
       )}
     </div>
+  )
+}
+
+// ──── Export ───────────────────────────────────────────────────────────────────
+
+export default function SalesPage() {
+  return (
+    <Suspense fallback={null}>
+      <SalesPageContent />
+    </Suspense>
   )
 }

@@ -208,7 +208,109 @@ const filtered = items.filter((item) =>
 
 ---
 
-## 7. Implementation Checklist
+## 7. Padrão de Filtros (obrigatório em todas as telas com filtros)
+
+> **Referência canônica:** `app/(dashboard)/carteira/page.tsx` — implementação completa e correta.
+
+### 7.1 Tipos de filtro e componentes
+
+| Tipo de filtro | Componente | Quando usar |
+|---|---|---|
+| Status / tipo fixo com ≤ 6 opções | **Pills** (botões `rounded-full`) | Status, tipo, categoria fixa |
+| Entidade cadastrada (cliente, serviço, profissional, insumo) | **ComboboxSearch** (`/components/ui/combobox-search.tsx`) | Qualquer campo que carrega dados da API |
+| Busca textual livre | **Input simples** `h-8 w-48 text-sm` + debounce 250ms | Nome, descrição, número livre |
+| Período | **Presets** (Hoje/7 dias/30 dias/6 meses/1 ano) + **Date range** (De/Até) | Telas financeiras e de histórico |
+
+### 7.2 Pills — classes obrigatórias
+
+```tsx
+// Ativo
+className="rounded-full border px-3 py-1 text-xs font-medium border-primary bg-primary text-primary-foreground"
+
+// Inativo
+className="rounded-full border px-3 py-1 text-xs font-medium border-input bg-card text-muted-foreground hover:bg-accent"
+```
+
+### 7.3 Legenda descritiva — obrigatória em toda tela com filtros
+
+```tsx
+<div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+  <Info className="h-3.5 w-3.5 shrink-0" />
+  <span>Exibindo {buildFilterLabel(...)}</span>
+  {!isDefaultFilters && (
+    <button
+      type="button"
+      onClick={resetFilters}
+      className="ml-auto shrink-0 font-medium text-primary hover:underline"
+    >
+      Restaurar padrão
+    </button>
+  )}
+</div>
+```
+
+### 7.4 Campos de Busca com ComboboxSearch
+
+Componente localizado em `/components/ui/combobox-search.tsx`.
+
+```tsx
+import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
+
+const [selectedItem, setSelectedItem] = useState<ComboboxItem | null>(null)
+const [searchQuery, setSearchQuery] = useState('')
+
+const items = useMemo(() => {
+  const q = searchQuery.trim().toLowerCase()
+  return (data?.items ?? [])
+    .filter((i) => !q || i.name.toLowerCase().includes(q))
+    .map((i) => ({ value: i.id, label: i.name }))
+}, [data, searchQuery])
+
+<ComboboxSearch
+  value={selectedItem}
+  onChange={setSelectedItem}
+  onSearch={setSearchQuery}
+  items={items}
+  placeholder="Buscar..."
+/>
+```
+
+Props disponíveis: `value`, `onChange`, `onSearch`, `items`, `placeholder`, `debounceMs` (padrão: 250), `isLoading`, `className`.
+
+### 7.5 URL sync — telas financeiras e de histórico
+
+Telas com histórico temporal (Financeiro, Contas a Pagar, Vendas, Cobranças) devem persistir filtros na URL com `useSearchParams` + `router.replace()`. Usar `Suspense` ao redor do componente de página.
+
+```tsx
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
+
+function PageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const [filter, setFilter] = useState(searchParams.get('filter') ?? '')
+
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (filter) p.set('filter', filter)
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, filter])
+  // ...
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <PageContent />
+    </Suspense>
+  )
+}
+```
+
+---
+
+## 8. Implementation Checklist
 
 Before marking any task as done, verify:
 

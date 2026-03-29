@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ExternalLink } from 'lucide-react'
+import { useState, useEffect, Suspense } from 'react'
+import { ExternalLink, Info, Search } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -118,15 +119,48 @@ function BillingActions({ billing }: { billing: Billing }) {
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function BillingPage() {
-  const [statusFilter, setStatusFilter] = useState<BillingStatus | ''>('')
-  const [customerSearch, setCustomerSearch] = useState('')
-  const [customerSearchDebounced, setCustomerSearchDebounced] = useState('')
+function BillingPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const [statusFilter, setStatusFilter] = useState<BillingStatus | ''>((searchParams.get('status') as BillingStatus | null) ?? '')
+  const [customerSearch, setCustomerSearch] = useState(searchParams.get('customer') ?? '')
+  const [customerSearchDebounced, setCustomerSearchDebounced] = useState(searchParams.get('customer') ?? '')
 
   useEffect(() => {
     const timer = setTimeout(() => setCustomerSearchDebounced(customerSearch), 250)
     return () => clearTimeout(timer)
   }, [customerSearch])
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (statusFilter) p.set('status', statusFilter)
+    if (customerSearch) p.set('customer', customerSearch)
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, statusFilter, customerSearch])
+
+  const isDefaultFilters = statusFilter === '' && customerSearch === ''
+
+  function resetFilters() {
+    setStatusFilter('')
+    setCustomerSearch('')
+    setCustomerSearchDebounced('')
+  }
+
+  function buildFilterLabel(): string {
+    const parts: string[] = []
+    const statusLabel: Record<string, string> = {
+      '': 'todos os status',
+      pending: 'Pendente',
+      paid: 'Pago',
+      overdue: 'Vencido',
+      cancelled: 'Cancelado',
+    }
+    parts.push(statusLabel[statusFilter] ?? statusFilter)
+    if (customerSearchDebounced) parts.push(`cliente: ${customerSearchDebounced}`)
+    return parts.join(' · ')
+  }
 
   const params: Record<string, string> = {
     ...(statusFilter && { status: statusFilter }),
@@ -154,29 +188,50 @@ export default function BillingPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex gap-2">
-        {statuses.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => setStatusFilter(s.value)}
-            className={[
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              statusFilter === s.value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-input bg-card text-muted-foreground hover:bg-accent',
-            ].join(' ')}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1">
+          {statuses.map((s) => (
+            <button
+              key={s.value}
+              onClick={() => setStatusFilter(s.value)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                statusFilter === s.value
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              {s.label}
+            </button>
+          ))}
+          </div>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar por cliente…"
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary w-48"
+            />
+          </div>
         </div>
-        <Input
-          placeholder="Buscar por cliente…"
-          value={customerSearch}
-          onChange={(e) => setCustomerSearch(e.target.value)}
-          className="h-8 w-48 text-sm"
-        />
+
+        {/* Legenda descritiva */}
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -281,5 +336,15 @@ export default function BillingPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// ──── Export ───────────────────────────────────────────────────────────────────
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={null}>
+      <BillingPageContent />
+    </Suspense>
   )
 }

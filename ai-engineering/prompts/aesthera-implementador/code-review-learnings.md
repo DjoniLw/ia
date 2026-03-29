@@ -96,6 +96,32 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: o cliente **nunca** deve poder nomear ou referenciar uma chave de storage diretamente no `confirm` — o `storageKey` é determinado pelo servidor no `presign` e recuperado pelo `id` no `confirm`. Isso previne path traversal de bucket e violação de multi-tenancy
   - 📅 Aprendido em: 25/03/2026 — revisão de `POST /uploads/confirm` recebendo `storageKey` bruto sem validação de intent de presign
 
+- [ ] **Upload de recursos de empresa (não por cliente) deve usar caminho `templates/{clinicId}/{uuid}.ext` via presign customizado no módulo — nunca o fluxo `CustomerFile`**
+  - 🔴 Anti-padrão: usar o fluxo `CustomerFile` (ou qualquer entidade que exige `customerId`) para fazer upload de arquivos vinculados à clínica como um todo (ex.: templates de anamnese, logotipo, protocolos padrão) — o fluxo `CustomerFile` exige `customerId` e será rejeitado ou vai criar vínculos incorretos com um cliente inexistente
+  - ✅ Correto: implementar um endpoint de presign dedicado no módulo responsável, gerando a chave de storage com o padrão:
+    ```
+    templates/{clinicId}/{uuid}.ext
+    ```
+    Exemplo de implementação:
+    ```ts
+    // no módulo (ex.: anamnese-templates.service.ts)
+    async presignTemplateUpload(clinicId: string, ext: string) {
+      const key = `templates/${clinicId}/${randomUUID()}.${ext}`;
+      const presignedUrl = await this.storage.presign(key, 'PUT', 15); // 15 min
+      const pending = await this.prisma.pendingUpload.create({
+        data: { storageKey: key, clinicId, expiresAt: addMinutes(new Date(), 15) },
+      });
+      return { uploadId: pending.id, presignedUrl };
+    }
+    ```
+    O `confirm` segue o mesmo padrão de presign/confirm: valida pelo `uploadId` server-side com `clinicId`, nunca recebe `storageKey` do cliente.
+  - 📌 Regra geral: o fluxo `CustomerFile` é exclusivo para arquivos vinculados a **um cliente específico** (exige `customerId`). Qualquer recurso de empresa (template, protocolo, imagem de serviço, logotipo) deve ter seu próprio presign com chave `{contexto}/{clinicId}/{uuid}.ext`, sem depender do fluxo de customer
+  - 📌 Convenção de prefixos de storage:
+    - `customers/{clinicId}/{customerId}/{uuid}.ext` → arquivo de cliente (usar CustomerFile)
+    - `templates/{clinicId}/{uuid}.ext` → template/recurso de empresa (presign no módulo)
+    - `clinic/{clinicId}/{uuid}.ext` → recurso geral da clínica (ex.: logotipo)
+  - 📅 Aprendido em: 29/03/2026 — code review identificou uso incorreto de CustomerFile para upload de templates de empresa
+
 ### Prisma / Banco de Dados
 
 - [ ] **IDOR em updates Prisma: sempre incluir `clinicId` no `where` para evitar que um tenant altere dados de outro**
@@ -351,3 +377,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 26/03/2026 | PR #128 | 1 padrão adicionado pelo treinador-agent: arquivos `.tsx` com acentuação PT-BR devem ser salvos em UTF-8 sem BOM no Windows — BOM (U+FEFF) e double-encoding causam corrupção total de texto na interface; correção via VS Code → `Save with Encoding` → UTF-8 |
 | 25/03/2026 | — | 4 padrões adicionados pelo treinador-agent (issue #124 — revisão transversal de filtros): (1) `<select>` para entidades cadastradas é BLOQUEANTE — usar `<ComboboxSearch>`; (2) `<select>` para status fixo → corrigir para pills; (3) legenda descritiva + botão "Restaurar padrão" obrigatórios em toda tela com filtros; (4) URL sync via `useSearchParams` em filtros de telas financeiras |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: após abrir qualquer PR, adicionar cenários de teste manual como comentário (não no corpo) via `mcp_github_add_issue_comment` — tabela Markdown por área (Settings, Ficha do Cliente, API/Multi-tenancy, Scripts) com colunas #, Cenário, Resultado esperado; cobrir fluxo feliz, casos de borda, permissões por papel e estados vazios/negativos |
+| 29/03/2026 | — | 1 padrão adicionado pelo treinador-agent: upload de recursos de empresa (não por cliente) usa caminho `templates/{clinicId}/{uuid}.ext` via presign customizado no módulo — nunca usar o fluxo `CustomerFile` que exige `customerId`; convenção de prefixos de storage: `customers/` para arquivos de cliente, `templates/` para templates de empresa, `clinic/` para recursos gerais da clínica |

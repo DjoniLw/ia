@@ -95,6 +95,7 @@ export interface Customer {
   address: CustomerAddress | null
   metadata: CustomerMeta | null
   bodyDataConsentAt: string | null
+  active: boolean
   createdAt: string
 }
 
@@ -653,5 +654,168 @@ export function useAvailableEquipment(scheduledAt: string, durationMinutes: numb
         .then((r) => r.data),
     enabled: !!(scheduledAt && durationMinutes),
     staleTime: 0,
+  })
+}
+
+// ──── Contract Templates ───────────────────────────────────────────────────────
+
+export interface ContractTemplate {
+  id: string
+  name: string
+  description: string | null
+  storageKey: string | null
+  active: boolean
+  createdAt: string
+}
+
+export function useContractTemplates() {
+  return useQuery<ContractTemplate[]>({
+    queryKey: ['contract-templates'],
+    queryFn: () => api.get('/contract-templates').then((r) => r.data),
+  })
+}
+
+export function useCreateContractTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { name: string; description?: string; storageKey?: string }) =>
+      api.post('/contract-templates', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract-templates'] }),
+  })
+}
+
+export function useUpdateContractTemplate(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Partial<ContractTemplate>) =>
+      api.patch(`/contract-templates/${id}`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract-templates'] }),
+  })
+}
+
+export function useDeleteContractTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/contract-templates/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contract-templates'] }),
+  })
+}
+
+export function usePresignTemplate() {
+  return useMutation({
+    mutationFn: (data: { fileName: string; mimeType: string; size: number }) =>
+      api.post('/contract-templates/presign', data).then((r) => r.data as { storageKey: string; presignedUrl: string }),
+  })
+}
+
+// ──── Customer Contracts ───────────────────────────────────────────────────────
+
+export interface CustomerContract {
+  id: string
+  clinicId: string
+  customerId: string
+  templateId: string | null
+  label: string | null
+  status: 'pending' | 'signed'
+  signatureMode: 'assinafy' | 'manual' | 'uploaded' | null
+  signLink: string | null
+  externalId: string | null
+  signedAt: string | null
+  sentAt: string | null
+  signerIp: string | null
+  createdAt: string
+  template: { name: string; storageKey: string | null } | null
+}
+
+export function useCustomerContracts(customerId: string) {
+  return useQuery<CustomerContract[]>({
+    queryKey: ['customer-contracts', customerId],
+    queryFn: () => api.get(`/customers/${customerId}/contracts`).then((r) => r.data),
+    enabled: !!customerId,
+  })
+}
+
+export function useCreateCustomerContract(customerId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { templateId: string }) =>
+      api.post(`/customers/${customerId}/contracts`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export function useSendAssinafy(customerId: string, contractId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { customerEmail?: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/send-assinafy`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export function useSignManual(customerId: string, contractId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { signature: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/sign-manual`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export interface ContractView {
+  id: string
+  status: 'pending' | 'signed'
+  signatureMode: 'assinafy' | 'manual' | 'uploaded' | null
+  signedAt: string | null
+  fileUrl: string | null
+  signedFileUrl: string | null
+  signature: string | null
+}
+
+export function useGetContractView(customerId: string) {
+  return useMutation({
+    mutationFn: (contractId: string) =>
+      api.get(`/customers/${customerId}/contracts/${contractId}/view`).then((r) => r.data as ContractView),
+  })
+}
+
+export function useSendContractWhatsApp(customerId: string) {
+  return useMutation({
+    mutationFn: ({ contractId, phone }: { contractId: string; phone: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/send-whatsapp`, { phone }).then((r) => r.data),
+  })
+}
+
+export function usePresignSignedContract(customerId: string) {
+  return useMutation({
+    mutationFn: ({ contractId, fileName, mimeType, size }: { contractId: string; fileName: string; mimeType: string; size: number }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/presign-signed`, { fileName, mimeType, size })
+        .then((r) => r.data as { storageKey: string; presignedUrl: string }),
+  })
+}
+
+export function useConfirmSignedUpload(customerId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ contractId, storageKey }: { contractId: string; storageKey: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/confirm-upload-signed`, { storageKey }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export function usePresignStandaloneSigned(customerId: string) {
+  return useMutation({
+    mutationFn: (data: { label: string; fileName: string; mimeType: string; size: number }) =>
+      api.post(`/customers/${customerId}/contracts/presign-standalone-signed`, data)
+        .then((r) => r.data as { storageKey: string; presignedUrl: string }),
+  })
+}
+
+export function useConfirmStandaloneSigned(customerId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { label: string; storageKey: string }) =>
+      api.post(`/customers/${customerId}/contracts/confirm-standalone-signed`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
   })
 }

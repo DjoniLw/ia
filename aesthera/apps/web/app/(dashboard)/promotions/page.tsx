@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   type CreatePromotionInput,
@@ -318,12 +318,38 @@ function UsageCell({ promotion }: { promotion: Promotion }) {
 
 export default function PromotionsPage() {
   const [statusFilter, setStatusFilter] = useState<PromotionStatus | ''>('')
+  const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Promotion | undefined>()
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const params = statusFilter ? { status: statusFilter } : undefined
   const { data, isLoading } = usePromotions(params)
+
+  const filtered = (data?.items ?? []).filter((p) =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.code.toLowerCase().includes(search.toLowerCase()),
+  )
+
+  const isDefaultFilters = statusFilter === '' && search === ''
+
+  function resetFilters() {
+    setStatusFilter('')
+    setSearch('')
+  }
+
+  function buildFilterLabel(): string {
+    const parts: string[] = []
+    const map: Record<string, string> = {
+      '': 'todos os status',
+      active: 'Ativo',
+      inactive: 'Inativo',
+      expired: 'Expirado',
+    }
+    parts.push(map[statusFilter] ?? statusFilter)
+    if (search) parts.push(`busca: ${search}`)
+    return parts.join(' · ')
+  }
 
   const statusOptions: Array<{ value: PromotionStatus | ''; label: string }> = [
     { value: '', label: 'Todos' },
@@ -348,21 +374,48 @@ export default function PromotionsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        {statusOptions.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => setStatusFilter(s.value)}
-            className={[
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-              statusFilter === s.value
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-input bg-card text-muted-foreground hover:bg-accent',
-            ].join(' ')}
-          >
-            {s.label}
-          </button>
-        ))}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome ou código…"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          {statusOptions.map((s) => (
+            <button
+              key={s.value}
+              onClick={() => setStatusFilter(s.value)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                statusFilter === s.value
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Legenda descritiva */}
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -393,7 +446,10 @@ export default function PromotionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {data.items.map((promo) => (
+                {filtered.length === 0 && (
+                  <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Nenhuma promoção encontrada para os filtros selecionados.</td></tr>
+                )}
+                {filtered.map((promo) => (
                   <>
                     <tr key={promo.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3">

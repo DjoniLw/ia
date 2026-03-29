@@ -45,6 +45,10 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
 
+  // Integração Assinafy via n8n
+  N8N_CONTRACTS_WEBHOOK_URL: z.string().url().optional(),
+  CONTRACTS_WEBHOOK_SECRET: z.string().optional(),
+
   // Allowed origin(s) for CORS. Comma-separated list, or '*' for all origins.
   // Example: https://app.aesthera.com,https://aesthera-web.up.railway.app
   // Defaults to '*' so the web frontend can reach the API out of the box.

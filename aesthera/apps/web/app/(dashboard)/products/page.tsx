@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, ChevronDown, Package, Pencil, Plus, ShoppingCart, Trash2 } from 'lucide-react'
+import { AlertCircle, ChevronDown, Info, Package, Pencil, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -279,6 +279,9 @@ function SellDialog({ product, onClose }: { product: Product; onClose: () => voi
 
 type PageTab = 'catalog' | 'sales'
 
+type ProductStatusFilter = 'all' | 'active' | 'inactive'
+const PRODUCT_STATUS_LABELS: Record<ProductStatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
+
 export default function ProductsPage() {
   const [tab, setTab] = useState<PageTab>('catalog')
   const [creating, setCreating] = useState(false)
@@ -358,6 +361,34 @@ export default function ProductsPage() {
 
   const lowStock = products?.items.filter((p) => p.stock <= p.minStock && p.active) ?? []
 
+  // ── Filters ──
+  const [productSearch, setProductSearch] = useState('')
+  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>('all')
+
+  const filteredProducts = (products?.items ?? []).filter((p) => {
+    const matchesSearch = p.name.toLowerCase().includes(productSearch.toLowerCase())
+    const matchesStatus =
+      productStatusFilter === 'all' ||
+      (productStatusFilter === 'active' && p.active) ||
+      (productStatusFilter === 'inactive' && !p.active)
+    return matchesSearch && matchesStatus
+  })
+
+  const isDefaultProductFilters = productSearch === '' && productStatusFilter === 'all'
+
+  function resetProductFilters() {
+    setProductSearch('')
+    setProductStatusFilter('all')
+  }
+
+  function buildProductFilterLabel(): string {
+    const parts: string[] = []
+    const statusMap: Record<ProductStatusFilter, string> = { all: 'todos', active: 'apenas ativos', inactive: 'apenas inativos' }
+    parts.push(statusMap[productStatusFilter])
+    if (productSearch) parts.push(`busca: ${productSearch}`)
+    return parts.join(' · ')
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -402,7 +433,45 @@ export default function ProductsPage() {
 
       {/* Product catalog */}
       {tab === 'catalog' && (
-        <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Buscar por nome…"
+                className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            {(['all', 'active', 'inactive'] as ProductStatusFilter[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setProductStatusFilter(s)}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  productStatusFilter === s
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {PRODUCT_STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            <span>Exibindo {buildProductFilterLabel()}</span>
+            {!isDefaultProductFilters && (
+              <button type="button" onClick={resetProductFilters} className="ml-auto shrink-0 font-medium text-primary hover:underline">
+                Restaurar padrão
+              </button>
+            )}
+          </div>
+
+          <div className="rounded-lg border bg-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-muted-foreground">
@@ -419,10 +488,10 @@ export default function ProductsPage() {
               {isLoading && (
                 <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>
               )}
-              {!isLoading && products?.items.length === 0 && (
-                <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum produto cadastrado.</td></tr>
+              {!isLoading && filteredProducts.length === 0 && (
+                <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td></tr>
               )}
-              {products?.items.map((p) => {
+              {filteredProducts.map((p) => {
                 const isLow = p.stock <= p.minStock
                 return (
                   <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
@@ -475,6 +544,7 @@ export default function ProductsPage() {
               })}
             </tbody>
           </table>
+        </div>
         </div>
       )}
 

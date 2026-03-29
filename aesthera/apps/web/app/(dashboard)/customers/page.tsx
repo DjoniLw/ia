@@ -1,8 +1,8 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, FileSignature, Loader2, Package, Pencil, Plus, Scissors, Search, Trash2, User, Wallet } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, MessageCircle, Package, Pencil, Plus, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -32,9 +32,23 @@ import {
   useCustomers,
   useDeleteCustomer,
   useUpdateCustomer,
+  useCustomerContracts,
+  useCreateCustomerContract,
+  useSendAssinafy,
+  useSignManual,
+  useGetContractView,
+  useSendContractWhatsApp,
+  usePresignSignedContract,
+  useConfirmSignedUpload,
+  usePresignStandaloneSigned,
+  useConfirmStandaloneSigned,
+  useContractTemplates,
+  type CustomerContract,
+  type ContractView,
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
+import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
 import { api } from '@/lib/api'
 import Link from 'next/link'
 import { useRole } from '@/lib/hooks/use-role'
@@ -480,89 +494,6 @@ function CustomerForm({
             )}
           </div>
 
-          {/* Anamnese */}
-          <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Tipo de pele</Label>
-            <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('ana_skinType')}>
-              <option value="">Selecione…</option>
-              <option>Normal</option>
-              <option>Seca</option>
-              <option>Oleosa</option>
-              <option>Mista</option>
-              <option>Sensível</option>
-              <option>Acneica</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Alergias conhecidas</Label>
-            <textarea
-              {...register('ana_allergies')}
-              rows={2}
-              placeholder="Ex: alergia a látex, peróxido de benzoíla…"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Medicamentos em uso</Label>
-            <textarea
-              {...register('ana_medications')}
-              rows={2}
-              placeholder="Ex: Isotretinoína 20mg, anticoagulantes…"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Condições de saúde / doenças</Label>
-            <textarea
-              {...register('ana_conditions')}
-              rows={2}
-              placeholder="Ex: diabetes, hipertensão, epilepsia…"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Tratamentos anteriores</Label>
-              <textarea
-                {...register('ana_previousTreatments')}
-                rows={3}
-                placeholder="Quais procedimentos já realizou…"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tratamentos em andamento</Label>
-              <textarea
-                {...register('ana_currentTreatments')}
-                rows={3}
-                placeholder="Procedimentos em curso em outra clínica…"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Observações clínicas</Label>
-            <textarea
-              {...register('ana_observations')}
-              rows={3}
-              placeholder="Outras informações relevantes…"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="consent" {...register('ana_consentSigned')} className="h-4 w-4" />
-            <label htmlFor="consent" className="text-sm text-foreground">
-              Termo de consentimento assinado
-            </label>
-          </div>
-          </div>{/* end anamnese */}
         </div>
       )}
 
@@ -984,6 +915,750 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
             ))}
           </div>
         )
+      )}
+    </div>
+  )
+}
+
+// ──── Contracts Tab ────────────────────────────────────────────────────────────
+
+const CONTRACT_STATUS_LABEL: Record<CustomerContract['status'], string> = {
+  pending: 'Pendente',
+  signed:  'Assinado',
+}
+const CONTRACT_STATUS_CLASS: Record<CustomerContract['status'], string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  signed:  'bg-green-100 text-green-700',
+}
+
+function SignatureCanvas({
+  onConfirm,
+  onCancel,
+  isPending,
+}: {
+  onConfirm: (base64: string) => void
+  onCancel: () => void
+  isPending: boolean
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const drawing = useRef(false)
+
+  function getPos(e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) {
+    const rect = canvas.getBoundingClientRect()
+    if ('touches' in e) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top }
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  }
+
+  function startDraw(e: React.MouseEvent | React.TouchEvent) {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    drawing.current = true
+    const ctx = canvas.getContext('2d')!
+    const pos = getPos(e, canvas)
+    ctx.beginPath()
+    ctx.moveTo(pos.x, pos.y)
+  }
+
+  function draw(e: React.MouseEvent | React.TouchEvent) {
+    if (!drawing.current) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    const pos = getPos(e, canvas)
+    ctx.lineTo(pos.x, pos.y)
+    ctx.strokeStyle = '#111'
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.stroke()
+  }
+
+  function stopDraw() { drawing.current = false }
+
+  function handleClear() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
+
+  function handleConfirm() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    onConfirm(canvas.toDataURL('image/png'))
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">Assine abaixo usando o mouse ou toque:</p>
+      <div className="rounded-lg border overflow-hidden bg-white">
+        <canvas
+          ref={canvasRef}
+          width={480}
+          height={200}
+          className="w-full touch-none cursor-crosshair"
+          onMouseDown={startDraw}
+          onMouseMove={draw}
+          onMouseUp={stopDraw}
+          onMouseLeave={stopDraw}
+          onTouchStart={startDraw}
+          onTouchMove={draw}
+          onTouchEnd={stopDraw}
+        />
+      </div>
+      <div className="flex justify-between">
+        <Button variant="outline" size="sm" onClick={handleClear}>Limpar</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
+          <Button size="sm" onClick={handleConfirm} disabled={isPending}>
+            {isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Confirmar assinatura
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ContractsTab({ customer }: { customer: Customer }) {
+  const { data: contracts = [], isLoading } = useCustomerContracts(customer.id)
+  const { data: templates = [] } = useContractTemplates()
+  const activeTemplates = templates.filter((t) => t.active)
+
+  const createContract = useCreateCustomerContract(customer.id)
+
+  const [addingContract, setAddingContract] = useState(false)
+  const [selectedTemplateItem, setSelectedTemplateItem] = useState<ComboboxItem | null>(null)
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('')
+  const templateComboItems = activeTemplates
+    .filter(t => !templateSearchQuery || t.name.toLowerCase().includes(templateSearchQuery.toLowerCase()))
+    .map(t => ({ value: t.id, label: t.name }))
+  const [signingContract, setSigningContract] = useState<CustomerContract | null>(null)
+  const [sendingAssinafy, setSendingAssinafy] = useState<CustomerContract | null>(null)
+  const [assinafyEmail, setAssinafyEmail] = useState(customer.email ?? '')
+  const [viewingContract, setViewingContract] = useState<CustomerContract | null>(null)
+  const [contractViewData, setContractViewData] = useState<ContractView | null>(null)
+  const [sendingWhatsApp, setSendingWhatsApp] = useState<CustomerContract | null>(null)
+  const [whatsappPhone, setWhatsappPhone] = useState('')
+  const [uploadingSignedContract, setUploadingSignedContract] = useState<CustomerContract | null>(null)
+  const [uploadSignedFile, setUploadSignedFile] = useState<File | null>(null)
+  const [uploadSignedProgress, setUploadSignedProgress] = useState<'idle' | 'uploading' | 'confirming'>('idle')
+  const uploadSignedInputRef = useRef<HTMLInputElement | null>(null)
+  const [uploadingStandalone, setUploadingStandalone] = useState(false)
+  const [standaloneLabel, setStandaloneLabel] = useState('')
+  const [standaloneFile, setStandaloneFile] = useState<File | null>(null)
+  const [standaloneProgress, setStandaloneProgress] = useState<'idle' | 'uploading' | 'confirming'>('idle')
+  const standaloneInputRef = useRef<HTMLInputElement | null>(null)
+
+  const sendAssinafy = useSendAssinafy(
+    customer.id,
+    sendingAssinafy?.id ?? '',
+  )
+  const signManual = useSignManual(
+    customer.id,
+    signingContract?.id ?? '',
+  )
+  const getContractView = useGetContractView(customer.id)
+  const sendContractWhatsApp = useSendContractWhatsApp(customer.id)
+  const presignSignedContract = usePresignSignedContract(customer.id)
+  const confirmSignedUpload = useConfirmSignedUpload(customer.id)
+  const presignStandalone = usePresignStandaloneSigned(customer.id)
+  const confirmStandalone = useConfirmStandaloneSigned(customer.id)
+
+  async function handleAddContract() {
+    if (!selectedTemplateItem) { toast.error('Selecione um modelo'); return }
+    try {
+      await createContract.mutateAsync({ templateId: selectedTemplateItem.value })
+      toast.success('Contrato adicionado')
+      setAddingContract(false)
+      setSelectedTemplateItem(null)
+      setTemplateSearchQuery('')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao adicionar contrato')
+    }
+  }
+
+  async function handleSendAssinafy() {
+    try {
+      await sendAssinafy.mutateAsync({ customerEmail: assinafyEmail || undefined })
+      toast.success('Contrato enviado para assinatura')
+      setSendingAssinafy(null)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao enviar contrato')
+    }
+  }
+
+  async function handleSignManual(base64: string) {
+    try {
+      await signManual.mutateAsync({ signature: base64 })
+      toast.success('Contrato assinado')
+      setSigningContract(null)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao assinar contrato')
+    }
+  }
+
+  async function handleViewContract(contract: CustomerContract) {
+    setViewingContract(contract)
+    setContractViewData(null)
+    try {
+      const view = await getContractView.mutateAsync(contract.id)
+      setContractViewData(view)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao carregar visualização do contrato')
+      setViewingContract(null)
+    }
+  }
+
+  async function handleSendWhatsApp() {
+    if (!sendingWhatsApp) return
+    try {
+      await sendContractWhatsApp.mutateAsync({ contractId: sendingWhatsApp.id, phone: whatsappPhone })
+      toast.success('Link de assinatura enviado via WhatsApp')
+      setSendingWhatsApp(null)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao enviar WhatsApp')
+    }
+  }
+
+  async function handleUploadSigned() {
+    if (!uploadingSignedContract || !uploadSignedFile) return
+    try {
+      setUploadSignedProgress('uploading')
+      const { storageKey, presignedUrl } = await presignSignedContract.mutateAsync({
+        contractId: uploadingSignedContract.id,
+        fileName: uploadSignedFile.name,
+        mimeType: uploadSignedFile.type || 'application/pdf',
+        size: uploadSignedFile.size,
+      })
+      // Upload direto ao R2
+      const uploadRes = await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': uploadSignedFile.type || 'application/pdf' },
+        body: uploadSignedFile,
+      })
+      if (!uploadRes.ok) {
+        throw new Error(`Falha no upload: ${uploadRes.status}`)
+      }
+      setUploadSignedProgress('confirming')
+      await confirmSignedUpload.mutateAsync({ contractId: uploadingSignedContract.id, storageKey })
+      toast.success('Contrato assinado enviado com sucesso')
+      setUploadingSignedContract(null)
+      setUploadSignedFile(null)
+      setUploadSignedProgress('idle')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao enviar contrato assinado')
+      setUploadSignedProgress('idle')
+    }
+  }
+
+  async function handleUploadStandalone() {
+    if (!standaloneFile || !standaloneLabel.trim()) return
+    try {
+      setStandaloneProgress('uploading')
+      const { storageKey, presignedUrl } = await presignStandalone.mutateAsync({
+        label: standaloneLabel.trim(),
+        fileName: standaloneFile.name,
+        mimeType: standaloneFile.type || 'application/pdf',
+        size: standaloneFile.size,
+      })
+      const uploadRes = await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': standaloneFile.type || 'application/pdf' },
+        body: standaloneFile,
+      })
+      if (!uploadRes.ok) throw new Error(`Falha no upload: ${uploadRes.status}`)
+      setStandaloneProgress('confirming')
+      await confirmStandalone.mutateAsync({ label: standaloneLabel.trim(), storageKey })
+      toast.success('Documento assinado registrado com sucesso')
+      setUploadingStandalone(false)
+      setStandaloneLabel('')
+      setStandaloneFile(null)
+      setStandaloneProgress('idle')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao registrar documento assinado')
+      setStandaloneProgress('idle')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* LGPD info */}
+      <div className="rounded-xl border p-4 space-y-1">
+        <p className="text-sm font-semibold flex items-center gap-2">
+          <FileSignature className="h-3.5 w-3.5 text-muted-foreground" />
+          Consentimento LGPD (Art. 11)
+        </p>
+        {customer.bodyDataConsentAt ? (
+          <p className="text-xs text-muted-foreground">
+            Registrado em {new Date(customer.bodyDataConsentAt).toLocaleDateString('pt-BR')}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">Consentimento não registrado</p>
+        )}
+      </div>
+
+      {/* Cabeçalho contratos */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Contratos
+        </p>
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { setUploadingStandalone(true); setStandaloneLabel(''); setStandaloneFile(null); setStandaloneProgress('idle') }}
+          >
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            Carregar assinado
+          </Button>
+          {activeTemplates.length > 0 && (
+            <Button size="sm" variant="outline" onClick={() => setAddingContract(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Adicionar
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Lista de contratos */}
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Carregando contratos...
+        </div>
+      ) : contracts.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-6 text-center">
+          <FileText className="mx-auto h-6 w-6 text-muted-foreground mb-1.5" />
+          <p className="text-xs text-muted-foreground">Nenhum contrato vinculado</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {contracts.map((c) => (
+            <div key={c.id} className="rounded-lg border px-4 py-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">{c.label ?? c.template?.name ?? '—'}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${CONTRACT_STATUS_CLASS[c.status]}`}>
+                      {CONTRACT_STATUS_LABEL[c.status]}
+                    </span>
+                    {c.signatureMode === 'assinafy' && (
+                      <span className="text-xs text-muted-foreground">via Assinafy</span>
+                    )}
+                    {c.signatureMode === 'manual' && (
+                      <span className="text-xs text-muted-foreground">Assinatura manual</span>
+                    )}
+                    {c.signatureMode === 'uploaded' && (
+                      <span className="text-xs text-muted-foreground">Contrato carregado</span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    <span>Enviado: {c.sentAt ? new Date(c.sentAt).toLocaleDateString('pt-BR') : '—'}</span>
+                    <span>Assinado: {c.signedAt ? new Date(c.signedAt).toLocaleDateString('pt-BR') : '—'}</span>
+                  </div>
+                </div>
+                {/* Ações */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void handleViewContract(c)}
+                    title="Visualizar contrato"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                  {c.status === 'pending' && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setSendingAssinafy(c); setAssinafyEmail(customer.email ?? '') }}
+                        title="Enviar para assinatura (Assinafy)"
+                      >
+                        <Send className="h-3.5 w-3.5 mr-1.5" />
+                        Assinafy
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setSendingWhatsApp(c); setWhatsappPhone(customer.phone ?? '') }}
+                        title="Enviar link de assinatura via WhatsApp"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+                        WhatsApp
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSigningContract(c)}
+                        title="Assinar manualmente"
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                        Manual
+                      </Button>
+                    </>
+                  )}
+                  {c.status === 'signed' && c.signLink && (
+                    <a href={c.signLink} target="_blank" rel="noopener noreferrer">
+                      <Button variant="ghost" size="sm" title="Ver link de assinatura">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog: adicionar contrato */}
+      {addingContract && (
+        <Dialog open onClose={() => { setAddingContract(false); setSelectedTemplateItem(null); setTemplateSearchQuery('') }}>
+          <DialogTitle>Adicionar contrato</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Modelo de contrato</Label>
+              <ComboboxSearch
+                value={selectedTemplateItem}
+                onChange={setSelectedTemplateItem}
+                onSearch={setTemplateSearchQuery}
+                items={templateComboItems}
+                placeholder="Buscar modelo…"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => { setAddingContract(false); setSelectedTemplateItem(null); setTemplateSearchQuery('') }}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={() => void handleAddContract()}
+                disabled={createContract.isPending || !selectedTemplateItem}
+              >
+                {createContract.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Adicionar
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: enviar para Assinafy */}
+      {sendingAssinafy && (
+        <Dialog open onClose={() => setSendingAssinafy(null)}>
+          <DialogTitle>Enviar para assinatura (Assinafy)</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Contrato: <strong>{sendingAssinafy.label ?? sendingAssinafy.template?.name ?? '—'}</strong>
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="assinafy-email">E-mail do cliente</Label>
+              <Input
+                id="assinafy-email"
+                type="email"
+                className="h-8 text-sm"
+                placeholder="email@exemplo.com"
+                value={assinafyEmail}
+                onChange={(e) => setAssinafyEmail(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setSendingAssinafy(null)}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={() => void handleSendAssinafy()}
+                disabled={sendAssinafy.isPending}
+              >
+                {sendAssinafy.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                Enviar
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: assinatura manual */}
+      {signingContract && (
+        <Dialog open onClose={() => setSigningContract(null)}>
+          <DialogTitle>Assinar contrato manualmente</DialogTitle>
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground mb-3">
+              Contrato: <strong>{signingContract.label ?? signingContract.template?.name ?? '—'}</strong>
+            </p>
+            <SignatureCanvas
+              onConfirm={(b64) => void handleSignManual(b64)}
+              onCancel={() => setSigningContract(null)}
+              isPending={signManual.isPending}
+            />
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: visualizar contrato */}
+      {viewingContract && (
+        <Dialog open onClose={() => { setViewingContract(null); setContractViewData(null) }}>
+          <DialogTitle>Visualizar contrato</DialogTitle>
+          <div className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {viewingContract.label ?? viewingContract.template?.name ?? '—'}
+            </p>
+            {getContractView.isPending && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Carregando...
+              </div>
+            )}
+            {contractViewData && (
+              <div className="space-y-3">
+                {contractViewData.fileUrl && (
+                  <a
+                    href={contractViewData.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-primary underline underline-offset-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Abrir documento
+                  </a>
+                )}
+                {contractViewData.signedFileUrl && (
+                  <a
+                    href={contractViewData.signedFileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-primary underline underline-offset-2"
+                  >
+                    <FileSignature className="h-4 w-4" />
+                    Abrir documento assinado
+                  </a>
+                )}
+                {contractViewData.signature && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Assinatura registrada</p>
+                    <div className="rounded-lg border p-2 bg-white">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={contractViewData.signature}
+                        alt="Assinatura"
+                        className="max-h-32 max-w-full object-contain"
+                      />
+                    </div>
+                    {contractViewData.signedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Assinado em {new Date(contractViewData.signedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!contractViewData.fileUrl && !contractViewData.signedFileUrl && !contractViewData.signature && (
+                  <p className="text-sm text-muted-foreground">Nenhum arquivo disponível para este contrato.</p>
+                )}
+              </div>
+            )}
+            <div className="flex justify-end pt-2">
+              <Button variant="outline" size="sm" onClick={() => { setViewingContract(null); setContractViewData(null) }}>Fechar</Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: enviar via WhatsApp */}
+      {sendingWhatsApp && (
+        <Dialog open onClose={() => setSendingWhatsApp(null)}>
+          <DialogTitle>Enviar link de assinatura via WhatsApp</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Contrato: <strong>{sendingWhatsApp.label ?? sendingWhatsApp.template?.name ?? '—'}</strong>
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp-phone">Telefone (WhatsApp)</Label>
+              <Input
+                id="whatsapp-phone"
+                type="tel"
+                className="h-8 text-sm"
+                placeholder="5511999999999"
+                value={whatsappPhone}
+                onChange={(e) => setWhatsappPhone(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Informe o número com código do país (ex.: 5511999999999)</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setSendingWhatsApp(null)}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={() => void handleSendWhatsApp()}
+                disabled={sendContractWhatsApp.isPending || !whatsappPhone}
+              >
+                {sendContractWhatsApp.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+                Enviar
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: carregar contrato já assinado (vinculado ao template) */}
+      {uploadingSignedContract && (
+        <Dialog open onClose={() => { if (uploadSignedProgress === 'idle') { setUploadingSignedContract(null); setUploadSignedFile(null) } }}>
+          <DialogTitle>Carregar contrato assinado</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Contrato: <strong>{uploadingSignedContract.label ?? uploadingSignedContract.template?.name ?? '—'}</strong>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Selecione o PDF do contrato impresso e assinado manualmente.
+            </p>
+            <div className="space-y-2">
+              <input
+                ref={uploadSignedInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => setUploadSignedFile(e.target.files?.[0] ?? null)}
+              />
+              {uploadSignedFile ? (
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/50">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate flex-1">{uploadSignedFile.name}</span>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => { setUploadSignedFile(null); if (uploadSignedInputRef.current) uploadSignedInputRef.current.value = '' }}
+                  >
+                    Remover
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => uploadSignedInputRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  Selecionar PDF
+                </Button>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setUploadingSignedContract(null); setUploadSignedFile(null); setUploadSignedProgress('idle') }}
+                disabled={uploadSignedProgress !== 'idle'}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleUploadSigned()}
+                disabled={!uploadSignedFile || uploadSignedProgress !== 'idle'}
+              >
+                {uploadSignedProgress !== 'idle' && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                {uploadSignedProgress === 'uploading' && 'Enviando...'}
+                {uploadSignedProgress === 'confirming' && 'Confirmando...'}
+                {uploadSignedProgress === 'idle' && (
+                  <>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    Salvar contrato assinado
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: carregar documento assinado avulso (sem template) */}
+      {uploadingStandalone && (
+        <Dialog open onClose={() => { if (standaloneProgress === 'idle') { setUploadingStandalone(false); setStandaloneLabel(''); setStandaloneFile(null) } }}>
+          <DialogTitle>Carregar documento assinado</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-xs text-muted-foreground">
+              Para contratos impressos e assinados fisicamente. Não é necessário selecionar um modelo.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="standalone-label">Nome do documento</Label>
+              <Input
+                id="standalone-label"
+                className="h-8 text-sm"
+                placeholder="Ex.: Contrato de prestação de serviços"
+                value={standaloneLabel}
+                onChange={(e) => setStandaloneLabel(e.target.value)}
+                disabled={standaloneProgress !== 'idle'}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Arquivo PDF</Label>
+              <input
+                ref={standaloneInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => setStandaloneFile(e.target.files?.[0] ?? null)}
+              />
+              {standaloneFile ? (
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/50">
+                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate flex-1">{standaloneFile.name}</span>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => { setStandaloneFile(null); if (standaloneInputRef.current) standaloneInputRef.current.value = '' }}
+                    disabled={standaloneProgress !== 'idle'}
+                  >
+                    Remover
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => standaloneInputRef.current?.click()}
+                  disabled={standaloneProgress !== 'idle'}
+                >
+                  <Upload className="h-3.5 w-3.5 mr-1.5" />
+                  Selecionar PDF
+                </Button>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setUploadingStandalone(false); setStandaloneLabel(''); setStandaloneFile(null); setStandaloneProgress('idle') }}
+                disabled={standaloneProgress !== 'idle'}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleUploadStandalone()}
+                disabled={!standaloneFile || !standaloneLabel.trim() || standaloneProgress !== 'idle'}
+              >
+                {standaloneProgress !== 'idle' && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                {standaloneProgress === 'uploading' && 'Enviando...'}
+                {standaloneProgress === 'confirming' && 'Salvando...'}
+                {standaloneProgress === 'idle' && (
+                  <>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    Salvar documento
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
       )}
     </div>
   )
@@ -1907,25 +2582,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* ── Contratos ─────────────────────────────────────────────────── */}
       {detailTab === 'contracts' && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <FileSignature className="h-3.5 w-3.5 text-muted-foreground" />
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Consentimento LGPD</p>
-          </div>
-          <div className="rounded-xl border p-4 space-y-3">
-            <p className="text-sm font-semibold">Consentimento LGPD (Art. 11)</p>
-            {customer.bodyDataConsentAt ? (
-              <p className="text-sm text-muted-foreground">
-                Registrado em {new Date(customer.bodyDataConsentAt).toLocaleDateString('pt-BR')}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">Consentimento não registrado</p>
-            )}
-          </div>
-          <p className="rounded-lg border border-muted px-3 py-2 text-xs text-muted-foreground">
-            Para registrar ou revogar o consentimento, clique em &quot;Editar&quot; e acesse a aba &quot;Contratos &amp; LGPD&quot;.
-          </p>
-        </div>
+        <ContractsTab customer={customer} />
       )}
 
       {/* ── Evolução corporal ──────────────────────────────────────── */}
@@ -1949,7 +2606,24 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
 export default function CustomersPage() {
   const [search, setSearch] = useState('')
-  const { data, isLoading } = useCustomers(search ? { name: search } : undefined)
+  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
+
+  const queryParams: Record<string, string> = {}
+  if (search) queryParams.name = search
+  if (activeFilter !== 'all') queryParams.active = String(activeFilter === 'active')
+
+  const { data, isLoading } = useCustomers(Object.keys(queryParams).length ? queryParams : undefined)
+
+  const isDefaultFilters = search === '' && activeFilter === 'active'
+
+  function buildFilterLabel(): string {
+    const parts: string[] = []
+    if (activeFilter === 'active') parts.push('apenas ativos')
+    else if (activeFilter === 'inactive') parts.push('apenas inativos')
+    else parts.push('todos')
+    if (search) parts.push(`busca: ${search}`)
+    return parts.join(' · ')
+  }
   const createCustomer = useCreateCustomer()
   const deleteCustomer = useDeleteCustomer()
 
@@ -1961,6 +2635,7 @@ export default function CustomersPage() {
   const [aiSummary, setAiSummary] = useState<Customer | null>(null)
 
   const updateCustomer = useUpdateCustomer(editing?.id ?? '')
+  const toggleActive = useUpdateCustomer(editing?.id ?? '')
 
   function formatDate(iso: string | null) {
     if (!iso) return '—'
@@ -1994,8 +2669,9 @@ export default function CustomersPage() {
       await deleteCustomer.mutateAsync(id)
       toast.success('Cliente removido')
       setDeleting(null)
-    } catch {
-      toast.error('Erro ao remover cliente')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao remover cliente')
     }
   }
 
@@ -2009,15 +2685,48 @@ export default function CustomersPage() {
         <Button onClick={() => setCreating(true)}>+ Novo Cliente</Button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          className="pl-9"
-          placeholder="Buscar por nome…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Search + Filter + Legenda */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome…"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          {(['active', 'inactive', 'all'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setActiveFilter(v)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                activeFilter === v
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              {v === 'active' ? 'Ativos' : v === 'inactive' ? 'Inativos' : 'Todos'}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel()}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={() => { setSearch(''); setActiveFilter('active') }}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -2044,9 +2753,14 @@ export default function CustomersPage() {
             {data?.items.map((c) => (
               <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="py-3 pl-4 pr-2 font-medium">
-                  <button className="text-left hover:text-primary transition-colors" onClick={() => setViewing(c)}>
-                    {c.name}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button className="text-left hover:text-primary transition-colors" onClick={() => setViewing(c)}>
+                      {c.name}
+                    </button>
+                    {!c.active && (
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Inativo</span>
+                    )}
+                  </div>
                 </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.email ?? '—'}</td>
                 <td className="px-2 py-3 text-muted-foreground">{formatPhone(c.phone) ?? '—'}</td>
@@ -2088,7 +2802,30 @@ export default function CustomersPage() {
       {/* Edit dialog */}
       {editing && (
         <Dialog open onClose={() => setEditing(null)} isDirty={formDirty}>
-          <DialogTitle>Editar Cliente — {editing.name}</DialogTitle>
+          <div className="flex items-center justify-between gap-2">
+            <DialogTitle>Editar Cliente — {editing.name}</DialogTitle>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await toggleActive.mutateAsync({ active: !editing.active } as Parameters<typeof toggleActive.mutateAsync>[0])
+                  toast.success(editing.active ? 'Cliente inativado' : 'Cliente ativado')
+                  setEditing((prev) => prev ? { ...prev, active: !prev.active } : null)
+                } catch {
+                  toast.error('Erro ao alterar status do cliente')
+                }
+              }}
+              className={[
+                'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                editing.active
+                  ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20'
+                  : 'border-green-600/40 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400',
+              ].join(' ')}
+              disabled={toggleActive.isPending}
+            >
+              {toggleActive.isPending ? 'Aguarde…' : editing.active ? 'Inativar' : 'Ativar'}
+            </button>
+          </div>
           <div className="mt-4">
             <CustomerForm
               defaultValues={fromCustomer(editing)}

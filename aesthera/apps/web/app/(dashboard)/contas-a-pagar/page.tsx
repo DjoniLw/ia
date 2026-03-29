@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Clock, Plus, XCircle } from 'lucide-react'
+import { useEffect, useState, Suspense } from 'react'
+import { AlertCircle, CheckCircle2, Clock, Info, Plus, XCircle } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -27,6 +28,44 @@ function formatCurrency(cents: number) {
 function formatDate(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+function buildFilterLabel(
+  statusFilter: AccountsPayableStatus | '',
+  supplierSearch: string,
+  categoryFilter: string,
+  fromFilter: string,
+  toFilter: string,
+): string {
+  const parts: string[] = []
+
+  const now = new Date()
+  const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+  const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+
+  if (!fromFilter && !toFilter) {
+    parts.push('todo o período')
+  } else if (fromFilter === defaultFrom && toFilter === defaultTo) {
+    parts.push('mês atual')
+  } else if (fromFilter && !toFilter) {
+    parts.push(`a partir de ${formatDate(fromFilter)}`)
+  } else if (fromFilter && toFilter) {
+    parts.push(`de ${formatDate(fromFilter)} até ${formatDate(toFilter)}`)
+  }
+
+  const statusLabel: Record<string, string> = {
+    '': 'todos os status',
+    PENDING: 'Pendente',
+    OVERDUE: 'Vencida',
+    PAID: 'Paga',
+    CANCELLED: 'Cancelada',
+  }
+  parts.push(statusLabel[statusFilter] ?? statusFilter)
+
+  if (categoryFilter) parts.push(categoryFilter)
+  if (supplierSearch) parts.push(`fornecedor: ${supplierSearch}`)
+
+  return parts.join(' · ')
 }
 
 function parseCurrencyInput(value: string): number {
@@ -340,19 +379,52 @@ function RowActions({ entry }: { entry: AccountsPayable }) {
 
 // ──── Page ────────────────────────────────────────────────────────────────────
 
-export default function ContasAPagarPage() {
-  const [statusFilter, setStatusFilter] = useState<AccountsPayableStatus | ''>('')
-  const [supplierSearch, setSupplierSearch] = useState('')
-  const [supplierSearchDebounced, setSupplierSearchDebounced] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [fromFilter, setFromFilter] = useState('')
-  const [toFilter, setToFilter] = useState('')
+function ContasAPagarPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const [statusFilter, setStatusFilter] = useState<AccountsPayableStatus | ''>(
+    (searchParams.get('status') as AccountsPayableStatus | null) ?? '',
+  )
+  const [supplierSearch, setSupplierSearch] = useState(searchParams.get('supplier') ?? '')
+  const [supplierSearchDebounced, setSupplierSearchDebounced] = useState(searchParams.get('supplier') ?? '')
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get('category') ?? '')
+  const [fromFilter, setFromFilter] = useState(searchParams.get('from') ?? '')
+  const [toFilter, setToFilter] = useState(searchParams.get('to') ?? '')
   const [novaContaOpen, setNovaContaOpen] = useState(false)
 
+  // Debounce do campo fornecedor
   useEffect(() => {
     const t = setTimeout(() => setSupplierSearchDebounced(supplierSearch), 250)
     return () => clearTimeout(t)
   }, [supplierSearch])
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams()
+    if (statusFilter) p.set('status', statusFilter)
+    if (supplierSearch) p.set('supplier', supplierSearch)
+    if (categoryFilter) p.set('category', categoryFilter)
+    if (fromFilter) p.set('from', fromFilter)
+    if (toFilter) p.set('to', toFilter)
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, statusFilter, supplierSearch, categoryFilter, fromFilter, toFilter])
+
+  const isDefaultFilters =
+    statusFilter === '' &&
+    supplierSearch === '' &&
+    categoryFilter === '' &&
+    fromFilter === '' &&
+    toFilter === ''
+
+  function resetFilters() {
+    setStatusFilter('')
+    setSupplierSearch('')
+    setSupplierSearchDebounced('')
+    setCategoryFilter('')
+    setFromFilter('')
+    setToFilter('')
+  }
 
   const params: Record<string, string> = {
     ...(statusFilter && { status: statusFilter }),
@@ -422,50 +494,96 @@ export default function ContasAPagarPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder="Buscar por fornecedor…"
-          value={supplierSearch}
-          onChange={(e) => setSupplierSearch(e.target.value)}
-          className="h-8 w-48 text-sm"
-        />
-
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as AccountsPayableStatus | '')}
-          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-        >
-          {statuses.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-        >
-          <option value="">Todas as categorias</option>
-          {CATEGORY_OPTIONS.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground">De</span>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Input
-            type="date"
-            value={fromFilter}
-            onChange={(e) => setFromFilter(e.target.value)}
-            className="h-8 w-36 text-sm"
+            placeholder="Buscar por fornecedor…"
+            value={supplierSearch}
+            onChange={(e) => setSupplierSearch(e.target.value)}
+            className="h-8 w-48 text-sm"
           />
-          <span className="text-xs text-muted-foreground">até</span>
-          <Input
-            type="date"
-            value={toFilter}
-            onChange={(e) => setToFilter(e.target.value)}
-            className="h-8 w-36 text-sm"
-          />
+
+          {/* Status pills */}
+          <div className="flex flex-wrap gap-1">
+            {statuses.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => setStatusFilter(s.value)}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  statusFilter === s.value
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Categoria pills */}
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('')}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                categoryFilter === ''
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              Todas as categorias
+            </button>
+            {CATEGORY_OPTIONS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategoryFilter(c)}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  categoryFilter === c
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground">De</span>
+            <Input
+              type="date"
+              value={fromFilter}
+              onChange={(e) => setFromFilter(e.target.value)}
+              className="h-8 w-36 text-sm"
+            />
+            <span className="text-xs text-muted-foreground">até</span>
+            <Input
+              type="date"
+              value={toFilter}
+              onChange={(e) => setToFilter(e.target.value)}
+              className="h-8 w-36 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Legenda descritiva */}
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          <span>Exibindo {buildFilterLabel(statusFilter, supplierSearchDebounced, categoryFilter, fromFilter, toFilter)}</span>
+          {!isDefaultFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="ml-auto shrink-0 font-medium text-primary hover:underline"
+            >
+              Restaurar padrão
+            </button>
+          )}
         </div>
       </div>
 
@@ -550,5 +668,13 @@ export default function ContasAPagarPage() {
 
       {novaContaOpen && <NovaContaDialog onClose={() => setNovaContaOpen(false)} />}
     </div>
+  )
+}
+
+export default function ContasAPagarPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContasAPagarPageContent />
+    </Suspense>
   )
 }

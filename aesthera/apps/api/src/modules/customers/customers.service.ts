@@ -38,6 +38,40 @@ export class CustomersService {
 
   async delete(clinicId: string, id: string) {
     await this.get(clinicId, id)
+
+    // Verificar se o cliente possui registros vinculados — impedir remoção caso positivo
+    const counts = await prisma.customer.findFirst({
+      where: { id, clinicId },
+      select: {
+        _count: {
+          select: {
+            appointments: true,
+            billing: true,
+            payments: true,
+            walletEntries: true,
+            customerPackages: true,
+            productSales: true,
+            ledgerEntries: true,
+          },
+        },
+      },
+    })
+
+    const total =
+      (counts?._count.appointments ?? 0) +
+      (counts?._count.billing ?? 0) +
+      (counts?._count.payments ?? 0) +
+      (counts?._count.walletEntries ?? 0) +
+      (counts?._count.customerPackages ?? 0) +
+      (counts?._count.productSales ?? 0) +
+      (counts?._count.ledgerEntries ?? 0)
+
+    if (total > 0) {
+      throw new ConflictError(
+        'Não é possível remover o cliente pois ele possui registros vinculados (agendamentos, cobranças, pagamentos, carteira, pacotes ou vendas). Considere inativá-lo.',
+      )
+    }
+
     await this.repo.softDelete(clinicId, id)
     return { message: 'Customer deleted' }
   }

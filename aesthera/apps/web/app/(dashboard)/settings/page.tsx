@@ -32,6 +32,7 @@ import { ClinicTab } from './_components/clinic-tab'
 import { PaymentMethodsTab } from './_components/payment-methods-tab'
 import { UsersTab } from './_components/users-tab'
 import { BodyMeasurementsTab } from './_components/body-measurements-tab'
+import { ContractTemplatesTab } from './_components/contract-templates-tab'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1176,6 +1177,7 @@ export default function SettingsPage() {
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="anamnesis">Anamnese</TabsTrigger>
           <TabsTrigger value="body-measurements">Medidas Corporais</TabsTrigger>
+          <TabsTrigger value="contracts">Contratos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="clinic">
@@ -1208,6 +1210,10 @@ export default function SettingsPage() {
 
         <TabsContent value="body-measurements">
           <BodyMeasurementsTab />
+        </TabsContent>
+
+        <TabsContent value="contracts">
+          <ContractTemplatesTab />
         </TabsContent>
       </Tabs>
 

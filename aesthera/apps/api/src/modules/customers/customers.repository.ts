@@ -20,6 +20,7 @@ export class CustomersRepository {
     const where = {
       clinicId,
       deletedAt: null,
+      ...(q.active !== undefined && { active: q.active }),
       ...(searchOr ?? {
         ...(q.name && { name: { contains: q.name, mode: 'insensitive' as const } }),
         ...(q.email && { email: { contains: q.email, mode: 'insensitive' as const } }),
@@ -83,6 +84,7 @@ export class CustomersRepository {
         notes: data.notes,
         birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
         address: data.address as object | undefined,
+        ...(data.active !== undefined && { active: data.active }),
         metadata: {
           ...existingMeta,
           phone2: data.phone2 ?? existingMeta.phone2 ?? null,
