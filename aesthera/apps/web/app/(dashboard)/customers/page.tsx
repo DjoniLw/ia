@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, Scissors, Search, Send, Trash2, User, Wallet } from 'lucide-react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, MessageCircle, Package, Pencil, Plus, Scissors, Search, Send, Trash2, User, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -36,8 +36,11 @@ import {
   useCreateCustomerContract,
   useSendAssinafy,
   useSignManual,
+  useGetContractView,
+  useSendContractWhatsApp,
   useContractTemplates,
   type CustomerContract,
+  type ContractView,
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
@@ -1025,6 +1028,10 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const [signingContract, setSigningContract] = useState<CustomerContract | null>(null)
   const [sendingAssinafy, setSendingAssinafy] = useState<CustomerContract | null>(null)
   const [assinafyEmail, setAssinafyEmail] = useState(customer.email ?? '')
+  const [viewingContract, setViewingContract] = useState<CustomerContract | null>(null)
+  const [contractViewData, setContractViewData] = useState<ContractView | null>(null)
+  const [sendingWhatsApp, setSendingWhatsApp] = useState<CustomerContract | null>(null)
+  const [whatsappPhone, setWhatsappPhone] = useState('')
 
   const sendAssinafy = useSendAssinafy(
     customer.id,
@@ -1034,6 +1041,8 @@ function ContractsTab({ customer }: { customer: Customer }) {
     customer.id,
     signingContract?.id ?? '',
   )
+  const getContractView = useGetContractView(customer.id)
+  const sendContractWhatsApp = useSendContractWhatsApp(customer.id)
 
   async function handleAddContract() {
     if (!selectedTemplateId) { toast.error('Selecione um modelo'); return }
@@ -1067,6 +1076,31 @@ function ContractsTab({ customer }: { customer: Customer }) {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao assinar contrato')
+    }
+  }
+
+  async function handleViewContract(contract: CustomerContract) {
+    setViewingContract(contract)
+    setContractViewData(null)
+    try {
+      const view = await getContractView.mutateAsync(contract.id)
+      setContractViewData(view)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao carregar visualização do contrato')
+      setViewingContract(null)
+    }
+  }
+
+  async function handleSendWhatsApp() {
+    if (!sendingWhatsApp) return
+    try {
+      await sendContractWhatsApp.mutateAsync({ contractId: sendingWhatsApp.id, phone: whatsappPhone })
+      toast.success('Link de assinatura enviado via WhatsApp')
+      setSendingWhatsApp(null)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao enviar WhatsApp')
     }
   }
 
@@ -1135,35 +1169,54 @@ function ContractsTab({ customer }: { customer: Customer }) {
                   </div>
                 </div>
                 {/* Ações */}
-                {c.status === 'pending' && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => { setSendingAssinafy(c); setAssinafyEmail(customer.email ?? '') }}
-                      title="Enviar para assinatura (Assinafy)"
-                    >
-                      <Send className="h-3.5 w-3.5 mr-1.5" />
-                      Assinafy
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSigningContract(c)}
-                      title="Assinar manualmente"
-                    >
-                      <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                      Manual
-                    </Button>
-                  </div>
-                )}
-                {c.status === 'signed' && c.signLink && (
-                  <a href={c.signLink} target="_blank" rel="noopener noreferrer">
-                    <Button variant="ghost" size="sm" title="Ver link de assinatura">
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Button>
-                  </a>
-                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void handleViewContract(c)}
+                    title="Visualizar contrato"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                  {c.status === 'pending' && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setSendingAssinafy(c); setAssinafyEmail(customer.email ?? '') }}
+                        title="Enviar para assinatura (Assinafy)"
+                      >
+                        <Send className="h-3.5 w-3.5 mr-1.5" />
+                        Assinafy
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setSendingWhatsApp(c); setWhatsappPhone(customer.phone ?? '') }}
+                        title="Enviar link de assinatura via WhatsApp"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+                        WhatsApp
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSigningContract(c)}
+                        title="Assinar manualmente"
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                        Manual
+                      </Button>
+                    </>
+                  )}
+                  {c.status === 'signed' && c.signLink && (
+                    <a href={c.signLink} target="_blank" rel="noopener noreferrer">
+                      <Button variant="ghost" size="sm" title="Ver link de assinatura">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -1251,6 +1304,110 @@ function ContractsTab({ customer }: { customer: Customer }) {
               onCancel={() => setSigningContract(null)}
               isPending={signManual.isPending}
             />
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: visualizar contrato */}
+      {viewingContract && (
+        <Dialog open onClose={() => { setViewingContract(null); setContractViewData(null) }}>
+          <DialogTitle>Visualizar contrato</DialogTitle>
+          <div className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {viewingContract.template.name}
+            </p>
+            {getContractView.isPending && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Carregando...
+              </div>
+            )}
+            {contractViewData && (
+              <div className="space-y-3">
+                {contractViewData.fileUrl && (
+                  <a
+                    href={contractViewData.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-primary underline underline-offset-2"
+                  >
+                    <FileText className="h-4 w-4" />
+                    Abrir documento
+                  </a>
+                )}
+                {contractViewData.signedFileUrl && (
+                  <a
+                    href={contractViewData.signedFileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-primary underline underline-offset-2"
+                  >
+                    <FileSignature className="h-4 w-4" />
+                    Abrir documento assinado
+                  </a>
+                )}
+                {contractViewData.signature && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Assinatura registrada</p>
+                    <div className="rounded-lg border p-2 bg-white">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={contractViewData.signature}
+                        alt="Assinatura"
+                        className="max-h-32 max-w-full object-contain"
+                      />
+                    </div>
+                    {contractViewData.signedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Assinado em {new Date(contractViewData.signedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {!contractViewData.fileUrl && !contractViewData.signedFileUrl && !contractViewData.signature && (
+                  <p className="text-sm text-muted-foreground">Nenhum arquivo disponível para este contrato.</p>
+                )}
+              </div>
+            )}
+            <div className="flex justify-end pt-2">
+              <Button variant="outline" size="sm" onClick={() => { setViewingContract(null); setContractViewData(null) }}>Fechar</Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog: enviar via WhatsApp */}
+      {sendingWhatsApp && (
+        <Dialog open onClose={() => setSendingWhatsApp(null)}>
+          <DialogTitle>Enviar link de assinatura via WhatsApp</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Contrato: <strong>{sendingWhatsApp.template.name}</strong>
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="whatsapp-phone">Telefone (WhatsApp)</Label>
+              <Input
+                id="whatsapp-phone"
+                type="tel"
+                className="h-8 text-sm"
+                placeholder="5511999999999"
+                value={whatsappPhone}
+                onChange={(e) => setWhatsappPhone(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Informe o número com código do país (ex.: 5511999999999)</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setSendingWhatsApp(null)}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={() => void handleSendWhatsApp()}
+                disabled={sendContractWhatsApp.isPending || !whatsappPhone}
+              >
+                {sendContractWhatsApp.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
+                Enviar
+              </Button>
+            </div>
           </div>
         </Dialog>
       )}

@@ -52,6 +52,13 @@ export const AssinafyWebhookDto = z.object({
 })
 export type AssinafyWebhookDto = z.infer<typeof AssinafyWebhookDto>
 
+// ─── Contract WhatsApp ───────────────────────────────────────────────────────
+
+export const SendContractWhatsAppDto = z.object({
+  phone: z.string().min(10, 'Telefone inválido (mín. 10 dígitos)'),
+})
+export type SendContractWhatsAppDto = z.infer<typeof SendContractWhatsAppDto>
+
 // ─── Template Presign ──────────────────────────────────────────────────────────
 
 export const TemplatePresignDto = z.object({

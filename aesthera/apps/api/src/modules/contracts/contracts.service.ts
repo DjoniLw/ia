@@ -1,7 +1,8 @@
 import crypto from 'node:crypto'
 import path from 'node:path'
 import { appConfig } from '../../config/app.config'
-import { generatePresignedPutUrl } from '../../integrations/r2/r2.service'
+import { generatePresignedPutUrl, generatePresignedGetUrl } from '../../integrations/r2/r2.service'
+import { NotificationsService } from '../notifications/notifications.service'
 import {
   AppError,
   ConflictError,
@@ -14,6 +15,7 @@ import type {
   CreateContractTemplateDto,
   CreateCustomerContractDto,
   SendAssinafyDto,
+  SendContractWhatsAppDto,
   SignManualDto,
   TemplatePresignDto,
   UpdateContractTemplateDto,
@@ -235,5 +237,76 @@ export class ContractsService {
     })
 
     return updated
+  }
+
+  /**
+   * Retorna URL temporária de visualização do arquivo do contrato
+   * e assinatura (se assinado manualmente).
+   */
+  async getContractView(clinicId: string, customerId: string, contractId: string) {
+    const contract = await this.repo.findContractById(clinicId, contractId)
+    if (!contract) throw new NotFoundError('CustomerContract')
+    if (contract.customerId !== customerId) throw new NotFoundError('CustomerContract')
+
+    let fileUrl: string | null = null
+    if (contract.template.storageKey) {
+      fileUrl = await generatePresignedGetUrl(contract.template.storageKey, 3600)
+    }
+
+    let signedFileUrl: string | null = null
+    if (contract.status === 'signed' && contract.signedPdfKey) {
+      signedFileUrl = await generatePresignedGetUrl(contract.signedPdfKey, 3600)
+    }
+
+    return {
+      id: contract.id,
+      status: contract.status,
+      signatureMode: contract.signatureMode,
+      signedAt: contract.signedAt,
+      fileUrl,
+      signedFileUrl,
+      signature:
+        contract.signatureMode === 'manual' && contract.status === 'signed'
+          ? contract.signature
+          : null,
+    }
+  }
+
+  /**
+   * Envia o link de assinatura do contrato via WhatsApp (Z-API).
+   */
+  async sendContractWhatsApp(
+    clinicId: string,
+    customerId: string,
+    contractId: string,
+    dto: SendContractWhatsAppDto,
+  ) {
+    const contract = await this.repo.findContractById(clinicId, contractId)
+    if (!contract) throw new NotFoundError('CustomerContract')
+    if (contract.customerId !== customerId) throw new NotFoundError('CustomerContract')
+
+    if (!contract.signLink) {
+      throw new AppError(
+        'Este contrato não possui link de assinatura. Envie via Assinafy primeiro para gerar o link.',
+        400,
+        'NO_SIGN_LINK',
+      )
+    }
+
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, clinicId } })
+    const customerName = customer?.name ?? 'Cliente'
+
+    const message = `Olá, ${customerName}! 👋\n\nSegue o link para assinar o contrato *${contract.template.name}*:\n\n${contract.signLink}`
+
+    const notificationsService = new NotificationsService()
+    await notificationsService.sendWhatsApp({
+      clinicId,
+      phone: dto.phone,
+      message,
+      event: 'contract.sign_link',
+      customerId,
+    })
+
+    return { sent: true }
   }
 }

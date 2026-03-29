@@ -760,3 +760,27 @@ export function useSignManual(customerId: string, contractId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
   })
 }
+
+export interface ContractView {
+  id: string
+  status: 'pending' | 'signed'
+  signatureMode: 'assinafy' | 'manual' | null
+  signedAt: string | null
+  fileUrl: string | null
+  signedFileUrl: string | null
+  signature: string | null
+}
+
+export function useGetContractView(customerId: string) {
+  return useMutation({
+    mutationFn: (contractId: string) =>
+      api.get(`/customers/${customerId}/contracts/${contractId}/view`).then((r) => r.data as ContractView),
+  })
+}
+
+export function useSendContractWhatsApp(customerId: string) {
+  return useMutation({
+    mutationFn: ({ contractId, phone }: { contractId: string; phone: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/send-whatsapp`, { phone }).then((r) => r.data),
+  })
+}

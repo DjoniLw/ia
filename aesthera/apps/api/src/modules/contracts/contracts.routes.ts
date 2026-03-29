@@ -6,6 +6,7 @@ import {
   CreateContractTemplateDto,
   CreateCustomerContractDto,
   SendAssinafyDto,
+  SendContractWhatsAppDto,
   SignManualDto,
   TemplatePresignDto,
   UpdateContractTemplateDto,
@@ -142,7 +143,37 @@ export async function contractsRoutes(app: FastifyInstance) {
     },
   )
 
-  // ── Webhook (público) ──────────────────────────────────────────────────────────
+  // ── Visualização e WhatsApp ───────────────────────────────────────────────────
+
+  /**
+   * GET /customers/:customerId/contracts/:id/view
+   * Retorna URL temporária de visualização do arquivo do contrato
+   * e assinatura registrada (se assinatura manual).
+   */
+  app.get(
+    '/customers/:customerId/contracts/:id/view',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId, id } = req.params as { customerId: string; id: string }
+      return reply.send(await svc.getContractView(req.clinicId, customerId, id))
+    },
+  )
+
+  /**
+   * POST /customers/:customerId/contracts/:id/send-whatsapp
+   * Envia o link de assinatura do contrato via WhatsApp.
+   */
+  app.post(
+    '/customers/:customerId/contracts/:id/send-whatsapp',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId, id } = req.params as { customerId: string; id: string }
+      const dto = SendContractWhatsAppDto.parse(req.body)
+      return reply.send(await svc.sendContractWhatsApp(req.clinicId, customerId, id, dto))
+    },
+  )
+
+  // ── Webhook (público) ────────────────────────────────────────────────────────
 
   /**
    * POST /contracts/webhooks/assinafy
