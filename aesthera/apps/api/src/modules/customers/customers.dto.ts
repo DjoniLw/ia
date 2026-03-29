@@ -52,6 +52,7 @@ export const UpdateCustomerDto = z.object({
   occupation: z.string().nullish(),
   howFound: z.string().nullish(),
   notes: z.string().nullish(),
+  active: z.boolean().optional(),
   address: AddressSchema,
   anamnesis: AnamnesisSchema,
   bodyDataConsentAt: z.string().datetime().nullish(), // LGPD Art. 11I
@@ -64,6 +65,10 @@ export const ListCustomersQuery = z.object({
   email: z.string().optional(),
   phone: z.string().optional(),
   document: z.string().optional(),
+  active: z
+    .string()
+    .transform((v) => v === 'true')
+    .optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(500).default(20),
 })

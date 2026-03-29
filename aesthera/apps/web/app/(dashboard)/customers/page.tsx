@@ -480,89 +480,6 @@ function CustomerForm({
             )}
           </div>
 
-          {/* Anamnese */}
-          <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Tipo de pele</Label>
-            <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" {...register('ana_skinType')}>
-              <option value="">Selecione…</option>
-              <option>Normal</option>
-              <option>Seca</option>
-              <option>Oleosa</option>
-              <option>Mista</option>
-              <option>Sensível</option>
-              <option>Acneica</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Alergias conhecidas</Label>
-            <textarea
-              {...register('ana_allergies')}
-              rows={2}
-              placeholder="Ex: alergia a látex, peróxido de benzoíla…"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Medicamentos em uso</Label>
-            <textarea
-              {...register('ana_medications')}
-              rows={2}
-              placeholder="Ex: Isotretinoína 20mg, anticoagulantes…"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Condições de saúde / doenças</Label>
-            <textarea
-              {...register('ana_conditions')}
-              rows={2}
-              placeholder="Ex: diabetes, hipertensão, epilepsia…"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Tratamentos anteriores</Label>
-              <textarea
-                {...register('ana_previousTreatments')}
-                rows={3}
-                placeholder="Quais procedimentos já realizou…"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tratamentos em andamento</Label>
-              <textarea
-                {...register('ana_currentTreatments')}
-                rows={3}
-                placeholder="Procedimentos em curso em outra clínica…"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Observações clínicas</Label>
-            <textarea
-              {...register('ana_observations')}
-              rows={3}
-              placeholder="Outras informações relevantes…"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="consent" {...register('ana_consentSigned')} className="h-4 w-4" />
-            <label htmlFor="consent" className="text-sm text-foreground">
-              Termo de consentimento assinado
-            </label>
-          </div>
-          </div>{/* end anamnese */}
         </div>
       )}
 
@@ -1949,13 +1866,23 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
 export default function CustomersPage() {
   const [search, setSearch] = useState('')
-  const { data, isLoading } = useCustomers(search ? { name: search } : undefined)
+  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
 
-  const isDefaultFilters = search === ''
+  const queryParams: Record<string, string> = {}
+  if (search) queryParams.name = search
+  if (activeFilter !== 'all') queryParams.active = String(activeFilter === 'active')
+
+  const { data, isLoading } = useCustomers(Object.keys(queryParams).length ? queryParams : undefined)
+
+  const isDefaultFilters = search === '' && activeFilter === 'active'
 
   function buildFilterLabel(): string {
-    if (search) return `buscando: ${search}`
-    return 'todos os clientes'
+    const parts: string[] = []
+    if (activeFilter === 'active') parts.push('apenas ativos')
+    else if (activeFilter === 'inactive') parts.push('apenas inativos')
+    else parts.push('todos')
+    if (search) parts.push(`busca: ${search}`)
+    return parts.join(' · ')
   }
   const createCustomer = useCreateCustomer()
   const deleteCustomer = useDeleteCustomer()
@@ -1968,6 +1895,7 @@ export default function CustomersPage() {
   const [aiSummary, setAiSummary] = useState<Customer | null>(null)
 
   const updateCustomer = useUpdateCustomer(editing?.id ?? '')
+  const toggleActive = useUpdateCustomer(editing?.id ?? '')
 
   function formatDate(iso: string | null) {
     if (!iso) return '—'
@@ -2016,17 +1944,33 @@ export default function CustomersPage() {
         <Button onClick={() => setCreating(true)}>+ Novo Cliente</Button>
       </div>
 
-      {/* Search + Legenda */}
+      {/* Search + Filter + Legenda */}
       <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome…"
-            className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nome…"
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          {(['active', 'inactive', 'all'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setActiveFilter(v)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                activeFilter === v
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              {v === 'active' ? 'Ativos' : v === 'inactive' ? 'Inativos' : 'Todos'}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
@@ -2035,7 +1979,7 @@ export default function CustomersPage() {
           {!isDefaultFilters && (
             <button
               type="button"
-              onClick={() => setSearch('')}
+              onClick={() => { setSearch(''); setActiveFilter('active') }}
               className="ml-auto shrink-0 font-medium text-primary hover:underline"
             >
               Restaurar padrão
@@ -2068,9 +2012,14 @@ export default function CustomersPage() {
             {data?.items.map((c) => (
               <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="py-3 pl-4 pr-2 font-medium">
-                  <button className="text-left hover:text-primary transition-colors" onClick={() => setViewing(c)}>
-                    {c.name}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button className="text-left hover:text-primary transition-colors" onClick={() => setViewing(c)}>
+                      {c.name}
+                    </button>
+                    {!c.active && (
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Inativo</span>
+                    )}
+                  </div>
                 </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.email ?? '—'}</td>
                 <td className="px-2 py-3 text-muted-foreground">{formatPhone(c.phone) ?? '—'}</td>
@@ -2112,7 +2061,30 @@ export default function CustomersPage() {
       {/* Edit dialog */}
       {editing && (
         <Dialog open onClose={() => setEditing(null)} isDirty={formDirty}>
-          <DialogTitle>Editar Cliente — {editing.name}</DialogTitle>
+          <div className="flex items-center justify-between gap-2">
+            <DialogTitle>Editar Cliente — {editing.name}</DialogTitle>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await toggleActive.mutateAsync({ active: !editing.active } as Parameters<typeof toggleActive.mutateAsync>[0])
+                  toast.success(editing.active ? 'Cliente inativado' : 'Cliente ativado')
+                  setEditing((prev) => prev ? { ...prev, active: !prev.active } : null)
+                } catch {
+                  toast.error('Erro ao alterar status do cliente')
+                }
+              }}
+              className={[
+                'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                editing.active
+                  ? 'border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20'
+                  : 'border-green-600/40 bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400',
+              ].join(' ')}
+              disabled={toggleActive.isPending}
+            >
+              {toggleActive.isPending ? 'Aguarde…' : editing.active ? 'Inativar' : 'Ativar'}
+            </button>
+          </div>
           <div className="mt-4">
             <CustomerForm
               defaultValues={fromCustomer(editing)}

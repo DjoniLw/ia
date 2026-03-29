@@ -95,6 +95,7 @@ export interface Customer {
   address: CustomerAddress | null
   metadata: CustomerMeta | null
   bodyDataConsentAt: string | null
+  active: boolean
   createdAt: string
 }
 
