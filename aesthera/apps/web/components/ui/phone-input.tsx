@@ -55,6 +55,9 @@ export function PhoneInput({ value, onChange, id, disabled, className }: PhoneIn
   const [country, setCountry] = useState<Country>(COUNTRIES[0])
   const [display, setDisplay] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
+  // Ref estável para não precisar de onChange nas dependências do useEffect de montagem
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
 
   // Ao receber value externo (ex: pré-preenchimento do cadastro), tenta parsear
   useEffect(() => {
@@ -66,11 +69,15 @@ export function PhoneInput({ value, onChange, id, disabled, className }: PhoneIn
         const local = digits.slice(c.dial.length)
         setCountry(c)
         setDisplay(applyMask(local, c.mask))
+        // Notifica o pai com o estado inicial já parseado
+        onChangeRef.current(buildE164(c.dial, local), validatePhone(c.dial, local, c))
         return
       }
     }
     // Fallback: trata como BR sem código
-    setDisplay(applyMask(digits.slice(0, COUNTRIES[0].digits), COUNTRIES[0].mask))
+    const local = digits.slice(0, COUNTRIES[0].digits)
+    setDisplay(applyMask(local, COUNTRIES[0].mask))
+    onChangeRef.current(buildE164(COUNTRIES[0].dial, local), validatePhone(COUNTRIES[0].dial, local, COUNTRIES[0]))
   }, []) // só na montagem — o estado interno é controlado
 
   // Fecha o dropdown ao clicar fora
