@@ -370,6 +370,46 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: todo empty state com ação primária usa `<Button variant="outline" size="sm" className="mt-3">` — nunca elemento nativo. O container segue exatamente `rounded-lg border bg-card py-16 text-center text-muted-foreground` conforme `ui-standards.md` seção 2.3
   - 📅 Aprendido em: 25/03/2026 — revisão de empty state com `<button>` nativo e underline em tela de uploads/medidas corporais
 
+- [ ] **Controles booleanos devem sempre usar `<Switch>` do shadcn/ui — nunca `<button>` nativo estilizado como toggle**
+  - 🔴 Anti-padrão: implementar um toggle com `<button>` nativo e classes condicionais (ex.: `bg-green-500` / `bg-gray-300`) para representar um estado booleano (ativo/inativo, sim/não, habilitado/desabilitado)
+  - ✅ Correto: importar e usar `<Switch>` de `@/components/ui/switch`:
+    ```tsx
+    import { Switch } from '@/components/ui/switch';
+
+    <Switch
+      checked={isActive}
+      onCheckedChange={(val) => handleToggle(val)}
+      aria-label="Ativar notificação"
+    />
+    ```
+  - 📌 Regra geral: `<Switch>` do shadcn/ui fornece acessibilidade (`role="switch"`, `aria-checked`), animações consistentes, suporte a dark mode e estados desabilitados prontos. Qualquer `<button>` estilizado como toggle é uma reimplementação inferior que quebra a consistência visual e a acessibilidade do sistema.
+  - 📌 Aplica-se a: qualquer campo que represente um valor booleano — ativo/inativo, habilitado/desabilitado, visível/oculto, notificar/não notificar.
+  - 📅 Aprendido em: 30/03/2026 — revisão de PR #136 (assinatura remota): toggle de configuração implementado com `<button>` nativo
+
+- [ ] **Nunca exibir feedback de sucesso (toast, badge, estado visual) para uma operação que não foi persistida no backend**
+  - 🔴 Anti-padrão: mostrar `toast.success('Salvo!')`, alterar um badge para "Ativo" ou atualizar estado visual de confirmação **sem ter feito chamada à API** — o usuário acredita que a ação foi persistida quando na verdade nenhuma requisição foi enviada:
+    ```ts
+    // ERRADO — feedback sem persistência
+    const handleToggle = () => {
+      setIsActive(!isActive);
+      toast.success('Configuração salva!'); // nenhuma chamada de API
+    };
+    ```
+  - ✅ Correto: o feedback de sucesso só ocorre **após** a confirmação da API (`.onSuccess` da mutation):
+    ```ts
+    // CORRETO — feedback condicionado à resposta da API
+    const mutation = useMutation({
+      mutationFn: (value: boolean) => api.patch('/settings', { isActive: value }),
+      onSuccess: () => toast.success('Configuração salva!'),
+      onError: () => toast.error('Erro ao salvar. Tente novamente.'),
+    });
+
+    const handleToggle = (val: boolean) => mutation.mutate(val);
+    ```
+  - 📌 Regra geral: estado otimista (atualizar UI antes da API responder) é aceitável apenas com rollback em `onError`. Qualquer feedback de "salvo" sem API call — ou sem tratamento de erro — é um bug que erode a confiança do usuário e mascara falhas silenciosas.
+  - 📌 Checklist antes de adicionar qualquer `toast.success`: existe uma `mutationFn` correspondente? O toast está dentro do `onSuccess`? Existe um `onError` com mensagem de falha?
+  - 📅 Aprendido em: 30/03/2026 — revisão de PR #136 (assinatura remota): feedback visual de ativação exibido sem chamada à API
+
 ---
 
 ## Geral
@@ -493,3 +533,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 29/03/2026 | — | 1 padrão adicionado pelo treinador-agent: upload de recursos de empresa (não por cliente) usa caminho `templates/{clinicId}/{uuid}.ext` via presign customizado no módulo — nunca usar o fluxo `CustomerFile` que exige `customerId`; convenção de prefixos de storage: `customers/` para arquivos de cliente, `templates/` para templates de empresa, `clinic/` para recursos gerais da clínica |
 | 29/03/2026 | — | 2 padrões adicionados pelo treinador-agent (levantamento UX transversal — 15 telas de listagem): (1) filtragem client-side com `.filter()` sobre array local é anti-padrão — qualquer mudança de filtro deve disparar nova requisição à API com parâmetros de query; (2) toda nova tela de listagem deve incluir `<DataPagination>` e `usePaginatedQuery` com URL sync desde a primeira implementação — nunca usar `limit` hardcoded |
 | 30/03/2026 | PR #136 | 2 padrões adicionados pelo treinador-agent (revisão de assinatura remota por link): (1) `_clinicId` em repositório multi-tenant é bug de segurança — `clinicId` deve sempre estar no `WHERE`, defesa em profundidade exige isolamento em toda camada; (2) webhook secret condicional com `if (expected && ...)` desabilita proteção silenciosamente quando env não configurado — usar fail-fast: lançar erro se secret ausente, nunca skip |
+| 30/03/2026 | PR #136 | 2 padrões adicionados pelo treinador-agent (revisão de assinatura remota por link — UX/componentes): (1) controles booleanos devem sempre usar `<Switch>` do shadcn/ui — `<button>` nativo como toggle quebra acessibilidade e consistência visual; (2) feedback de sucesso (toast, badge, estado visual) só pode ser exibido após confirmação da API em `onSuccess` — nunca antes ou sem chamada de API |
