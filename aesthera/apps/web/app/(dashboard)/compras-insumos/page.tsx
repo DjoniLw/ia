@@ -341,7 +341,6 @@ function SupplyPurchasesPageContent() {
   const [supplySearchQuery, setSupplySearchQuery] = useState('')
   const [supplierFilter, setSupplierFilter] = useState('')
   const [{ from, to }, setRange] = useState(currentMonthRange())
-  const [page, setPage] = useState(1)
   const [cancelingPurchase, setCancelingPurchase] = useState<SupplyPurchase | null>(null)
   const createPurchase = useCreateSupplyPurchase()
 

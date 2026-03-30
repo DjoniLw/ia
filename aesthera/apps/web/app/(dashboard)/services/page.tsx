@@ -599,7 +599,7 @@ function ServicesPageContent() {
         onPageSizeChange={setPageSize}
       />
 
-      {/* Create dialog */}}
+      {/* Create dialog */}
       {showCreate && (
         <Dialog open onClose={() => setShowCreate(false)} isDirty={formDirty}>
           <DialogTitle>Novo Serviço</DialogTitle>
