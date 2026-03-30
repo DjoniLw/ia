@@ -830,3 +830,36 @@ export function useSendRemoteSignLink(customerId: string, contractId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
   })
 }
+
+// ── SMTP Settings ──────────────────────────────────────────────────────────────
+
+export interface SmtpSettings {
+  smtpHost: string | null
+  smtpPort: number | null
+  smtpUser: string | null
+  smtpFrom: string | null
+  smtpSecure: boolean
+  configured: boolean
+}
+
+export function useSmtpSettings() {
+  return useQuery<SmtpSettings>({
+    queryKey: ['clinic-smtp'],
+    queryFn: () => api.get('/clinics/me/smtp').then((r) => r.data),
+  })
+}
+
+export function useUpdateSmtpSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Partial<SmtpSettings> & { smtpPass?: string | null }) =>
+      api.put('/clinics/me/smtp', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinic-smtp'] }),
+  })
+}
+
+export function useTestSmtpSettings() {
+  return useMutation({
+    mutationFn: () => api.post('/clinics/me/smtp/test').then((r) => r.data),
+  })
+}

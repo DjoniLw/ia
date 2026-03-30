@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
-import { SetBusinessHoursDto, UpdateClinicDto, UpdatePaymentMethodConfigDto } from './clinics.dto'
+import { SetBusinessHoursDto, UpdateClinicDto, UpdatePaymentMethodConfigDto, UpdateSmtpSettingsDto } from './clinics.dto'
 import { ClinicsService } from './clinics.service'
 
 export async function clinicsRoutes(app: FastifyInstance) {
@@ -72,6 +72,34 @@ export async function clinicsRoutes(app: FastifyInstance) {
       const dto = SetBusinessHoursDto.parse(request.body)
       const hours = await service.setBusinessHours(request.clinicId, dto)
       return reply.send(hours)
+    },
+  )
+
+  // GET /clinics/me/smtp
+  app.get(
+    '/clinics/me/smtp',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (request, reply) => {
+      return reply.send(await service.getSmtpSettings(request.clinicId))
+    },
+  )
+
+  // PUT /clinics/me/smtp
+  app.put(
+    '/clinics/me/smtp',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (request, reply) => {
+      const dto = UpdateSmtpSettingsDto.parse(request.body)
+      return reply.send(await service.updateSmtpSettings(request.clinicId, dto))
+    },
+  )
+
+  // POST /clinics/me/smtp/test
+  app.post(
+    '/clinics/me/smtp/test',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (request, reply) => {
+      return reply.send(await service.testSmtpSettings(request.clinicId))
     },
   )
 }

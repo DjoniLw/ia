@@ -33,6 +33,7 @@ import { PaymentMethodsTab } from './_components/payment-methods-tab'
 import { UsersTab } from './_components/users-tab'
 import { BodyMeasurementsTab } from './_components/body-measurements-tab'
 import { ContractTemplatesTab } from './_components/contract-templates-tab'
+import { EmailTab } from './_components/email-tab'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1178,6 +1179,7 @@ export default function SettingsPage() {
           <TabsTrigger value="anamnesis">Anamnese</TabsTrigger>
           <TabsTrigger value="body-measurements">Medidas Corporais</TabsTrigger>
           <TabsTrigger value="contracts">Contratos</TabsTrigger>
+          <TabsTrigger value="email">E-mail</TabsTrigger>
         </TabsList>
 
         <TabsContent value="clinic">
@@ -1214,6 +1216,10 @@ export default function SettingsPage() {
 
         <TabsContent value="contracts">
           <ContractTemplatesTab />
+        </TabsContent>
+
+        <TabsContent value="email">
+          <EmailTab />
         </TabsContent>
       </Tabs>
 

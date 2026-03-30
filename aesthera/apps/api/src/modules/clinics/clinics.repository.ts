@@ -1,4 +1,4 @@
-import type { UpdateClinicDto } from './clinics.dto'
+import type { UpdateClinicDto, UpdateSmtpSettingsDto } from './clinics.dto'
 import { prisma } from '../../database/prisma/client'
 import type { PaymentMethodConfigShape } from './payment-method-config'
 
@@ -85,6 +85,21 @@ export class ClinicsRepository {
       },
       update: {
         ...data,
+        updatedAt: new Date(),
+      },
+    })
+  }
+
+  async updateSmtp(clinicId: string, data: Pick<UpdateSmtpSettingsDto, 'smtpHost' | 'smtpPort' | 'smtpUser' | 'smtpPass' | 'smtpFrom' | 'smtpSecure'>) {
+    return prisma.clinic.update({
+      where: { id: clinicId },
+      data: {
+        smtpHost: data.smtpHost ?? null,
+        smtpPort: data.smtpPort ?? null,
+        smtpUser: data.smtpUser ?? null,
+        smtpPass: data.smtpPass ?? null,
+        smtpFrom: data.smtpFrom ?? null,
+        smtpSecure: data.smtpSecure ?? true,
         updatedAt: new Date(),
       },
     })

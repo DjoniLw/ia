@@ -6,6 +6,7 @@ import type {
   SetBusinessHoursDto,
   UpdateClinicDto,
   UpdatePaymentMethodConfigDto,
+  UpdateSmtpSettingsDto,
 } from './clinics.dto'
 import { ClinicsRepository } from './clinics.repository'
 import { normalizePaymentMethodConfig } from './payment-method-config'
@@ -175,6 +176,55 @@ export class ClinicsService {
     } catch (error) {
       logger.warn({ error, cnpj }, 'Falha ao consultar BrasilAPI para CNPJ')
       return null
+    }
+  }
+
+  async getSmtpSettings(clinicId: string) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    return {
+      smtpHost: clinic.smtpHost ?? null,
+      smtpPort: clinic.smtpPort ?? null,
+      smtpUser: clinic.smtpUser ?? null,
+      smtpFrom: clinic.smtpFrom ?? null,
+      smtpSecure: clinic.smtpSecure,
+      configured: !!(clinic.smtpHost && clinic.smtpUser && clinic.smtpPass),
+    }
+  }
+
+  async updateSmtpSettings(clinicId: string, dto: UpdateSmtpSettingsDto) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    await this.repo.updateSmtp(clinicId, {
+      smtpHost: dto.smtpHost ?? null,
+      smtpPort: dto.smtpPort ?? null,
+      smtpUser: dto.smtpUser ?? null,
+      smtpPass: dto.smtpPass ?? null,
+      smtpFrom: dto.smtpFrom ?? null,
+      smtpSecure: dto.smtpSecure ?? true,
+    })
+    return this.getSmtpSettings(clinicId)
+  }
+
+  async testSmtpSettings(clinicId: string) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    if (!clinic.smtpHost || !clinic.smtpUser || !clinic.smtpPass) {
+      throw new AppError('Configure o servidor SMTP antes de testar.', 400, 'SMTP_NOT_CONFIGURED')
+    }
+    const nodemailer = await import('nodemailer')
+    const transporter = nodemailer.createTransport({
+      host: clinic.smtpHost,
+      port: clinic.smtpPort ?? (clinic.smtpSecure ? 465 : 587),
+      secure: clinic.smtpSecure,
+      auth: { user: clinic.smtpUser, pass: clinic.smtpPass },
+    })
+    try {
+      await transporter.verify()
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      throw new AppError(`Falha na conexão SMTP: ${msg}`, 400, 'SMTP_TEST_FAILED')
     }
   }
 }

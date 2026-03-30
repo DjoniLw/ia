@@ -1,6 +1,7 @@
 import { appConfig } from '../../config/app.config'
 import { logger } from '../../shared/logger/logger'
 import { NotFoundError } from '../../shared/errors/app-error'
+import { prisma } from '../../database/prisma/client'
 import type { ListNotificationsQuery } from './notifications.dto'
 import { NotificationsRepository } from './notifications.repository'
 
@@ -93,6 +94,41 @@ export class NotificationsService {
     })
 
     const { apiKey, from } = appConfig.email
+
+    // Verifica se a clínica tem SMTP próprio configurado
+    const clinic = await prisma.clinic.findUnique({
+      where: { id: input.clinicId },
+      select: { smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, smtpSecure: true },
+    })
+
+    const hasClinicSmtp = !!(clinic?.smtpHost && clinic?.smtpUser && clinic?.smtpPass)
+
+    if (hasClinicSmtp) {
+      // Envio via SMTP da clínica (Gmail, Outlook, etc.)
+      try {
+        const nodemailer = await import('nodemailer')
+        const transporter = nodemailer.createTransport({
+          host: clinic!.smtpHost!,
+          port: clinic!.smtpPort ?? (clinic!.smtpSecure ? 465 : 587),
+          secure: clinic!.smtpSecure,
+          auth: { user: clinic!.smtpUser!, pass: clinic!.smtpPass! },
+        })
+        await transporter.sendMail({
+          from: clinic!.smtpFrom ?? clinic!.smtpUser!,
+          to: input.email,
+          subject: input.subject,
+          html: input.htmlBody,
+        })
+        await this.repo.markSent(log.id)
+        logger.info({ event: input.event, email: input.email }, 'Email sent via clinic SMTP')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        await this.repo.markFailed(log.id, msg, 1)
+        logger.error({ err, event: input.event }, 'Clinic SMTP send failed')
+      }
+      return
+    }
+
     if (!apiKey) {
       logger.warn({ event: input.event }, 'Email not configured, skipping send')
       await this.repo.markFailed(log.id, 'EMAIL_NOT_CONFIGURED', 1)
