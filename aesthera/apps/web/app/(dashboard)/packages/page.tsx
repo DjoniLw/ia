@@ -653,6 +653,7 @@ function PackagesPageContent() {
   function resetFilters() {
     setActiveFilter(undefined)
     setSearch('')
+    pagination.resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -687,7 +688,7 @@ function PackagesPageContent() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); pagination.resetPage() }}
               placeholder="Buscar por nome…"
               className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />

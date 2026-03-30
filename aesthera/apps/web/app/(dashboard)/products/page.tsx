@@ -448,7 +448,7 @@ function ProductsPageContent() {
         {(['catalog', 'sales'] as const).map((t) => (
           <button
             key={t}
-            onClick={() => { setTab(t); if (t === 'catalog') salesPagination.resetPage(); else catalogPagination.resetPage() }}
+            onClick={() => setTab(t)}
             className={[
               'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
               tab === t ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-accent',

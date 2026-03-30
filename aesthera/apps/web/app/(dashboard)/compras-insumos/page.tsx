@@ -413,8 +413,6 @@ function SupplyPurchasesPageContent() {
     }
   }
 
-  const totalPages = purchasesQuery.data ? Math.ceil(purchasesQuery.data.total / purchasesQuery.data.limit) : 1
-
   // URL sync
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString())

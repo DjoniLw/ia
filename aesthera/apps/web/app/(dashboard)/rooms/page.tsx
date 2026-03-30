@@ -232,7 +232,7 @@ function DeleteDialog({ room, onClose }: { room: Room; onClose: () => void }) {
 function RoomsPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
+  const { page, pageSize, setPage, setPageSize, resetPage } = usePaginatedQuery({ defaultPageSize: 20 })
   const createRoom = useCreateRoom()
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
@@ -287,13 +287,13 @@ function RoomsPageContent() {
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, searchParams, search, statusFilter])
 
-  const params: Record<string, string> = {
-    ...paginationParams,
-    ...(debouncedSearch && { search: debouncedSearch }),
-    ...(statusFilter === 'active' && { active: 'true' }),
-    ...(statusFilter === 'inactive' && { active: 'false' }),
-  }
-  const { data: roomsData, isLoading } = useRooms(params)
+  const { data: allRooms, isLoading } = useRooms()
+  const filtered = (allRooms ?? []).filter((room) => {
+    const matchesSearch = !debouncedSearch || room.name.toLowerCase().includes(debouncedSearch.toLowerCase())
+    const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? room.active : !room.active)
+    return matchesSearch && matchesStatus
+  })
+  const pagedItems = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   return (
     <div className="space-y-5">
@@ -352,7 +352,7 @@ function RoomsPageContent() {
       {/* List */}
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
-      ) : !roomsData?.items.length ? (
+      ) : !filtered.length ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <DoorOpen className="mx-auto mb-2 h-8 w-8 opacity-30" />
           {isDefaultFilters ? (
@@ -368,7 +368,7 @@ function RoomsPageContent() {
         </div>
       ) : (
         <div className="space-y-2">
-          {(roomsData?.items ?? []).map((room) => (
+          {pagedItems.map((room) => (
             <RoomRow
               key={room.id}
               room={room}
@@ -382,7 +382,7 @@ function RoomsPageContent() {
       <DataPagination
         page={page}
         pageSize={pageSize}
-        total={roomsData?.total ?? 0}
+        total={filtered.length}
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
       />

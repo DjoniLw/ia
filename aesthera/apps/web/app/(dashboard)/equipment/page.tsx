@@ -164,7 +164,7 @@ function EquipmentRow({ eq, onEdit, onDelete }: {
 function EquipmentPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
+  const { page, pageSize, setPage, setPageSize, resetPage } = usePaginatedQuery({ defaultPageSize: 20 })
   const createEquipment = useCreateEquipment()
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
@@ -219,13 +219,13 @@ function EquipmentPageContent() {
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, searchParams, search, statusFilter])
 
-  const params: Record<string, string> = {
-    ...paginationParams,
-    ...(debouncedSearch && { search: debouncedSearch }),
-    ...(statusFilter === 'active' && { active: 'true' }),
-    ...(statusFilter === 'inactive' && { active: 'false' }),
-  }
-  const { data: equipmentData, isLoading } = useEquipment(params)
+  const { data: allEquipment, isLoading } = useEquipment()
+  const filtered = (allEquipment ?? []).filter((eq) => {
+    const matchesSearch = !debouncedSearch || eq.name.toLowerCase().includes(debouncedSearch.toLowerCase())
+    const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? eq.active : !eq.active)
+    return matchesSearch && matchesStatus
+  })
+  const pagedItems = filtered.slice((page - 1) * pageSize, page * pageSize)
 
   return (
     <div className="space-y-5">
@@ -286,7 +286,7 @@ function EquipmentPageContent() {
       {/* List */}
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
-      ) : !equipmentData?.items.length ? (
+      ) : !filtered.length ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <Wrench className="mx-auto mb-2 h-8 w-8 opacity-30" />
           {isDefaultFilters ? (
@@ -302,7 +302,7 @@ function EquipmentPageContent() {
         </div>
       ) : (
         <div className="space-y-2">
-          {(equipmentData?.items ?? []).map((eq) => (
+          {pagedItems.map((eq) => (
             <EquipmentRow
               key={eq.id}
               eq={eq}
@@ -316,7 +316,7 @@ function EquipmentPageContent() {
       <DataPagination
         page={page}
         pageSize={pageSize}
-        total={equipmentData?.total ?? 0}
+        total={filtered.length}
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
       />

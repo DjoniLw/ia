@@ -214,7 +214,7 @@ function SuppliesPageContent() {
 
   const params: Record<string, string> = {
     ...paginationParams,
-    ...(debouncedSearch && { search: debouncedSearch }),
+    ...(debouncedSearch && { name: debouncedSearch }),
     ...(statusFilter === 'active' && { active: 'true' }),
     ...(statusFilter === 'inactive' && { active: 'false' }),
   }
@@ -338,6 +338,14 @@ function SuppliesPageContent() {
           </div>
         </div>
       )}
+
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {creating && (
         <Dialog open onClose={() => setCreating(false)} isDirty={formDirty}>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 interface UsePaginatedQueryOptions {
@@ -65,10 +65,10 @@ export function usePaginatedQuery(options: UsePaginatedQueryOptions = {}): UsePa
     updateParams({ [pageKey]: '1' })
   }, [updateParams, pageKey])
 
-  const paginationParams: Record<string, string> = {
-    page: String(page),
-    limit: String(pageSize),
-  }
+  const paginationParams = useMemo<Record<string, string>>(
+    () => ({ page: String(page), limit: String(pageSize) }),
+    [page, pageSize],
+  )
 
   return { page, pageSize, setPage, setPageSize, resetPage, paginationParams }
 }

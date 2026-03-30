@@ -433,10 +433,10 @@ export interface Equipment {
   createdAt: string
 }
 
-export function useEquipment(params?: Record<string, string>) {
-  return useQuery<Paginated<Equipment>>({
-    queryKey: ['equipment', params],
-    queryFn: () => api.get('/equipment', { params }).then((r) => r.data),
+export function useEquipment() {
+  return useQuery<Equipment[]>({
+    queryKey: ['equipment'],
+    queryFn: () => api.get('/equipment').then((r) => r.data),
   })
 }
 
@@ -476,10 +476,10 @@ export interface Room {
   createdAt: string
 }
 
-export function useRooms(params?: Record<string, string>) {
-  return useQuery<Paginated<Room>>({
-    queryKey: ['rooms', params],
-    queryFn: () => api.get('/rooms', { params }).then((r) => r.data),
+export function useRooms() {
+  return useQuery<Room[]>({
+    queryKey: ['rooms'],
+    queryFn: () => api.get('/rooms').then((r) => r.data),
   })
 }
 

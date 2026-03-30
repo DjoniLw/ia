@@ -412,7 +412,7 @@ function ProfessionalsPageContent() {
 
   const params: Record<string, string> = {
     ...paginationParams,
-    ...(debouncedSearch && { search: debouncedSearch }),
+    ...(debouncedSearch && { name: debouncedSearch }),
     ...(statusFilter === 'active' && { active: 'true' }),
     ...(statusFilter === 'inactive' && { active: 'false' }),
   }
@@ -473,7 +473,7 @@ function ProfessionalsPageContent() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome ou e-mail…"
+              placeholder="Buscar por nome…"
               className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>

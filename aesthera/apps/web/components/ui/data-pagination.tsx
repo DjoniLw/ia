@@ -53,8 +53,9 @@ export function DataPagination({
   if (total === 0 || total <= pageSize) return null
 
   const lastPage = Math.ceil(total / pageSize)
-  const from = (page - 1) * pageSize + 1
-  const to = Math.min(page * pageSize, total)
+  const safePage = Math.min(Math.max(1, page), lastPage)
+  const from = (safePage - 1) * pageSize + 1
+  const to = Math.min(safePage * pageSize, total)
   const pageNumbers = buildPageNumbers(page, lastPage)
 
   return (

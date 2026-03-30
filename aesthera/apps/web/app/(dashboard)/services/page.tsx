@@ -379,28 +379,6 @@ function ServicesPageContent() {
   const [managingSupplies, setManagingSupplies] = useState<Service | null>(null)
   const { mutateAsync: update, isPending: updating } = useUpdateService(editing?.id ?? '')
 
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
-    return () => clearTimeout(t)
-  }, [search])
-
-  // URL sync
-  useEffect(() => {
-    const p = new URLSearchParams(searchParams.toString())
-    search ? p.set('search', search) : p.delete('search')
-    statusFilter !== 'all' ? p.set('status', statusFilter) : p.delete('status')
-    router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, searchParams, search, statusFilter])
-
-  const params: Record<string, string> = {
-    ...paginationParams,
-    ...(debouncedSearch && { search: debouncedSearch }),
-    ...(statusFilter === 'active' && { active: 'true' }),
-    ...(statusFilter === 'inactive' && { active: 'false' }),
-  }
-  const { data, isLoading } = useServices(params)
-
   // ── Filters ──
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
@@ -423,6 +401,28 @@ function ServicesPageContent() {
     if (search) parts.push(`busca: ${search}`)
     return parts.join(' · ')
   }
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    search ? p.set('search', search) : p.delete('search')
+    statusFilter !== 'all' ? p.set('status', statusFilter) : p.delete('status')
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, searchParams, search, statusFilter])
+
+  const params: Record<string, string> = {
+    ...paginationParams,
+    ...(debouncedSearch && { name: debouncedSearch }),
+    ...(statusFilter === 'active' && { active: 'true' }),
+    ...(statusFilter === 'inactive' && { active: 'false' }),
+  }
+  const { data, isLoading } = useServices(params)
 
   async function handleCreate(formData: ServiceFormData) {
     try {

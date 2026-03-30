@@ -327,7 +327,7 @@ const catalogPagination = usePaginatedQuery({ defaultPageSize: 20, paramPrefix: 
 Retorna: `{ page, pageSize, setPage, setPageSize, resetPage, paginationParams }`
 
 - `paginationParams` — `{ page: string, limit: string }` para spread em chamadas de API.
-- `resetPage()` — chame ao mudar qualquer filtro para voltar ao página 1.
+- `resetPage()` — chame ao mudar qualquer filtro para voltar à página 1.
 - Com `paramPrefix`, usa params de URL `${prefix}_page` / `${prefix}_pageSize`.
 
 ### Componente: `<DataPagination>`
