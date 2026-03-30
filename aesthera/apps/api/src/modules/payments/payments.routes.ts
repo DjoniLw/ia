@@ -25,13 +25,12 @@ export async function paymentsRoutes(app: FastifyInstance) {
   })
 
   // ── Mock gateway: confirm payment (dev only) ──────────────────────────────────
-  app.post('/payments/mock/pay/:gatewayPaymentId', { preHandler: [jwtClinicGuard, roleGuard(['admin'])] }, async (req, reply) => {
-    if (appConfig.isProduction) {
-      return reply.status(404).send()
-    }
-    const { gatewayPaymentId } = req.params as { gatewayPaymentId: string }
-    return reply.send(await svc.confirmMockPayment(gatewayPaymentId))
-  })
+  if (!appConfig.isProduction) {
+    app.post('/payments/mock/pay/:gatewayPaymentId', { preHandler: [jwtClinicGuard, roleGuard(['admin'])] }, async (req, reply) => {
+      const { gatewayPaymentId } = req.params as { gatewayPaymentId: string }
+      return reply.send(await svc.confirmMockPayment(gatewayPaymentId))
+    })
+  }
 
   // ── Webhooks (public — signature-verified internally) ────────────────────────
   // Raw body is required for HMAC signature validation (Stripe and MercadoPago
