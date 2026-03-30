@@ -551,7 +551,7 @@ export class ContractsService {
       },
     })
 
-    if (!contract) throw new AppError('Contrato não encontrado ou link inválido.', 404, 'PUBLIC_CONTRACT_NOT_FOUND')
+    if (!contract) throw new NotFoundError('Contrato não encontrado ou link inválido.')
 
     if (!contract.signTokenExpiresAt || contract.signTokenExpiresAt < new Date()) {
       throw new AppError('Este link de assinatura expirou.', 410, 'SIGN_TOKEN_EXPIRED')
@@ -593,7 +593,7 @@ export class ContractsService {
       },
     })
 
-    if (!contract) throw new AppError('Contrato não encontrado ou link inválido.', 404, 'PUBLIC_CONTRACT_NOT_FOUND')
+    if (!contract) throw new NotFoundError('Contrato não encontrado ou link inválido.')
 
     if (!contract.signTokenExpiresAt || contract.signTokenExpiresAt < new Date()) {
       throw new AppError('Este link de assinatura expirou.', 410, 'SIGN_TOKEN_EXPIRED')
