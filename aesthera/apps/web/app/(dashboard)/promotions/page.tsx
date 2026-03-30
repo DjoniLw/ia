@@ -1,9 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DataPagination } from '@/components/ui/data-pagination'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import {
   type CreatePromotionInput,
   type Promotion,
@@ -316,7 +319,9 @@ function UsageCell({ promotion }: { promotion: Promotion }) {
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function PromotionsPage() {
+function PromotionsPageContent() {
+  useSearchParams()
+  const pagination = usePaginatedQuery({ defaultPageSize: 20 })
   const [statusFilter, setStatusFilter] = useState<PromotionStatus | ''>('')
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
@@ -324,7 +329,11 @@ export default function PromotionsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const params = statusFilter ? { status: statusFilter } : undefined
-  const { data, isLoading } = usePromotions(params)
+  const { data, isLoading } = usePromotions({
+    ...(params ?? {}),
+    page: parseInt(pagination.paginationParams.page),
+    limit: parseInt(pagination.paginationParams.limit),
+  })
 
   const filtered = (data?.items ?? []).filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -336,6 +345,7 @@ export default function PromotionsPage() {
   function resetFilters() {
     setStatusFilter('')
     setSearch('')
+    pagination.resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -389,7 +399,7 @@ export default function PromotionsPage() {
           {statusOptions.map((s) => (
             <button
               key={s.value}
-              onClick={() => setStatusFilter(s.value)}
+              onClick={() => { setStatusFilter(s.value); pagination.resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 statusFilter === s.value
@@ -555,10 +565,14 @@ export default function PromotionsPage() {
           </div>
         )}
 
-        {data && data.total > (data.limit ?? 20) && (
-          <div className="border-t px-5 py-3 text-xs text-muted-foreground">
-            Exibindo {data.items.length} de {data.total} promoções
-          </div>
+        {data && (
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            total={data.total}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         )}
       </div>
 
@@ -589,5 +603,13 @@ export default function PromotionsPage() {
         <PromotionModal open={true} onClose={() => setEditing(undefined)} editing={editing} />
       )}
     </div>
+  )
+}
+
+export default function PromotionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <PromotionsPageContent />
+    </Suspense>
   )
 }

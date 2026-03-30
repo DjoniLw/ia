@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { Suspense, useCallback, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   Plus,
@@ -15,6 +16,8 @@ import {
   Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DataPagination } from '@/components/ui/data-pagination'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { useCustomers, useServices } from '@/lib/hooks/use-resources'
 import {
   type CreatePackageInput,
@@ -621,15 +624,19 @@ function PackageCard({
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function PackagesPage() {
+function PackagesPageContent() {
+  useSearchParams()
+  const pagination = usePaginatedQuery({ defaultPageSize: 20 })
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [search, setSearch] = useState('')
   const [creating, setCreating] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const { data, isLoading } = usePackages(
-    activeFilter !== undefined ? { active: activeFilter } : undefined,
-  )
+  const { data, isLoading } = usePackages({
+    ...(activeFilter !== undefined ? { active: activeFilter } : {}),
+    page: parseInt(pagination.paginationParams.page),
+    limit: parseInt(pagination.paginationParams.limit),
+  })
 
   const filterOptions: Array<{ value: boolean | undefined; label: string }> = [
     { value: undefined, label: 'Todos' },
@@ -688,7 +695,7 @@ export default function PackagesPage() {
           {filterOptions.map((opt) => (
             <button
               key={String(opt.value)}
-              onClick={() => setActiveFilter(opt.value)}
+              onClick={() => { setActiveFilter(opt.value); pagination.resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 activeFilter === opt.value
@@ -746,6 +753,13 @@ export default function PackagesPage() {
               onToggle={() => setExpandedId(expandedId === pkg.id ? null : pkg.id)}
             />
           ))}
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            total={data?.total ?? 0}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         </div>
       )}
 
@@ -773,5 +787,13 @@ export default function PackagesPage() {
 
       <PackageModal open={creating} onClose={() => setCreating(false)} />
     </div>
+  )
+}
+
+export default function PackagesPage() {
+  return (
+    <Suspense fallback={null}>
+      <PackagesPageContent />
+    </Suspense>
   )
 }

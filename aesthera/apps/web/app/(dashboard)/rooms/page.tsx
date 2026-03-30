@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Info, Pencil, Search, Trash2, Plus, DoorOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,8 @@ import {
   useUpdateRoom,
   useDeleteRoom,
 } from '@/lib/hooks/use-resources'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
@@ -226,8 +229,10 @@ function DeleteDialog({ room, onClose }: { room: Room; onClose: () => void }) {
 
 // ──── Page ────────────────────────────────────────────────────────────────────
 
-export default function RoomsPage() {
-  const { data: roomsList, isLoading } = useRooms()
+function RoomsPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
   const createRoom = useCreateRoom()
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
@@ -235,28 +240,23 @@ export default function RoomsPage() {
   const [deleting, setDeleting] = useState<Room | null>(null)
 
   // ── Filters ──
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-
-  const filtered = (roomsList ?? []).filter((room) => {
-    const matchesSearch = room.name.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && room.active) ||
-      (statusFilter === 'inactive' && !room.active)
-    return matchesSearch && matchesStatus
-  })
+  const [search, setSearch] = useState(searchParams.get('search') ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    (searchParams.get('status') as StatusFilter | null) ?? 'all'
+  )
 
   const isDefaultFilters = search === '' && statusFilter === 'all'
 
   function resetFilters() {
     setSearch('')
     setStatusFilter('all')
+    resetPage()
   }
 
   function buildFilterLabel(): string {
     const parts: string[] = []
-    const statusMap: Record<StatusFilter, string> = { all: 'todos', active: 'apenas ativos', inactive: 'apenas inativos' }
+    const statusMap: Record<StatusFilter, string> = { all: 'todos', active: 'apenas ativas', inactive: 'apenas inativas' }
     parts.push(statusMap[statusFilter])
     if (search) parts.push(`busca: ${search}`)
     return parts.join(' · ')
@@ -272,6 +272,28 @@ export default function RoomsPage() {
       toast.error(msg ?? 'Erro ao criar sala')
     }
   }
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    if (search) p.set('search', search) else p.delete('search')
+    if (statusFilter !== 'all') p.set('status', statusFilter) else p.delete('status')
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, searchParams, search, statusFilter])
+
+  const params: Record<string, string> = {
+    ...paginationParams,
+    ...(debouncedSearch && { search: debouncedSearch }),
+    ...(statusFilter === 'active' && { active: 'true' }),
+    ...(statusFilter === 'inactive' && { active: 'false' }),
+  }
+  const { data: roomsData, isLoading } = useRooms(params)
 
   return (
     <div className="space-y-5">
@@ -303,7 +325,7 @@ export default function RoomsPage() {
           {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
             <button
               key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => { setStatusFilter(s); resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 statusFilter === s
@@ -330,21 +352,23 @@ export default function RoomsPage() {
       {/* List */}
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
-      ) : !roomsList || roomsList.length === 0 ? (
+      ) : !roomsData?.items.length ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <DoorOpen className="mx-auto mb-2 h-8 w-8 opacity-30" />
-          <p className="text-sm">Nenhuma sala cadastrada.</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
-            Criar primeira sala
-          </Button>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
-          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+          {isDefaultFilters ? (
+            <>
+              <p className="text-sm">Nenhuma sala cadastrada.</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
+                Criar primeira sala
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((room) => (
+          {(roomsData?.items ?? []).map((room) => (
             <RoomRow
               key={room.id}
               room={room}
@@ -354,6 +378,14 @@ export default function RoomsPage() {
           ))}
         </div>
       )}
+
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={roomsData?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {/* Create dialog */}
       {creating && (
@@ -376,5 +408,13 @@ export default function RoomsPage() {
       {/* Delete dialog */}
       {deleting && <DeleteDialog room={deleting} onClose={() => setDeleting(null)} />}
     </div>
+  )
+}
+
+export default function RoomsPage() {
+  return (
+    <Suspense fallback={null}>
+      <RoomsPageContent />
+    </Suspense>
   )
 }

@@ -24,6 +24,8 @@ import {
 } from '@/lib/hooks/use-wallet'
 import { useCustomers } from '@/lib/hooks/use-resources'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -535,15 +537,17 @@ function CarteiraPageContent() {
   const [createdAtFrom, setCreatedAtFrom] = useState(searchParams.get('createdAtFrom') ?? defaultCreatedAtFrom())
   const [createdAtTo, setCreatedAtTo] = useState(searchParams.get('createdAtTo') ?? '')
 
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
+
   // URL sync
   useEffect(() => {
-    const p = new URLSearchParams()
-    if (statusFilter) p.set('status', statusFilter)
-    if (typeFilter) p.set('type', typeFilter)
-    if (createdAtFrom) p.set('createdAtFrom', createdAtFrom)
-    if (createdAtTo) p.set('createdAtTo', createdAtTo)
+    const p = new URLSearchParams(searchParams.toString())
+    if (statusFilter) p.set('status', statusFilter); else p.delete('status')
+    if (typeFilter) p.set('type', typeFilter); else p.delete('type')
+    if (createdAtFrom) p.set('createdAtFrom', createdAtFrom); else p.delete('createdAtFrom')
+    if (createdAtTo) p.set('createdAtTo', createdAtTo); else p.delete('createdAtTo')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, statusFilter, typeFilter, createdAtFrom, createdAtTo])
+  }, [router, statusFilter, typeFilter, createdAtFrom, createdAtTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Date validation
   const dateRangeError =
@@ -565,6 +569,7 @@ function CarteiraPageContent() {
     setTypeFilter('')
     setCreatedAtFrom(defaultCreatedAtFrom())
     setCreatedAtTo('')
+    resetPage()
   }
 
   function applyPreset(preset: 'today' | 7 | 30 | '6months' | '1year') {
@@ -591,7 +596,7 @@ function CarteiraPageContent() {
   }
 
   // Visão geral
-  const overviewParams: Record<string, string> = {}
+  const overviewParams: Record<string, string> = { ...paginationParams }
   if (statusFilter) overviewParams.status = statusFilter
   if (typeFilter) overviewParams.type = typeFilter
   if (createdAtFrom && !dateRangeError && isValidISODate(createdAtFrom)) overviewParams.createdAtFrom = createdAtFrom
@@ -602,7 +607,7 @@ function CarteiraPageContent() {
   )
 
   // Por cliente
-  const byCustomerParams: Record<string, string> = {}
+  const byCustomerParams: Record<string, string> = { ...paginationParams }
   if (statusFilter) byCustomerParams.status = statusFilter
   if (typeFilter) byCustomerParams.type = typeFilter
   if (selectedCustomer) byCustomerParams.customerId = selectedCustomer.id
@@ -694,7 +699,7 @@ function CarteiraPageContent() {
               <button
                 key={s.value}
                 type="button"
-                onClick={() => setStatusFilter(s.value)}
+                onClick={() => { setStatusFilter(s.value); resetPage() }}
                 className={[
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   statusFilter === s.value
@@ -713,7 +718,7 @@ function CarteiraPageContent() {
               <button
                 key={t.value}
                 type="button"
-                onClick={() => setTypeFilter(t.value)}
+                onClick={() => { setTypeFilter(t.value); resetPage() }}
                 className={[
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   typeFilter === t.value
@@ -839,11 +844,13 @@ function CarteiraPageContent() {
       ) : viewMode === 'overview' ? (
         <>
           <OverviewTable items={displayItems} onAdjust={setAdjustEntry} />
-          {overviewData && total > overviewData.limit && (
-            <p className="text-center text-xs text-muted-foreground">
-              Exibindo {displayItems.length} de {total} entradas
-            </p>
-          )}
+          <DataPagination
+            page={page}
+            pageSize={pageSize}
+            total={overviewData?.total ?? 0}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </>
       ) : !selectedCustomer ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border bg-card py-16 text-center">
@@ -924,11 +931,13 @@ function CarteiraPageContent() {
               </div>
             ))}
           </div>
-          {byCustomerData && byCustomerData.total > byCustomerData.limit && (
-            <p className="text-center text-xs text-muted-foreground">
-              Exibindo {displayItems.length} de {byCustomerData.total} entradas
-            </p>
-          )}
+          <DataPagination
+            page={page}
+            pageSize={pageSize}
+            total={byCustomerData?.total ?? 0}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </>
       )}
 

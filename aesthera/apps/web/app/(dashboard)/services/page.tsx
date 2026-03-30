@@ -1,7 +1,8 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -20,6 +21,8 @@ import {
   useSupplies,
   useUpdateService,
 } from '@/lib/hooks/use-resources'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 function parseBRL(value: string): number {
   // Accept "150,00" or "150.00" or "150" → returns cents
@@ -362,8 +365,10 @@ const STATUS_LABELS: Record<StatusFilter, string> = {
   inactive: 'Inativos',
 }
 
-export default function ServicesPage() {
-  const { data, isLoading } = useServices()
+function ServicesPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
   const { mutateAsync: create, isPending: creating } = useCreateService()
   const { mutateAsync: del } = useDeleteService()
 
@@ -374,24 +379,41 @@ export default function ServicesPage() {
   const [managingSupplies, setManagingSupplies] = useState<Service | null>(null)
   const { mutateAsync: update, isPending: updating } = useUpdateService(editing?.id ?? '')
 
-  // ── Filters ──
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
+    return () => clearTimeout(t)
+  }, [search])
 
-  const filtered = (data?.items ?? []).filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && s.active) ||
-      (statusFilter === 'inactive' && !s.active)
-    return matchesSearch && matchesStatus
-  })
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    if (search) p.set('search', search) else p.delete('search')
+    if (statusFilter !== 'all') p.set('status', statusFilter) else p.delete('status')
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, searchParams, search, statusFilter])
+
+  const params: Record<string, string> = {
+    ...paginationParams,
+    ...(debouncedSearch && { search: debouncedSearch }),
+    ...(statusFilter === 'active' && { active: 'true' }),
+    ...(statusFilter === 'inactive' && { active: 'false' }),
+  }
+  const { data, isLoading } = useServices(params)
+
+  // ── Filters ──
+  const [search, setSearch] = useState(searchParams.get('search') ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    (searchParams.get('status') as StatusFilter | null) ?? 'all'
+  )
 
   const isDefaultFilters = search === '' && statusFilter === 'all'
 
   function resetFilters() {
     setSearch('')
     setStatusFilter('all')
+    resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -477,7 +499,7 @@ export default function ServicesPage() {
           {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
             <button
               key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => { setStatusFilter(s); resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 statusFilter === s
@@ -503,17 +525,19 @@ export default function ServicesPage() {
 
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
-      ) : !data || data.items.length === 0 ? (
+      ) : !data?.items.length ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <Scissors className="mx-auto mb-2 h-8 w-8 opacity-30" />
-          <p className="text-sm">Nenhum serviço cadastrado.</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowCreate(true)}>
-            Criar primeiro serviço
-          </Button>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
-          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+          {isDefaultFilters ? (
+            <>
+              <p className="text-sm">Nenhum serviço cadastrado.</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowCreate(true)}>
+                Criar primeiro serviço
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+          )}
         </div>
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -530,7 +554,7 @@ export default function ServicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filtered.map((s) => (
+                {(data?.items ?? []).map((s) => (
                   <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-medium">{s.name}</td>
                     <td className="hidden sm:table-cell px-4 py-3 text-muted-foreground">{s.category ?? '—'}</td>
@@ -567,7 +591,15 @@ export default function ServicesPage() {
         </div>
       )}
 
-      {/* Create dialog */}
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
+
+      {/* Create dialog */}}
       {showCreate && (
         <Dialog open onClose={() => setShowCreate(false)} isDirty={formDirty}>
           <DialogTitle>Novo Serviço</DialogTitle>
@@ -616,5 +648,13 @@ export default function ServicesPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function ServicesPage() {
+  return (
+    <Suspense fallback={null}>
+      <ServicesPageContent />
+    </Suspense>
   )
 }

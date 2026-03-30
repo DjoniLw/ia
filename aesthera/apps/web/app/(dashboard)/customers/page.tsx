@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -50,6 +50,8 @@ import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-sear
 import { api } from '@/lib/api'
 import Link from 'next/link'
 import { useRole } from '@/lib/hooks/use-role'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { DataPagination } from '@/components/ui/data-pagination'
 import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
@@ -2517,15 +2519,23 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function CustomersPage() {
+function CustomersPageContent() {
   const [search, setSearch] = useState('')
+  const [searchDebounced, setSearchDebounced] = useState('')
   const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
 
-  const queryParams: Record<string, string> = {}
-  if (search) queryParams.name = search
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
+
+  useEffect(() => {
+    const timer = setTimeout(() => { setSearchDebounced(search); resetPage() }, 250)
+    return () => clearTimeout(timer)
+  }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const queryParams: Record<string, string> = { ...paginationParams }
+  if (searchDebounced) queryParams.name = searchDebounced
   if (activeFilter !== 'all') queryParams.active = String(activeFilter === 'active')
 
-  const { data, isLoading } = useCustomers(Object.keys(queryParams).length ? queryParams : undefined)
+  const { data, isLoading } = useCustomers(queryParams)
 
   const isDefaultFilters = search === '' && activeFilter === 'active'
 
@@ -2614,7 +2624,7 @@ export default function CustomersPage() {
           {(['active', 'inactive', 'all'] as const).map((v) => (
             <button
               key={v}
-              onClick={() => setActiveFilter(v)}
+              onClick={() => { setActiveFilter(v); resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 activeFilter === v
@@ -2633,7 +2643,7 @@ export default function CustomersPage() {
           {!isDefaultFilters && (
             <button
               type="button"
-              onClick={() => { setSearch(''); setActiveFilter('active') }}
+              onClick={() => { setSearch(''); setActiveFilter('active'); resetPage() }}
               className="ml-auto shrink-0 font-medium text-primary hover:underline"
             >
               Restaurar padrão
@@ -2701,6 +2711,14 @@ export default function CustomersPage() {
           </tbody>
         </table>
       </div>
+
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {/* Create dialog */}
       {creating && (
@@ -2784,5 +2802,13 @@ export default function CustomersPage() {
         </Dialog>
       )}
     </div>
+  )
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense fallback={null}>
+      <CustomersPageContent />
+    </Suspense>
   )
 }

@@ -18,6 +18,8 @@ import {
   useAccountsPayable,
   useAccountsPayableSummary,
 } from '@/lib/hooks/use-accounts-payable'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -393,22 +395,24 @@ function ContasAPagarPageContent() {
   const [toFilter, setToFilter] = useState(searchParams.get('to') ?? '')
   const [novaContaOpen, setNovaContaOpen] = useState(false)
 
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
+
   // Debounce do campo fornecedor
   useEffect(() => {
-    const t = setTimeout(() => setSupplierSearchDebounced(supplierSearch), 250)
+    const t = setTimeout(() => { setSupplierSearchDebounced(supplierSearch); resetPage() }, 250)
     return () => clearTimeout(t)
   }, [supplierSearch])
 
   // URL sync
   useEffect(() => {
-    const p = new URLSearchParams()
-    if (statusFilter) p.set('status', statusFilter)
-    if (supplierSearch) p.set('supplier', supplierSearch)
-    if (categoryFilter) p.set('category', categoryFilter)
-    if (fromFilter) p.set('from', fromFilter)
-    if (toFilter) p.set('to', toFilter)
+    const p = new URLSearchParams(searchParams.toString())
+    if (statusFilter) p.set('status', statusFilter) else p.delete('status')
+    if (supplierSearch) p.set('supplier', supplierSearch) else p.delete('supplier')
+    if (categoryFilter) p.set('category', categoryFilter) else p.delete('category')
+    if (fromFilter) p.set('from', fromFilter) else p.delete('from')
+    if (toFilter) p.set('to', toFilter) else p.delete('to')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, statusFilter, supplierSearch, categoryFilter, fromFilter, toFilter])
+  }, [router, searchParams, statusFilter, supplierSearch, categoryFilter, fromFilter, toFilter])
 
   const isDefaultFilters =
     statusFilter === '' &&
@@ -424,9 +428,11 @@ function ContasAPagarPageContent() {
     setCategoryFilter('')
     setFromFilter('')
     setToFilter('')
+    resetPage()
   }
 
   const params: Record<string, string> = {
+    ...paginationParams,
     ...(statusFilter && { status: statusFilter }),
     ...(supplierSearchDebounced && { supplierName: supplierSearchDebounced }),
     ...(categoryFilter && { category: categoryFilter }),
@@ -434,9 +440,7 @@ function ContasAPagarPageContent() {
     ...(toFilter && { to: toFilter }),
   }
 
-  const { data, isLoading } = useAccountsPayable(
-    Object.keys(params).length ? params : undefined,
-  )
+  const { data, isLoading } = useAccountsPayable(params)
   const { data: summary } = useAccountsPayableSummary()
 
   const statuses: Array<{ value: AccountsPayableStatus | ''; label: string }> = [
@@ -509,7 +513,7 @@ function ContasAPagarPageContent() {
               <button
                 key={s.value}
                 type="button"
-                onClick={() => setStatusFilter(s.value)}
+                onClick={() => { setStatusFilter(s.value); resetPage() }}
                 className={[
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   statusFilter === s.value
@@ -526,7 +530,7 @@ function ContasAPagarPageContent() {
           <div className="flex flex-wrap gap-1">
             <button
               type="button"
-              onClick={() => setCategoryFilter('')}
+              onClick={() => { setCategoryFilter(''); resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 categoryFilter === ''
@@ -540,7 +544,7 @@ function ContasAPagarPageContent() {
               <button
                 key={c}
                 type="button"
-                onClick={() => setCategoryFilter(c)}
+                onClick={() => { setCategoryFilter(c); resetPage() }}
                 className={[
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   categoryFilter === c
@@ -558,14 +562,14 @@ function ContasAPagarPageContent() {
             <Input
               type="date"
               value={fromFilter}
-              onChange={(e) => setFromFilter(e.target.value)}
+              onChange={(e) => { setFromFilter(e.target.value); resetPage() }}
               className="h-8 w-36 text-sm"
             />
             <span className="text-xs text-muted-foreground">até</span>
             <Input
               type="date"
               value={toFilter}
-              onChange={(e) => setToFilter(e.target.value)}
+              onChange={(e) => { setToFilter(e.target.value); resetPage() }}
               className="h-8 w-36 text-sm"
             />
           </div>
@@ -659,12 +663,13 @@ function ContasAPagarPageContent() {
         </table>
       </div>
 
-      {/* Pagination info */}
-      {data && data.total > data.limit && (
-        <p className="text-xs text-muted-foreground text-right">
-          Exibindo {data.items.length} de {data.total} contas
-        </p>
-      )}
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {novaContaOpen && <NovaContaDialog onClose={() => setNovaContaOpen(false)} />}
     </div>

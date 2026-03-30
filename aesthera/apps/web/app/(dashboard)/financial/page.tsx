@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useLedger, useLedgerChart, useLedgerSummary } from '@/lib/hooks/use-financial'
 import type { LedgerEntry } from '@/lib/hooks/use-financial'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
@@ -92,7 +94,8 @@ function FinancialPageContent() {
   const [from, setFrom] = useState(searchParams.get('from') ?? currentMonthFrom())
   const [to, setTo] = useState(searchParams.get('to') ?? currentMonthTo())
   const [type, setType] = useState<'credit' | 'debit' | ''>((searchParams.get('type') as 'credit' | 'debit' | '') ?? '')
-  const [page, setPage] = useState(1)
+
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 
   const isDefaultFilters = from === currentMonthFrom() && to === currentMonthTo() && type === ''
 
@@ -100,7 +103,7 @@ function FinancialPageContent() {
     setFrom(currentMonthFrom())
     setTo(currentMonthTo())
     setType('')
-    setPage(1)
+    resetPage()
   }
 
   function applyPreset(preset: 'today' | 7 | 30 | '6months' | '1year') {
@@ -124,20 +127,20 @@ function FinancialPageContent() {
       setFrom(toISODate(d))
       setTo(today)
     }
-    setPage(1)
+    resetPage()
   }
 
-  // URL sync
+  // URL sync — gerenciado pelo usePaginatedQuery para page/pageSize; aqui só os filtros de data/tipo
   useEffect(() => {
-    const p = new URLSearchParams()
-    if (from) p.set('from', from)
-    if (to) p.set('to', to)
-    if (type) p.set('type', type)
+    const p = new URLSearchParams(searchParams.toString())
+    if (from) p.set('from', from); else p.delete('from')
+    if (to) p.set('to', to); else p.delete('to')
+    if (type) p.set('type', type); else p.delete('type')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, from, to, type])
+  }, [router, from, to, type]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const params = Object.fromEntries(
-    Object.entries({ from, to, type, page, limit: 20 }).filter(([, v]) => v !== ''),
+    Object.entries({ from, to, type, ...paginationParams }).filter(([, v]) => v !== ''),
   )
 
   const { data, isLoading } = useLedger(params)
@@ -275,7 +278,7 @@ function FinancialPageContent() {
               <input
                 type="date"
                 value={from}
-                onChange={(e) => { setFrom(e.target.value); setPage(1) }}
+                onChange={(e) => { setFrom(e.target.value); resetPage() }}
                 className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -284,7 +287,7 @@ function FinancialPageContent() {
               <input
                 type="date"
                 value={to}
-                onChange={(e) => { setTo(e.target.value); setPage(1) }}
+                onChange={(e) => { setTo(e.target.value); resetPage() }}
                 className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -296,7 +299,7 @@ function FinancialPageContent() {
               <button
                 key={t.value}
                 type="button"
-                onClick={() => { setType(t.value); setPage(1) }}
+                onClick={() => { setType(t.value); resetPage() }}
                 className={[
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   type === t.value
@@ -394,29 +397,13 @@ function FinancialPageContent() {
         )}
 
         {/* Pagination */}
-        {data && data.total > 20 && (
-          <div className="flex items-center justify-between border-t px-5 py-3">
-            <p className="text-xs text-muted-foreground">
-              Página {data.page} de {Math.ceil(data.total / data.limit)}
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="rounded-lg border px-3 py-1 text-xs font-medium disabled:opacity-40 hover:bg-muted/50"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page >= Math.ceil(data.total / data.limit)}
-                className="rounded-lg border px-3 py-1 text-xs font-medium disabled:opacity-40 hover:bg-muted/50"
-              >
-                Próxima
-              </button>
-            </div>
-          </div>
-        )}
+        <DataPagination
+          page={page}
+          pageSize={pageSize}
+          total={data?.total ?? 0}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
     </div>
   )
