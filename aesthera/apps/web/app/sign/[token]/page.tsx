@@ -99,8 +99,8 @@ function SignatureCanvas({
         <canvas
           ref={canvasRef}
           width={600}
-          height={200}
-          className="w-full h-40 cursor-crosshair"
+          height={256}
+          className="w-full h-48 cursor-crosshair"
           onMouseDown={start}
           onMouseMove={draw}
           onMouseUp={stop}
@@ -151,6 +151,7 @@ export default function SignPage() {
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(false)
   const [showCanvas, setShowCanvas] = useState(false)
+  const [consentChecked, setConsentChecked] = useState(false)
 
   useEffect(() => {
     axios
@@ -264,14 +265,39 @@ export default function SignPage() {
               isPending={signing}
             />
           ) : (
-            <button
-              type="button"
-              onClick={() => setShowCanvas(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors"
-            >
-              <PenLine className="h-4 w-4" />
-              Assinar contrato
-            </button>
+            <div className="space-y-3">
+              {data?.fileUrl && (
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={consentChecked}
+                    onChange={(e) => setConsentChecked(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded accent-violet-600"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    Li e concordo com os termos do{' '}
+                    <a
+                      href={data.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline text-violet-600"
+                    >
+                      contrato
+                    </a>
+                    .
+                  </span>
+                </label>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowCanvas(true)}
+                disabled={!!data?.fileUrl && !consentChecked}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <PenLine className="h-4 w-4" />
+                Assinar contrato
+              </button>
+            </div>
           )}
 
           <p className="text-center text-xs text-muted-foreground">

@@ -1409,9 +1409,6 @@ function ContractsTab({ customer }: { customer: Customer }) {
         </Dialog>
       )}
 
-      {/* Dialog: enviar para assinar remotamente (2ª instância — mesmo componente) */}
-      {/* já tratado acima — removido duplicado */}
-
       {/* Dialog: carregar contrato já assinado (vinculado ao template) */}
       {uploadingSignedContract && (
         <Dialog open onClose={() => { if (uploadSignedProgress === 'idle') { setUploadingSignedContract(null); setUploadSignedFile(null) } }}>

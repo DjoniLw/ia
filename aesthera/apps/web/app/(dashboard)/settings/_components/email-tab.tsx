@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { CheckCircle, Loader2, Mail, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { useSmtpSettings, useUpdateSmtpSettings, useTestSmtpSettings } from '@/lib/hooks/use-resources'
 
 export function EmailTab() {
@@ -18,7 +20,6 @@ export function EmailTab() {
   const [pass, setPass] = useState('')
   const [from, setFrom] = useState('')
   const [secure, setSecure] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [testResult, setTestResult] = useState<'ok' | 'error' | null>(null)
   const [testError, setTestError] = useState('')
 
@@ -40,9 +41,8 @@ export function EmailTab() {
       smtpFrom: from.trim() || null,
       smtpSecure: secure,
     })
-    setSaved(true)
     setPass('')
-    setTimeout(() => setSaved(false), 2500)
+    toast.success('Configurações de e-mail salvas.')
   }
 
   async function handleTest() {
@@ -158,25 +158,15 @@ export function EmailTab() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSecure(!secure)}
-            className={[
-              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none',
-              secure ? 'bg-violet-600' : 'bg-gray-200 dark:bg-gray-700',
-            ].join(' ')}
-          >
-            <span
-              className={[
-                'inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform',
-                secure ? 'translate-x-4.5' : 'translate-x-0.5',
-              ].join(' ')}
-            />
-          </button>
-          <span className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="smtp-secure"
+            checked={secure}
+            onCheckedChange={setSecure}
+          />
+          <Label htmlFor="smtp-secure" className="text-sm text-muted-foreground cursor-pointer">
             SSL/TLS (porta 465) — desative para STARTTLS (porta 587)
-          </span>
+          </Label>
         </div>
 
         {testResult === 'ok' && (
@@ -193,22 +183,27 @@ export function EmailTab() {
         )}
 
         <div className="flex items-center justify-between pt-2 border-t">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void handleTest()}
-            disabled={test.isPending || !data?.configured}
-          >
-            {test.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-            Testar conexão
-          </Button>
+          <div className="flex flex-col items-start gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleTest()}
+              disabled={test.isPending || !data?.configured}
+            >
+              {test.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Testar conexão
+            </Button>
+            {!data?.configured && (
+              <p className="text-xs text-muted-foreground">Salve as configurações primeiro para habilitar o teste.</p>
+            )}
+          </div>
           <Button
             size="sm"
             onClick={() => void handleSave()}
             disabled={update.isPending}
           >
             {update.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-            {saved ? '✓ Salvo!' : 'Salvar'}
+            Salvar
           </Button>
         </div>
       </div>

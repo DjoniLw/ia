@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   useWhatsappSettings,
   useUpdateWhatsappInstance,
@@ -205,36 +206,22 @@ function BirthdayAutomationSection() {
   const [template, setTemplate] = useState(
     'Olá {nome}! 🎉\nA equipe da clínica deseja um feliz aniversário!\nComo presente, você ganhou {benefício}.\nEstamos aqui para te receber com muito carinho! 💜',
   )
-  const [saved, setSaved] = useState(false)
-
-  function handleSave() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-  }
 
   return (
-    <div className="rounded-xl border bg-card p-6 shadow-sm">
+    <div className="rounded-xl border bg-card p-6 shadow-sm opacity-70">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-base font-semibold">Automação de Aniversários</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold">Automação de Aniversários</h3>
+            <span className="rounded-full bg-violet-100 dark:bg-violet-900/30 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
+              Em breve
+            </span>
+          </div>
           <p className="text-muted-foreground mt-1 text-sm">
             Envie mensagens automáticas de feliz aniversário via WhatsApp para seus clientes.
           </p>
         </div>
-        <button
-          onClick={() => setEnabled(!enabled)}
-          className={[
-            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none',
-            enabled ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700',
-          ].join(' ')}
-        >
-          <span
-            className={[
-              'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-              enabled ? 'translate-x-6' : 'translate-x-1',
-            ].join(' ')}
-          />
-        </button>
+        <Switch checked={enabled} onCheckedChange={setEnabled} disabled />
       </div>
 
       {enabled && (
@@ -245,7 +232,8 @@ function BirthdayAutomationSection() {
               type="time"
               value={sendTime}
               onChange={(e) => setSendTime(e.target.value)}
-              className="bg-background text-foreground focus:ring-primary rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              disabled
+              className="bg-background text-foreground rounded-lg border px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <p className="text-muted-foreground text-xs">
               O sistema enviará mensagens neste horário para todos os aniversariantes do dia.
@@ -264,8 +252,9 @@ function BirthdayAutomationSection() {
             <textarea
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
+              disabled
               rows={5}
-              className="bg-background text-foreground focus:ring-primary w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              className="bg-background text-foreground w-full resize-none rounded-lg border px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <p className="text-muted-foreground text-xs">Prévia para &quot;Maria&quot;:</p>
             <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm whitespace-pre-wrap text-green-900 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-300">
@@ -273,12 +262,6 @@ function BirthdayAutomationSection() {
                 .replace('{nome}', 'Maria')
                 .replace('{benefício}', '10% de desconto no próximo tratamento')}
             </div>
-          </div>
-
-          <div className="flex justify-end">
-            <Button onClick={handleSave} size="sm">
-              {saved ? '✓ Salvo!' : 'Salvar configurações'}
-            </Button>
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Loader2, Mail, MessageCircle, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PhoneInput } from '@/components/ui/phone-input'
@@ -38,10 +39,11 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
   }
 
   // Validação de envio
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   const canSend = (() => {
     if (!sendViaWhatsapp && !sendViaEmail) return false
     if (sendViaWhatsapp && !phoneValid) return false
-    if (sendViaEmail && !email.trim()) return false
+    if (sendViaEmail && !emailRegex.test(email.trim())) return false
     return true
   })()
 
@@ -74,16 +76,17 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Enviar por</p>
 
           {/* WhatsApp */}
-          <label className="flex items-center gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
+          <div className="flex items-center gap-3">
+            <Checkbox
+              id="send-via-whatsapp"
               checked={sendViaWhatsapp}
-              onChange={(e) => setSendViaWhatsapp(e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-violet-600"
+              onCheckedChange={setSendViaWhatsapp}
             />
-            <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
-            <span className="text-sm font-medium">WhatsApp</span>
-          </label>
+            <label htmlFor="send-via-whatsapp" className="flex items-center gap-2 cursor-pointer select-none">
+              <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
+              <span className="text-sm font-medium">WhatsApp</span>
+            </label>
+          </div>
 
           {sendViaWhatsapp && (
             <div className="ml-7 space-y-1.5">
@@ -99,19 +102,21 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
           )}
 
           {/* E-mail */}
-          <label className="flex items-center gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
+          <div className="flex items-center gap-3">
+            <Checkbox
+              id="send-via-email"
               checked={sendViaEmail}
-              onChange={(e) => setSendViaEmail(e.target.checked)}
-              className="h-4 w-4 rounded border-input accent-violet-600"
+              onCheckedChange={setSendViaEmail}
             />
-            <Mail className="h-4 w-4 text-violet-600 shrink-0" />
-            <span className="text-sm font-medium">E-mail</span>
-          </label>
+            <label htmlFor="send-via-email" className="flex items-center gap-2 cursor-pointer select-none">
+              <Mail className="h-4 w-4 text-violet-600 shrink-0" />
+              <span className="text-sm font-medium">E-mail</span>
+            </label>
+          </div>
 
           {sendViaEmail && (
             <div className="ml-7 space-y-1.5">
+              <Label htmlFor="remote-sign-email">E-mail do cliente</Label>
               <Input
                 id="remote-sign-email"
                 type="email"
