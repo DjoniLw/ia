@@ -99,12 +99,12 @@ const STATUS_COLOR: Record<AppointmentStatus, string> = {
 }
 
 const EVENT_COLOR: Record<AppointmentStatus, string> = {
-  draft: 'bg-gray-200 text-gray-800',
-  confirmed: 'bg-blue-500 text-white',
-  in_progress: 'bg-amber-500 text-white',
-  completed: 'bg-green-500 text-white',
-  cancelled: 'bg-red-200 text-red-700 line-through opacity-60',
-  no_show: 'bg-orange-400 text-white',
+  draft:       'bg-gray-300 text-gray-900 ring-1 ring-white/50',
+  confirmed:   'bg-blue-600 text-white ring-1 ring-white/50',
+  in_progress: 'bg-amber-600 text-white ring-1 ring-white/50',
+  completed:   'bg-green-600 text-white ring-1 ring-white/50',
+  cancelled:   'bg-red-200 text-red-900 opacity-75 ring-1 ring-white/50',
+  no_show:     'bg-orange-600 text-white ring-1 ring-white/50',
 }
 
 // ──── Time Grid Column ─────────────────────────────────────────────────────────
@@ -985,6 +985,18 @@ function AdvancedScheduleDialog({
         </Button>
       </div>
 
+      {/* Legenda de status */}
+      <div className="flex flex-wrap gap-1.5 px-4 pb-2 pt-1">
+        {(Object.entries(STATUS_LABEL) as [AppointmentStatus, string][]).map(([key, label]) => (
+          <span
+            key={key}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${EVENT_COLOR[key]}`}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+
       {isLoading && <p className="text-sm text-muted-foreground text-center py-8">Carregando…</p>}
 
       {!isLoading && professionals.length === 0 && (
@@ -1171,7 +1183,7 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         {status === 'in_progress' && (
           <>
             <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAction('complete')}>Concluir</Button>
-            <Button size="sm" variant="outline" onClick={() => handleAction('noShow')}>No-show</Button>
+            <Button size="sm" variant="outline" onClick={() => handleAction('noShow')}>Não compareceu</Button>
           </>
         )}
         {canCancel && (
@@ -1741,6 +1753,18 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
+      {/* Legenda de cores do calendário */}
+      <div className="flex flex-wrap gap-1.5">
+        {(Object.entries(STATUS_LABEL) as [AppointmentStatus, string][]).map(([key, label]) => (
+          <span
+            key={key}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${EVENT_COLOR[key]}`}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+
       {/* Calendar */}
       {isLoading ? (
         <div className="py-16 text-center text-muted-foreground">Carregando…</div>
@@ -1760,13 +1784,6 @@ export default function AppointmentsPage() {
           onDayClick={handleDayClick}
         />
       )}
-
-      {/* Status legend */}
-      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        {(Object.entries(STATUS_LABEL) as [AppointmentStatus, string][]).map(([k, v]) => (
-          <span key={k} className={`rounded-full px-2.5 py-0.5 font-medium ${STATUS_COLOR[k]}`}>{v}</span>
-        ))}
-      </div>
 
       {/* Slot action dialog */}
       {selectedSlot && selectedSlot.type === 'appointment' && (
