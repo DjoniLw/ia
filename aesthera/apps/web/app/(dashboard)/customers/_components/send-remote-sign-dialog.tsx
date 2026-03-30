@@ -1,0 +1,149 @@
+'use client'
+
+import { useState } from 'react'
+import { Loader2, Mail, MessageCircle, Send } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import { useSendRemoteSignLink, type CustomerContract } from '@/lib/hooks/use-resources'
+
+interface Props {
+  contract: CustomerContract
+  defaultPhone?: string | null
+  defaultEmail?: string | null
+  onClose: () => void
+  onSuccess: () => void
+}
+
+export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onClose, onSuccess }: Props) {
+  const [sendViaWhatsapp, setSendViaWhatsapp] = useState(true)
+  const [sendViaEmail, setSendViaEmail] = useState(true)
+  const [phone, setPhone] = useState(defaultPhone ?? '')
+  const [phoneValid, setPhoneValid] = useState(false)
+  const [email, setEmail] = useState(defaultEmail ?? '')
+  const [phoneError, setPhoneError] = useState('')
+
+  const sendRemoteSign = useSendRemoteSignLink(contract.customerId, contract.id)
+
+  function handlePhoneChange(e164: string, isValid: boolean) {
+    setPhone(e164)
+    setPhoneValid(isValid)
+    if (e164.replace(/\D/g, '').length > 2) {
+      setPhoneError(isValid ? '' : 'Número inválido — verifique o DDD e os dígitos')
+    } else {
+      setPhoneError('')
+    }
+  }
+
+  // Validação de envio
+  const canSend = (() => {
+    if (!sendViaWhatsapp && !sendViaEmail) return false
+    if (sendViaWhatsapp && !phoneValid) return false
+    if (sendViaEmail && !email.trim()) return false
+    return true
+  })()
+
+  async function handleSend() {
+    if (!canSend) return
+    try {
+      await sendRemoteSign.mutateAsync({
+        phone: sendViaWhatsapp ? phone : undefined,
+        email: sendViaEmail ? email.trim() : undefined,
+      })
+      onSuccess()
+    } catch {
+      // erro tratado na página pai via toast
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose}>
+      <DialogTitle>Enviar para assinar</DialogTitle>
+      <div className="space-y-5 mt-4">
+        <p className="text-sm text-muted-foreground">
+          Contrato: <strong>{contract.label ?? contract.template?.name ?? '—'}</strong>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          O cliente receberá um link para assinar diretamente pelo celular. O link expira em 48 horas.
+        </p>
+
+        {/* Checkboxes de canais */}
+        <div className="space-y-3 rounded-lg border p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Enviar por</p>
+
+          {/* WhatsApp */}
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={sendViaWhatsapp}
+              onChange={(e) => setSendViaWhatsapp(e.target.checked)}
+              className="h-4 w-4 rounded border-input accent-violet-600"
+            />
+            <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
+            <span className="text-sm font-medium">WhatsApp</span>
+          </label>
+
+          {sendViaWhatsapp && (
+            <div className="ml-7 space-y-1.5">
+              <PhoneInput
+                id="remote-sign-phone"
+                value={phone}
+                onChange={handlePhoneChange}
+              />
+              {phoneError && (
+                <p className="text-xs text-red-500">{phoneError}</p>
+              )}
+            </div>
+          )}
+
+          {/* E-mail */}
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={sendViaEmail}
+              onChange={(e) => setSendViaEmail(e.target.checked)}
+              className="h-4 w-4 rounded border-input accent-violet-600"
+            />
+            <Mail className="h-4 w-4 text-violet-600 shrink-0" />
+            <span className="text-sm font-medium">E-mail</span>
+          </label>
+
+          {sendViaEmail && (
+            <div className="ml-7 space-y-1.5">
+              <Input
+                id="remote-sign-email"
+                type="email"
+                placeholder="cliente@exemplo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+          )}
+        </div>
+
+        {!sendViaWhatsapp && !sendViaEmail && (
+          <p className="text-xs text-red-500">Selecione ao menos um canal de envio.</p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={sendRemoteSign.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void handleSend()}
+            disabled={sendRemoteSign.isPending || !canSend}
+          >
+            {sendRemoteSign.isPending
+              ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              : <Send className="h-3.5 w-3.5 mr-1.5" />}
+            Enviar link
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}

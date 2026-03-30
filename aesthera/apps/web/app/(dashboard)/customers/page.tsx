@@ -40,7 +40,6 @@ import {
   useConfirmSignedUpload,
   usePresignStandaloneSigned,
   useConfirmStandaloneSigned,
-  useSendRemoteSignLink,
   useContractTemplates,
   type CustomerContract,
   type ContractView,
@@ -55,6 +54,7 @@ import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
+import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
 import {
   WALLET_ENTRY_TYPE_LABELS,
   WALLET_ENTRY_TYPE_COLORS,
@@ -1046,8 +1046,6 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const [standaloneProgress, setStandaloneProgress] = useState<'idle' | 'uploading' | 'confirming'>('idle')
   const standaloneInputRef = useRef<HTMLInputElement | null>(null)
   const [sendingRemoteSign, setSendingRemoteSign] = useState<CustomerContract | null>(null)
-  const [remoteSignPhone, setRemoteSignPhone] = useState('')
-  const [remoteSignEmail, setRemoteSignEmail] = useState('')
 
   const signManual = useSignManual(
     customer.id,
@@ -1058,10 +1056,6 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const confirmSignedUpload = useConfirmSignedUpload(customer.id)
   const presignStandalone = usePresignStandaloneSigned(customer.id)
   const confirmStandalone = useConfirmStandaloneSigned(customer.id)
-  const sendRemoteSign = useSendRemoteSignLink(
-    customer.id,
-    sendingRemoteSign?.id ?? '',
-  )
 
   async function handleAddContract() {
     if (!selectedTemplateItem) { toast.error('Selecione um modelo'); return }
@@ -1160,21 +1154,6 @@ function ContractsTab({ customer }: { customer: Customer }) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao registrar documento assinado')
       setStandaloneProgress('idle')
-    }
-  }
-
-  async function handleSendRemoteSign() {
-    if (!sendingRemoteSign || (!remoteSignPhone.trim() && !remoteSignEmail.trim())) return
-    try {
-      await sendRemoteSign.mutateAsync({
-        phone: remoteSignPhone.trim() || undefined,
-        email: remoteSignEmail.trim() || undefined,
-      })
-      toast.success('Link de assinatura enviado')
-      setSendingRemoteSign(null)
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao enviar link de assinatura')
     }
   }
 
@@ -1284,7 +1263,7 @@ function ContractsTab({ customer }: { customer: Customer }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => { setSendingRemoteSign(c); setRemoteSignPhone(customer.phone ?? ''); setRemoteSignEmail(customer.email ?? '') }}
+                        onClick={() => { setSendingRemoteSign(c) }}
                         title="Enviar link de assinatura para o cliente assinar"
                       >
                         <Send className="h-3.5 w-3.5 mr-1.5" />
@@ -1338,52 +1317,13 @@ function ContractsTab({ customer }: { customer: Customer }) {
 
       {/* Dialog: enviar para assinar remotamente */}
       {sendingRemoteSign && (
-        <Dialog open onClose={() => setSendingRemoteSign(null)}>
-          <DialogTitle>Enviar para assinar</DialogTitle>
-          <div className="space-y-4 mt-4">
-            <p className="text-sm text-muted-foreground">
-              Contrato: <strong>{sendingRemoteSign.label ?? sendingRemoteSign.template?.name ?? '—'}</strong>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              O cliente receberá um link para assinar o contrato diretamente pelo celular. O link expira em 48 horas. Preencha ao menos um dos canais abaixo.
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="remote-sign-phone">WhatsApp (opcional)</Label>
-              <Input
-                id="remote-sign-phone"
-                type="tel"
-                className="h-8 text-sm"
-                placeholder="5511999999999"
-                value={remoteSignPhone}
-                onChange={(e) => setRemoteSignPhone(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">Número com código do país (ex.: 5511999999999)</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="remote-sign-email">E-mail (opcional)</Label>
-              <Input
-                id="remote-sign-email"
-                type="email"
-                className="h-8 text-sm"
-                placeholder="cliente@exemplo.com"
-                value={remoteSignEmail}
-                onChange={(e) => setRemoteSignEmail(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setSendingRemoteSign(null)}>Cancelar</Button>
-              <Button
-                size="sm"
-                onClick={() => void handleSendRemoteSign()}
-                disabled={sendRemoteSign.isPending || (!remoteSignPhone.trim() && !remoteSignEmail.trim())}
-              >
-                {sendRemoteSign.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                <Send className="h-3.5 w-3.5 mr-1.5" />
-                Enviar link
-              </Button>
-            </div>
-          </div>
-        </Dialog>
+        <SendRemoteSignDialog
+          contract={sendingRemoteSign}
+          defaultPhone={customer.phone}
+          defaultEmail={customer.email}
+          onClose={() => setSendingRemoteSign(null)}
+          onSuccess={() => { toast.success('Link de assinatura enviado'); setSendingRemoteSign(null) }}
+        />
       )}
       {signingContract && (
         <Dialog open onClose={() => setSigningContract(null)}>
@@ -1469,44 +1409,8 @@ function ContractsTab({ customer }: { customer: Customer }) {
         </Dialog>
       )}
 
-      {/* Dialog: enviar para assinar remotamente */}
-      {sendingRemoteSign && (
-        <Dialog open onClose={() => setSendingRemoteSign(null)}>
-          <DialogTitle>Enviar para assinar remotamente</DialogTitle>
-          <div className="space-y-4 mt-4">
-            <p className="text-sm text-muted-foreground">
-              Contrato: <strong>{sendingRemoteSign.label ?? sendingRemoteSign.template?.name ?? '—'}</strong>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              O cliente receberá um link via WhatsApp para assinar o contrato diretamente pelo celular. O link expira em 48 horas.
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="remote-sign-phone">Telefone (WhatsApp)</Label>
-              <Input
-                id="remote-sign-phone"
-                type="tel"
-                className="h-8 text-sm"
-                placeholder="5511999999999"
-                value={remoteSignPhone}
-                onChange={(e) => setRemoteSignPhone(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">Informe o número com código do país (ex.: 5511999999999)</p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setSendingRemoteSign(null)}>Cancelar</Button>
-              <Button
-                size="sm"
-                onClick={() => void handleSendRemoteSign()}
-                disabled={sendRemoteSign.isPending || !remoteSignPhone.trim()}
-              >
-                {sendRemoteSign.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                <Send className="h-3.5 w-3.5 mr-1.5" />
-                Enviar link
-              </Button>
-            </div>
-          </div>
-        </Dialog>
-      )}
+      {/* Dialog: enviar para assinar remotamente (2ª instância — mesmo componente) */}
+      {/* já tratado acima — removido duplicado */}
 
       {/* Dialog: carregar contrato já assinado (vinculado ao template) */}
       {uploadingSignedContract && (

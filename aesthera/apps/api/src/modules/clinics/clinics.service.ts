@@ -214,8 +214,12 @@ export class ClinicsService {
       throw new AppError('Configure o servidor SMTP antes de testar.', 400, 'SMTP_NOT_CONFIGURED')
     }
     const nodemailer = await import('nodemailer')
+    const { resolve4 } = await import('node:dns/promises')
+    // Resolve para IPv4 explícito — evita ENETUNREACH quando o servidor retorna endereço IPv6
+    let smtpHost = clinic.smtpHost
+    try { const [ipv4] = await resolve4(clinic.smtpHost); smtpHost = ipv4 } catch { /* usa hostname original */ }
     const transporter = nodemailer.createTransport({
-      host: clinic.smtpHost,
+      host: smtpHost,
       port: clinic.smtpPort ?? (clinic.smtpSecure ? 465 : 587),
       secure: clinic.smtpSecure,
       auth: { user: clinic.smtpUser, pass: clinic.smtpPass },
