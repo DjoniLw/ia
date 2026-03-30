@@ -30,9 +30,9 @@ export class ContractsRepository {
     })
   }
 
-  async updateTemplate(_clinicId: string, id: string, dto: UpdateContractTemplateDto) {
+  async updateTemplate(clinicId: string, id: string, dto: UpdateContractTemplateDto) {
     return prisma.contractTemplate.update({
-      where: { id },
+      where: { id, clinicId },
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
@@ -42,8 +42,8 @@ export class ContractsRepository {
     })
   }
 
-  async deleteTemplate(_clinicId: string, id: string) {
-    return prisma.contractTemplate.delete({ where: { id } })
+  async deleteTemplate(clinicId: string, id: string) {
+    return prisma.contractTemplate.delete({ where: { id, clinicId } })
   }
 
   // ── Customer Contracts ────────────────────────────────────────────────────────
@@ -78,8 +78,8 @@ export class ContractsRepository {
     })
   }
 
-  async updateContract(id: string, data: Parameters<typeof prisma.customerContract.update>[0]['data']) {
-    return prisma.customerContract.update({ where: { id }, data })
+  async updateContract(clinicId: string, id: string, data: Parameters<typeof prisma.customerContract.update>[0]['data']) {
+    return prisma.customerContract.update({ where: { id, clinicId }, data })
   }
 
   async softDeleteContract(id: string) {

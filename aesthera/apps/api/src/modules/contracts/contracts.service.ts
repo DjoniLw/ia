@@ -180,7 +180,7 @@ export class ContractsService {
     }
 
     // Persistir link de assinatura
-    const updated = await this.repo.updateContract(contract.id, {
+    const updated = await this.repo.updateContract(clinicId, contract.id, {
       signatureMode: 'assinafy',
       signLink: result.signLink ?? null,
       externalId: result.externalId ?? null,
@@ -237,7 +237,7 @@ export class ContractsService {
       }
     }
 
-    const updated = await this.repo.updateContract(contract.id, {
+    const updated = await this.repo.updateContract(clinicId, contract.id, {
       status: 'signed',
       signatureMode: 'manual',
       signature: dto.signature,
@@ -256,9 +256,8 @@ export class ContractsService {
    */
   async handleAssinafyWebhook(secret: string | undefined, dto: AssinafyWebhookDto) {
     const expected = appConfig.contracts.webhookSecret
-    if (expected && secret !== expected) {
-      throw new UnauthorizedError('Webhook secret inválido.')
-    }
+    if (!expected) throw new AppError('Webhook não configurado', 503, 'WEBHOOK_NOT_CONFIGURED')
+    if (secret !== expected) throw new UnauthorizedError('Webhook secret inválido.')
 
     const contract = await prisma.customerContract.findFirst({
       where: { id: dto.contractId, deletedAt: null },
@@ -267,7 +266,7 @@ export class ContractsService {
 
     if (contract.status === 'signed') return contract // idempotente
 
-    const updated = await this.repo.updateContract(contract.id, {
+    const updated = await this.repo.updateContract(contract.clinicId, contract.id, {
       status: 'signed',
       externalId: dto.externalId ?? contract.externalId,
       signedAt: new Date(dto.signedAt),
@@ -408,7 +407,7 @@ export class ContractsService {
       throw new ConflictError('Este contrato já foi assinado.')
     }
 
-    return this.repo.updateContract(contract.id, {
+    return this.repo.updateContract(clinicId, contract.id, {
       status: 'signed',
       signatureMode: 'uploaded',
       signedPdfKey: dto.storageKey,
@@ -494,7 +493,7 @@ export class ContractsService {
     const token = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
 
-    const updated = await this.repo.updateContract(contract.id, {
+    const updated = await this.repo.updateContract(clinicId, contract.id, {
       signToken: token,
       signTokenExpiresAt: expiresAt,
     })
@@ -624,7 +623,7 @@ export class ContractsService {
       }
     }
 
-    const updated = await this.repo.updateContract(contract.id, {
+    const updated = await this.repo.updateContract(contract.clinicId, contract.id, {
       status: 'signed',
       signatureMode: 'remote',
       signature: dto.signature,

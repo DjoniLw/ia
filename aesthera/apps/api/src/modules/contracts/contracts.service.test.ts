@@ -100,6 +100,7 @@ describe('ContractsService.signManual()', () => {
     )
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({
         status: 'signed',
@@ -127,6 +128,7 @@ describe('ContractsService.signManual()', () => {
     )
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ signerCpf: null }),
     )
@@ -147,6 +149,7 @@ describe('ContractsService.signManual()', () => {
 
     expect(mockGetObjectBuffer).not.toHaveBeenCalled()
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ documentHash: null }),
     )
@@ -167,6 +170,7 @@ describe('ContractsService.signManual()', () => {
 
     expect(mockGetObjectBuffer).not.toHaveBeenCalled()
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ documentHash: null }),
     )
@@ -189,6 +193,7 @@ describe('ContractsService.signManual()', () => {
     ).resolves.not.toThrow()
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ documentHash: null }),
     )
@@ -289,6 +294,7 @@ describe('ContractsService.generateSignToken()', () => {
     )
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({
         signToken: expect.any(String),
@@ -425,6 +431,7 @@ describe('ContractsService.signRemote()', () => {
     )
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({
         status: 'signed',
@@ -480,6 +487,7 @@ describe('ContractsService.signRemote()', () => {
     await service.signRemote(TOKEN, { signature: 'data:image/png;base64,abc' })
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ documentHash: null }),
     )
