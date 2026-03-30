@@ -298,6 +298,19 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - **routes:** `req.log` (logger por-request do Fastify/Pino) passado como 6º argumento a `updateSession`, mantendo rastreabilidade de request ID.
 - **Impacto:** Apenas backend. Sem migração de schema. Após deploy, os logs do Railway revelarão a causa exata do 403.
 
+### [2026-03-30] — security(#137): correção de 3 falhas de multi-tenancy (crítico/alto/médio)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/contracts/contracts.service.ts`
+  - `aesthera/apps/api/src/modules/contracts/contracts.repository.ts`
+  - `aesthera/apps/api/src/modules/contracts/contracts.service.test.ts`
+  - `aesthera/apps/api/src/modules/payments/payments.routes.ts`
+- **O que foi feito:**
+  - **[CRÍTICO] Webhook Assinafy fail-fast**: `CONTRACTS_WEBHOOK_SECRET` não configurado agora lança `AppError(503)` imediatamente — antes, a ausência do secret tornava o endpoint público, permitindo marcar qualquer contrato como assinado sem autenticação.
+  - **[ALTO] IDOR em updateTemplate/deleteTemplate/updateContract**: `_clinicId` substituído por `clinicId` incluso no `WHERE` do Prisma (Prisma 6 extended where unique) — garante que UPDATE/DELETE não operem em registros de outro tenant mesmo se chamados diretamente.
+  - **[MÉDIO] Mock de pagamento sem auth**: `POST /payments/mock/pay/:gatewayPaymentId` agora exige `jwtClinicGuard + roleGuard(['admin'])` — antes, qualquer pessoa com o gatewayPaymentId e slug podia confirmar pagamentos em staging.
+  - Testes de `contracts.service.test.ts` adaptados (Tipo 1 — Estrutural) para refletir a nova assinatura de `updateContract(clinicId, id, data)`.
+- **Impacto:** Segurança — módulo Contracts e Payments. Sem alterações de schema ou migration. RLS planejado separadamente.
+
 ### [2026-03-30] — feat(#138): atualização em tempo real do status do contrato + botão de refresh
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/web/lib/hooks/use-resources.ts` *(useCustomerContracts atualizado)*

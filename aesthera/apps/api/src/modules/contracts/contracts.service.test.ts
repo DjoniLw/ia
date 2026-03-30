@@ -44,6 +44,19 @@ vi.mock('../../integrations/r2/r2.service', () => ({
   getObjectBuffer: mockGetObjectBuffer,
 }))
 
+const mockAppConfig = vi.hoisted(() => ({
+  contracts: {
+    webhookSecret: 'secret-correto' as string | undefined,
+    n8nWebhookUrl: undefined as string | undefined,
+  },
+  frontendUrl: 'http://localhost:3000',
+  isProduction: false,
+}))
+
+vi.mock('../../config/app.config', () => ({
+  appConfig: mockAppConfig,
+}))
+
 vi.mock('node:crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:crypto')>()
   return {
@@ -56,7 +69,7 @@ vi.mock('node:crypto', async (importOriginal) => {
 })
 
 import { ContractsService } from './contracts.service'
-import { AppError, ConflictError, NotFoundError } from '../../shared/errors/app-error'
+import { AppError, ConflictError, NotFoundError, UnauthorizedError } from '../../shared/errors/app-error'
 
 // ── Constantes de apoio ───────────────────────────────────────────────────────
 
@@ -100,6 +113,7 @@ describe('ContractsService.signManual()', () => {
     )
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({
         status: 'signed',
@@ -127,6 +141,7 @@ describe('ContractsService.signManual()', () => {
     )
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ signerCpf: null }),
     )
@@ -147,6 +162,7 @@ describe('ContractsService.signManual()', () => {
 
     expect(mockGetObjectBuffer).not.toHaveBeenCalled()
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ documentHash: null }),
     )
@@ -167,6 +183,7 @@ describe('ContractsService.signManual()', () => {
 
     expect(mockGetObjectBuffer).not.toHaveBeenCalled()
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ documentHash: null }),
     )
@@ -189,6 +206,7 @@ describe('ContractsService.signManual()', () => {
     ).resolves.not.toThrow()
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ documentHash: null }),
     )
@@ -289,6 +307,7 @@ describe('ContractsService.generateSignToken()', () => {
     )
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({
         signToken: expect.any(String),
@@ -425,6 +444,7 @@ describe('ContractsService.signRemote()', () => {
     )
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({
         status: 'signed',
@@ -480,8 +500,82 @@ describe('ContractsService.signRemote()', () => {
     await service.signRemote(TOKEN, { signature: 'data:image/png;base64,abc' })
 
     expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
       CONTRACT_ID,
       expect.objectContaining({ documentHash: null }),
+    )
+  })
+})
+
+// ── handleAssinafyWebhook ─────────────────────────────────────────────────────
+
+describe('ContractsService.handleAssinafyWebhook()', () => {
+  let service: ContractsService
+
+  const WEBHOOK_DTO = {
+    contractId: CONTRACT_ID,
+    externalId: 'ext-123',
+    signedAt: '2026-03-30T10:00:00Z',
+    signedPdfUrl: undefined as string | undefined,
+  }
+
+  const WEBHOOK_CONTRACT = {
+    id: CONTRACT_ID,
+    clinicId: CLINIC_ID,
+    customerId: CUSTOMER_ID,
+    status: 'pending',
+    externalId: null,
+    deletedAt: null,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAppConfig.contracts.webhookSecret = 'secret-correto'
+    service = new ContractsService()
+  })
+
+  it('deve lançar AppError(503) quando CONTRACTS_WEBHOOK_SECRET não está configurado', async () => {
+    mockAppConfig.contracts.webhookSecret = undefined
+
+    await expect(
+      service.handleAssinafyWebhook('qualquer-secret', WEBHOOK_DTO),
+    ).rejects.toThrow(AppError)
+
+    await expect(
+      service.handleAssinafyWebhook('qualquer-secret', WEBHOOK_DTO),
+    ).rejects.toMatchObject({ statusCode: 503, code: 'WEBHOOK_NOT_CONFIGURED' })
+  })
+
+  it('deve lançar UnauthorizedError quando secret passado é diferente do configurado', async () => {
+    await expect(
+      service.handleAssinafyWebhook('secret-errado', WEBHOOK_DTO),
+    ).rejects.toThrow(UnauthorizedError)
+  })
+
+  it('deve retornar contrato sem chamar updateContract quando já está assinado (idempotência)', async () => {
+    const signedContract = { ...WEBHOOK_CONTRACT, status: 'signed' }
+    mockPrisma.customerContract.findFirst.mockResolvedValue(signedContract)
+
+    const result = await service.handleAssinafyWebhook('secret-correto', WEBHOOK_DTO)
+
+    expect(result).toEqual(signedContract)
+    expect(mockRepo.updateContract).not.toHaveBeenCalled()
+  })
+
+  it('deve chamar updateContract com clinicId correto ao assinar contrato pendente', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue(WEBHOOK_CONTRACT)
+    mockRepo.updateContract.mockResolvedValue({ ...WEBHOOK_CONTRACT, status: 'signed' })
+
+    await service.handleAssinafyWebhook('secret-correto', WEBHOOK_DTO)
+
+    expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CLINIC_ID,
+      CONTRACT_ID,
+      expect.objectContaining({
+        status: 'signed',
+        externalId: 'ext-123',
+        signedAt: expect.any(Date),
+      }),
     )
   })
 })
