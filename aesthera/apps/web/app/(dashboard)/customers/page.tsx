@@ -929,8 +929,8 @@ const CONTRACT_STATUS_LABEL: Record<CustomerContract['status'], string> = {
   signed:  'Assinado',
 }
 const CONTRACT_STATUS_CLASS: Record<CustomerContract['status'], string> = {
-  pending: 'bg-amber-100 text-amber-700',
-  signed:  'bg-green-100 text-green-700',
+  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  signed:  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
 }
 
 function SignatureCanvas({
