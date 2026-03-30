@@ -101,18 +101,18 @@ export class NotificationsService {
       billingId: input.billingId,
     })
 
-    const { apiKey, from } = appConfig.email
+    const { apiKey, from: platformFrom } = appConfig.email
 
-    // Verifica se a clínica tem SMTP próprio configurado
+    // Busca configurações da clínica (SMTP + nome para display no fallback)
     const clinic = await prisma.clinic.findUnique({
       where: { id: input.clinicId },
-      select: { smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, smtpSecure: true },
+      select: { name: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, smtpSecure: true },
     })
 
     const hasClinicSmtp = !!(clinic?.smtpHost && clinic?.smtpUser && clinic?.smtpPass)
 
     if (hasClinicSmtp) {
-      // Envio via SMTP da clínica (Gmail, Outlook, etc.)
+      // Tenta envio via SMTP da clínica (Gmail, Outlook, etc.)
       try {
         const nodemailer = await import('nodemailer')
         const transporter = nodemailer.createTransport({
@@ -120,6 +120,9 @@ export class NotificationsService {
           port: clinic!.smtpPort ?? (clinic!.smtpSecure ? 465 : 587),
           secure: clinic!.smtpSecure,
           auth: { user: clinic!.smtpUser!, pass: clinic!.smtpPass! },
+          connectionTimeout: 15_000,
+          greetingTimeout: 10_000,
+          socketTimeout: 15_000,
         })
         await transporter.sendMail({
           from: clinic!.smtpFrom ?? clinic!.smtpUser!,
@@ -127,14 +130,20 @@ export class NotificationsService {
           subject: input.subject,
           html: input.htmlBody,
         })
+        transporter.close()
         await this.repo.markSent(log.id)
         logger.info({ event: input.event, email: input.email }, 'Email sent via clinic SMTP')
+        return
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        await this.repo.markFailed(log.id, msg, 1)
-        logger.error({ err, event: input.event }, 'Clinic SMTP send failed')
+        logger.error({ err, event: input.event }, 'Clinic SMTP send failed — falling back to platform email')
+        // Não marca como failed ainda: tenta fallback via Resend antes de desistir
+        if (!apiKey) {
+          await this.repo.markFailed(log.id, `SMTP: ${msg} | RESEND: not configured`, 1)
+          return
+        }
+        // Segue para o bloco Resend abaixo com flag de fallback
       }
-      return
     }
 
     if (!apiKey) {
@@ -142,6 +151,12 @@ export class NotificationsService {
       await this.repo.markFailed(log.id, 'EMAIL_NOT_CONFIGURED', 1)
       return
     }
+
+    // Remetente via Resend: usa display name da clínica para personalizar
+    const clinicName = clinic?.name
+    const resendFrom = clinicName
+      ? `${clinicName} via Aesthera <${platformFrom ?? 'noreply@aesthera.app'}>`
+      : (platformFrom ?? 'noreply@aesthera.app')
 
     try {
       const res = await fetch('https://api.resend.com/emails', {
@@ -151,7 +166,7 @@ export class NotificationsService {
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          from: from ?? 'noreply@aesthera.app',
+          from: resendFrom,
           to: [input.email],
           subject: input.subject,
           html: input.htmlBody,
@@ -162,7 +177,7 @@ export class NotificationsService {
         throw new Error(`Resend ${res.status}: ${txt}`)
       }
       await this.repo.markSent(log.id)
-      logger.info({ event: input.event, email: input.email }, 'Email sent')
+      logger.info({ event: input.event, email: input.email, via: hasClinicSmtp ? 'resend-fallback' : 'resend' }, 'Email sent')
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       await this.repo.markFailed(log.id, msg, 1)

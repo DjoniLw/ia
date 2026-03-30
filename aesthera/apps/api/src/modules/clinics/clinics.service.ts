@@ -219,13 +219,24 @@ export class ClinicsService {
       port: clinic.smtpPort ?? (clinic.smtpSecure ? 465 : 587),
       secure: clinic.smtpSecure,
       auth: { user: clinic.smtpUser, pass: clinic.smtpPass },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 10_000,
     })
     try {
-      await transporter.verify()
+      // Race: verify vs. timeout de 12s para evitar hang no frontend
+      await Promise.race([
+        transporter.verify(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout ao conectar ao servidor SMTP. Verifique o host, porta e firewall.')), 12_000)
+        ),
+      ])
       return { ok: true }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       throw new AppError(`Falha na conexão SMTP: ${msg}`, 400, 'SMTP_TEST_FAILED')
+    } finally {
+      transporter.close()
     }
   }
 
