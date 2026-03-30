@@ -538,6 +538,36 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - `#66`: Quando `totalPaid > billing.amount`, campo `overpaymentHandling` é obrigatório. Opções: `cash_change` (apenas anota o troco), `wallet_credit` (cria entrada de crédito na carteira), `wallet_voucher` (cria voucher nominal ao cliente). Seção dinâmica no modal exibe opções de rádio somente quando há excedente.
 - **Impacto:** Clínicas podem controlar suas contas a pagar (geradas manualmente ou automaticamente via compras de insumos). Recebimentos de cobranças passam a aceitar qualquer combinação de formas de pagamento em vez de apenas um método, com tratamento adequado de troco e crédito/voucher quando o cliente paga a mais.
 
+### [2026-03-30] — #134 — Paginação server-side em todas as telas de listagem (PR #141)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/components/ui/data-pagination.tsx` _(novo)_
+  - `aesthera/apps/web/lib/hooks/use-paginated-query.ts` _(novo)_
+  - `aesthera/apps/web/lib/hooks/use-resources.ts`
+  - `aesthera/apps/web/app/(dashboard)/financial/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/billing/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/carteira/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/contas-a-pagar/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/sales/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/professionals/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/compras-insumos/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/services/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/supplies/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/equipment/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/rooms/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/products/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/packages/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/promotions/page.tsx`
+  - `aesthera/docs/ui-standards.md`
+- **O que foi feito:**
+  - Criados `usePaginatedQuery` (lê/grava `page`/`pageSize` na URL, suporta `paramPrefix` para múltiplas listas) e `DataPagination` (componente com contador, numeração com ellipsis e seletor de tamanho)
+  - Todas as 15 telas de listagem migradas de "carregar tudo" para paginação server-side
+  - Busca textual migrada para server-side (`search`/`name` param) nas telas que suportam: professionals, services, supplies, equipment, rooms, products
+  - `useEquipment` e `useRooms` atualizados para retornar `Paginated<T>` e aceitar params
+  - Todas as páginas envolvidas em `<Suspense fallback={null}>` (obrigatório por `useSearchParams`)
+  - Documentação: seção 2.6 Paginação adicionada ao `ui-standards.md`
+- **Impacto:** Elimina carregamento de todos os registros em listagens, reduzindo latência e uso de memória. Melhora a experiência em clínicas com grande volume de dados.
+
 ### [2026-03-21] — #98 #99 #100 — UX Review: carteira dual-view, select shadcn/ui em clientes, campos fiscais colapsáveis
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/web/app/(dashboard)/carteira/page.tsx`
