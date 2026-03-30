@@ -723,6 +723,8 @@ export interface CustomerContract {
   signedAt: string | null
   sentAt: string | null
   signerIp: string | null
+  signToken: string | null
+  signTokenExpiresAt: string | null
   createdAt: string
   template: { name: string; storageKey: string | null } | null
 }
@@ -817,5 +819,94 @@ export function useConfirmStandaloneSigned(customerId: string) {
     mutationFn: (data: { label: string; storageKey: string }) =>
       api.post(`/customers/${customerId}/contracts/confirm-standalone-signed`, data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+export function useSendRemoteSignLink(customerId: string, contractId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { phone?: string; email?: string }) =>
+      api.post(`/customers/${customerId}/contracts/${contractId}/send-remote-sign`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-contracts', customerId] }),
+  })
+}
+
+// ── SMTP Settings ──────────────────────────────────────────────────────────────
+
+export interface SmtpSettings {
+  smtpHost: string | null
+  smtpPort: number | null
+  smtpUser: string | null
+  smtpFrom: string | null
+  smtpSecure: boolean
+  configured: boolean
+}
+
+export function useSmtpSettings() {
+  return useQuery<SmtpSettings>({
+    queryKey: ['clinic-smtp'],
+    queryFn: () => api.get('/clinics/me/smtp').then((r) => r.data),
+  })
+}
+
+export function useUpdateSmtpSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Partial<SmtpSettings> & { smtpPass?: string | null }) =>
+      api.put('/clinics/me/smtp', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinic-smtp'] }),
+  })
+}
+
+export function useTestSmtpSettings() {
+  return useMutation({
+    mutationFn: () => api.post('/clinics/me/smtp/test').then((r) => r.data),
+  })
+}
+
+// ─── WhatsApp por clínica ──────────────────────────────────────────────────────
+
+export interface WhatsappSettings {
+  instance: string | null
+  connected: boolean
+  configured: boolean
+}
+
+export interface WhatsappQrCode {
+  base64: string | null
+  code: string | null
+}
+
+export function useWhatsappSettings() {
+  return useQuery<WhatsappSettings>({
+    queryKey: ['clinic-whatsapp'],
+    queryFn: () => api.get('/clinics/me/whatsapp').then((r) => r.data),
+  })
+}
+
+export function useUpdateWhatsappInstance() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { whatsappInstance: string | null }) =>
+      api.put('/clinics/me/whatsapp', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinic-whatsapp'] }),
+  })
+}
+
+export function useWhatsappQrCode(enabled: boolean) {
+  return useQuery<WhatsappQrCode>({
+    queryKey: ['clinic-whatsapp-qrcode'],
+    queryFn: () => api.get('/clinics/me/whatsapp/qrcode').then((r) => r.data),
+    enabled,
+    refetchInterval: 30_000, // recarrega a cada 30s para pegar novo QR se expirar
+    staleTime: 0,
+  })
+}
+
+export function useDisconnectWhatsapp() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.delete('/clinics/me/whatsapp/disconnect').then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinic-whatsapp'] }),
   })
 }

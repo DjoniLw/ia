@@ -11,7 +11,9 @@ import {
   PresignStandaloneSignedDto,
   SendAssinafyDto,
   SendContractWhatsAppDto,
+  SendRemoteSignDto,
   SignManualDto,
+  SignRemoteDto,
   TemplatePresignDto,
   UpdateContractTemplateDto,
 } from './contracts.dto'
@@ -262,6 +264,54 @@ export async function contractsRoutes(app: FastifyInstance) {
       const dto = AssinafyWebhookDto.parse(req.body)
       const result = await svc.handleAssinafyWebhook(secret, dto)
       return reply.send(result)
+    },
+  )
+
+  // ── Assinatura Remota por Link ────────────────────────────────────────────────
+
+  /**
+   * POST /customers/:customerId/contracts/:id/send-remote-sign
+   * Gera token de assinatura remota e envia via WhatsApp.
+   */
+  app.post(
+    '/customers/:customerId/contracts/:id/send-remote-sign',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId, id } = req.params as { customerId: string; id: string }
+      const dto = SendRemoteSignDto.parse(req.body)
+      return reply.send(await svc.generateSignToken(req.clinicId, customerId, id, dto))
+    },
+  )
+
+  /**
+   * GET /public/sign/:token
+   * Retorna informações públicas do contrato para a página de assinatura remota.
+   * Rota pública — sem autenticação.
+   */
+  app.get(
+    '/public/sign/:token',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const { token } = req.params as { token: string }
+      return reply.send(await svc.getPublicContractInfo(token))
+    },
+  )
+
+  /**
+   * POST /public/sign/:token
+   * Submete a assinatura remota do cliente.
+   * Rota pública — autenticada apenas pelo token.
+   */
+  app.post(
+    '/public/sign/:token',
+    { config: { rateLimit: { max: 5, timeWindow: '15 minutes' } } },
+    async (req, reply) => {
+      const { token } = req.params as { token: string }
+      const dto = SignRemoteDto.parse(req.body)
+      const ip = req.ip
+      const rawUserAgent = req.headers['user-agent']
+      const userAgent = Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent
+      return reply.send(await svc.signRemote(token, dto, ip, userAgent))
     },
   )
 }

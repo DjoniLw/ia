@@ -20,7 +20,9 @@ import type {
   PresignStandaloneSignedDto,
   SendAssinafyDto,
   SendContractWhatsAppDto,
+  SendRemoteSignDto,
   SignManualDto,
+  SignRemoteDto,
   TemplatePresignDto,
   UpdateContractTemplateDto,
 } from './contracts.dto'
@@ -302,7 +304,7 @@ export class ContractsService {
       fileUrl,
       signedFileUrl,
       signature:
-        contract.signatureMode === 'manual' && contract.status === 'signed'
+        (contract.signatureMode === 'manual' || contract.signatureMode === 'remote') && contract.status === 'signed'
           ? contract.signature
           : null,
     }
@@ -461,5 +463,181 @@ export class ContractsService {
       },
       include: { template: { select: { name: true, storageKey: true } } },
     })
+  }
+
+  // ── Assinatura Remota por Link ─────────────────────────────────────────────────
+
+  /**
+   * Gera um token único de assinatura remota, persiste com TTL de 48 horas
+   * e envia o link ao cliente via WhatsApp.
+   */
+  async generateSignToken(
+    clinicId: string,
+    customerId: string,
+    contractId: string,
+    dto: SendRemoteSignDto,
+  ) {
+    const contract = await this.repo.findContractById(clinicId, contractId)
+    if (!contract) throw new NotFoundError('CustomerContract')
+    if (contract.customerId !== customerId) throw new NotFoundError('CustomerContract')
+
+    if (contract.status === 'signed') {
+      throw new ConflictError('Este contrato já foi assinado.')
+    }
+
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, clinicId, deletedAt: null },
+      select: { name: true },
+    })
+    if (!customer) throw new NotFoundError('Customer')
+
+    const token = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
+
+    const updated = await this.repo.updateContract(contract.id, {
+      signToken: token,
+      signTokenExpiresAt: expiresAt,
+    })
+
+    const signUrl = `${appConfig.frontendUrl}/sign/${token}`
+    const contractName = contract.label ?? contract.template?.name ?? 'contrato'
+
+    const notificationsService = new NotificationsService()
+
+    if (dto.phone) {
+      const message = `Olá, ${customer.name}! 👋\n\nVocê recebeu um contrato para assinar: *${contractName}*.\n\nAcesse o link abaixo para ler e assinar diretamente pelo seu celular:\n\n${signUrl}\n\n_O link expira em 48 horas._`
+      await notificationsService.sendWhatsApp({
+        clinicId,
+        phone: dto.phone,
+        message,
+        event: 'contract.remote_sign_link',
+        customerId,
+      })
+    }
+
+    if (dto.email) {
+      await notificationsService.sendEmail({
+        clinicId,
+        email: dto.email,
+        subject: `Contrato para assinar: ${contractName}`,
+        htmlBody: `
+<p>Olá, ${customer.name}!</p>
+<p>Você recebeu um contrato para assinar: <strong>${contractName}</strong>.</p>
+<p>Clique no botão abaixo para ler e assinar diretamente pelo seu dispositivo:</p>
+<p style="margin:24px 0">
+  <a href="${signUrl}" style="background:#7c3aed;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+    Assinar contrato
+  </a>
+</p>
+<p style="color:#888;font-size:12px">O link expira em 48 horas. Se não solicitou esta assinatura, ignore este e-mail.</p>`,
+        event: 'contract.remote_sign_link',
+        customerId,
+      })
+    }
+
+    return updated
+  }
+
+  /**
+   * Retorna informações públicas do contrato para exibição na página de assinatura remota.
+   * NÃO requer autenticação — autenticado apenas pelo token.
+   */
+  async getPublicContractInfo(token: string) {
+    const contract = await prisma.customerContract.findFirst({
+      where: { signToken: token, deletedAt: null },
+      include: {
+        customer: { select: { name: true } },
+        template: { select: { name: true, storageKey: true } },
+      },
+    })
+
+    if (!contract) throw new AppError('Contrato não encontrado ou link inválido.', 404, 'PUBLIC_CONTRACT_NOT_FOUND')
+
+    if (!contract.signTokenExpiresAt || contract.signTokenExpiresAt < new Date()) {
+      throw new AppError('Este link de assinatura expirou.', 410, 'SIGN_TOKEN_EXPIRED')
+    }
+
+    if (contract.status === 'signed') {
+      throw new AppError('Este contrato já foi assinado.', 409, 'ALREADY_SIGNED')
+    }
+
+    let fileUrl: string | null = null
+    if (contract.template?.storageKey) {
+      fileUrl = await generatePresignedGetUrl(contract.template.storageKey, 3600)
+    }
+
+    return {
+      contractId: contract.id,
+      contractName: contract.label ?? contract.template?.name ?? 'Contrato',
+      customerName: contract.customer.name,
+      fileUrl,
+      expiresAt: contract.signTokenExpiresAt,
+    }
+  }
+
+  /**
+   * Efetua a assinatura remota do contrato via token público.
+   * Valida o token, registra a assinatura e invalida o token (uso único).
+   */
+  async signRemote(
+    token: string,
+    dto: SignRemoteDto,
+    signerIp?: string,
+    signerUserAgent?: string,
+  ) {
+    const contract = await prisma.customerContract.findFirst({
+      where: { signToken: token, deletedAt: null },
+      include: {
+        customer: { select: { document: true } },
+        template: { select: { storageKey: true } },
+      },
+    })
+
+    if (!contract) throw new AppError('Contrato não encontrado ou link inválido.', 404, 'PUBLIC_CONTRACT_NOT_FOUND')
+
+    if (!contract.signTokenExpiresAt || contract.signTokenExpiresAt < new Date()) {
+      throw new AppError('Este link de assinatura expirou.', 410, 'SIGN_TOKEN_EXPIRED')
+    }
+
+    if (contract.status === 'signed') {
+      throw new ConflictError('Este contrato já foi assinado.')
+    }
+
+    // Calcular SHA-256 do PDF do template, se disponível
+    let documentHash: string | null = null
+    const templateStorageKey = contract.template?.storageKey
+    if (templateStorageKey) {
+      try {
+        const pdfBuffer = await getObjectBuffer(templateStorageKey)
+        if (pdfBuffer.length > 0) {
+          documentHash = crypto.createHash('sha256').update(pdfBuffer).digest('hex')
+        } else {
+          console.error(
+            `[contracts] Buffer vazio ao obter documento do R2 (templateStorageKey=${templateStorageKey}, contractId=${contract.id}). Hash não será calculado.`,
+          )
+        }
+      } catch (err) {
+        console.error(
+          `[contracts] Falha ao calcular hash do documento (contractId=${contract.id}):`,
+          err,
+        )
+      }
+    }
+
+    const updated = await this.repo.updateContract(contract.id, {
+      status: 'signed',
+      signatureMode: 'remote',
+      signature: dto.signature,
+      signedAt: new Date(),
+      signerIp: signerIp ?? null,
+      signerUserAgent: signerUserAgent ?? null,
+      signerCpf: contract.customer?.document ?? null,
+      documentHash,
+      // Invalida o token após uso (token de uso único)
+      signToken: null,
+      signTokenExpiresAt: null,
+    })
+
+    return updated
   }
 }

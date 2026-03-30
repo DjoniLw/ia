@@ -78,3 +78,18 @@ export const UpdatePaymentMethodConfigDto = z.object({
 })
 
 export type UpdatePaymentMethodConfigDto = z.infer<typeof UpdatePaymentMethodConfigDto>
+
+export const UpdateWhatsappSettingsDto = z.object({
+  whatsappInstance: z.string().min(1, 'Nome da instância obrigatório').optional().nullable(),
+})
+export type UpdateWhatsappSettingsDto = z.infer<typeof UpdateWhatsappSettingsDto>
+
+export const UpdateSmtpSettingsDto = z.object({
+  smtpHost: z.string().min(1, 'Servidor obrigatório').optional().nullable(),
+  smtpPort: z.coerce.number().int().min(1).max(65535).optional().nullable(),
+  smtpUser: z.string().min(1, 'Usuário obrigatório').optional().nullable(),
+  smtpPass: z.string().min(1, 'Senha obrigatória').optional().nullable(),
+  smtpFrom: z.string().min(1, 'Remetente obrigatório').optional().nullable(),
+  smtpSecure: z.boolean().optional(),
+})
+export type UpdateSmtpSettingsDto = z.infer<typeof UpdateSmtpSettingsDto>

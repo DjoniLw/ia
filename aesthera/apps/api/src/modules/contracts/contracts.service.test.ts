@@ -9,9 +9,15 @@ const mockRepo = vi.hoisted(() => ({
 
 const mockPrisma = vi.hoisted(() => ({
   customer: { findFirst: vi.fn() },
+  customerContract: { findFirst: vi.fn() },
+}))
+
+const mockNotificationsService = vi.hoisted(() => ({
+  sendWhatsApp: vi.fn(),
 }))
 
 const mockGetObjectBuffer = vi.hoisted(() => vi.fn())
+const mockGeneratePresignedGetUrl = vi.hoisted(() => vi.fn())
 const mockCreateHash = vi.hoisted(() => {
   const hash = { update: vi.fn(), digest: vi.fn() }
   hash.update.mockReturnValue(hash)
@@ -19,6 +25,12 @@ const mockCreateHash = vi.hoisted(() => {
 })
 
 vi.mock('../../database/prisma/client', () => ({ prisma: mockPrisma }))
+
+vi.mock('../notifications/notifications.service', () => ({
+  NotificationsService: vi.fn(function NotificationsService() {
+    return mockNotificationsService
+  }),
+}))
 
 vi.mock('./contracts.repository', () => ({
   ContractsRepository: vi.fn(function ContractsRepository() {
@@ -28,7 +40,7 @@ vi.mock('./contracts.repository', () => ({
 
 vi.mock('../../integrations/r2/r2.service', () => ({
   generatePresignedPutUrl: vi.fn(),
-  generatePresignedGetUrl: vi.fn(),
+  generatePresignedGetUrl: mockGeneratePresignedGetUrl,
   getObjectBuffer: mockGetObjectBuffer,
 }))
 
@@ -44,7 +56,7 @@ vi.mock('node:crypto', async (importOriginal) => {
 })
 
 import { ContractsService } from './contracts.service'
-import { ConflictError, NotFoundError } from '../../shared/errors/app-error'
+import { AppError, ConflictError, NotFoundError } from '../../shared/errors/app-error'
 
 // ── Constantes de apoio ───────────────────────────────────────────────────────
 
@@ -250,5 +262,226 @@ describe('ContractsService.getAuditTrail()', () => {
     await expect(
       service.getAuditTrail(CLINIC_ID, CUSTOMER_ID, CONTRACT_ID),
     ).rejects.toThrow(NotFoundError)
+  })
+})
+
+// ── generateSignToken ─────────────────────────────────────────────────────────
+
+describe('ContractsService.generateSignToken()', () => {
+  let service: ContractsService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new ContractsService()
+  })
+
+  it('deve gerar token e chamar sendWhatsApp com o telefone informado', async () => {
+    mockRepo.findContractById.mockResolvedValue(BASE_CONTRACT)
+    mockPrisma.customer.findFirst.mockResolvedValue({ name: 'Ana Silva' })
+    mockRepo.updateContract.mockResolvedValue({ ...BASE_CONTRACT, signToken: 'uuid-token' })
+    mockNotificationsService.sendWhatsApp.mockResolvedValue(undefined)
+
+    await service.generateSignToken(
+      CLINIC_ID,
+      CUSTOMER_ID,
+      CONTRACT_ID,
+      { phone: '5511999999999' },
+    )
+
+    expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CONTRACT_ID,
+      expect.objectContaining({
+        signToken: expect.any(String),
+        signTokenExpiresAt: expect.any(Date),
+      }),
+    )
+    expect(mockNotificationsService.sendWhatsApp).toHaveBeenCalledWith(
+      expect.objectContaining({ phone: '5511999999999' }),
+    )
+  })
+
+  it('deve lançar ConflictError quando contrato já está assinado', async () => {
+    mockRepo.findContractById.mockResolvedValue({ ...BASE_CONTRACT, status: 'signed' })
+
+    await expect(
+      service.generateSignToken(CLINIC_ID, CUSTOMER_ID, CONTRACT_ID, { phone: '5511999999999' }),
+    ).rejects.toThrow(ConflictError)
+  })
+
+  it('deve lançar NotFoundError quando contrato não existe', async () => {
+    mockRepo.findContractById.mockResolvedValue(null)
+
+    await expect(
+      service.generateSignToken(CLINIC_ID, CUSTOMER_ID, CONTRACT_ID, { phone: '5511999999999' }),
+    ).rejects.toThrow(NotFoundError)
+  })
+})
+
+// ── getPublicContractInfo ─────────────────────────────────────────────────────
+
+describe('ContractsService.getPublicContractInfo()', () => {
+  let service: ContractsService
+
+  const TOKEN = 'valid-token-uuid'
+  const FUTURE_DATE = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  const PAST_DATE = new Date(Date.now() - 1)
+
+  const PUBLIC_CONTRACT = {
+    id: CONTRACT_ID,
+    clinicId: CLINIC_ID,
+    customerId: CUSTOMER_ID,
+    status: 'pending',
+    signToken: TOKEN,
+    signTokenExpiresAt: FUTURE_DATE,
+    label: null,
+    customer: { name: 'Ana Silva' },
+    template: { name: 'Contrato Padrão', storageKey: 'templates/clinic-1/tmpl.pdf' },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new ContractsService()
+  })
+
+  it('deve retornar informações públicas do contrato para token válido', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue(PUBLIC_CONTRACT)
+    mockGeneratePresignedGetUrl.mockResolvedValue('https://cdn.example.com/doc.pdf')
+
+    const result = await service.getPublicContractInfo(TOKEN)
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        contractId: CONTRACT_ID,
+        contractName: 'Contrato Padrão',
+        customerName: 'Ana Silva',
+        fileUrl: 'https://cdn.example.com/doc.pdf',
+      }),
+    )
+  })
+
+  it('deve lançar AppError 410 quando token está expirado', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue({
+      ...PUBLIC_CONTRACT,
+      signTokenExpiresAt: PAST_DATE,
+    })
+
+    await expect(service.getPublicContractInfo(TOKEN)).rejects.toThrow(AppError)
+    await expect(service.getPublicContractInfo(TOKEN)).rejects.toMatchObject({ statusCode: 410 })
+  })
+
+  it('deve lançar AppError 409 quando contrato já está assinado', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue({
+      ...PUBLIC_CONTRACT,
+      status: 'signed',
+    })
+
+    await expect(service.getPublicContractInfo(TOKEN)).rejects.toThrow(AppError)
+    await expect(service.getPublicContractInfo(TOKEN)).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('deve lançar NotFoundError quando token não é encontrado', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue(null)
+
+    await expect(service.getPublicContractInfo(TOKEN)).rejects.toThrow(NotFoundError)
+  })
+})
+
+// ── signRemote ────────────────────────────────────────────────────────────────
+
+describe('ContractsService.signRemote()', () => {
+  let service: ContractsService
+
+  const TOKEN = 'valid-token-uuid'
+  const FUTURE_DATE = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  const PAST_DATE = new Date(Date.now() - 1)
+
+  const REMOTE_CONTRACT = {
+    id: CONTRACT_ID,
+    clinicId: CLINIC_ID,
+    customerId: CUSTOMER_ID,
+    status: 'pending',
+    signToken: TOKEN,
+    signTokenExpiresAt: FUTURE_DATE,
+    customer: { document: '123.456.789-00' },
+    template: { storageKey: 'templates/clinic-1/tmpl.pdf' },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new ContractsService()
+  })
+
+  it('deve assinar contrato, calcular hash e invalidar o token', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue(REMOTE_CONTRACT)
+    mockGetObjectBuffer.mockResolvedValue(Buffer.from('pdf-content'))
+    mockCreateHash._hash.digest.mockReturnValue('hash-sha256-remote')
+    mockRepo.updateContract.mockResolvedValue({ ...REMOTE_CONTRACT, status: 'signed' })
+
+    await service.signRemote(
+      TOKEN,
+      { signature: 'data:image/png;base64,abc' },
+      '10.0.0.1',
+      'Mozilla/5.0 (Mobile)',
+    )
+
+    expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CONTRACT_ID,
+      expect.objectContaining({
+        status: 'signed',
+        signatureMode: 'manual',
+        signerIp: '10.0.0.1',
+        signerUserAgent: 'Mozilla/5.0 (Mobile)',
+        signerCpf: '123.456.789-00',
+        documentHash: 'hash-sha256-remote',
+        signToken: null,
+        signTokenExpiresAt: null,
+      }),
+    )
+  })
+
+  it('deve lançar AppError 410 quando token está expirado', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue({
+      ...REMOTE_CONTRACT,
+      signTokenExpiresAt: PAST_DATE,
+    })
+
+    await expect(
+      service.signRemote(TOKEN, { signature: 'data:image/png;base64,abc' }),
+    ).rejects.toThrow(AppError)
+    await expect(
+      service.signRemote(TOKEN, { signature: 'data:image/png;base64,abc' }),
+    ).rejects.toMatchObject({ statusCode: 410 })
+  })
+
+  it('deve lançar ConflictError quando contrato já está assinado', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue({
+      ...REMOTE_CONTRACT,
+      status: 'signed',
+    })
+
+    await expect(
+      service.signRemote(TOKEN, { signature: 'data:image/png;base64,abc' }),
+    ).rejects.toThrow(ConflictError)
+  })
+
+  it('deve lançar NotFoundError quando token não é encontrado', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue(null)
+
+    await expect(
+      service.signRemote(TOKEN, { signature: 'data:image/png;base64,abc' }),
+    ).rejects.toThrow(NotFoundError)
+  })
+
+  it('deve manter documentHash como null quando R2 falha', async () => {
+    mockPrisma.customerContract.findFirst.mockResolvedValue(REMOTE_CONTRACT)
+    mockGetObjectBuffer.mockRejectedValue(new Error('R2 indisponível'))
+    mockRepo.updateContract.mockResolvedValue({ ...REMOTE_CONTRACT, status: 'signed' })
+
+    await service.signRemote(TOKEN, { signature: 'data:image/png;base64,abc' })
+
+    expect(mockRepo.updateContract).toHaveBeenCalledWith(
+      CONTRACT_ID,
+      expect.objectContaining({ documentHash: null }),
+    )
   })
 })

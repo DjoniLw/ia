@@ -8,6 +8,7 @@ const PUBLIC_PREFIXES = [
   '/accept-invite',
   '/transfer',
   '/pay',
+  '/sign',
   '/sem-acesso',
 ]
 

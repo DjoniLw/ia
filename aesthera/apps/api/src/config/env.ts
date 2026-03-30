@@ -38,9 +38,9 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('noreply@aesthera.com.br'),
 
-  ZAPI_INSTANCE_ID: z.string().optional(),
-  ZAPI_TOKEN: z.string().optional(),
-  ZAPI_CLIENT_TOKEN: z.string().optional(),
+  EVOLUTION_API_URL: z.string().url().optional(),
+  EVOLUTION_API_KEY: z.string().optional(),
+  EVOLUTION_INSTANCE: z.string().optional(),
 
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),

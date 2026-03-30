@@ -6,6 +6,8 @@ import type {
   SetBusinessHoursDto,
   UpdateClinicDto,
   UpdatePaymentMethodConfigDto,
+  UpdateSmtpSettingsDto,
+  UpdateWhatsappSettingsDto,
 } from './clinics.dto'
 import { ClinicsRepository } from './clinics.repository'
 import { normalizePaymentMethodConfig } from './payment-method-config'
@@ -176,5 +178,157 @@ export class ClinicsService {
       logger.warn({ error, cnpj }, 'Falha ao consultar BrasilAPI para CNPJ')
       return null
     }
+  }
+
+  async getSmtpSettings(clinicId: string) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    return {
+      smtpHost: clinic.smtpHost ?? null,
+      smtpPort: clinic.smtpPort ?? null,
+      smtpUser: clinic.smtpUser ?? null,
+      smtpFrom: clinic.smtpFrom ?? null,
+      smtpSecure: clinic.smtpSecure,
+      configured: !!(clinic.smtpHost && clinic.smtpUser && clinic.smtpPass),
+    }
+  }
+
+  async updateSmtpSettings(clinicId: string, dto: UpdateSmtpSettingsDto) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    await this.repo.updateSmtp(clinicId, {
+      smtpHost: dto.smtpHost ?? null,
+      smtpPort: dto.smtpPort ?? null,
+      smtpUser: dto.smtpUser ?? null,
+      smtpPass: dto.smtpPass ?? null,
+      smtpFrom: dto.smtpFrom ?? null,
+      smtpSecure: dto.smtpSecure ?? true,
+    })
+    return this.getSmtpSettings(clinicId)
+  }
+
+  async testSmtpSettings(clinicId: string) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    if (!clinic.smtpHost || !clinic.smtpUser || !clinic.smtpPass) {
+      throw new AppError('Configure o servidor SMTP antes de testar.', 400, 'SMTP_NOT_CONFIGURED')
+    }
+    const nodemailer = await import('nodemailer')
+    const { resolve4 } = await import('node:dns/promises')
+    // Resolve para IPv4 explícito — evita ENETUNREACH quando o servidor retorna endereço IPv6
+    let smtpHost = clinic.smtpHost
+    try { const [ipv4] = await resolve4(clinic.smtpHost); smtpHost = ipv4 } catch { /* usa hostname original */ }
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: clinic.smtpPort ?? (clinic.smtpSecure ? 465 : 587),
+      secure: clinic.smtpSecure,
+      auth: { user: clinic.smtpUser, pass: clinic.smtpPass },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 10_000,
+    })
+    try {
+      // Race: verify vs. timeout de 12s para evitar hang no frontend
+      await Promise.race([
+        transporter.verify(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout ao conectar ao servidor SMTP. Verifique o host, porta e firewall.')), 12_000)
+        ),
+      ])
+      return { ok: true }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      throw new AppError(`Falha na conexão SMTP: ${msg}`, 400, 'SMTP_TEST_FAILED')
+    } finally {
+      transporter.close()
+    }
+  }
+
+  // ─── WhatsApp por clínica ──────────────────────────────────────────────────
+
+  private evolutionHeaders() {
+    const { evolutionApiKey } = appConfig.whatsapp
+    return { 'Content-Type': 'application/json', 'apikey': evolutionApiKey ?? '' }
+  }
+
+  async getWhatsappSettings(clinicId: string) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+
+    const instance = clinic.whatsappInstance ?? null
+    if (!instance) return { instance: null, connected: false, configured: false }
+
+    const { evolutionUrl } = appConfig.whatsapp
+    if (!evolutionUrl) return { instance, connected: false, configured: true }
+
+    try {
+      const res = await fetch(`${evolutionUrl}/instance/connectionState/${instance}`, {
+        headers: this.evolutionHeaders(),
+      })
+      if (!res.ok) return { instance, connected: false, configured: true }
+      const data = (await res.json()) as { instance?: { state?: string } }
+      const connected = data?.instance?.state === 'open'
+      return { instance, connected, configured: true }
+    } catch {
+      return { instance, connected: false, configured: true }
+    }
+  }
+
+  async updateWhatsappInstance(clinicId: string, dto: UpdateWhatsappSettingsDto) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    await this.repo.updateWhatsapp(clinicId, { whatsappInstance: dto.whatsappInstance ?? null })
+    return this.getWhatsappSettings(clinicId)
+  }
+
+  async getWhatsappQrCode(clinicId: string) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    if (!clinic.whatsappInstance) {
+      throw new AppError('Configure o nome da instância antes de escanear o QR Code.', 400, 'WHATSAPP_INSTANCE_NOT_SET')
+    }
+
+    const { evolutionUrl } = appConfig.whatsapp
+    if (!evolutionUrl) {
+      throw new AppError('Evolution API não configurada no servidor.', 503, 'EVOLUTION_NOT_CONFIGURED')
+    }
+
+    // Garante que a instância existe na Evolution API
+    const createRes = await fetch(`${evolutionUrl}/instance/create`, {
+      method: 'POST',
+      headers: this.evolutionHeaders(),
+      body: JSON.stringify({ instanceName: clinic.whatsappInstance, qrcode: true, integration: 'WHATSAPP-BAILEYS' }),
+    })
+    if (!createRes.ok && createRes.status !== 409) {
+      // 409 = instância já existe, pode continuar
+      const txt = await createRes.text()
+      throw new AppError(`Falha ao criar instância: ${txt}`, 502, 'EVOLUTION_CREATE_FAILED')
+    }
+
+    // Conecta e obtém o QR code
+    const connectRes = await fetch(`${evolutionUrl}/instance/connect/${clinic.whatsappInstance}`, {
+      headers: this.evolutionHeaders(),
+    })
+    if (!connectRes.ok) {
+      const txt = await connectRes.text()
+      throw new AppError(`Falha ao obter QR Code: ${txt}`, 502, 'EVOLUTION_CONNECT_FAILED')
+    }
+    const data = (await connectRes.json()) as { base64?: string; code?: string }
+    return { base64: data.base64 ?? null, code: data.code ?? null }
+  }
+
+  async disconnectWhatsapp(clinicId: string) {
+    const clinic = await this.repo.findById(clinicId)
+    if (!clinic) throw new NotFoundError('Clinic')
+    if (!clinic.whatsappInstance) return { ok: true }
+
+    const { evolutionUrl } = appConfig.whatsapp
+    if (evolutionUrl) {
+      await fetch(`${evolutionUrl}/instance/logout/${clinic.whatsappInstance}`, {
+        method: 'DELETE',
+        headers: this.evolutionHeaders(),
+      }).catch(() => { /* ignora erros de desconexão */ })
+    }
+    return { ok: true }
   }
 }

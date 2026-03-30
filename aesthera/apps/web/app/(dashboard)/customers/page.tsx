@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, MessageCircle, Package, Pencil, Plus, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -34,10 +34,8 @@ import {
   useUpdateCustomer,
   useCustomerContracts,
   useCreateCustomerContract,
-  useSendAssinafy,
   useSignManual,
   useGetContractView,
-  useSendContractWhatsApp,
   usePresignSignedContract,
   useConfirmSignedUpload,
   usePresignStandaloneSigned,
@@ -56,6 +54,7 @@ import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
+import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
 import {
   WALLET_ENTRY_TYPE_LABELS,
   WALLET_ENTRY_TYPE_COLORS,
@@ -1035,12 +1034,8 @@ function ContractsTab({ customer }: { customer: Customer }) {
     .filter(t => !templateSearchQuery || t.name.toLowerCase().includes(templateSearchQuery.toLowerCase()))
     .map(t => ({ value: t.id, label: t.name }))
   const [signingContract, setSigningContract] = useState<CustomerContract | null>(null)
-  const [sendingAssinafy, setSendingAssinafy] = useState<CustomerContract | null>(null)
-  const [assinafyEmail, setAssinafyEmail] = useState(customer.email ?? '')
   const [viewingContract, setViewingContract] = useState<CustomerContract | null>(null)
   const [contractViewData, setContractViewData] = useState<ContractView | null>(null)
-  const [sendingWhatsApp, setSendingWhatsApp] = useState<CustomerContract | null>(null)
-  const [whatsappPhone, setWhatsappPhone] = useState('')
   const [uploadingSignedContract, setUploadingSignedContract] = useState<CustomerContract | null>(null)
   const [uploadSignedFile, setUploadSignedFile] = useState<File | null>(null)
   const [uploadSignedProgress, setUploadSignedProgress] = useState<'idle' | 'uploading' | 'confirming'>('idle')
@@ -1050,17 +1045,13 @@ function ContractsTab({ customer }: { customer: Customer }) {
   const [standaloneFile, setStandaloneFile] = useState<File | null>(null)
   const [standaloneProgress, setStandaloneProgress] = useState<'idle' | 'uploading' | 'confirming'>('idle')
   const standaloneInputRef = useRef<HTMLInputElement | null>(null)
+  const [sendingRemoteSign, setSendingRemoteSign] = useState<CustomerContract | null>(null)
 
-  const sendAssinafy = useSendAssinafy(
-    customer.id,
-    sendingAssinafy?.id ?? '',
-  )
   const signManual = useSignManual(
     customer.id,
     signingContract?.id ?? '',
   )
   const getContractView = useGetContractView(customer.id)
-  const sendContractWhatsApp = useSendContractWhatsApp(customer.id)
   const presignSignedContract = usePresignSignedContract(customer.id)
   const confirmSignedUpload = useConfirmSignedUpload(customer.id)
   const presignStandalone = usePresignStandaloneSigned(customer.id)
@@ -1077,17 +1068,6 @@ function ContractsTab({ customer }: { customer: Customer }) {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao adicionar contrato')
-    }
-  }
-
-  async function handleSendAssinafy() {
-    try {
-      await sendAssinafy.mutateAsync({ customerEmail: assinafyEmail || undefined })
-      toast.success('Contrato enviado para assinatura')
-      setSendingAssinafy(null)
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao enviar contrato')
     }
   }
 
@@ -1112,18 +1092,6 @@ function ContractsTab({ customer }: { customer: Customer }) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao carregar visualização do contrato')
       setViewingContract(null)
-    }
-  }
-
-  async function handleSendWhatsApp() {
-    if (!sendingWhatsApp) return
-    try {
-      await sendContractWhatsApp.mutateAsync({ contractId: sendingWhatsApp.id, phone: whatsappPhone })
-      toast.success('Link de assinatura enviado via WhatsApp')
-      setSendingWhatsApp(null)
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao enviar WhatsApp')
     }
   }
 
@@ -1264,6 +1232,11 @@ function ContractsTab({ customer }: { customer: Customer }) {
                   <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
                     <span>Enviado: {c.sentAt ? new Date(c.sentAt).toLocaleDateString('pt-BR') : '—'}</span>
                     <span>Assinado: {c.signedAt ? new Date(c.signedAt).toLocaleDateString('pt-BR') : '—'}</span>
+                    {c.signToken && c.signTokenExpiresAt && (
+                      <span className="text-amber-600 font-medium">
+                        Link aguardando assinatura (expira {new Date(c.signTokenExpiresAt).toLocaleDateString('pt-BR')})
+                      </span>
+                    )}
                   </div>
                 </div>
                 {/* Ações */}
@@ -1281,29 +1254,20 @@ function ContractsTab({ customer }: { customer: Customer }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => { setSendingAssinafy(c); setAssinafyEmail(customer.email ?? '') }}
-                        title="Enviar para assinatura (Assinafy)"
-                      >
-                        <Send className="h-3.5 w-3.5 mr-1.5" />
-                        Assinafy
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => { setSendingWhatsApp(c); setWhatsappPhone(customer.phone ?? '') }}
-                        title="Enviar link de assinatura via WhatsApp"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
-                        WhatsApp
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
                         onClick={() => setSigningContract(c)}
                         title="Assinar manualmente"
                       >
                         <Pencil className="h-3.5 w-3.5 mr-1.5" />
                         Manual
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { setSendingRemoteSign(c) }}
+                        title="Enviar link de assinatura para o cliente assinar"
+                      >
+                        <Send className="h-3.5 w-3.5 mr-1.5" />
+                        Enviar para assinar
                       </Button>
                     </>
                   )}
@@ -1351,41 +1315,16 @@ function ContractsTab({ customer }: { customer: Customer }) {
         </Dialog>
       )}
 
-      {/* Dialog: enviar para Assinafy */}
-      {sendingAssinafy && (
-        <Dialog open onClose={() => setSendingAssinafy(null)}>
-          <DialogTitle>Enviar para assinatura (Assinafy)</DialogTitle>
-          <div className="space-y-4 mt-4">
-            <p className="text-sm text-muted-foreground">
-              Contrato: <strong>{sendingAssinafy.label ?? sendingAssinafy.template?.name ?? '—'}</strong>
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="assinafy-email">E-mail do cliente</Label>
-              <Input
-                id="assinafy-email"
-                type="email"
-                className="h-8 text-sm"
-                placeholder="email@exemplo.com"
-                value={assinafyEmail}
-                onChange={(e) => setAssinafyEmail(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setSendingAssinafy(null)}>Cancelar</Button>
-              <Button
-                size="sm"
-                onClick={() => void handleSendAssinafy()}
-                disabled={sendAssinafy.isPending}
-              >
-                {sendAssinafy.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                Enviar
-              </Button>
-            </div>
-          </div>
-        </Dialog>
+      {/* Dialog: enviar para assinar remotamente */}
+      {sendingRemoteSign && (
+        <SendRemoteSignDialog
+          contract={sendingRemoteSign}
+          defaultPhone={customer.phone}
+          defaultEmail={customer.email}
+          onClose={() => setSendingRemoteSign(null)}
+          onSuccess={() => { toast.success('Link de assinatura enviado'); setSendingRemoteSign(null) }}
+        />
       )}
-
-      {/* Dialog: assinatura manual */}
       {signingContract && (
         <Dialog open onClose={() => setSigningContract(null)}>
           <DialogTitle>Assinar contrato manualmente</DialogTitle>
@@ -1465,42 +1404,6 @@ function ContractsTab({ customer }: { customer: Customer }) {
             )}
             <div className="flex justify-end pt-2">
               <Button variant="outline" size="sm" onClick={() => { setViewingContract(null); setContractViewData(null) }}>Fechar</Button>
-            </div>
-          </div>
-        </Dialog>
-      )}
-
-      {/* Dialog: enviar via WhatsApp */}
-      {sendingWhatsApp && (
-        <Dialog open onClose={() => setSendingWhatsApp(null)}>
-          <DialogTitle>Enviar link de assinatura via WhatsApp</DialogTitle>
-          <div className="space-y-4 mt-4">
-            <p className="text-sm text-muted-foreground">
-              Contrato: <strong>{sendingWhatsApp.label ?? sendingWhatsApp.template?.name ?? '—'}</strong>
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="whatsapp-phone">Telefone (WhatsApp)</Label>
-              <Input
-                id="whatsapp-phone"
-                type="tel"
-                className="h-8 text-sm"
-                placeholder="5511999999999"
-                value={whatsappPhone}
-                onChange={(e) => setWhatsappPhone(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">Informe o número com código do país (ex.: 5511999999999)</p>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={() => setSendingWhatsApp(null)}>Cancelar</Button>
-              <Button
-                size="sm"
-                onClick={() => void handleSendWhatsApp()}
-                disabled={sendContractWhatsApp.isPending || !whatsappPhone}
-              >
-                {sendContractWhatsApp.isPending && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-                <MessageCircle className="h-3.5 w-3.5 mr-1.5" />
-                Enviar
-              </Button>
             </div>
           </div>
         </Dialog>
