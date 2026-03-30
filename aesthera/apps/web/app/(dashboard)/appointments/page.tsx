@@ -1785,13 +1785,6 @@ export default function AppointmentsPage() {
         />
       )}
 
-      {/* Status legend */}
-      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-        {(Object.entries(STATUS_LABEL) as [AppointmentStatus, string][]).map(([k, v]) => (
-          <span key={k} className={`rounded-full px-2.5 py-0.5 font-medium ${STATUS_COLOR[k]}`}>{v}</span>
-        ))}
-      </div>
-
       {/* Slot action dialog */}
       {selectedSlot && selectedSlot.type === 'appointment' && (
         <Dialog open onClose={() => setSelectedSlot(null)}>
