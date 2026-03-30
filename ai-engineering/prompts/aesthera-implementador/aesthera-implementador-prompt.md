@@ -469,9 +469,25 @@ Após o push de uma nova branch, pergunte **separadamente**:
 
 **Somente se confirmado**, abra o PR com:
 - **Título**: `feat: {descrição curta da feature}`
-- **Corpo**: resumo do que foi implementado, arquivos alterados e critérios de aceitação atendidos
-- **Issue vinculada**: se houver número de issue, incluir `Closes #{número}` no corpo
 - **Branch base**: `main` (ou `develop`, conforme convenção do repositório)
+- **Corpo**: use **exatamente** o template abaixo — não omitir nenhuma seção
+
+```markdown
+## O que foi implementado
+{resumo do que foi feito — 2 a 5 linhas}
+
+## Arquivos alterados
+- `{caminho/do/arquivo1}` — {o que mudou}
+- `{caminho/do/arquivo2}` — {o que mudou}
+
+## Critérios atendidos
+- {critério 1 da issue}
+- {critério 2 da issue}
+
+Closes #{número}
+```
+
+> ⚠️ **REGRA CRÍTICA DE VINCULAÇÃO**: A linha `Closes #{número}` **deve ser a última linha do corpo** do PR, sozinha, sem texto antes ou depois. Essa formatação é obrigatória para o GitHub criar o link automático entre o PR e a issue. Se o `Closes #N` estiver embutido em texto corrido, o link NÃO é criado. Se não houver número de issue, omitir essa linha.
 
 Após criar o PR, exiba o link gerado.
 
