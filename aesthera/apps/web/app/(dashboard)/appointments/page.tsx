@@ -1753,6 +1753,18 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
+      {/* Legenda de cores do calendário */}
+      <div className="flex flex-wrap gap-1.5">
+        {(Object.entries(STATUS_LABEL) as [AppointmentStatus, string][]).map(([key, label]) => (
+          <span
+            key={key}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${EVENT_COLOR[key]}`}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+
       {/* Calendar */}
       {isLoading ? (
         <div className="py-16 text-center text-muted-foreground">Carregando…</div>
