@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { type BillingStatus, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
@@ -125,9 +126,9 @@ function BillingPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [statusFilter, setStatusFilter] = useState<BillingStatus | ''>((searchParams.get('status') as BillingStatus | null) ?? '')
-  const [customerSearch, setCustomerSearch] = useState(searchParams.get('customer') ?? '')
-  const [customerSearchDebounced, setCustomerSearchDebounced] = useState(searchParams.get('customer') ?? '')
+  const [statusFilter, setStatusFilter] = usePersistedFilter<BillingStatus | ''>('aesthera-filter-billing-status', (searchParams.get('status') as BillingStatus | null), '')
+  const [customerSearch, setCustomerSearch] = usePersistedFilter('aesthera-filter-billing-customer', searchParams.get('customer'), '')
+  const [customerSearchDebounced, setCustomerSearchDebounced] = useState(customerSearch)
 
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 

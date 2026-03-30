@@ -194,7 +194,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-6">{isScreenAllowed ? children : null}</main>
+        <main className="flex-1 overflow-auto p-4 pb-24 md:p-6 md:pb-24">{isScreenAllowed ? children : null}</main>
       </div>
 
       {/* AI Chat Panel */}

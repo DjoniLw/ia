@@ -19,6 +19,7 @@ import {
   useAccountsPayableSummary,
 } from '@/lib/hooks/use-accounts-payable'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
@@ -385,12 +386,10 @@ function ContasAPagarPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [statusFilter, setStatusFilter] = useState<AccountsPayableStatus | ''>(
-    (searchParams.get('status') as AccountsPayableStatus | null) ?? '',
-  )
-  const [supplierSearch, setSupplierSearch] = useState(searchParams.get('supplier') ?? '')
-  const [supplierSearchDebounced, setSupplierSearchDebounced] = useState(searchParams.get('supplier') ?? '')
-  const [categoryFilter, setCategoryFilter] = useState(searchParams.get('category') ?? '')
+  const [statusFilter, setStatusFilter] = usePersistedFilter<AccountsPayableStatus | ''>('aesthera-filter-payables-status', (searchParams.get('status') as AccountsPayableStatus | null), '')
+  const [supplierSearch, setSupplierSearch] = usePersistedFilter('aesthera-filter-payables-supplier', searchParams.get('supplier'), '')
+  const [supplierSearchDebounced, setSupplierSearchDebounced] = useState(supplierSearch)
+  const [categoryFilter, setCategoryFilter] = usePersistedFilter('aesthera-filter-payables-category', searchParams.get('category'), '')
   const [fromFilter, setFromFilter] = useState(searchParams.get('from') ?? '')
   const [toFilter, setToFilter] = useState(searchParams.get('to') ?? '')
   const [novaContaOpen, setNovaContaOpen] = useState(false)

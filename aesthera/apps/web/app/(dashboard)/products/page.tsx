@@ -27,6 +27,7 @@ import {
   useUpdateProduct,
 } from '@/lib/hooks/use-resources'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
@@ -299,11 +300,9 @@ function ProductsPageContent() {
   const [selling, setSelling] = useState<Product | null>(null)
 
   // ── Catalog Filters ──
-  const [productSearch, setProductSearch] = useState(searchParams.get('q') ?? '')
-  const [debouncedProductSearch, setDebouncedProductSearch] = useState(searchParams.get('q') ?? '')
-  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>(
-    (searchParams.get('status') as ProductStatusFilter | null) ?? 'all'
-  )
+  const [productSearch, setProductSearch] = usePersistedFilter('aesthera-filter-products-search', searchParams.get('q'), '')
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState(productSearch)
+  const [productStatusFilter, setProductStatusFilter] = usePersistedFilter<ProductStatusFilter>('aesthera-filter-products-status', searchParams.get('status') as ProductStatusFilter | null, 'all')
 
   const isDefaultProductFilters = productSearch === '' && productStatusFilter === 'all'
 

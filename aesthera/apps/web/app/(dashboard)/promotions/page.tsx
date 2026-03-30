@@ -7,6 +7,7 @@ import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search } from
 import { Button } from '@/components/ui/button'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import {
   type CreatePromotionInput,
   type Promotion,
@@ -322,8 +323,8 @@ function UsageCell({ promotion }: { promotion: Promotion }) {
 function PromotionsPageContent() {
   useSearchParams()
   const pagination = usePaginatedQuery({ defaultPageSize: 20 })
-  const [statusFilter, setStatusFilter] = useState<PromotionStatus | ''>('')
-  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = usePersistedFilter<PromotionStatus | ''>('aesthera-filter-promotions-status', null, '')
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-promotions-search', null, '')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Promotion | undefined>()
   const [expandedId, setExpandedId] = useState<string | null>(null)

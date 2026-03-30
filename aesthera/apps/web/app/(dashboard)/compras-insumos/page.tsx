@@ -19,6 +19,7 @@ import {
   useSupplyPurchases,
 } from '@/lib/hooks/use-resources'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 
 function formatCurrency(cents: number) {
@@ -339,7 +340,7 @@ function SupplyPurchasesPageContent() {
   const [formDirty, setFormDirty] = useState(false)
   const [selectedSupply, setSelectedSupply] = useState<ComboboxItem | null>(null)
   const [supplySearchQuery, setSupplySearchQuery] = useState('')
-  const [supplierFilter, setSupplierFilter] = useState('')
+  const [supplierFilter, setSupplierFilter] = usePersistedFilter('aesthera-filter-purchases-supplier', null, '')
   const [{ from, to }, setRange] = useState(currentMonthRange())
   const [cancelingPurchase, setCancelingPurchase] = useState<SupplyPurchase | null>(null)
   const createPurchase = useCreateSupplyPurchase()

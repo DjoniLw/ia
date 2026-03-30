@@ -51,6 +51,7 @@ import { api } from '@/lib/api'
 import Link from 'next/link'
 import { useRole } from '@/lib/hooks/use-role'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
@@ -2520,9 +2521,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
 function CustomersPageContent() {
-  const [search, setSearch] = useState('')
-  const [searchDebounced, setSearchDebounced] = useState('')
-  const [activeFilter, setActiveFilter] = useState<'active' | 'inactive' | 'all'>('active')
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-customers-search', null, '')
+  const [searchDebounced, setSearchDebounced] = useState(search)
+  const [activeFilter, setActiveFilter] = usePersistedFilter<'active' | 'inactive' | 'all'>('aesthera-filter-customers-active', null, 'active')
 
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 

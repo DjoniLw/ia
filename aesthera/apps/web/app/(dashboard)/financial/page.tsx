@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useLedger, useLedgerChart, useLedgerSummary } from '@/lib/hooks/use-financial'
 import type { LedgerEntry } from '@/lib/hooks/use-financial'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 
 function formatCurrency(cents: number) {
@@ -93,7 +94,7 @@ function FinancialPageContent() {
 
   const [from, setFrom] = useState(searchParams.get('from') ?? currentMonthFrom())
   const [to, setTo] = useState(searchParams.get('to') ?? currentMonthTo())
-  const [type, setType] = useState<'credit' | 'debit' | ''>((searchParams.get('type') as 'credit' | 'debit' | '') ?? '')
+  const [type, setType] = usePersistedFilter<'credit' | 'debit' | ''>('aesthera-filter-financial-type', (searchParams.get('type') as 'credit' | 'debit' | '') || null, '')
 
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 

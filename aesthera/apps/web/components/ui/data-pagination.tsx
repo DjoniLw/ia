@@ -50,45 +50,50 @@ export function DataPagination({
   onPageSizeChange,
   pageSizeOptions = [20, 50, 100],
 }: DataPaginationProps) {
-  if (total === 0 || total <= pageSize) return null
+  if (total === 0) return null
 
   const lastPage = Math.ceil(total / pageSize)
+  const singlePage = lastPage <= 1
   const safePage = Math.min(Math.max(1, page), lastPage)
-  const from = (safePage - 1) * pageSize + 1
-  const to = Math.min(safePage * pageSize, total)
-  const pageNumbers = buildPageNumbers(page, lastPage)
+  const from = singlePage ? 1 : (safePage - 1) * pageSize + 1
+  const to = singlePage ? total : Math.min(safePage * pageSize, total)
+  const pageNumbers = singlePage ? [] : buildPageNumbers(safePage, lastPage)
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm">
       {/* Esquerda: contador */}
       <p className="text-xs text-muted-foreground">
-        Exibindo {from}–{to} de {total} registros
+        {singlePage
+          ? `${total} registro${total !== 1 ? 's' : ''}`
+          : `Exibindo ${from}–${to} de ${total} registros`}
       </p>
 
       {/* Centro: números de página */}
-      <div className="hidden items-center gap-1 sm:flex">
-        {pageNumbers.map((p, idx) =>
-          p === '...' ? (
-            <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground">
-              …
-            </span>
-          ) : (
-            <button
-              key={p}
-              type="button"
-              onClick={() => onPageChange(p)}
-              className={[
-                'flex h-7 w-7 items-center justify-center rounded text-xs font-medium transition-colors',
-                page === p
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted',
-              ].join(' ')}
-            >
-              {p}
-            </button>
-          ),
-        )}
-      </div>
+      {!singlePage && (
+        <div className="hidden items-center gap-1 sm:flex">
+          {pageNumbers.map((p, idx) =>
+            p === '...' ? (
+              <span key={`ellipsis-${idx}`} className="px-1 text-xs text-muted-foreground">
+                …
+              </span>
+            ) : (
+              <button
+                key={p}
+                type="button"
+                onClick={() => onPageChange(p)}
+                className={[
+                  'flex h-7 w-7 items-center justify-center rounded text-xs font-medium transition-colors',
+                  safePage === p
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted',
+                ].join(' ')}
+              >
+                {p}
+              </button>
+            ),
+          )}
+        </div>
+      )}
 
       {/* Direita: seletor por página + botões prev/next */}
       <div className="flex items-center gap-2">
@@ -115,8 +120,8 @@ export function DataPagination({
           variant="outline"
           size="sm"
           className="h-7 w-7 p-0"
-          onClick={() => onPageChange(page - 1)}
-          disabled={page === 1}
+          onClick={() => onPageChange(safePage - 1)}
+          disabled={singlePage || safePage === 1}
           aria-label="Página anterior"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
@@ -125,8 +130,8 @@ export function DataPagination({
           variant="outline"
           size="sm"
           className="h-7 w-7 p-0"
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= lastPage}
+          onClick={() => onPageChange(safePage + 1)}
+          disabled={singlePage || safePage >= lastPage}
           aria-label="Próxima página"
         >
           <ChevronRight className="h-3.5 w-3.5" />

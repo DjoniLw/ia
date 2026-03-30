@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { useCustomers, useServices } from '@/lib/hooks/use-resources'
 import {
   type CreatePackageInput,
@@ -627,8 +628,8 @@ function PackageCard({
 function PackagesPageContent() {
   useSearchParams()
   const pagination = usePaginatedQuery({ defaultPageSize: 20 })
-  const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
-  const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = usePersistedFilter<boolean | undefined>('aesthera-filter-packages-active', null, undefined)
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-packages-search', null, '')
   const [creating, setCreating] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 

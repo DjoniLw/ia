@@ -25,6 +25,7 @@ import {
 import { useCustomers } from '@/lib/hooks/use-resources'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
@@ -528,8 +529,8 @@ function CarteiraPageContent() {
   const searchParams = useSearchParams()
 
   const [viewMode, setViewMode] = useState<'overview' | 'by-customer'>('overview')
-  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? 'ACTIVE')
-  const [typeFilter, setTypeFilter] = useState<string>(searchParams.get('type') ?? '')
+  const [statusFilter, setStatusFilter] = usePersistedFilter('aesthera-filter-wallet-status', searchParams.get('status'), 'ACTIVE')
+  const [typeFilter, setTypeFilter] = usePersistedFilter('aesthera-filter-wallet-type', searchParams.get('type'), '')
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null)
   const [createOpen, setCreateOpen] = useState(false)

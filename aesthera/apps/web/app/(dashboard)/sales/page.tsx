@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type ProductSale, useCustomers, useProductSales, useProducts, useSellProduct } from '@/lib/hooks/use-resources'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
@@ -192,8 +193,8 @@ function SalesPageContent() {
 
   const [newSale, setNewSale] = useState(false)
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
-  const [search, setSearch] = useState(searchParams.get('search') ?? '')
-  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-sales-search', searchParams.get('search'), '')
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
   const now = new Date()
   const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)

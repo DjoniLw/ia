@@ -22,6 +22,7 @@ import {
   useUpdateService,
 } from '@/lib/hooks/use-resources'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 
 function parseBRL(value: string): number {
@@ -380,11 +381,9 @@ function ServicesPageContent() {
   const { mutateAsync: update, isPending: updating } = useUpdateService(editing?.id ?? '')
 
   // ── Filters ──
-  const [search, setSearch] = useState(searchParams.get('search') ?? '')
-  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
-    (searchParams.get('status') as StatusFilter | null) ?? 'all'
-  )
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-services-search', searchParams.get('search'), '')
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
+  const [statusFilter, setStatusFilter] = usePersistedFilter<StatusFilter>('aesthera-filter-services-status', searchParams.get('status') as StatusFilter | null, 'all')
 
   const isDefaultFilters = search === '' && statusFilter === 'all'
 

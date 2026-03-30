@@ -1,7 +1,12 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+
+function getStoredPageSize(lsKey: string): string | null {
+  if (typeof window === 'undefined') return null
+  try { return localStorage.getItem(lsKey) } catch { return null }
+}
 
 interface UsePaginatedQueryOptions {
   defaultPageSize?: number
@@ -22,14 +27,21 @@ export function usePaginatedQuery(options: UsePaginatedQueryOptions = {}): UsePa
 
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
 
   const pageKey = paramPrefix ? `${paramPrefix}_page` : 'page'
   const pageSizeKey = paramPrefix ? `${paramPrefix}_pageSize` : 'pageSize'
+  const lsKey = `aesthera-pageSize${paramPrefix ? `-${paramPrefix}` : ''}-${pathname}`
 
   const page = Math.max(1, parseInt(searchParams.get(pageKey) ?? '1', 10) || 1)
   const pageSize = Math.max(
     1,
-    parseInt(searchParams.get(pageSizeKey) ?? String(defaultPageSize), 10) || defaultPageSize,
+    parseInt(
+      searchParams.get(pageSizeKey) ??
+        getStoredPageSize(lsKey) ??
+        String(defaultPageSize),
+      10,
+    ) || defaultPageSize,
   )
 
   const updateParams = useCallback(
@@ -57,8 +69,9 @@ export function usePaginatedQuery(options: UsePaginatedQueryOptions = {}): UsePa
   const setPageSize = useCallback(
     (newSize: number) => {
       updateParams({ [pageSizeKey]: String(newSize), [pageKey]: '1' })
+      try { localStorage.setItem(lsKey, String(newSize)) } catch {}
     },
-    [updateParams, pageSizeKey, pageKey],
+    [updateParams, pageSizeKey, pageKey, lsKey],
   )
 
   const resetPage = useCallback(() => {
