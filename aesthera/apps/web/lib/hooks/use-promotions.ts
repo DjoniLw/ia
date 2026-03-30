@@ -59,7 +59,7 @@ export interface ValidatePromotionResult {
 
 // ──── Hooks ────────────────────────────────────────────────────────────────────
 
-export function usePromotions(params?: { status?: PromotionStatus; page?: number; limit?: number }) {
+export function usePromotions(params?: { status?: PromotionStatus; search?: string; page?: number; limit?: number }) {
   return useQuery<PromotionsPage>({
     queryKey: ['promotions', params],
     queryFn: () => api.get('/promotions', { params }).then((r) => r.data),

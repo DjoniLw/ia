@@ -12,6 +12,9 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type ProductSale, useCustomers, useProductSales, useProducts, useSellProduct } from '@/lib/hooks/use-resources'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -189,9 +192,9 @@ function SalesPageContent() {
   const searchParams = useSearchParams()
 
   const [newSale, setNewSale] = useState(false)
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState(searchParams.get('search') ?? '')
-  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-sales-search', searchParams.get('search'), '')
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
   const now = new Date()
   const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
@@ -199,18 +202,18 @@ function SalesPageContent() {
   const [to, setTo] = useState(searchParams.get('to') ?? defaultTo)
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 250)
+    const timer = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
     return () => clearTimeout(timer)
   }, [search])
 
   // URL sync
   useEffect(() => {
-    const p = new URLSearchParams()
-    if (from !== defaultFrom) p.set('from', from)
-    if (to !== defaultTo) p.set('to', to)
-    if (search) p.set('search', search)
+    const p = new URLSearchParams(searchParams.toString())
+    from !== defaultFrom ? p.set('from', from) : p.delete('from')
+    to !== defaultTo ? p.set('to', to) : p.delete('to')
+    search ? p.set('search', search) : p.delete('search')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, from, to, search, defaultFrom, defaultTo])
+  }, [router, searchParams, from, to, search, defaultFrom, defaultTo])
 
   const isDefaultFilters = from === defaultFrom && to === defaultTo && search === ''
 
@@ -219,7 +222,7 @@ function SalesPageContent() {
     setTo(defaultTo)
     setSearch('')
     setDebouncedSearch('')
-    setPage(1)
+    resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -232,8 +235,7 @@ function SalesPageContent() {
   }
 
   const params: Record<string, string> = {
-    page: String(page),
-    limit: '20',
+    ...paginationParams,
     from,
     to,
     ...(debouncedSearch && { search: debouncedSearch }),
@@ -281,7 +283,7 @@ function SalesPageContent() {
             <input
               type="date"
               value={from}
-              onChange={(e) => { setFrom(e.target.value); setPage(1) }}
+              onChange={(e) => { setFrom(e.target.value); resetPage() }}
               className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
@@ -290,7 +292,7 @@ function SalesPageContent() {
             <input
               type="date"
               value={to}
-              onChange={(e) => { setTo(e.target.value); setPage(1) }}
+              onChange={(e) => { setTo(e.target.value); resetPage() }}
               className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
@@ -300,7 +302,7 @@ function SalesPageContent() {
               type="text"
               placeholder="Buscar por produto ou cliente…"
               value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              onChange={(e) => { setSearch(e.target.value); resetPage() }}
               className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
@@ -385,31 +387,14 @@ function SalesPageContent() {
           </div>
         )}
 
-        {/* Pagination */}
-        {data && data.total > 20 && (
-          <div className="flex items-center justify-between border-t px-5 py-3">
-            <p className="text-xs text-muted-foreground">
-              Página {data.page} de {Math.ceil(data.total / data.limit)}
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="rounded-lg border px-3 py-1 text-xs font-medium disabled:opacity-40 hover:bg-muted/50"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page >= Math.ceil(data.total / data.limit)}
-                className="rounded-lg border px-3 py-1 text-xs font-medium disabled:opacity-40 hover:bg-muted/50"
-              >
-                Próxima
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {/* New Sale Dialog */}
       {newSale && (

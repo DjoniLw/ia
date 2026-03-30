@@ -1,9 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DataPagination } from '@/components/ui/data-pagination'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import {
   type CreatePromotionInput,
   type Promotion,
@@ -316,26 +320,30 @@ function UsageCell({ promotion }: { promotion: Promotion }) {
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function PromotionsPage() {
-  const [statusFilter, setStatusFilter] = useState<PromotionStatus | ''>('')
-  const [search, setSearch] = useState('')
+function PromotionsPageContent() {
+  useSearchParams()
+  const pagination = usePaginatedQuery({ defaultPageSize: 20 })
+  const [statusFilter, setStatusFilter] = usePersistedFilter<PromotionStatus | ''>('aesthera-filter-promotions-status', null, '')
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-promotions-search', null, '')
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Promotion | undefined>()
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const params = statusFilter ? { status: statusFilter } : undefined
-  const { data, isLoading } = usePromotions(params)
+  const { data, isLoading } = usePromotions({
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(search ? { search } : {}),
+    page: parseInt(pagination.paginationParams.page),
+    limit: parseInt(pagination.paginationParams.limit),
+  })
 
-  const filtered = (data?.items ?? []).filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.code.toLowerCase().includes(search.toLowerCase()),
-  )
+  const { data: activeStats } = usePromotions({ status: 'active', limit: 1 })
 
   const isDefaultFilters = statusFilter === '' && search === ''
 
   function resetFilters() {
     setStatusFilter('')
     setSearch('')
+    pagination.resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -389,7 +397,7 @@ export default function PromotionsPage() {
           {statusOptions.map((s) => (
             <button
               key={s.value}
-              onClick={() => setStatusFilter(s.value)}
+              onClick={() => { setStatusFilter(s.value); pagination.resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 statusFilter === s.value
@@ -446,10 +454,10 @@ export default function PromotionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filtered.length === 0 && (
+                {(data?.items ?? []).length === 0 && (
                   <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Nenhuma promoção encontrada para os filtros selecionados.</td></tr>
                 )}
-                {filtered.map((promo) => (
+                {(data?.items ?? []).map((promo) => (
                   <>
                     <tr key={promo.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3">
@@ -555,10 +563,14 @@ export default function PromotionsPage() {
           </div>
         )}
 
-        {data && data.total > (data.limit ?? 20) && (
-          <div className="border-t px-5 py-3 text-xs text-muted-foreground">
-            Exibindo {data.items.length} de {data.total} promoções
-          </div>
+        {data && (
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            total={data.total}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         )}
       </div>
 
@@ -572,7 +584,7 @@ export default function PromotionsPage() {
           <div>
             <p className="text-muted-foreground">Ativos</p>
             <p className="text-lg font-semibold text-green-600">
-              {data.items.filter((p) => p.status === 'active').length}
+              {activeStats?.total ?? 0}
             </p>
           </div>
           <div>
@@ -589,5 +601,13 @@ export default function PromotionsPage() {
         <PromotionModal open={true} onClose={() => setEditing(undefined)} editing={editing} />
       )}
     </div>
+  )
+}
+
+export default function PromotionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <PromotionsPageContent />
+    </Suspense>
   )
 }

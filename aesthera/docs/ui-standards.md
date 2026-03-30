@@ -310,6 +310,115 @@ export default function Page() {
 
 ---
 
+## 2.6 Paginação
+
+> **Padrão obrigatório** em todas as telas de listagem com dados paginados pelo servidor.
+
+### Hook: `usePaginatedQuery`
+
+```tsx
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+
+const pagination = usePaginatedQuery({ defaultPageSize: 20 })
+// Com prefixo (múltiplas listas na mesma página):
+const catalogPagination = usePaginatedQuery({ defaultPageSize: 20, paramPrefix: 'catalog' })
+```
+
+Retorna: `{ page, pageSize, setPage, setPageSize, resetPage, paginationParams }`
+
+- `paginationParams` — `{ page: string, limit: string }` para spread em chamadas de API.
+- `resetPage()` — chame ao mudar qualquer filtro para voltar à página 1.
+- Com `paramPrefix`, usa params de URL `${prefix}_page` / `${prefix}_pageSize`.
+
+### Componente: `<DataPagination>`
+
+```tsx
+import { DataPagination } from '@/components/ui/data-pagination'
+
+<DataPagination
+  page={pagination.page}
+  pageSize={pagination.pageSize}
+  total={data?.total ?? 0}
+  onPageChange={pagination.setPage}
+  onPageSizeChange={pagination.setPageSize}
+/>
+```
+
+- Renderiza `null` quando `total === 0` ou `total <= pageSize` (sem paginação necessária).
+- Layout: contador à esquerda · números de página ao centro · seletor de tamanho + prev/next à direita.
+
+### Padrão completo de uma tela de listagem
+
+```tsx
+'use client'
+import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { DataPagination } from '@/components/ui/data-pagination'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+
+function ItemsPageContent() {
+  useSearchParams() // obrigatório para Suspense funcionar
+  const pagination = usePaginatedQuery({ defaultPageSize: 20 })
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+
+  const { data, isLoading } = useItems({
+    ...pagination.paginationParams,
+    ...(statusFilter !== 'all' ? { active: statusFilter === 'active' ? 'true' : 'false' } : {}),
+  })
+
+  // Ao mudar filtro, resetar para página 1:
+  function handleFilterChange(value: typeof statusFilter) {
+    setStatusFilter(value)
+    pagination.resetPage()
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* filtros */}
+      {/* tabela */}
+      <DataPagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        total={data?.total ?? 0}
+        onPageChange={pagination.setPage}
+        onPageSizeChange={pagination.setPageSize}
+      />
+      {/* dialogs */}
+    </div>
+  )
+}
+
+export default function ItemsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ItemsPageContent />
+    </Suspense>
+  )
+}
+```
+
+### Hooks com parâmetros tipados (não `Record<string,string>`)
+
+Para hooks como `usePackages` e `usePromotions` que aceitam `{ page?: number; limit?: number }`:
+
+```tsx
+const { data } = usePackages({
+  page: parseInt(pagination.paginationParams.page),
+  limit: parseInt(pagination.paginationParams.limit),
+  ...(activeFilter !== undefined ? { active: activeFilter } : {}),
+})
+```
+
+### Checklist de paginação
+
+- [ ] `usePaginatedQuery` instanciado na função de página
+- [ ] `paginationParams` passado para o hook de dados
+- [ ] `resetPage()` chamado em todos os handlers de filtro
+- [ ] `<DataPagination>` posicionado após a tabela/lista
+- [ ] Componente de página envolto em `<Suspense fallback={null}>`
+
+---
+
 ## 8. Implementation Checklist
 
 Before marking any task as done, verify:
@@ -321,3 +430,5 @@ Before marking any task as done, verify:
 - [ ] Deletion checks referential integrity at the API level
 - [ ] Row actions use Pencil/Trash2 icon buttons (no text buttons, no `window.confirm`)
 - [ ] No unrelated code was changed
+- [ ] Telas com listagem usam `usePaginatedQuery` + `<DataPagination>` (ver seção 2.6)
+- [ ] Página envolta em `<Suspense fallback={null}>` quando usa `useSearchParams`

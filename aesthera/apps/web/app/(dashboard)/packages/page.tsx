@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { Suspense, useCallback, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   Plus,
@@ -15,6 +16,9 @@ import {
   Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DataPagination } from '@/components/ui/data-pagination'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { useCustomers, useServices } from '@/lib/hooks/use-resources'
 import {
   type CreatePackageInput,
@@ -621,15 +625,22 @@ function PackageCard({
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function PackagesPage() {
-  const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
-  const [search, setSearch] = useState('')
+function PackagesPageContent() {
+  useSearchParams()
+  const pagination = usePaginatedQuery({ defaultPageSize: 20 })
+  const [activeFilter, setActiveFilter] = usePersistedFilter<boolean | undefined>('aesthera-filter-packages-active', null, undefined)
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-packages-search', null, '')
   const [creating, setCreating] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const { data, isLoading } = usePackages(
-    activeFilter !== undefined ? { active: activeFilter } : undefined,
-  )
+  const { data, isLoading } = usePackages({
+    ...(activeFilter !== undefined ? { active: activeFilter } : {}),
+    ...(search ? { name: search } : {}),
+    page: parseInt(pagination.paginationParams.page),
+    limit: parseInt(pagination.paginationParams.limit),
+  })
+
+  const { data: activeStats } = usePackages({ active: true, limit: 1 })
 
   const filterOptions: Array<{ value: boolean | undefined; label: string }> = [
     { value: undefined, label: 'Todos' },
@@ -637,15 +648,12 @@ export default function PackagesPage() {
     { value: false, label: 'Inativos' },
   ]
 
-  const filteredPackages = (data?.items ?? []).filter((pkg) =>
-    pkg.name.toLowerCase().includes(search.toLowerCase()),
-  )
-
   const isDefaultFilters = activeFilter === undefined && search === ''
 
   function resetFilters() {
     setActiveFilter(undefined)
     setSearch('')
+    pagination.resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -680,7 +688,7 @@ export default function PackagesPage() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); pagination.resetPage() }}
               placeholder="Buscar por nome…"
               className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
@@ -688,7 +696,7 @@ export default function PackagesPage() {
           {filterOptions.map((opt) => (
             <button
               key={String(opt.value)}
-              onClick={() => setActiveFilter(opt.value)}
+              onClick={() => { setActiveFilter(opt.value); pagination.resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 activeFilter === opt.value
@@ -732,13 +740,13 @@ export default function PackagesPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredPackages.length === 0 && (
+          {(data?.items ?? []).length === 0 && (
             <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-8 text-center shadow-sm">
               <PackageIcon className="h-8 w-8 text-muted-foreground/30" />
               <p className="text-sm text-muted-foreground">Nenhum pacote encontrado para os filtros selecionados.</p>
             </div>
           )}
-          {filteredPackages.map((pkg) => (
+          {(data?.items ?? []).map((pkg) => (
             <PackageCard
               key={pkg.id}
               pkg={pkg}
@@ -746,6 +754,13 @@ export default function PackagesPage() {
               onToggle={() => setExpandedId(expandedId === pkg.id ? null : pkg.id)}
             />
           ))}
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            total={data?.total ?? 0}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+          />
         </div>
       )}
 
@@ -759,7 +774,7 @@ export default function PackagesPage() {
           <div>
             <p className="text-muted-foreground">Ativos</p>
             <p className="text-lg font-semibold text-green-600">
-              {data.items.filter((p) => p.active).length}
+              {activeStats?.total ?? 0}
             </p>
           </div>
           <div>
@@ -773,5 +788,13 @@ export default function PackagesPage() {
 
       <PackageModal open={creating} onClose={() => setCreating(false)} />
     </div>
+  )
+}
+
+export default function PackagesPage() {
+  return (
+    <Suspense fallback={null}>
+      <PackagesPageContent />
+    </Suspense>
   )
 }

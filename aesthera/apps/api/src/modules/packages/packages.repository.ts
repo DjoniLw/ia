@@ -11,6 +11,7 @@ export class PackagesRepository {
   async findAll(clinicId: string, q: ListPackagesQuery) {
     const where: Record<string, unknown> = { clinicId }
     if (q.active !== undefined) where.active = q.active
+    if (q.name) where.name = { contains: q.name, mode: 'insensitive' }
 
     const skip = (q.page - 1) * q.limit
     const [items, total] = await Promise.all([

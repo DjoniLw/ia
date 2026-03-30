@@ -2,7 +2,8 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertCircle, ChevronDown, Info, Package, Pencil, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -25,6 +26,9 @@ import {
   useSellProduct,
   useUpdateProduct,
 } from '@/lib/hooks/use-resources'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -282,7 +286,12 @@ type PageTab = 'catalog' | 'sales'
 type ProductStatusFilter = 'all' | 'active' | 'inactive'
 const PRODUCT_STATUS_LABELS: Record<ProductStatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
 
-export default function ProductsPage() {
+function ProductsPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const catalogPagination = usePaginatedQuery({ defaultPageSize: 20, paramPrefix: 'catalog' })
+  const salesPagination = usePaginatedQuery({ defaultPageSize: 20, paramPrefix: 'sale' })
+
   const [tab, setTab] = useState<PageTab>('catalog')
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
@@ -290,8 +299,54 @@ export default function ProductsPage() {
   const [deleting, setDeleting] = useState<Product | null>(null)
   const [selling, setSelling] = useState<Product | null>(null)
 
-  const { data: products, isLoading } = useProducts()
-  const { data: sales, isLoading: salesLoading } = useProductSales()
+  // ── Catalog Filters ──
+  const [productSearch, setProductSearch] = usePersistedFilter('aesthera-filter-products-search', searchParams.get('q'), '')
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState(productSearch)
+  const [productStatusFilter, setProductStatusFilter] = usePersistedFilter<ProductStatusFilter>('aesthera-filter-products-status', searchParams.get('status') as ProductStatusFilter | null, 'all')
+
+  const isDefaultProductFilters = productSearch === '' && productStatusFilter === 'all'
+
+  function resetProductFilters() {
+    setProductSearch('')
+    setProductStatusFilter('all')
+    catalogPagination.resetPage()
+  }
+
+  function buildProductFilterLabel(): string {
+    const parts: string[] = []
+    const statusMap: Record<ProductStatusFilter, string> = { all: 'todos', active: 'apenas ativos', inactive: 'apenas inativos' }
+    parts.push(statusMap[productStatusFilter])
+    if (productSearch) parts.push(`busca: ${productSearch}`)
+    return parts.join(' · ')
+  }
+
+  // Debounce product search
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedProductSearch(productSearch); catalogPagination.resetPage() }, 250)
+    return () => clearTimeout(t)
+  }, [productSearch])
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    productSearch ? p.set('q', productSearch) : p.delete('q')
+    productStatusFilter !== 'all' ? p.set('status', productStatusFilter) : p.delete('status')
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, searchParams, productSearch, productStatusFilter])
+
+  const catalogParams: Record<string, string> = {
+    ...catalogPagination.paginationParams,
+    ...(debouncedProductSearch && { search: debouncedProductSearch }),
+    ...(productStatusFilter === 'active' && { active: 'true' }),
+    ...(productStatusFilter === 'inactive' && { active: 'false' }),
+  }
+  const salesParams: Record<string, string> = {
+    ...salesPagination.paginationParams,
+  }
+
+  const { data: products, isLoading } = useProducts(catalogParams)
+  const { data: sales, isLoading: salesLoading } = useProductSales(salesParams)
+  const { data: lowStockData } = useProducts({ active: 'true', limit: '200' })
   const createProduct = useCreateProduct()
   const updateProduct = useUpdateProduct(editing?.id ?? '')
   const deleteProduct = useDeleteProduct()
@@ -359,35 +414,7 @@ export default function ProductsPage() {
     }
   }
 
-  const lowStock = products?.items.filter((p) => p.stock <= p.minStock && p.active) ?? []
-
-  // ── Filters ──
-  const [productSearch, setProductSearch] = useState('')
-  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>('all')
-
-  const filteredProducts = (products?.items ?? []).filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(productSearch.toLowerCase())
-    const matchesStatus =
-      productStatusFilter === 'all' ||
-      (productStatusFilter === 'active' && p.active) ||
-      (productStatusFilter === 'inactive' && !p.active)
-    return matchesSearch && matchesStatus
-  })
-
-  const isDefaultProductFilters = productSearch === '' && productStatusFilter === 'all'
-
-  function resetProductFilters() {
-    setProductSearch('')
-    setProductStatusFilter('all')
-  }
-
-  function buildProductFilterLabel(): string {
-    const parts: string[] = []
-    const statusMap: Record<ProductStatusFilter, string> = { all: 'todos', active: 'apenas ativos', inactive: 'apenas inativos' }
-    parts.push(statusMap[productStatusFilter])
-    if (productSearch) parts.push(`busca: ${productSearch}`)
-    return parts.join(' · ')
-  }
+  const lowStock = (lowStockData?.items ?? []).filter((p) => p.stock <= p.minStock && p.active)
 
   return (
     <div className="space-y-6">
@@ -433,6 +460,7 @@ export default function ProductsPage() {
 
       {/* Product catalog */}
       {tab === 'catalog' && (
+        <>
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
@@ -448,7 +476,7 @@ export default function ProductsPage() {
             {(['all', 'active', 'inactive'] as ProductStatusFilter[]).map((s) => (
               <button
                 key={s}
-                onClick={() => setProductStatusFilter(s)}
+                onClick={() => { setProductStatusFilter(s); catalogPagination.resetPage() }}
                 className={[
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   productStatusFilter === s
@@ -488,10 +516,10 @@ export default function ProductsPage() {
               {isLoading && (
                 <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Carregando…</td></tr>
               )}
-              {!isLoading && filteredProducts.length === 0 && (
+              {!isLoading && !(products?.items?.length) && (
                 <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum produto encontrado.</td></tr>
               )}
-              {filteredProducts.map((p) => {
+              {(products?.items ?? []).map((p) => {
                 const isLow = p.stock <= p.minStock
                 return (
                   <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
@@ -546,10 +574,20 @@ export default function ProductsPage() {
           </table>
         </div>
         </div>
+
+        <DataPagination
+          page={catalogPagination.page}
+          pageSize={catalogPagination.pageSize}
+          total={products?.total ?? 0}
+          onPageChange={catalogPagination.setPage}
+          onPageSizeChange={catalogPagination.setPageSize}
+        />
+        </>
       )}
 
       {/* Sales history */}
       {tab === 'sales' && (
+        <>
         <div className="rounded-lg border bg-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -584,6 +622,15 @@ export default function ProductsPage() {
             </tbody>
           </table>
         </div>
+
+        <DataPagination
+          page={salesPagination.page}
+          pageSize={salesPagination.pageSize}
+          total={sales?.total ?? 0}
+          onPageChange={salesPagination.setPage}
+          onPageSizeChange={salesPagination.setPageSize}
+        />
+        </>
       )}
 
       {/* Create dialog */}
@@ -655,5 +702,13 @@ export default function ProductsPage() {
         </Dialog>
       )}
     </div>
+  )
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProductsPageContent />
+    </Suspense>
   )
 }

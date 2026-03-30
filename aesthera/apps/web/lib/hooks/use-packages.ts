@@ -80,7 +80,7 @@ export interface UpdatePackageInput {
 
 // ──── Hooks ────────────────────────────────────────────────────────────────────
 
-export function usePackages(params?: { active?: boolean; page?: number; limit?: number }) {
+export function usePackages(params?: { active?: boolean; name?: string; page?: number; limit?: number }) {
   return useQuery<PackagesPage>({
     queryKey: ['packages', params],
     queryFn: () => api.get('/packages', { params }).then((r) => r.data),

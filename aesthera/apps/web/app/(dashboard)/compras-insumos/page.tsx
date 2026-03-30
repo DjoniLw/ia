@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Info, Loader2, PackageOpen, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,9 @@ import {
   useSupplies,
   useSupplyPurchases,
 } from '@/lib/hooks/use-resources'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
@@ -327,18 +331,21 @@ function CancelPurchaseDialog({
   )
 }
 
-export default function SupplyPurchasesPage() {
+function SupplyPurchasesPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const role = useRole()
   const canManage = role === 'admin'
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
   const [selectedSupply, setSelectedSupply] = useState<ComboboxItem | null>(null)
   const [supplySearchQuery, setSupplySearchQuery] = useState('')
-  const [supplierFilter, setSupplierFilter] = useState('')
+  const [supplierFilter, setSupplierFilter] = usePersistedFilter('aesthera-filter-purchases-supplier', null, '')
   const [{ from, to }, setRange] = useState(currentMonthRange())
-  const [page, setPage] = useState(1)
   const [cancelingPurchase, setCancelingPurchase] = useState<SupplyPurchase | null>(null)
   const createPurchase = useCreateSupplyPurchase()
+
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 
   const suppliesQuery = useSupplies({ active: 'true', limit: '200' })
 
@@ -360,7 +367,7 @@ export default function SupplyPurchasesPage() {
     setSupplySearchQuery('')
     setSupplierFilter('')
     setRange(currentMonthRange())
-    setPage(1)
+    resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -382,18 +389,17 @@ export default function SupplyPurchasesPage() {
   }
 
   const params = useMemo(() => ({
-    page: String(page),
-    limit: '20',
+    ...paginationParams,
     ...(selectedSupplyId && { supplyId: selectedSupplyId }),
     ...(supplierFilter.trim() && { supplierName: supplierFilter.trim() }),
     ...(from && { from }),
     ...(to && { to }),
-  }), [from, page, selectedSupplyId, supplierFilter, to])
+  }), [paginationParams, selectedSupplyId, supplierFilter, from, to])
 
   const purchasesQuery = useSupplyPurchases(params)
 
   useEffect(() => {
-    setPage(1)
+    resetPage()
   }, [selectedSupplyId, supplierFilter, from, to])
 
   async function handleCreate(data: Parameters<typeof createPurchase.mutateAsync>[0]) {
@@ -408,7 +414,12 @@ export default function SupplyPurchasesPage() {
     }
   }
 
-  const totalPages = purchasesQuery.data ? Math.ceil(purchasesQuery.data.total / purchasesQuery.data.limit) : 1
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    supplierFilter.trim() ? p.set('supplier', supplierFilter.trim()) : p.delete('supplier')
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, searchParams, supplierFilter])
 
   return (
     <div className="space-y-6">
@@ -548,21 +559,13 @@ export default function SupplyPurchasesPage() {
               </table>
             </div>
 
-            {purchasesQuery.data.total > purchasesQuery.data.limit && (
-              <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground">
-                <span>
-                  Página {purchasesQuery.data.page} de {totalPages}
-                </span>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>
-                    Anterior
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setPage((current) => current + 1)} disabled={page >= totalPages}>
-                    Próxima
-                  </Button>
-                </div>
-              </div>
-            )}
+            <DataPagination
+              page={page}
+              pageSize={pageSize}
+              total={purchasesQuery.data.total}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
           </>
         )}
       </div>
@@ -587,5 +590,13 @@ export default function SupplyPurchasesPage() {
 
       {cancelingPurchase && <CancelPurchaseDialog purchase={cancelingPurchase} onClose={() => setCancelingPurchase(null)} />}
     </div>
+  )
+}
+
+export default function SupplyPurchasesPage() {
+  return (
+    <Suspense fallback={null}>
+      <SupplyPurchasesPageContent />
+    </Suspense>
   )
 }

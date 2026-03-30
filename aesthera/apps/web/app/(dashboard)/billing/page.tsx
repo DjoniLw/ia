@@ -9,6 +9,9 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { type BillingStatus, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -123,22 +126,24 @@ function BillingPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [statusFilter, setStatusFilter] = useState<BillingStatus | ''>((searchParams.get('status') as BillingStatus | null) ?? '')
-  const [customerSearch, setCustomerSearch] = useState(searchParams.get('customer') ?? '')
-  const [customerSearchDebounced, setCustomerSearchDebounced] = useState(searchParams.get('customer') ?? '')
+  const [statusFilter, setStatusFilter] = usePersistedFilter<BillingStatus | ''>('aesthera-filter-billing-status', (searchParams.get('status') as BillingStatus | null), '')
+  const [customerSearch, setCustomerSearch] = usePersistedFilter('aesthera-filter-billing-customer', searchParams.get('customer'), '')
+  const [customerSearchDebounced, setCustomerSearchDebounced] = useState(customerSearch)
+
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 
   useEffect(() => {
-    const timer = setTimeout(() => setCustomerSearchDebounced(customerSearch), 250)
+    const timer = setTimeout(() => { setCustomerSearchDebounced(customerSearch); resetPage() }, 250)
     return () => clearTimeout(timer)
-  }, [customerSearch])
+  }, [customerSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // URL sync
+  // URL sync — page/pageSize gerenciados pelo usePaginatedQuery; aqui só os filtros
   useEffect(() => {
-    const p = new URLSearchParams()
-    if (statusFilter) p.set('status', statusFilter)
-    if (customerSearch) p.set('customer', customerSearch)
+    const p = new URLSearchParams(searchParams.toString())
+    if (statusFilter) p.set('status', statusFilter); else p.delete('status')
+    if (customerSearch) p.set('customer', customerSearch); else p.delete('customer')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, statusFilter, customerSearch])
+  }, [router, statusFilter, customerSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDefaultFilters = statusFilter === '' && customerSearch === ''
 
@@ -146,6 +151,7 @@ function BillingPageContent() {
     setStatusFilter('')
     setCustomerSearch('')
     setCustomerSearchDebounced('')
+    resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -165,6 +171,7 @@ function BillingPageContent() {
   const params: Record<string, string> = {
     ...(statusFilter && { status: statusFilter }),
     ...(customerSearchDebounced && { customerName: customerSearchDebounced }),
+    ...paginationParams,
   }
   const { data, isLoading } = useBilling(Object.keys(params).length ? params : undefined)
 
@@ -194,7 +201,7 @@ function BillingPageContent() {
           {statuses.map((s) => (
             <button
               key={s.value}
-              onClick={() => setStatusFilter(s.value)}
+              onClick={() => { setStatusFilter(s.value); resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 statusFilter === s.value
@@ -303,6 +310,14 @@ function BillingPageContent() {
           </tbody>
         </table>
       </div>
+
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {/* Summary */}
       {data && data.items.length > 0 && (

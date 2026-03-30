@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Info, PackageOpen, Plus, Pencil, Search, Trash2, ShoppingBag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,9 @@ import {
   useDeleteSupply,
   useCreateProduct,
 } from '@/lib/hooks/use-resources'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 function formatCost(cents: number | null) {
   if (cents == null) return '—'
@@ -150,8 +154,10 @@ function SupplyForm({
 type StatusFilter = 'all' | 'active' | 'inactive'
 const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
 
-export default function SuppliesPage() {
-  const { data, isLoading } = useSupplies()
+function SuppliesPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
   const createSupply = useCreateSupply()
   const [creating, setCreating] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
@@ -160,23 +166,16 @@ export default function SuppliesPage() {
   const [converting, setConverting] = useState<Supply | null>(null)
 
   // ── Filters ──
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-
-  const filtered = (data?.items ?? []).filter((s) => {
-    const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && s.active) ||
-      (statusFilter === 'inactive' && !s.active)
-    return matchesSearch && matchesStatus
-  })
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-supplies-search', searchParams.get('search'), '')
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
+  const [statusFilter, setStatusFilter] = usePersistedFilter<StatusFilter>('aesthera-filter-supplies-status', searchParams.get('status') as StatusFilter | null, 'all')
 
   const isDefaultFilters = search === '' && statusFilter === 'all'
 
   function resetFilters() {
     setSearch('')
     setStatusFilter('all')
+    resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -197,6 +196,28 @@ export default function SuppliesPage() {
       toast.error(msg ?? 'Erro ao criar insumo')
     }
   }
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    search ? p.set('search', search) : p.delete('search')
+    statusFilter !== 'all' ? p.set('status', statusFilter) : p.delete('status')
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, searchParams, search, statusFilter])
+
+  const params: Record<string, string> = {
+    ...paginationParams,
+    ...(debouncedSearch && { name: debouncedSearch }),
+    ...(statusFilter === 'active' && { active: 'true' }),
+    ...(statusFilter === 'inactive' && { active: 'false' }),
+  }
+  const { data, isLoading } = useSupplies(params)
 
   return (
     <div className="space-y-5">
@@ -229,7 +250,7 @@ export default function SuppliesPage() {
           {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
             <button
               key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => { setStatusFilter(s); resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 statusFilter === s
@@ -255,14 +276,14 @@ export default function SuppliesPage() {
 
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
-      ) : !data || data.items.length === 0 ? (
+      ) : !data?.items.length ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <PackageOpen className="mx-auto mb-2 h-8 w-8 opacity-30" />
-          <p className="text-sm">Nenhum insumo cadastrado.</p>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
-          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+          {isDefaultFilters ? (
+            <p className="text-sm">Nenhum insumo cadastrado.</p>
+          ) : (
+            <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+          )}
         </div>
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -279,7 +300,7 @@ export default function SuppliesPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filtered.map((s) => (
+              {(data?.items ?? []).map((s) => (
                 <tr key={s.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-medium">
                     {s.name}
@@ -317,6 +338,14 @@ export default function SuppliesPage() {
         </div>
       )}
 
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
+
       {creating && (
         <Dialog open onClose={() => setCreating(false)} isDirty={formDirty}>
           <DialogTitle>Novo Insumo</DialogTitle>
@@ -335,6 +364,14 @@ export default function SuppliesPage() {
       {deleting && <DeleteSupplyDialog supply={deleting} onClose={() => setDeleting(null)} />}
       {converting && <ConvertToProductDialog supply={converting} onClose={() => setConverting(null)} />}
     </div>
+  )
+}
+
+export default function SuppliesPage() {
+  return (
+    <Suspense fallback={null}>
+      <SuppliesPageContent />
+    </Suspense>
   )
 }
 

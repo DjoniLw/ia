@@ -1,7 +1,8 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -23,6 +24,9 @@ import {
   useServices,
   useUpdateProfessional,
 } from '@/lib/hooks/use-resources'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
+import { DataPagination } from '@/components/ui/data-pagination'
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 const STATUS_LABELS: Record<StatusFilter, string> = { all: 'Todos', active: 'Ativos', inactive: 'Inativos' }
@@ -355,8 +359,10 @@ function DeleteProfessionalConfirm({
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ProfessionalsPage() {
-  const { data, isLoading } = useProfessionals()
+function ProfessionalsPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
   const createProfessional = useCreateProfessional()
   const deleteProfessional = useDeleteProfessional()
 
@@ -367,14 +373,16 @@ export default function ProfessionalsPage() {
   const [assigningTo, setAssigningTo] = useState<Professional | null>(null)
 
   // ── Filters ──
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [search, setSearch] = usePersistedFilter('aesthera-filter-professionals-search', searchParams.get('search'), '')
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
+  const [statusFilter, setStatusFilter] = usePersistedFilter<StatusFilter>('aesthera-filter-professionals-status', searchParams.get('status') as StatusFilter | null, 'all')
 
   const isDefaultFilters = search === '' && statusFilter === 'all'
 
   function resetFilters() {
     setSearch('')
     setStatusFilter('all')
+    resetPage()
   }
 
   function buildFilterLabel(): string {
@@ -387,16 +395,27 @@ export default function ProfessionalsPage() {
 
   const updateProfessional = useUpdateProfessional(editing?.id ?? '')
 
-  const filtered = (data?.items ?? []).filter((p) => {
-    const matchesSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.email.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'active' && p.active) ||
-      (statusFilter === 'inactive' && !p.active)
-    return matchesSearch && matchesStatus
-  })
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // URL sync
+  useEffect(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    search ? p.set('search', search) : p.delete('search')
+    statusFilter !== 'all' ? p.set('status', statusFilter) : p.delete('status')
+    router.replace(`?${p.toString()}`, { scroll: false })
+  }, [router, searchParams, search, statusFilter])
+
+  const params: Record<string, string> = {
+    ...paginationParams,
+    ...(debouncedSearch && { name: debouncedSearch }),
+    ...(statusFilter === 'active' && { active: 'true' }),
+    ...(statusFilter === 'inactive' && { active: 'false' }),
+  }
+  const { data, isLoading } = useProfessionals(params)
 
   async function handleCreate(formData: ProfessionalFormData) {
     try {
@@ -453,14 +472,14 @@ export default function ProfessionalsPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome ou e-mail…"
+              placeholder="Buscar por nome…"
               className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           {(['all', 'active', 'inactive'] as StatusFilter[]).map((s) => (
             <button
               key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => { setStatusFilter(s); resetPage() }}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                 statusFilter === s
@@ -487,17 +506,19 @@ export default function ProfessionalsPage() {
       {/* Table */}
       {isLoading ? (
         <div className="py-12 text-center text-muted-foreground">Carregando…</div>
-      ) : !data || data.items.length === 0 ? (
+      ) : !data?.items.length ? (
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <UserRound className="mx-auto mb-2 h-8 w-8 opacity-30" />
-          <p className="text-sm">Nenhum profissional cadastrado.</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
-            Criar primeiro profissional
-          </Button>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border bg-card py-12 text-center text-muted-foreground">
-          <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+          {isDefaultFilters ? (
+            <>
+              <p className="text-sm">Nenhum profissional cadastrado.</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => setCreating(true)}>
+                Criar primeiro profissional
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm">Nenhum resultado para os filtros selecionados.</p>
+          )}
         </div>
       ) : (
         <div className="rounded-lg border bg-card overflow-x-auto">
@@ -512,7 +533,7 @@ export default function ProfessionalsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
+              {(data?.items ?? []).map((p) => (
                 <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="py-3 pl-4 pr-2 font-medium">{p.name}</td>
                   <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{p.speciality ?? '—'}</td>
@@ -554,6 +575,14 @@ export default function ProfessionalsPage() {
           </table>
         </div>
       )}
+
+      <DataPagination
+        page={page}
+        pageSize={pageSize}
+        total={data?.total ?? 0}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+      />
 
       {/* Create dialog */}
       {creating && (
@@ -602,5 +631,13 @@ export default function ProfessionalsPage() {
         />
       )}
     </div>
+  )
+}
+
+export default function ProfessionalsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProfessionalsPageContent />
+    </Suspense>
   )
 }
