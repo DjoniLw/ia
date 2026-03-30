@@ -5,6 +5,12 @@ export class PromotionsRepository {
   async findAll(clinicId: string, q: ListPromotionsQuery) {
     const where: Record<string, unknown> = { clinicId }
     if (q.status) where.status = q.status
+    if (q.search) {
+      where.OR = [
+        { name: { contains: q.search, mode: 'insensitive' } },
+        { code: { contains: q.search, mode: 'insensitive' } },
+      ]
+    }
 
     const skip = (q.page - 1) * q.limit
     const [items, total] = await Promise.all([

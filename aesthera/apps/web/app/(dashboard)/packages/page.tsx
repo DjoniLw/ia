@@ -635,19 +635,18 @@ function PackagesPageContent() {
 
   const { data, isLoading } = usePackages({
     ...(activeFilter !== undefined ? { active: activeFilter } : {}),
+    ...(search ? { name: search } : {}),
     page: parseInt(pagination.paginationParams.page),
     limit: parseInt(pagination.paginationParams.limit),
   })
+
+  const { data: activeStats } = usePackages({ active: true, limit: 1 })
 
   const filterOptions: Array<{ value: boolean | undefined; label: string }> = [
     { value: undefined, label: 'Todos' },
     { value: true, label: 'Ativos' },
     { value: false, label: 'Inativos' },
   ]
-
-  const filteredPackages = (data?.items ?? []).filter((pkg) =>
-    pkg.name.toLowerCase().includes(search.toLowerCase()),
-  )
 
   const isDefaultFilters = activeFilter === undefined && search === ''
 
@@ -741,13 +740,13 @@ function PackagesPageContent() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredPackages.length === 0 && (
+          {(data?.items ?? []).length === 0 && (
             <div className="flex flex-col items-center gap-2 rounded-xl border bg-card py-8 text-center shadow-sm">
               <PackageIcon className="h-8 w-8 text-muted-foreground/30" />
               <p className="text-sm text-muted-foreground">Nenhum pacote encontrado para os filtros selecionados.</p>
             </div>
           )}
-          {filteredPackages.map((pkg) => (
+          {(data?.items ?? []).map((pkg) => (
             <PackageCard
               key={pkg.id}
               pkg={pkg}
@@ -775,7 +774,7 @@ function PackagesPageContent() {
           <div>
             <p className="text-muted-foreground">Ativos</p>
             <p className="text-lg font-semibold text-green-600">
-              {data.items.filter((p) => p.active).length}
+              {activeStats?.total ?? 0}
             </p>
           </div>
           <div>

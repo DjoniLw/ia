@@ -329,17 +329,14 @@ function PromotionsPageContent() {
   const [editing, setEditing] = useState<Promotion | undefined>()
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const params = statusFilter ? { status: statusFilter } : undefined
   const { data, isLoading } = usePromotions({
-    ...(params ?? {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(search ? { search } : {}),
     page: parseInt(pagination.paginationParams.page),
     limit: parseInt(pagination.paginationParams.limit),
   })
 
-  const filtered = (data?.items ?? []).filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.code.toLowerCase().includes(search.toLowerCase()),
-  )
+  const { data: activeStats } = usePromotions({ status: 'active', limit: 1 })
 
   const isDefaultFilters = statusFilter === '' && search === ''
 
@@ -457,10 +454,10 @@ function PromotionsPageContent() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {filtered.length === 0 && (
+                {(data?.items ?? []).length === 0 && (
                   <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Nenhuma promoção encontrada para os filtros selecionados.</td></tr>
                 )}
-                {filtered.map((promo) => (
+                {(data?.items ?? []).map((promo) => (
                   <>
                     <tr key={promo.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3">
@@ -587,7 +584,7 @@ function PromotionsPageContent() {
           <div>
             <p className="text-muted-foreground">Ativos</p>
             <p className="text-lg font-semibold text-green-600">
-              {data.items.filter((p) => p.status === 'active').length}
+              {activeStats?.total ?? 0}
             </p>
           </div>
           <div>
