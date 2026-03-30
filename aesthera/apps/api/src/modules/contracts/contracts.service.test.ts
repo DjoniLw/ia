@@ -428,7 +428,7 @@ describe('ContractsService.signRemote()', () => {
       CONTRACT_ID,
       expect.objectContaining({
         status: 'signed',
-        signatureMode: 'manual',
+        signatureMode: 'remote',
         signerIp: '10.0.0.1',
         signerUserAgent: 'Mozilla/5.0 (Mobile)',
         signerCpf: '123.456.789-00',
