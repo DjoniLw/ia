@@ -585,11 +585,11 @@ export default function ReportsPage() {
                           <td className="hidden sm:table-cell px-5 py-3 text-right text-muted-foreground">{formatCurrency(p.price)}</td>
                           <td className="px-5 py-3 text-center">
                             {p.stock === 0 ? (
-                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Sem estoque</span>
+                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">Sem estoque</span>
                             ) : p.minStock > 0 && p.stock <= p.minStock ? (
-                              <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">Baixo</span>
+                              <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300">Baixo</span>
                             ) : (
-                              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">OK</span>
+                              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">OK</span>
                             )}
                           </td>
                         </tr>

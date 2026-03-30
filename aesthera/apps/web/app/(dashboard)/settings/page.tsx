@@ -575,12 +575,12 @@ function AnamnesisConfigTab({
                             <div className="flex items-center gap-2">
                               <GripVertical className="text-muted-foreground/50 h-4 w-4 shrink-0 cursor-grab active:cursor-grabbing" />
                               <span className="text-foreground flex-1 text-sm">{q.text}</span>
-                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                                 {TYPE_LABEL[q.type]}
                               </span>
                               <button
                                 onClick={() => toggleRequired(group.id, q.id)}
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
                               >
                                 {q.required ? 'Obrigatório' : 'Opcional'}
                               </button>
@@ -768,7 +768,7 @@ function AnamnesisConfigTab({
                                         >
                                           <span className="flex-1 text-xs">{opt.label}</span>
                                           {opt.withDescription && (
-                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                                               com descrição
                                             </span>
                                           )}

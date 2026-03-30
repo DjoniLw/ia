@@ -298,14 +298,14 @@ export default function DashboardPage() {
               <Cake className="h-4 w-4 text-pink-500" />
             </div>
             <h3 className="text-sm font-semibold text-foreground">Aniversariantes</h3>
-            <span className="ml-auto rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-700">
+            <span className="ml-auto rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-700 dark:bg-pink-900/40 dark:text-pink-300">
               próximos 7 dias
             </span>
           </div>
           <div className="divide-y">
             {birthdays.data?.items.map((b) => (
               <div key={b.id} className="flex items-center gap-4 px-5 py-3">
-                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${b.isToday ? 'bg-pink-500 text-white' : 'bg-pink-100 text-pink-700'}`}>
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${b.isToday ? 'bg-pink-500 text-white' : 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300'}`}>
                   {b.isToday ? '🎂' : b.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
