@@ -330,8 +330,8 @@ function ProductsPageContent() {
   // URL sync
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString())
-    if (productSearch) p.set('q', productSearch) else p.delete('q')
-    if (productStatusFilter !== 'all') p.set('status', productStatusFilter) else p.delete('status')
+    productSearch ? p.set('q', productSearch) : p.delete('q')
+    productStatusFilter !== 'all' ? p.set('status', productStatusFilter) : p.delete('status')
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, searchParams, productSearch, productStatusFilter])
 

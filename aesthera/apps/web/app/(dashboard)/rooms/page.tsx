@@ -282,8 +282,8 @@ function RoomsPageContent() {
   // URL sync
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString())
-    if (search) p.set('search', search) else p.delete('search')
-    if (statusFilter !== 'all') p.set('status', statusFilter) else p.delete('status')
+    search ? p.set('search', search) : p.delete('search')
+    statusFilter !== 'all' ? p.set('status', statusFilter) : p.delete('status')
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, searchParams, search, statusFilter])
 

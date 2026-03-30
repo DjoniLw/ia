@@ -406,11 +406,11 @@ function ContasAPagarPageContent() {
   // URL sync
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString())
-    if (statusFilter) p.set('status', statusFilter) else p.delete('status')
-    if (supplierSearch) p.set('supplier', supplierSearch) else p.delete('supplier')
-    if (categoryFilter) p.set('category', categoryFilter) else p.delete('category')
-    if (fromFilter) p.set('from', fromFilter) else p.delete('from')
-    if (toFilter) p.set('to', toFilter) else p.delete('to')
+    statusFilter ? p.set('status', statusFilter) : p.delete('status')
+    supplierSearch ? p.set('supplier', supplierSearch) : p.delete('supplier')
+    categoryFilter ? p.set('category', categoryFilter) : p.delete('category')
+    fromFilter ? p.set('from', fromFilter) : p.delete('from')
+    toFilter ? p.set('to', toFilter) : p.delete('to')
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, searchParams, statusFilter, supplierSearch, categoryFilter, fromFilter, toFilter])
 

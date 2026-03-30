@@ -208,9 +208,9 @@ function SalesPageContent() {
   // URL sync
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString())
-    if (from !== defaultFrom) p.set('from', from) else p.delete('from')
-    if (to !== defaultTo) p.set('to', to) else p.delete('to')
-    if (search) p.set('search', search) else p.delete('search')
+    from !== defaultFrom ? p.set('from', from) : p.delete('from')
+    to !== defaultTo ? p.set('to', to) : p.delete('to')
+    search ? p.set('search', search) : p.delete('search')
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, searchParams, from, to, search, defaultFrom, defaultTo])
 

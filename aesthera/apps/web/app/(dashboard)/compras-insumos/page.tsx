@@ -419,7 +419,7 @@ function SupplyPurchasesPageContent() {
   // URL sync
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString())
-    if (supplierFilter.trim()) p.set('supplier', supplierFilter.trim()) else p.delete('supplier')
+    supplierFilter.trim() ? p.set('supplier', supplierFilter.trim()) : p.delete('supplier')
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, searchParams, supplierFilter])
 
