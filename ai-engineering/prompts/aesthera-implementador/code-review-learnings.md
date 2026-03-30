@@ -137,6 +137,49 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: **toda** operação de escrita em tabelas multi-tenant (`update`, `delete`, `updateMany`) deve incluir `clinicId` no `where`. O `id` isolado não é suficiente — é uma superfície de IDOR. Se `updateMany` retornar `count === 0`, o registro não pertence ao tenant → lançar `NotFoundException`
   - 📅 Aprendido em: 25/03/2026 — revisão de repositórios Prisma sem filtro de tenant em operações de update
 
+- [ ] **`clinicId` nunca deve ser descartado no nível do repositório — defesa em profundidade exige `clinicId` no `WHERE` em toda camada**
+  - 🔴 Anti-padrão: receber `clinicId` como parâmetro no método do repositório e ignorá-lo (ex.: `_clinicId: string`) confiando que a service já faz o isolamento upstream. Se a service for chamada por outro ponto sem `clinicId`, o repositório não oferece nenhuma barreira
+  - ✅ Correto: o repositório **sempre** inclui `clinicId` no `WHERE`, independentemente de a service também fazê-lo. A validação é redundante por design:
+    ```ts
+    // Errado — clinicId recebido mas ignorado
+    async findById(_clinicId: string, id: string) {
+      return this.prisma.document.findUnique({ where: { id } });
+    }
+
+    // Correto — clinicId aplicado na query
+    async findById(clinicId: string, id: string) {
+      return this.prisma.document.findFirst({ where: { id, clinicId } });
+    }
+    ```
+  - 📌 Regra geral: prefixar um parâmetro com `_` significa que ele é recebido mas não usado — em repositórios multi-tenant isso é sempre um bug de segurança. Nunca usar `_clinicId` em métodos de repositórios de dados que pertencem a uma clínica.
+  - 📌 Defesa em profundidade: service filtra por tenant → repositório filtra por tenant → query retorna apenas dados do tenant correto. Se qualquer camada falhar, a outra ainda protege.
+  - 📅 Aprendido em: 30/03/2026 — revisão de assinatura remota por link (PR #136): repositório `remote-sign` descartava `clinicId` com `_clinicId`
+
+- [ ] **Webhook secret deve causar falha explícita se não configurado — nunca usar condicional `if (expected && ...)` que desabilita silenciosamente a proteção**
+  - 🔴 Anti-padrão: validar o webhook secret com `if (expected && received !== expected)` — quando `expected` é `undefined` (variável de ambiente não configurada), a condição inteira é `false` e **qualquer requisição passa sem autenticação**:
+    ```ts
+    // INSEGURO — variável não configurada desabilita proteção
+    const expected = process.env.WEBHOOK_SECRET;
+    if (expected && req.headers['x-signature'] !== expected) {
+      throw new UnauthorizedException();
+    }
+    ```
+  - ✅ Correto: aplicar o padrão **fail-fast** — se o secret não estiver configurado, recusar todas as requisições e registrar o erro de configuração:
+    ```ts
+    // SEGURO — fail-fast: secret ausente = nenhuma requisição passa
+    const expected = process.env.WEBHOOK_SECRET;
+    if (!expected) {
+      // Erro de configuração crítico — bloquear e logar
+      throw new InternalServerErrorException('WEBHOOK_SECRET não configurado');
+    }
+    if (req.headers['x-signature'] !== expected) {
+      throw new UnauthorizedException('Assinatura de webhook inválida');
+    }
+    ```
+  - 📌 Regra geral: qualquer verificação de segurança que depende de uma variável de ambiente deve **falhar explicitamente** quando a variável estiver ausente — nunca tratar ausência como "skip". O sistema deve ser seguro por padrão (secure by default).
+  - 📌 Aplica-se a: webhook secrets, chaves de API de terceiros (pagamentos, notificações, WhatsApp), tokens de integração, segredos de HMAC.
+  - 📅 Aprendido em: 30/03/2026 — revisão de assinatura remota por link (PR #136): handler de callback de assinatura permitia requests sem secret quando `WEBHOOK_SECRET` não estava no env
+
 ---
 
 ## Frontend
@@ -448,3 +491,5 @@ Se a resposta for não → revise antes de prosseguir.
 | 25/03/2026 | — | 4 padrões adicionados pelo treinador-agent (issue #124 — revisão transversal de filtros): (1) `<select>` para entidades cadastradas é BLOQUEANTE — usar `<ComboboxSearch>`; (2) `<select>` para status fixo → corrigir para pills; (3) legenda descritiva + botão "Restaurar padrão" obrigatórios em toda tela com filtros; (4) URL sync via `useSearchParams` em filtros de telas financeiras |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: após abrir qualquer PR, adicionar cenários de teste manual como comentário (não no corpo) via `mcp_github_add_issue_comment` — tabela Markdown por área (Settings, Ficha do Cliente, API/Multi-tenancy, Scripts) com colunas #, Cenário, Resultado esperado; cobrir fluxo feliz, casos de borda, permissões por papel e estados vazios/negativos |
 | 29/03/2026 | — | 1 padrão adicionado pelo treinador-agent: upload de recursos de empresa (não por cliente) usa caminho `templates/{clinicId}/{uuid}.ext` via presign customizado no módulo — nunca usar o fluxo `CustomerFile` que exige `customerId`; convenção de prefixos de storage: `customers/` para arquivos de cliente, `templates/` para templates de empresa, `clinic/` para recursos gerais da clínica |
+| 29/03/2026 | — | 2 padrões adicionados pelo treinador-agent (levantamento UX transversal — 15 telas de listagem): (1) filtragem client-side com `.filter()` sobre array local é anti-padrão — qualquer mudança de filtro deve disparar nova requisição à API com parâmetros de query; (2) toda nova tela de listagem deve incluir `<DataPagination>` e `usePaginatedQuery` com URL sync desde a primeira implementação — nunca usar `limit` hardcoded |
+| 30/03/2026 | PR #136 | 2 padrões adicionados pelo treinador-agent (revisão de assinatura remota por link): (1) `_clinicId` em repositório multi-tenant é bug de segurança — `clinicId` deve sempre estar no `WHERE`, defesa em profundidade exige isolamento em toda camada; (2) webhook secret condicional com `if (expected && ...)` desabilita proteção silenciosamente quando env não configurado — usar fail-fast: lançar erro se secret ausente, nunca skip |
