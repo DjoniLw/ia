@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -1021,7 +1021,7 @@ function SignatureCanvas({
 }
 
 function ContractsTab({ customer }: { customer: Customer }) {
-  const { data: contracts = [], isLoading } = useCustomerContracts(customer.id)
+  const { data: contracts = [], isLoading, isFetching, refetch } = useCustomerContracts(customer.id)
   const { data: templates = [] } = useContractTemplates()
   const activeTemplates = templates.filter((t) => t.active)
 
@@ -1180,6 +1180,16 @@ function ContractsTab({ customer }: { customer: Customer }) {
           Contratos
         </p>
         <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Atualizar contratos"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            <span className="ml-1.5">Atualizar</span>
+          </Button>
           <Button
             size="sm"
             variant="outline"

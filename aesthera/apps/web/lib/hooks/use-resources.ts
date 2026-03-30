@@ -734,6 +734,8 @@ export function useCustomerContracts(customerId: string) {
     queryKey: ['customer-contracts', customerId],
     queryFn: () => api.get(`/customers/${customerId}/contracts`).then((r) => r.data),
     enabled: !!customerId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
   })
 }
 

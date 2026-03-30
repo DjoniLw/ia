@@ -298,6 +298,15 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
   - **routes:** `req.log` (logger por-request do Fastify/Pino) passado como 6º argumento a `updateSession`, mantendo rastreabilidade de request ID.
 - **Impacto:** Apenas backend. Sem migração de schema. Após deploy, os logs do Railway revelarão a causa exata do 403.
 
+### [2026-03-30] — feat(#138): atualização em tempo real do status do contrato + botão de refresh
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/lib/hooks/use-resources.ts` *(useCustomerContracts atualizado)*
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(botão Atualizar + ícone RefreshCw)*
+- **O que foi feito:**
+  - `useCustomerContracts` agora usa `staleTime: 30_000` (30s) e `refetchOnWindowFocus: true` — ao voltar para a aba, a query é recarregada automaticamente.
+  - Botão **Atualizar** (ícone `RefreshCw`, variant `ghost`, size `sm`) adicionado no cabeçalho da seção de contratos da ficha do cliente — chama `refetch()` e exibe `animate-spin` enquanto `isFetching` for `true`.
+- **Impacto:** Frontend apenas — módulo Contratos na ficha do cliente. Sem alteração de backend.
+
 ### [2026-03-29] — feat(#133): assinatura remota por link — cliente assina pelo celular via WhatsApp
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/api/prisma/schema.prisma` *(2 novos campos em `CustomerContract`: `signToken`, `signTokenExpiresAt`)*
