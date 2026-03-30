@@ -265,6 +265,34 @@ Se a resposta for não → revise antes de prosseguir.
 
 ---
 
+- [ ] **Ao migrar para paginação server-side, toda busca/filtro textual também deve ser migrada — nunca aplicar `.filter()` client-side sobre `data?.items` paginados**
+  - 🔴 Anti-padrão: migrar a paginação para server-side mas manter o campo de busca textual filtrando client-side sobre o array `data?.items` — o filtro só vê os registros da página atual, não o dataset completo. Com 500 registros e `pageSize=20`, uma busca retorna no máximo 20 resultados em vez de pesquisar os 500:
+    ```tsx
+    // ERRADO — filtra apenas os 20 da página atual
+    const visible = data?.items.filter(item =>
+      item.name.toLowerCase().includes(search.toLowerCase())
+    );
+    ```
+  - ✅ Correto: incluir o `search` como parâmetro da query ao servidor, junto com `page` e `pageSize`. Ao alterar o campo de busca, resetar `page` para 1:
+    ```tsx
+    // CORRETO — busca no servidor, sobre o dataset completo
+    const { data } = useQuery({
+      queryKey: ['resource', { search, page, pageSize }],
+      queryFn: () => api.get('/resource', { params: { search, page, limit: pageSize } }),
+    });
+
+    // Handler do input de busca
+    function handleSearchChange(value: string) {
+      setSearch(value);
+      setPage(1); // reset obrigatório ao alterar busca
+    }
+    ```
+  - 📌 Regra geral: **se a lista é paginada pelo servidor, qualquer filtro ou busca que precise operar sobre o dataset completo também deve ser enviado ao servidor**. Client-side filter sobre `items` paginados é sempre incorreto — é um falso filtro que apenas restringe o subconjunto visível na página.
+  - 📌 Checklist de migração para server-side: (1) paginação → server-side ✅, (2) busca textual → server-side ✅, (3) filtros de status/tipo → server-side ✅, (4) ordenação → server-side ✅. Todos ou nenhum.
+  - 📅 Aprendido em: 30/03/2026 — revisão de PR #141 (paginação server-side): busca textual ficou client-side sobre `data?.items`, tornando a pesquisa ineficaz quando havia mais de uma página de resultados
+
+---
+
 ### Textos e Internacionalização (PT-BR)
 
 - [ ] **Arquivos `.tsx` com acentuação PT-BR devem ser salvos em UTF-8 sem BOM — verificar antes de commitar no Windows**
