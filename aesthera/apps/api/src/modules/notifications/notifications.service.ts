@@ -51,7 +51,15 @@ export class NotificationsService {
       billingId: input.billingId,
     })
 
-    const { evolutionUrl, evolutionApiKey, evolutionInstance } = appConfig.whatsapp
+    const { evolutionUrl, evolutionApiKey, evolutionInstance: globalInstance } = appConfig.whatsapp
+
+    // Instância da clínica tem prioridade sobre a global
+    const clinic = await prisma.clinic.findUnique({
+      where: { id: input.clinicId },
+      select: { whatsappInstance: true },
+    })
+    const evolutionInstance = clinic?.whatsappInstance ?? globalInstance
+
     if (!evolutionUrl || !evolutionApiKey || !evolutionInstance) {
       logger.warn({ event: input.event }, 'WhatsApp not configured, skipping send')
       await this.repo.markFailed(log.id, 'WHATSAPP_NOT_CONFIGURED', 1)

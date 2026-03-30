@@ -863,3 +863,50 @@ export function useTestSmtpSettings() {
     mutationFn: () => api.post('/clinics/me/smtp/test').then((r) => r.data),
   })
 }
+
+// ─── WhatsApp por clínica ──────────────────────────────────────────────────────
+
+export interface WhatsappSettings {
+  instance: string | null
+  connected: boolean
+  configured: boolean
+}
+
+export interface WhatsappQrCode {
+  base64: string | null
+  code: string | null
+}
+
+export function useWhatsappSettings() {
+  return useQuery<WhatsappSettings>({
+    queryKey: ['clinic-whatsapp'],
+    queryFn: () => api.get('/clinics/me/whatsapp').then((r) => r.data),
+  })
+}
+
+export function useUpdateWhatsappInstance() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { whatsappInstance: string | null }) =>
+      api.put('/clinics/me/whatsapp', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinic-whatsapp'] }),
+  })
+}
+
+export function useWhatsappQrCode(enabled: boolean) {
+  return useQuery<WhatsappQrCode>({
+    queryKey: ['clinic-whatsapp-qrcode'],
+    queryFn: () => api.get('/clinics/me/whatsapp/qrcode').then((r) => r.data),
+    enabled,
+    refetchInterval: 30_000, // recarrega a cada 30s para pegar novo QR se expirar
+    staleTime: 0,
+  })
+}
+
+export function useDisconnectWhatsapp() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.delete('/clinics/me/whatsapp/disconnect').then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinic-whatsapp'] }),
+  })
+}

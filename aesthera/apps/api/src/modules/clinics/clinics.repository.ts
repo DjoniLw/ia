@@ -1,4 +1,4 @@
-import type { UpdateClinicDto, UpdateSmtpSettingsDto } from './clinics.dto'
+import type { UpdateClinicDto, UpdateSmtpSettingsDto, UpdateWhatsappSettingsDto } from './clinics.dto'
 import { prisma } from '../../database/prisma/client'
 import type { PaymentMethodConfigShape } from './payment-method-config'
 
@@ -87,6 +87,13 @@ export class ClinicsRepository {
         ...data,
         updatedAt: new Date(),
       },
+    })
+  }
+
+  async updateWhatsapp(clinicId: string, data: Pick<UpdateWhatsappSettingsDto, 'whatsappInstance'>) {
+    return prisma.clinic.update({
+      where: { id: clinicId },
+      data: { whatsappInstance: data.whatsappInstance ?? null, updatedAt: new Date() },
     })
   }
 

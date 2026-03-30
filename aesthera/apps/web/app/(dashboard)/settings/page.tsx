@@ -34,6 +34,7 @@ import { UsersTab } from './_components/users-tab'
 import { BodyMeasurementsTab } from './_components/body-measurements-tab'
 import { ContractTemplatesTab } from './_components/contract-templates-tab'
 import { EmailTab } from './_components/email-tab'
+import { WhatsAppTab } from './_components/whatsapp-tab'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -902,111 +903,6 @@ function AnamnesisConfigTab({
   )
 }
 
-function WhatsAppAutomationTab() {
-  const [enabled, setEnabled] = useState(false)
-  const [sendTime, setSendTime] = useState('09:00')
-  const [template, setTemplate] = useState(
-    'Olá {nome}! 🎉\nA equipe da clínica deseja um feliz aniversário!\nComo presente, você ganhou {benefício}.\nEstamos aqui para te receber com muito carinho! 💜',
-  )
-  const [saved, setSaved] = useState(false)
-
-  function handleSave() {
-    // In a full implementation, this would save to backend
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
-  }
-
-  return (
-    <div className="mt-6 space-y-6">
-      {/* Birthday Automation */}
-      <div className="bg-card rounded-xl border p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold">Automação de Aniversários</h3>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Envie mensagens automáticas de feliz aniversário via WhatsApp para seus clientes.
-            </p>
-          </div>
-          <button
-            onClick={() => setEnabled(!enabled)}
-            className={[
-              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none',
-              enabled ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700',
-            ].join(' ')}
-          >
-            <span
-              className={[
-                'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
-                enabled ? 'translate-x-6' : 'translate-x-1',
-              ].join(' ')}
-            />
-          </button>
-        </div>
-
-        {enabled && (
-          <div className="mt-6 space-y-4 border-t pt-4">
-            <div className="space-y-2">
-              <Label>Horário de envio</Label>
-              <input
-                type="time"
-                value={sendTime}
-                onChange={(e) => setSendTime(e.target.value)}
-                className="bg-background text-foreground focus:ring-primary rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
-              />
-              <p className="text-muted-foreground text-xs">
-                O sistema enviará mensagens neste horário para todos os aniversariantes do dia.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Template da mensagem</Label>
-              <p className="text-muted-foreground text-xs">
-                Use <code className="bg-muted rounded px-1 py-0.5 font-mono">{'{nome}'}</code> para
-                o nome do cliente e{' '}
-                <code className="bg-muted rounded px-1 py-0.5 font-mono">{'{benefício}'}</code> para
-                um benefício personalizado.
-              </p>
-              <textarea
-                value={template}
-                onChange={(e) => setTemplate(e.target.value)}
-                rows={5}
-                className="bg-background text-foreground focus:ring-primary w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
-              />
-              <p className="text-muted-foreground text-xs">Prévia para "Maria":</p>
-              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm whitespace-pre-wrap text-green-900 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-300">
-                {template
-                  .replace('{nome}', 'Maria')
-                  .replace('{benefício}', '10% de desconto no próximo tratamento')}
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={handleSave} size="sm">
-                {saved ? '✓ Salvo!' : 'Salvar configurações'}
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Integration note */}
-      <div className="bg-card rounded-xl border p-6 shadow-sm">
-        <h3 className="text-base font-semibold">Integração WhatsApp</h3>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Para envios automáticos, configure uma integração com Z-API ou Evolution API. Defina a
-          variável de ambiente{' '}
-          <code className="bg-muted mx-1 rounded px-1 py-0.5 font-mono text-xs">ZAPI_TOKEN</code> no
-          serviço de API.
-        </p>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Sem integração configurada, os envios funcionam como links de WhatsApp (abertura manual
-          pelo celular).
-        </p>
-      </div>
-    </div>
-  )
-}
-
 function AiIntegrationsTab() {
   return (
     <div className="mt-6 space-y-6">
@@ -1203,7 +1099,7 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="whatsapp">
-          <WhatsAppAutomationTab />
+          <WhatsAppTab />
         </TabsContent>
 
         <TabsContent value="anamnesis">

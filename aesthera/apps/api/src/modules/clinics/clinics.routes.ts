@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
-import { SetBusinessHoursDto, UpdateClinicDto, UpdatePaymentMethodConfigDto, UpdateSmtpSettingsDto } from './clinics.dto'
+import { SetBusinessHoursDto, UpdateClinicDto, UpdatePaymentMethodConfigDto, UpdateSmtpSettingsDto, UpdateWhatsappSettingsDto } from './clinics.dto'
 import { ClinicsService } from './clinics.service'
 
 export async function clinicsRoutes(app: FastifyInstance) {
@@ -100,6 +100,45 @@ export async function clinicsRoutes(app: FastifyInstance) {
     { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
     async (request, reply) => {
       return reply.send(await service.testSmtpSettings(request.clinicId))
+    },
+  )
+
+  // ─── WhatsApp por clínica ──────────────────────────────────────────────────
+
+  // GET /clinics/me/whatsapp
+  app.get(
+    '/clinics/me/whatsapp',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (request, reply) => {
+      return reply.send(await service.getWhatsappSettings(request.clinicId))
+    },
+  )
+
+  // PUT /clinics/me/whatsapp
+  app.put(
+    '/clinics/me/whatsapp',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (request, reply) => {
+      const dto = UpdateWhatsappSettingsDto.parse(request.body)
+      return reply.send(await service.updateWhatsappInstance(request.clinicId, dto))
+    },
+  )
+
+  // GET /clinics/me/whatsapp/qrcode
+  app.get(
+    '/clinics/me/whatsapp/qrcode',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (request, reply) => {
+      return reply.send(await service.getWhatsappQrCode(request.clinicId))
+    },
+  )
+
+  // DELETE /clinics/me/whatsapp/disconnect
+  app.delete(
+    '/clinics/me/whatsapp/disconnect',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (request, reply) => {
+      return reply.send(await service.disconnectWhatsapp(request.clinicId))
     },
   )
 }
