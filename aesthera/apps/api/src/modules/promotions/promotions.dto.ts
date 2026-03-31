@@ -12,13 +12,13 @@ export const CreatePromotionDto = z.object({
   description: z.string().optional(),
   discountType: z.enum(['PERCENTAGE', 'FIXED']),
   discountValue: z.number().int().positive(),
-  maxUses: z.number().int().positive().optional(),
+  maxUses: z.number().int().positive().optional().nullable(),
   maxUsesPerCustomer: z.number().int().positive().optional().nullable(),
-  minAmount: z.number().int().min(0).optional(),
+  minAmount: z.number().int().min(0).optional().nullable(),
   applicableServiceIds: z.array(z.string().uuid()).default([]),
   applicableProductIds: z.array(z.string().uuid()).default([]),
   validFrom: z.string().min(1).transform(dateTransform).pipe(z.string().datetime()),
-  validUntil: z.string().min(1).transform(dateUntilTransform).pipe(z.string().datetime()).optional(),
+  validUntil: z.string().min(1).transform(dateUntilTransform).pipe(z.string().datetime()).optional().nullable(),
 })
 export type CreatePromotionDto = z.infer<typeof CreatePromotionDto>
 
@@ -28,6 +28,7 @@ export const UpdatePromotionDto = z.object({
   status: z.enum(['active', 'inactive']).optional(),
   maxUses: z.number().int().positive().optional().nullable(),
   maxUsesPerCustomer: z.number().int().positive().optional().nullable(),
+  minAmount: z.number().int().min(0).optional().nullable(),
   applicableServiceIds: z.array(z.string().uuid()).optional(),
   applicableProductIds: z.array(z.string().uuid()).optional(),
   validUntil: z.string().min(1).transform(dateUntilTransform).pipe(z.string().datetime()).optional().nullable(),

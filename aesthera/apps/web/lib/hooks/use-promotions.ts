@@ -54,6 +54,7 @@ export interface UpdatePromotionInput {
   status?: PromotionStatus
   maxUses?: number | null
   maxUsesPerCustomer?: number | null
+  minAmount?: number | null
   validUntil?: string | null
 }
 

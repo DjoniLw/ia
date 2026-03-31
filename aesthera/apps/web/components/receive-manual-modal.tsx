@@ -358,7 +358,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
         </div>
 
         {/* Total & diff */}
-        <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-sm">
+        <div className={`rounded-lg border p-3 space-y-1 text-sm transition-colors ${appliedCoupon ? 'border-green-300 bg-green-50 dark:border-green-800/60 dark:bg-green-950/40' : 'bg-muted/20'}`}>
           {appliedCoupon && (
             <div className="flex justify-between text-muted-foreground">
               <span>Valor original</span>
@@ -366,11 +366,12 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
             </div>
           )}
           {appliedCoupon && (
-            <div className="flex justify-between text-green-600">
-              <span>Desconto ({appliedCoupon.code})</span>
+            <div className="flex justify-between font-medium text-green-700 dark:text-green-400">
+              <span>🏷 Desconto cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span></span>
               <span className="font-semibold">- {formatCurrency(appliedCoupon.discountAmount)}</span>
             </div>
           )}
+          {appliedCoupon && <div className="border-t border-green-200 dark:border-green-800/50 pt-1 mt-1" />}
           <div className="flex justify-between">
             <span className="text-muted-foreground">{appliedCoupon ? 'Valor a pagar' : 'Total informado'}</span>
             <span className="font-semibold">{formatCurrency(appliedCoupon ? effectiveAmount : totalPaid)}</span>

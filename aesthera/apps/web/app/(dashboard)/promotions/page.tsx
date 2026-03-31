@@ -95,6 +95,7 @@ function PromotionModal({
           status,
           maxUses: maxUses ? Number(maxUses) : null,
           maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
+          minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
           validUntil: validUntil || null,
         }
         await updateMutation.mutateAsync(dto)
@@ -231,20 +232,18 @@ function PromotionModal({
               />
             </div>
 
-            {!editing && (
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Valor mínimo (R$)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={minAmount}
-                  onChange={(e) => setMinAmount(e.target.value)}
-                  placeholder="Sem mínimo"
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            )}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Valor mínimo (R$)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                placeholder="Sem mínimo"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -276,15 +275,23 @@ function PromotionModal({
           {editing && (
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PromotionStatus)}
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="active">Ativo</option>
-                <option value="inactive">Inativo</option>
-                <option value="expired">Expirado</option>
-              </select>
+              <div className="flex gap-2">
+                {(['active', 'inactive'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatus(s)}
+                    className={[
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      status === s
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                    ].join(' ')}
+                  >
+                    {s === 'active' ? 'Ativo' : 'Inativo'}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
