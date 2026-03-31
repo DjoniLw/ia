@@ -13,7 +13,7 @@ import {
   type ManualReceiptPaymentMethod,
   type OverpaymentHandlingType,
 } from '@/lib/hooks/use-appointments'
-import { useValidatePromotion } from '@/lib/hooks/use-promotions'
+import { useValidatePromotion, useActivePromotionsForService } from '@/lib/hooks/use-promotions'
 import type { Billing } from '@/lib/hooks/use-appointments'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
@@ -219,6 +219,11 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null)
   const validatePromotion = useValidatePromotion()
 
+  // Auto-detect active promotions for the service being billed
+  const serviceId = billing.appointment?.service?.id ?? ''
+  const { data: servicePromotions } = useActivePromotionsForService(serviceId, open && !!serviceId && !appliedCoupon)
+  const suggestedPromotion = servicePromotions?.[0] ?? null
+
   const receive = useCreateManualReceipt(billing.id)
 
   const totalPaid = lines.reduce((sum, l) => sum + parseCurrencyInput(l.amountStr), 0)
@@ -402,6 +407,40 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
         {/* Coupon / Promotion Code */}
         <div>
           <Label className="mb-1.5 block">Cupom de desconto</Label>
+
+          {/* Suggested promotion banner */}
+          {suggestedPromotion && !appliedCoupon && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs dark:border-blue-800/50 dark:bg-blue-950/30">
+              <span className="text-blue-800 dark:text-blue-300">
+                🏷 Promoção disponível para este serviço:{' '}
+                <span className="font-mono font-semibold">{suggestedPromotion.code}</span>
+                {' — '}
+                {suggestedPromotion.discountType === 'PERCENTAGE'
+                  ? `${suggestedPromotion.discountValue}%`
+                  : formatCurrency(suggestedPromotion.discountValue)}{' '}
+                de desconto
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setCouponInput(suggestedPromotion.code)
+                  void validatePromotion.mutateAsync({
+                    code: suggestedPromotion.code,
+                    billingAmount: billing.amount,
+                    serviceIds: serviceId ? [serviceId] : [],
+                    customerId: billing.customer.id,
+                  }).then((r) => {
+                    setAppliedCoupon({ code: suggestedPromotion.code, discountAmount: r.discountAmount })
+                    toast.success(`Cupom aplicado! Desconto de ${formatCurrency(r.discountAmount)}`)
+                  }).catch(() => toast.error('Não foi possível aplicar a promoção'))
+                }}
+                className="shrink-0 rounded-full border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+              >
+                Aplicar
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <Input
               value={couponInput}

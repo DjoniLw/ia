@@ -56,6 +56,8 @@ export interface UpdatePromotionInput {
   maxUsesPerCustomer?: number | null
   minAmount?: number | null
   validUntil?: string | null
+  applicableServiceIds?: string[]
+  applicableProductIds?: string[]
 }
 
 export interface ValidatePromotionResult {
@@ -121,6 +123,16 @@ export function useActivePromotionsForService(serviceId: string, enabled = true)
     queryFn: () =>
       api.get('/promotions', { params: { serviceId, status: 'active' } }).then((r) => r.data?.items ?? []),
     enabled: !!serviceId && enabled,
+    staleTime: 30_000,
+  })
+}
+
+export function useActivePromotionsForProduct(productId: string, enabled = true) {
+  return useQuery<Promotion[]>({
+    queryKey: ['promotions-for-product', productId],
+    queryFn: () =>
+      api.get(`/promotions/active-for-product/${productId}`).then((r) => r.data),
+    enabled: !!productId && enabled,
     staleTime: 30_000,
   })
 }

@@ -54,6 +54,19 @@ export class PromotionsRepository {
     })
   }
 
+  async findActiveForProduct(clinicId: string, productId: string) {
+    return prisma.promotion.findMany({
+      where: {
+        clinicId,
+        status: 'active',
+        applicableProductIds: { has: productId },
+        validFrom: { lte: new Date() },
+        OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+      },
+      orderBy: { discountValue: 'desc' },
+    })
+  }
+
   async create(clinicId: string, dto: CreatePromotionDto) {
     return prisma.promotion.create({
       data: {

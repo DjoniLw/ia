@@ -44,6 +44,10 @@ export class PromotionsService {
     return this.repo.findActiveForService(clinicId, serviceId)
   }
 
+  async findActiveForProduct(clinicId: string, productId: string) {
+    return this.repo.findActiveForProduct(clinicId, productId)
+  }
+
   /**
    * Validate a promotion code and return the discount amount.
    * Throws descriptive PT-BR errors for authenticated users.
@@ -55,6 +59,7 @@ export class PromotionsService {
     serviceIds: string[],
     customerId?: string,
     isPackageSale = false,
+    productIds: string[] = [],
   ): Promise<{ promotion: NonNullable<Awaited<ReturnType<PromotionsRepository['findByCode']>>>; discountAmount: number }> {
     const promotion = await this.repo.findByCode(clinicId, code)
     if (!promotion) throw new AppError('Cupom não encontrado.', 404, 'PROMOTION_NOT_FOUND')
@@ -105,7 +110,14 @@ export class PromotionsService {
         throw new AppError('Este cupom não é válido para este serviço.', 400, 'PROMOTION_SERVICE_MISMATCH')
       }
     }
-
+    // Check applicable products (if list is non-empty, at least one product must match)
+    // productIds is passed when validating during a product sale
+    if (promotion.applicableProductIds.length > 0 && productIds.length > 0) {
+      const hasMatch = productIds.some((id) => promotion.applicableProductIds.includes(id))
+      if (!hasMatch) {
+        throw new AppError('Este cupom não é válido para este produto.', 400, 'PROMOTION_PRODUCT_MISMATCH')
+      }
+    }
     let discountAmount: number
     if (promotion.discountType === 'PERCENTAGE') {
       discountAmount = Math.floor((billingAmount * promotion.discountValue) / 100)

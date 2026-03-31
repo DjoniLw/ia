@@ -9,6 +9,7 @@ import { DataPagination } from '@/components/ui/data-pagination'
 import { PROMOTION_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
+import { useServices, useProducts, type Service, type Product } from '@/lib/hooks/use-resources'
 import {
   type CreatePromotionInput,
   type Promotion,
@@ -71,6 +72,13 @@ function PromotionModal({
   )
   const [validUntil, setValidUntil] = useState(editing?.validUntil?.slice(0, 10) ?? '')
   const [status, setStatus] = useState<PromotionStatus>(editing?.status ?? 'active')
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(editing?.applicableServiceIds ?? [])
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>(editing?.applicableProductIds ?? [])
+
+  const { data: servicesData } = useServices({ active: 'true', limit: '200' })
+  const { data: productsData } = useProducts({ active: 'true', limit: '200' })
+  const services: Service[] = servicesData?.items ?? []
+  const products: Product[] = productsData?.items ?? []
 
   const createMutation = useCreatePromotion()
   const updateMutation = useUpdatePromotion(editing?.id ?? '')
@@ -87,6 +95,11 @@ function PromotionModal({
       return
     }
 
+    if (validUntil && validFrom && validUntil < validFrom) {
+      toast.error('"Válido até" não pode ser anterior a "Válido de"')
+      return
+    }
+
     try {
       if (editing) {
         const dto: UpdatePromotionInput = {
@@ -97,6 +110,8 @@ function PromotionModal({
           maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
           minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
           validUntil: validUntil || null,
+          applicableServiceIds: selectedServiceIds,
+          applicableProductIds: selectedProductIds,
         }
         await updateMutation.mutateAsync(dto)
         toast.success('Promoção atualizada')
@@ -110,6 +125,8 @@ function PromotionModal({
           maxUses: maxUses ? Number(maxUses) : null,
           maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
           minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
+          applicableServiceIds: selectedServiceIds,
+          applicableProductIds: selectedProductIds,
           validFrom: `${validFrom}T00:00:00.000Z`,
           validUntil: validUntil ? `${validUntil}T23:59:59.999Z` : null,
         }
@@ -291,6 +308,74 @@ function PromotionModal({
                     {s === 'active' ? 'Ativo' : 'Inativo'}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Serviços aplicáveis */}
+          {services.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Serviços aplicáveis
+                <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
+              </label>
+              <div className="flex flex-wrap gap-1.5 rounded-lg border bg-background p-2">
+                {services.map((s) => {
+                  const checked = selectedServiceIds.includes(s.id)
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedServiceIds((prev) =>
+                          checked ? prev.filter((id) => id !== s.id) : [...prev, s.id],
+                        )
+                      }
+                      className={[
+                        'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                        checked
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                      ].join(' ')}
+                    >
+                      {s.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Produtos aplicáveis */}
+          {products.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Produtos aplicáveis
+                <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
+              </label>
+              <div className="flex flex-wrap gap-1.5 rounded-lg border bg-background p-2">
+                {products.map((p) => {
+                  const checked = selectedProductIds.includes(p.id)
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedProductIds((prev) =>
+                          checked ? prev.filter((id) => id !== p.id) : [...prev, p.id],
+                        )
+                      }
+                      className={[
+                        'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                        checked
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                      ].join(' ')}
+                    >
+                      {p.name}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}

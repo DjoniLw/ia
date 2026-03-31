@@ -12,6 +12,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { type ProductSale, useCustomers, useProductSales, useProducts, useSellProduct } from '@/lib/hooks/use-resources'
+import { useActivePromotionsForProduct } from '@/lib/hooks/use-promotions'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
@@ -75,7 +76,19 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
 
   const selectedProduct = products?.items.find((p) => p.id === selectedProductId)
   const unitPrice = selectedProduct?.price ?? 0
-  const total = Math.max(0, unitPrice * quantity - Math.round((discount || 0) * 100))
+
+  // Auto-detect active promotions for the selected product
+  const { data: activePromotions } = useActivePromotionsForProduct(selectedProductId, !!selectedProductId)
+  const bestPromotion = activePromotions?.[0] ?? null
+  const promoDiscount = bestPromotion
+    ? bestPromotion.discountType === 'PERCENTAGE'
+      ? Math.floor((unitPrice * quantity * bestPromotion.discountValue) / 100)
+      : Math.min(bestPromotion.discountValue, unitPrice * quantity)
+    : 0
+
+  const manualDiscount = Math.round((discount || 0) * 100)
+  const appliedDiscount = promoDiscount > 0 ? promoDiscount : manualDiscount
+  const total = Math.max(0, unitPrice * quantity - appliedDiscount)
 
   async function onSubmit(data: SaleFormData) {
     try {
@@ -83,9 +96,11 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
         productId: data.productId,
         customerId: data.customerId || null,
         quantity: data.quantity,
-        discount: Math.min(Math.round((data.discount || 0) * 100), unitPrice * data.quantity),
+        discount: Math.min(appliedDiscount, unitPrice * data.quantity),
         paymentMethod: data.paymentMethod || null,
-        notes: data.notes || null,
+        notes: bestPromotion
+          ? `[Promoção: ${bestPromotion.code}]${data.notes ? ' ' + data.notes : ''}`
+          : data.notes || null,
       })
       toast.success('Venda registrada com sucesso!')
       onClose()
@@ -132,22 +147,37 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
       </div>
 
       {selectedProduct && (
-        <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatCurrency(unitPrice * quantity)}</span>
-          </div>
-          {discount > 0 && (
-            <div className="flex justify-between text-red-600">
-              <span>Desconto</span>
-              <span>- {formatCurrency(Math.round((discount || 0) * 100))}</span>
+        <>
+          {bestPromotion && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-800 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
+              <span>🏷</span>
+              <span>
+                Promoção <span className="font-mono font-semibold">{bestPromotion.code}</span> aplicada automaticamente —{' '}
+                {bestPromotion.discountType === 'PERCENTAGE'
+                  ? `${bestPromotion.discountValue}% de desconto`
+                  : `${formatCurrency(bestPromotion.discountValue)} de desconto`}
+              </span>
             </div>
           )}
-          <div className="mt-1 flex justify-between border-t pt-1 font-semibold">
-            <span>Total</span>
-            <span className="text-green-600">{formatCurrency(total)}</span>
+          <div className={`rounded-lg px-4 py-3 text-sm ${bestPromotion ? 'border border-green-200 bg-green-50/50 dark:border-green-900/40 dark:bg-green-950/20' : 'bg-muted/40'}`}>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span>{formatCurrency(unitPrice * quantity)}</span>
+            </div>
+            {appliedDiscount > 0 && (
+              <div className="flex justify-between font-medium text-green-700 dark:text-green-400">
+                <span>
+                  {bestPromotion ? `🏷 Desconto (${bestPromotion.code})` : 'Desconto'}
+                </span>
+                <span>- {formatCurrency(appliedDiscount)}</span>
+              </div>
+            )}
+            <div className="mt-1 flex justify-between border-t pt-1 font-semibold">
+              <span>Total</span>
+              <span className="text-green-600">{formatCurrency(total)}</span>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <div className="space-y-2">

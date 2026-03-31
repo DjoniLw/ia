@@ -55,6 +55,7 @@ export const ValidatePromotionDto = z.object({
   code: z.string().min(1),
   billingAmount: z.number().int().positive(),
   serviceIds: z.array(z.string().uuid()).default([]),
+  productIds: z.array(z.string().uuid()).default([]),
   customerId: z.string().uuid().optional(),
 })
 export type ValidatePromotionDto = z.infer<typeof ValidatePromotionDto>

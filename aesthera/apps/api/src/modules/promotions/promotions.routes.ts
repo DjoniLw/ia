@@ -101,6 +101,8 @@ export async function promotionsRoutes(app: FastifyInstance) {
         dto.billingAmount,
         dto.serviceIds,
         dto.customerId,
+        false,
+        dto.productIds,
       )
       return reply.send({ discountAmount: result.discountAmount })
     },
@@ -120,6 +122,15 @@ export async function promotionsRoutes(app: FastifyInstance) {
           customerId: extra.customerId,
         }),
       )
+    },
+  )
+
+  app.get(
+    '/promotions/active-for-product/:productId',
+    { preHandler: [jwtClinicGuard] },
+    async (req, reply) => {
+      const { productId } = req.params as { productId: string }
+      return reply.send(await svc.findActiveForProduct(req.clinicId, productId))
     },
   )
 }
