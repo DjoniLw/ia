@@ -2687,6 +2687,9 @@ function CustomersPageContent() {
                     {!c.active && (
                       <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Inativo</span>
                     )}
+                    {c.active && (
+                      <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900/40 dark:text-green-200">Ativo</span>
+                    )}
                   </div>
                 </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{c.email ?? '—'}</td>

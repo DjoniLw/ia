@@ -315,7 +315,7 @@ function SuppliesPageContent() {
                     {s.minStock > 0 && <span className="text-xs text-muted-foreground"> / mín {s.minStock}</span>}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${s.active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'}`}>
+                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${s.active ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' : 'bg-muted text-muted-foreground'}`}>
                       {s.active ? 'Ativo' : 'Inativo'}
                     </span>
                   </td>

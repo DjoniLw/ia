@@ -149,8 +149,10 @@ function RoomRow({ room, onEdit, onDelete }: { room: Room; onEdit: () => void; o
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {!room.active && (
+        {!room.active ? (
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Inativa</span>
+        ) : (
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-200">Ativa</span>
         )}
         <Button variant="ghost" size="sm" onClick={onEdit}>
           <Pencil className="h-3.5 w-3.5" />

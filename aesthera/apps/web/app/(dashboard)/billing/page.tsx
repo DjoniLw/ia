@@ -32,9 +32,9 @@ const STATUS_LABEL: Record<BillingStatus, string> = {
 }
 
 const STATUS_COLOR: Record<BillingStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200',
-  paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  overdue: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200',
+  paid: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  overdue: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
   cancelled: 'bg-muted text-muted-foreground',
 }
 

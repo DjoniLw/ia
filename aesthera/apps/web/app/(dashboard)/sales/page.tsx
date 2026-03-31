@@ -33,6 +33,13 @@ const PAYMENT_LABELS: Record<string, string> = {
   transfer: 'Transferência',
 }
 
+const PAYMENT_BADGE_COLORS: Record<string, string> = {
+  cash:     'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  pix:      'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  card:     'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+  transfer: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+}
+
 // ──── New Sale Schema ──────────────────────────────────────────────────────────
 
 const saleSchema = z.object({
@@ -367,7 +374,7 @@ function SalesPageContent() {
                     </td>
                     <td className="hidden sm:table-cell px-5 py-3">
                       {sale.paymentMethod ? (
-                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_BADGE_COLORS[sale.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}>
                           {PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod}
                         </span>
                       ) : (

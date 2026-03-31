@@ -41,9 +41,9 @@ export const WALLET_ENTRY_TYPE_COLORS: Record<WalletEntryType, string> = {
 }
 
 export const WALLET_ENTRY_STATUS_CONFIG: Record<WalletEntryStatus, { label: string; variant: 'success' | 'muted' | 'destructive'; className: string }> = {
-  ACTIVE:  { label: 'Ativo',     variant: 'success',     className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+  ACTIVE:  { label: 'Ativo',     variant: 'success',     className: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' },
   USED:    { label: 'Utilizado', variant: 'muted',       className: 'bg-muted text-muted-foreground' },
-  EXPIRED: { label: 'Expirado',  variant: 'destructive', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+  EXPIRED: { label: 'Expirado',  variant: 'destructive', className: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200' },
 }
 
 export const WALLET_PACKAGE_SESSION_STATUS = {

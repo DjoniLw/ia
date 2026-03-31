@@ -33,9 +33,9 @@ const EVENT_LABEL: Record<string, string> = {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; icon: typeof CheckCircle; color: string }> = {
-  pending: { label: 'Pendente', icon: Clock, color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' },
-  sent: { label: 'Enviado', icon: CheckCircle, color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  failed: { label: 'Falhou', icon: XCircle, color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  pending: { label: 'Pendente', icon: Clock, color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200' },
+  sent: { label: 'Enviado', icon: CheckCircle, color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' },
+  failed: { label: 'Falhou', icon: XCircle, color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200' },
 }
 
 function RetryButton({ id }: { id: string }) {
