@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma/client'
-import type { CreatePackageDto, ListPackagesQuery, UpdatePackageDto } from './packages.dto'
+import type { CreatePackageDto, ListCustomerPackagesQuery, ListPackagesQuery, ListSoldPackagesQuery, UpdatePackageDto } from './packages.dto'
 
 const packageInclude = {
   items: {
@@ -69,15 +69,72 @@ export class PackagesRepository {
     })
   }
 
-  async findCustomerPackages(clinicId: string, customerId: string) {
-    return prisma.customerPackage.findMany({
-      where: { clinicId, customerId },
+  async findCustomerPackages(clinicId: string, customerId: string, q?: ListCustomerPackagesQuery) {
+    const where: Record<string, unknown> = { clinicId, customerId }
+
+    if (q?.packageName) {
+      where.package = { name: { contains: q.packageName, mode: 'insensitive' } }
+    }
+    if (q?.purchasedFrom || q?.purchasedUntil) {
+      where.purchasedAt = {
+        ...(q.purchasedFrom ? { gte: new Date(q.purchasedFrom) } : {}),
+        ...(q.purchasedUntil ? { lte: new Date(q.purchasedUntil + 'T23:59:59.999Z') } : {}),
+      }
+    }
+
+    const packages = await prisma.customerPackage.findMany({
+      where,
       include: {
         package: { include: packageInclude },
         sessions: { orderBy: { usedAt: 'desc' } },
       },
       orderBy: { purchasedAt: 'desc' },
     })
+
+    // Filter by derived status if requested
+    if (q?.status) {
+      const now = new Date()
+      return packages.filter((p) => {
+        const isExpired = p.expiresAt !== null && p.expiresAt < now
+        const allSessionsDone = p.sessions.every(
+          (s) => s.status === 'FINALIZADO' || s.status === 'EXPIRADO',
+        )
+        if (q.status === 'expirado') return isExpired
+        if (q.status === 'esgotado') return !isExpired && allSessionsDone
+        // ativo = at least one ABERTO session, not expired
+        return !isExpired && p.sessions.some((s) => s.status === 'ABERTO')
+      })
+    }
+
+    return packages
+  }
+
+  async findSoldPackages(clinicId: string, q: ListSoldPackagesQuery) {
+    const where: Record<string, unknown> = { clinicId }
+    if (q.customerId) where.customerId = q.customerId
+    if (q.purchasedFrom || q.purchasedUntil) {
+      where.purchasedAt = {
+        ...(q.purchasedFrom ? { gte: new Date(q.purchasedFrom) } : {}),
+        ...(q.purchasedUntil ? { lte: new Date(q.purchasedUntil + 'T23:59:59.999Z') } : {}),
+      }
+    }
+
+    const skip = (q.page - 1) * q.limit
+    const [items, total] = await Promise.all([
+      prisma.customerPackage.findMany({
+        where,
+        include: {
+          package: { include: packageInclude },
+          customer: { select: { id: true, name: true, phone: true } },
+          sessions: { orderBy: { usedAt: 'desc' } },
+        },
+        orderBy: { purchasedAt: 'desc' },
+        skip,
+        take: q.limit,
+      }),
+      prisma.customerPackage.count({ where }),
+    ])
+    return { items, total, page: q.page, limit: q.limit }
   }
 
   async findCustomerPackageById(clinicId: string, id: string) {
@@ -95,6 +152,7 @@ export class PackagesRepository {
     customerId: string
     packageId: string
     walletEntryId?: string
+    billingId?: string
     expiresAt?: Date
   }) {
     return prisma.customerPackage.create({
@@ -103,6 +161,7 @@ export class PackagesRepository {
         customerId: data.customerId,
         packageId: data.packageId,
         walletEntryId: data.walletEntryId,
+        billingId: data.billingId,
         expiresAt: data.expiresAt,
       },
       include: {
@@ -131,32 +190,45 @@ export class PackagesRepository {
     return prisma.customerPackageSession.update({
       where: { id },
       data: {
+        status: 'FINALIZADO',
         usedAt: new Date(),
         ...(appointmentId && { appointmentId }),
       },
     })
   }
 
-  /** Link a session to an appointment (reserve) without marking it as used yet */
+  /** Link a session to an appointment — set status=AGENDADO */
   async linkSession(sessionId: string, appointmentId: string) {
     return prisma.customerPackageSession.update({
       where: { id: sessionId },
-      data: { appointmentId },
+      data: { appointmentId, status: 'AGENDADO' },
     })
   }
 
-  /** Clear the appointmentId from a session (unreserve), keeping it available */
+  /** Clear the appointmentId from a session — set status back to ABERTO */
   async unlinkSession(sessionId: string) {
     return prisma.customerPackageSession.update({
       where: { id: sessionId },
-      data: { appointmentId: null },
+      data: { appointmentId: null, status: 'ABERTO' },
     })
   }
 
-  /** Find a session linked to an appointment that has not been used yet */
+  /** Find a session linked to an appointment that has not been used/finalized yet */
   async findLinkedSession(clinicId: string, appointmentId: string) {
     return prisma.customerPackageSession.findFirst({
-      where: { clinicId, appointmentId, usedAt: null },
+      where: { clinicId, appointmentId, status: { in: ['AGENDADO'] } },
     })
+  }
+
+  /** Find billing for idempotency check by idempotency key */
+  async findBillingByIdempotencyKey(clinicId: string, idempotencyKey: string) {
+    return prisma.billing.findFirst({
+      where: { clinicId, paymentToken: idempotencyKey },
+    })
+  }
+
+  /** Count customer usages of a specific promotion */
+  async countCustomerPromotionUsage(promotionId: string, customerId: string): Promise<number> {
+    return prisma.promotionUsage.count({ where: { promotionId, customerId } })
   }
 }

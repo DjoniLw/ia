@@ -278,10 +278,34 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-30] — feat(#120): Fluxo de Pagamento, Pacotes e Promoções — Ciclo Completo
+- **Branch:** `feature/issue-120-payment-packages-promotions`
+- **Módulos:** Packages, Promotions, ManualReceipts, Appointments
+- **O que foi feito:**
+  - **BLOCO 1 — Status de sessões:** Enum `PackageSessionStatus` (ABERTO/AGENDADO/FINALIZADO/EXPIRADO) adicionado ao schema. `appointments.service.ts` atualizado com `validateAndLinkPackageSession()`.
+  - **BLOCO 2 — Venda pré-paga de pacote:** `packages.service.ts` com `purchasePackage()` transacional + idempotency key; `packages.routes.ts` com `POST /packages/:id/sell`, `GET /packages/sold`, `POST /packages/sessions/:id/redeem`.
+  - **BLOCO 3 — Gestão de promoções:** `promotions.service.ts` com `maxUsesPerCustomer`, `toggleStatus()`, `findActiveForService()`; `promotions.routes.ts` com rate limiting (10/IP/min em `/validate`) e `PATCH /promotions/:id/status`.
+  - **BLOCO 4 — Cupom em recebimento manual:** `manual-receipts.dto.ts` + `manual-receipts.service.ts` integram `PromotionsService.apply()` com fast-fail e cálculo de `effectiveBillingAmount`.
+  - **BLOCO 5 — Página /packages:** `CustomerSearchInput` reescrito com `createPortal` (corrige overflow:hidden); `CustomerPackageCard` com badges de status ABERTO/AGENDADO/FINALIZADO/EXPIRADO; `PurchaseModal` com múltiplas formas de pagamento + idempotency key.
+  - **BLOCO 6 — Página /promotions:** Submissão de datas em formato ISO corrigida; campo `maxUsesPerCustomer`; `ToggleStatusButton`.
+  - **BLOCO 7 — Modal de recebimento:** Seção de cupom com validação inline + banner âmbar + cálculo de desconto em tempo real.
+- **Testes:** `packages.service.test.ts` (7 testes) e `promotions.service.test.ts` (10 testes) — todos passando.
+- **Observação:** Requer `prisma generate` após aplicação da migration `20260330100000_` para regenerar o cliente Prisma. Erros de TypeScript relacionados a campos novos (status, billingId, sourceType, maxUsesPerCustomer) são esperados até a regeneração.
+- **Closes:** #120
+
 ### [2026-03-30] — PO: Spec corrigida da issue #131 — NotificationsService + BullMQ (Evolution API)
 - **Módulo:** Notifications
 - **O que foi feito:** Spec corrigida para refletir o estado real do código. Issue original referenciava Z-API como provider atual; a spec foi reescrita para usar Evolution API (já implementada). Identificado que BullMQ está instalado mas não utilizado — notificações são enviadas de forma síncrona. Spec inclui: (1) fila BullMQ assíncrona para `sendWhatsApp` e `sendEmail`; (2) worker com retry automático (max 3x, backoff exponencial); (3) lembrete D-1 via delayed job (ausente em código apesar de marcado como [x] no PLAN); (4) refatoração do `retry()` para usar fila; (5) correção de comentários Z-API em `contracts.service.ts`.
 - **Artefato:** `outputs/tasks/014-messaging-queue-bullmq-evolution.md`
+
+### [2026-03-30] — PO: Ficha de Anamnese Digital com Assinatura Eletrônica
+- **Módulo:** AnamnesisRequest (novo) + Clinical Records (extensão) + Notifications (reutilização)
+- **O que foi feito:** Especificação completa gerada. Feature permite envio de ficha de anamnese configurada na clínica para o cliente preencher e/ou validar e assinar digitalmente. Dois modos: blank (cliente preenche) e prefilled (staff preenche, cliente valida). Página pública `/anamnese/[token]` segue padrão idêntico ao `/sign/[token]` dos contratos. Assinatura atômica com criação do ClinicalRecord de tipo `anamnesis`.
+
+### [2026-03-30] — Consolidador: Ficha de Anamnese Digital com Assinatura Eletrônica — Spec Final
+- **Arquivo(s) afetado(s):** `outputs/consolidador/anamnese-assinatura-digital-spec-final.md` *(novo)*
+- **O que foi feito:** Spec final consolidada pelo `aesthera-consolidador` a partir do `outputs/po/anamnese-assinatura-digital-doc.md` + revisões de UX Reviewer (5 bloqueantes + 9 sugestões + 4 observações), Security Auditor (7 bloqueantes + 8 atenções + 4 observações) e System Architect (5 bloqueantes + 5 sugestões + 6 observações). **1 conflito resolvido:** RN03 sobre reenvio — Security exige novo token (prevalece sobre PO que especificava mesmo token). **Principais adições:** consentimento LGPD Art.11 com snapshot de texto (`consentText`, `consentGivenAt`), anonimização de PII na eliminação, `clinicId` exclusivamente via JWT, race condition guard atômico, verificação de identidade leve em modo prefilled, validação backend de assinatura, estado `correcao_solicitada` na página pública, status `cancelled`, remoção de FK circular em `AnamnesisRequest`, criação de `ClinicalRecord` via domain event `anamnesis.signed`, imutabilidade de registros assinados, `SignatureCanvas` como pré-requisito extraído. **5 pré-requisitos de implementação** documentados na seção inicial.
+- **Impacto:** Spec final pronta para o Issue-Writer. Requer confirmação dos 5 pré-requisitos antes de abrir a issue de implementação.
 
 ### [2026-03-30] — fix: auditoria completa de padronização de badges e status (UX 30/03)
 - **Arquivo(s) afetado(s):**

@@ -21,5 +21,6 @@ export const CreateManualReceiptDto = z.object({
   notes: z.string().optional(),
   lines: z.array(ManualReceiptLineDto).min(1),
   overpaymentHandling: OverpaymentHandlingDto.optional(),
+  promotionCode: z.string().optional(),
 })
 export type CreateManualReceiptDto = z.infer<typeof CreateManualReceiptDto>

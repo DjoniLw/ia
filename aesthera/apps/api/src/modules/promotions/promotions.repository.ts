@@ -11,6 +11,9 @@ export class PromotionsRepository {
         { code: { contains: q.search, mode: 'insensitive' } },
       ]
     }
+    if (q.serviceId) {
+      where.applicableServiceIds = { has: q.serviceId }
+    }
 
     const skip = (q.page - 1) * q.limit
     const [items, total] = await Promise.all([
@@ -38,6 +41,19 @@ export class PromotionsRepository {
     })
   }
 
+  async findActiveForService(clinicId: string, serviceId: string) {
+    return prisma.promotion.findMany({
+      where: {
+        clinicId,
+        status: 'active',
+        applicableServiceIds: { has: serviceId },
+        validFrom: { lte: new Date() },
+        OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+      },
+      orderBy: { discountValue: 'desc' },
+    })
+  }
+
   async create(clinicId: string, dto: CreatePromotionDto) {
     return prisma.promotion.create({
       data: {
@@ -48,8 +64,10 @@ export class PromotionsRepository {
         discountType: dto.discountType,
         discountValue: dto.discountValue,
         maxUses: dto.maxUses,
+        maxUsesPerCustomer: dto.maxUsesPerCustomer,
         minAmount: dto.minAmount,
         applicableServiceIds: dto.applicableServiceIds,
+        applicableProductIds: dto.applicableProductIds,
         validFrom: new Date(dto.validFrom),
         validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
         status: 'active',
@@ -65,11 +83,21 @@ export class PromotionsRepository {
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.maxUses !== undefined && { maxUses: dto.maxUses }),
+        ...(dto.maxUsesPerCustomer !== undefined && { maxUsesPerCustomer: dto.maxUsesPerCustomer }),
+        ...(dto.applicableServiceIds !== undefined && { applicableServiceIds: dto.applicableServiceIds }),
+        ...(dto.applicableProductIds !== undefined && { applicableProductIds: dto.applicableProductIds }),
         ...(dto.validUntil !== undefined && {
           validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
         }),
         updatedAt: new Date(),
       },
+    })
+  }
+
+  async toggleStatus(id: string, active: boolean) {
+    return prisma.promotion.update({
+      where: { id },
+      data: { status: active ? 'active' : 'inactive', updatedAt: new Date() },
     })
   }
 
@@ -85,8 +113,13 @@ export class PromotionsRepository {
     promotionId: string
     customerId: string
     billingId?: string
+    saleId?: string
     discountAmount: number
   }) {
     return prisma.promotionUsage.create({ data })
+  }
+
+  async countCustomerUsage(promotionId: string, customerId: string): Promise<number> {
+    return prisma.promotionUsage.count({ where: { promotionId, customerId } })
   }
 }

@@ -3,7 +3,9 @@ import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
 import {
   CreatePackageDto,
+  ListCustomerPackagesQuery,
   ListPackagesQuery,
+  ListSoldPackagesQuery,
   PurchasePackageDto,
   RedeemSessionDto,
   UpdatePackageDto,
@@ -27,10 +29,25 @@ export async function packagesRoutes(app: FastifyInstance) {
     },
   )
 
-  app.get('/packages/customer/:customerId', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
-    const { customerId } = req.params as { customerId: string }
-    return reply.send(await svc.listCustomerPackages(req.clinicId, customerId))
-  })
+  // Listagem admin de todos os pacotes vendidos (acesso restrito a admin)
+  app.get(
+    '/packages/sold',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const q = ListSoldPackagesQuery.parse(req.query)
+      return reply.send(await svc.listSoldPackages(req.clinicId, q))
+    },
+  )
+
+  app.get(
+    '/packages/customer/:customerId',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId } = req.params as { customerId: string }
+      const q = ListCustomerPackagesQuery.parse(req.query)
+      return reply.send(await svc.listCustomerPackages(req.clinicId, customerId, q))
+    },
+  )
 
   app.get('/packages/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const { id } = req.params as { id: string }
@@ -47,19 +64,21 @@ export async function packagesRoutes(app: FastifyInstance) {
     },
   )
 
+  // Venda de pacote com cobrança pré-paga (BLOCO 2)
   app.post(
     '/packages/:id/purchase',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
     async (req, reply) => {
       const { id } = req.params as { id: string }
       const dto = PurchasePackageDto.parse(req.body)
-      return reply.status(201).send(await svc.purchasePackage(req.clinicId, dto.customerId, id))
+      const idempotencyKey = (req.headers['idempotency-key'] as string) || crypto.randomUUID()
+      return reply.status(201).send(await svc.purchasePackage(req.clinicId, id, dto, idempotencyKey))
     },
   )
 
   app.post(
     '/packages/sessions/:sessionId/redeem',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
     async (req, reply) => {
       const { sessionId } = req.params as { sessionId: string }
       const dto = RedeemSessionDto.parse(req.body ?? {})

@@ -321,6 +321,7 @@ export interface CreateManualReceiptPayload {
   notes?: string
   lines: ManualReceiptLine[]
   overpaymentHandling?: { type: OverpaymentHandlingType }
+  promotionCode?: string
 }
 
 export interface ManualReceiptResult {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Minus, Plus } from 'lucide-react'
+import { Loader2, Minus, Plus, Tag } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import {
   type ManualReceiptPaymentMethod,
   type OverpaymentHandlingType,
 } from '@/lib/hooks/use-appointments'
+import { useValidatePromotion } from '@/lib/hooks/use-promotions'
 import type { Billing } from '@/lib/hooks/use-appointments'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
@@ -213,11 +214,39 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   const [overpaymentHandling, setOverpaymentHandling] =
     useState<OverpaymentHandlingType>('cash_change')
 
+  // Coupon state
+  const [couponInput, setCouponInput] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null)
+  const validatePromotion = useValidatePromotion()
+
   const receive = useCreateManualReceipt(billing.id)
 
   const totalPaid = lines.reduce((sum, l) => sum + parseCurrencyInput(l.amountStr), 0)
-  const diffCents = billing.amount - totalPaid
-  const excedente = totalPaid - billing.amount
+  const effectiveAmount = billing.amount - (appliedCoupon?.discountAmount ?? 0)
+  const diffCents = effectiveAmount - totalPaid
+  const excedente = totalPaid - effectiveAmount
+
+  async function handleApplyCoupon() {
+    const code = couponInput.trim().toUpperCase()
+    if (!code) return
+    try {
+      const result = await validatePromotion.mutateAsync({
+        code,
+        billingAmount: billing.amount,
+        serviceIds: billing.appointment?.service?.id ? [billing.appointment.service.id] : [],
+        customerId: billing.customer.id,
+      })
+      setAppliedCoupon({ code, discountAmount: result.discountAmount })
+      toast.success(`Cupom aplicado! Desconto de ${formatCurrency(result.discountAmount)}`)
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(msg ?? 'Cupom inválido')
+      setAppliedCoupon(null)
+    }
+  }
 
   function addLine() {
     setLines((prev) => [
@@ -235,7 +264,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   }
 
   const canConfirm =
-    totalPaid >= billing.amount &&
+    totalPaid >= effectiveAmount &&
     lines.every((l) => {
       if (parseCurrencyInput(l.amountStr) <= 0) return false
       if ((l.method === 'wallet_credit' || l.method === 'wallet_voucher') && !l.walletEntryId) return false
@@ -255,6 +284,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
           ...(l.walletEntryId ? { walletEntryId: l.walletEntryId } : {}),
         })),
         ...(excedente > 0 ? { overpaymentHandling: { type: overpaymentHandling } } : {}),
+        ...(appliedCoupon ? { promotionCode: appliedCoupon.code } : {}),
       })
 
       if (result.walletEntry) {
@@ -329,9 +359,21 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
 
         {/* Total & diff */}
         <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-sm">
+          {appliedCoupon && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Valor original</span>
+              <span>{formatCurrency(billing.amount)}</span>
+            </div>
+          )}
+          {appliedCoupon && (
+            <div className="flex justify-between text-green-600">
+              <span>Desconto ({appliedCoupon.code})</span>
+              <span className="font-semibold">- {formatCurrency(appliedCoupon.discountAmount)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Total informado</span>
-            <span className="font-semibold">{formatCurrency(totalPaid)}</span>
+            <span className="text-muted-foreground">{appliedCoupon ? 'Valor a pagar' : 'Total informado'}</span>
+            <span className="font-semibold">{formatCurrency(appliedCoupon ? effectiveAmount : totalPaid)}</span>
           </div>
           {diffCents > 0 && (
             <div className="flex justify-between text-red-600">
@@ -355,6 +397,51 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
             onChange={setOverpaymentHandling}
           />
         )}
+
+        {/* Coupon / Promotion Code */}
+        <div>
+          <Label className="mb-1.5 block">Cupom de desconto</Label>
+          <div className="flex gap-2">
+            <Input
+              value={couponInput}
+              onChange={(e) => {
+                setCouponInput(e.target.value.toUpperCase())
+                if (appliedCoupon) setAppliedCoupon(null)
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleApplyCoupon() } }}
+              placeholder="CÓDIGO DO CUPOM"
+              className="h-9 flex-1 font-mono text-sm uppercase"
+              disabled={receive.isPending}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleApplyCoupon()}
+              disabled={!couponInput.trim() || validatePromotion.isPending || receive.isPending}
+              className="h-9 shrink-0"
+            >
+              {validatePromotion.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Tag className="mr-1 h-3.5 w-3.5" />
+              )}
+              Aplicar
+            </Button>
+          </div>
+          {appliedCoupon && (
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-300">
+              <span>✓ Cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span> — {formatCurrency(appliedCoupon.discountAmount)} de desconto</span>
+              <button
+                type="button"
+                onClick={() => { setAppliedCoupon(null); setCouponInput('') }}
+                className="ml-auto text-green-700 hover:text-green-900 dark:text-green-400"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Notes */}
         <div>

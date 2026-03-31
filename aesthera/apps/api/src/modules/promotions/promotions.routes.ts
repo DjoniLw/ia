@@ -5,13 +5,34 @@ import {
   ApplyPromotionDto,
   CreatePromotionDto,
   ListPromotionsQuery,
+  TogglePromotionStatusDto,
   UpdatePromotionDto,
   ValidatePromotionDto,
 } from './promotions.dto'
 import { PromotionsService } from './promotions.service'
 
+const VALIDATE_RATE_LIMIT_WINDOW_MS = 60_000
+const VALIDATE_RATE_LIMIT_MAX = 10
+
 export async function promotionsRoutes(app: FastifyInstance) {
   const svc = new PromotionsService()
+
+  // Per-IP in-memory counters for /validate rate limiting
+  const validateHits = new Map<string, { count: number; resetAt: number }>()
+
+  function checkValidateRateLimit(ip: string): { limited: boolean; retryAfter: number } {
+    const now = Date.now()
+    const entry = validateHits.get(ip)
+    if (!entry || entry.resetAt < now) {
+      validateHits.set(ip, { count: 1, resetAt: now + VALIDATE_RATE_LIMIT_WINDOW_MS })
+      return { limited: false, retryAfter: 0 }
+    }
+    entry.count += 1
+    if (entry.count > VALIDATE_RATE_LIMIT_MAX) {
+      return { limited: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) }
+    }
+    return { limited: false, retryAfter: 0 }
+  }
 
   app.get('/promotions', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const q = ListPromotionsQuery.parse(req.query)
@@ -42,23 +63,52 @@ export async function promotionsRoutes(app: FastifyInstance) {
     },
   )
 
-  app.post('/promotions/validate', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
-    const dto = ValidatePromotionDto.parse(req.body)
-    const result = await svc.validate(req.clinicId, dto.code, dto.billingAmount, dto.serviceIds)
-    return reply.send({ discountAmount: result.discountAmount })
-  })
+  app.patch(
+    '/promotions/:id/status',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const dto = TogglePromotionStatusDto.parse(req.body)
+      return reply.send(await svc.toggleStatus(req.clinicId, id, dto))
+    },
+  )
+
+  app.post(
+    '/promotions/validate',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const ip = req.ip ?? 'unknown'
+      const { limited, retryAfter } = checkValidateRateLimit(ip)
+      if (limited) {
+        return reply
+          .status(429)
+          .header('Retry-After', String(retryAfter))
+          .send({ error: 'Muitas tentativas. Tente novamente em alguns instantes.', code: 'RATE_LIMIT_EXCEEDED' })
+      }
+      const dto = ValidatePromotionDto.parse(req.body)
+      const result = await svc.validate(
+        req.clinicId,
+        dto.code,
+        dto.billingAmount,
+        dto.serviceIds,
+        dto.customerId,
+      )
+      return reply.send({ discountAmount: result.discountAmount })
+    },
+  )
 
   app.post(
     '/promotions/apply',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
     async (req, reply) => {
       const base = ApplyPromotionDto.parse(req.body)
-      const extra = req.body as { billingAmount: number; serviceIds?: string[] }
+      const extra = req.body as { billingAmount: number; serviceIds?: string[]; customerId: string }
       return reply.send(
         await svc.apply(req.clinicId, {
           ...base,
           billingAmount: extra.billingAmount,
           serviceIds: extra.serviceIds,
+          customerId: extra.customerId,
         }),
       )
     },

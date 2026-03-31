@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search } from 'lucide-react'
+import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
@@ -15,6 +15,7 @@ import {
   type UpdatePromotionInput,
   useCreatePromotion,
   usePromotions,
+  useTogglePromotion,
   useUpdatePromotion,
 } from '@/lib/hooks/use-promotions'
 
@@ -64,6 +65,9 @@ function PromotionModal({
     editing ? String(editing.discountValue) : '',
   )
   const [maxUses, setMaxUses] = useState(editing?.maxUses != null ? String(editing.maxUses) : '')
+  const [maxUsesPerCustomer, setMaxUsesPerCustomer] = useState(
+    editing?.maxUsesPerCustomer != null ? String(editing.maxUsesPerCustomer) : '',
+  )
   const [minAmount, setMinAmount] = useState(
     editing?.minAmount != null ? String(editing.minAmount / 100) : '',
   )
@@ -107,9 +111,10 @@ function PromotionModal({
           discountType,
           discountValue: Number(discountValue),
           maxUses: maxUses ? Number(maxUses) : null,
+          maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
           minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
-          validFrom,
-          validUntil: validUntil || null,
+          validFrom: `${validFrom}T00:00:00.000Z`,
+          validUntil: validUntil ? `${validUntil}T23:59:59.999Z` : null,
         }
         await createMutation.mutateAsync(dto)
         toast.success('Promoção criada')
@@ -218,6 +223,18 @@ function PromotionModal({
               />
             </div>
 
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Limite por cliente</label>
+              <input
+                type="number"
+                min="1"
+                value={maxUsesPerCustomer}
+                onChange={(e) => setMaxUsesPerCustomer(e.target.value)}
+                placeholder="Ilimitado"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
             {!editing && (
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Valor mínimo (R$)</label>
@@ -289,6 +306,30 @@ function PromotionModal({
         </form>
       </div>
     </div>
+  )
+}
+
+// ──── Toggle Button ────────────────────────────────────────────────────────────
+
+function ToggleStatusButton({ promotion }: { promotion: Promotion }) {
+  const toggle = useTogglePromotion(promotion.id)
+  const isActive = promotion.status === 'active'
+
+  return (
+    <button
+      onClick={() => toggle.mutate(!isActive)}
+      disabled={toggle.isPending || promotion.status === 'expired'}
+      title={isActive ? 'Desativar promoção' : 'Ativar promoção'}
+      className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
+    >
+      {toggle.isPending ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : isActive ? (
+        <ToggleRight className="h-4 w-4 text-green-500" />
+      ) : (
+        <ToggleLeft className="h-4 w-4" />
+      )}
+    </button>
   )
 }
 
@@ -494,6 +535,7 @@ function PromotionsPageContent() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <ToggleStatusButton promotion={promo} />
                           <button
                             onClick={() =>
                               setExpandedId(expandedId === promo.id ? null : promo.id)

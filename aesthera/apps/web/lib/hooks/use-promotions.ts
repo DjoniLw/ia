@@ -14,9 +14,11 @@ export interface Promotion {
   discountType: DiscountType
   discountValue: number
   maxUses: number | null
+  maxUsesPerCustomer: number | null
   usesCount: number
   minAmount: number | null
   applicableServiceIds: string[]
+  applicableProductIds: string[]
   status: PromotionStatus
   validFrom: string
   validUntil: string | null
@@ -38,8 +40,10 @@ export interface CreatePromotionInput {
   discountType: DiscountType
   discountValue: number
   maxUses?: number | null
+  maxUsesPerCustomer?: number | null
   minAmount?: number | null
   applicableServiceIds?: string[]
+  applicableProductIds?: string[]
   validFrom: string
   validUntil?: string | null
 }
@@ -94,7 +98,28 @@ export function useUpdatePromotion(id: string) {
 
 export function useValidatePromotion() {
   return useMutation({
-    mutationFn: (dto: { code: string; billingAmount: number; serviceIds?: string[] }) =>
+    mutationFn: (dto: { code: string; billingAmount: number; serviceIds?: string[]; customerId?: string }) =>
       api.post<ValidatePromotionResult>('/promotions/validate', dto).then((r) => r.data),
+  })
+}
+
+export function useTogglePromotion(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (active: boolean) =>
+      api.patch<Promotion>(`/promotions/${id}/status`, { active }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['promotions'] })
+    },
+  })
+}
+
+export function useActivePromotionsForService(serviceId: string, enabled = true) {
+  return useQuery<Promotion[]>({
+    queryKey: ['promotions-for-service', serviceId],
+    queryFn: () =>
+      api.get('/promotions', { params: { serviceId, status: 'active' } }).then((r) => r.data?.items ?? []),
+    enabled: !!serviceId && enabled,
+    staleTime: 30_000,
   })
 }
