@@ -560,7 +560,7 @@ function ServicesPageContent() {
                     <td className="hidden sm:table-cell px-4 py-3 text-right">{s.durationMinutes}min</td>
                     <td className="px-4 py-3 text-right">{priceDisplay(s.price)}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${s.active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-muted px-2 py-0.5 text-xs text-muted-foreground'}`}>
+                      <span className={`text-xs rounded-full px-2 py-0.5 font-medium ${s.active ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' : 'bg-muted text-muted-foreground'}`}>
                         {s.active ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>

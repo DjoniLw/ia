@@ -278,6 +278,36 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-30] — fix: correções de contraste e dark mode pós-review #116/#117
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/app/(dashboard)/settings/_components/body-measurements-tab.tsx`
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/settings/_components/whatsapp-tab.tsx`
+  - `aesthera/apps/web/app/(dashboard)/settings/_components/email-tab.tsx`
+  - `aesthera/apps/web/lib/wallet-labels.ts`
+  - `aesthera/apps/web/components/wallet/WalletOriginBadge.tsx`
+- **O que foi feito:**
+  - **body-measurements-tab.tsx**: badge `Simples` corrigido de `text-slate-600` para `text-slate-700` — contraste subiu de ~3.9:1 para ~5.8:1 (WCAG AA aprovado).
+  - **customers/page.tsx**: `CONTRACT_STATUS_CLASS` (`pending` e `signed`) recebeu variantes `dark:bg-amber-900/40 dark:text-amber-300` e `dark:bg-green-900/40 dark:text-green-300` respectivamente. `TYPE_COLOR` já possuía dark mode completo — nenhuma alteração necessária.
+  - **whatsapp-tab.tsx**: banner "WhatsApp conectado" atualizado de `bg-green-50/text-green-700` para `bg-green-100/text-green-800 font-medium` — maior profundidade visual e contraste ~6.5:1.
+  - **email-tab.tsx**: banners "E-mail configurado" e "Conexão bem-sucedida" atualizados com o mesmo padrão do whatsapp-tab.
+  - **wallet-labels.ts** e **WalletOriginBadge.tsx**: opacidade dos backgrounds dark mode dos badges de tipo/origem aumentada de `/30` para `/50` e texto de `-300` para `-200` — melhor discriminação visual entre tipos em dark mode.
+- **Impacto:** Apenas frontend — mudanças puramente cosméticas (classes Tailwind). Nenhuma lógica de negócio alterada. Identificado em revisão UX pós-implementação das issues #116 e #117.
+
+### [2026-03-30] — feat(#117): padronizar STATUS_COLOR no_show e dark mode dos badges de status
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/app/(dashboard)/dashboard/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/supplies/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/products/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/notifications/page.tsx`
+- **O que foi feito:**
+  - `dashboard/page.tsx` e `customers/page.tsx`: status `no_show` corrigido de `bg-red-100 text-red-800` para `bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200`; todos os demais status receberam variantes `dark:`.
+  - `supplies/page.tsx`: badge Ativo/Inativo recebeu classes `dark:bg-green-900/30 dark:text-green-400` e `dark:bg-zinc-800 dark:text-zinc-400` respectivamente.
+  - `products/page.tsx`: badge Ativo recebeu `dark:bg-green-900/30 dark:text-green-400`.
+  - `notifications/page.tsx`: `pending` e `sent` receberam variantes `dark:` — `failed` já as tinha.
+- **Impacto:** Apenas frontend — mudanças puramente cosméticas (classes Tailwind). Nenhuma lógica de negócio alterada. Badges agora consistentes e legíveis em dark mode em todo o sistema.
+
 ### [2026-03-28] — Testes unitários — Módulo de Medidas Corporais (issue #129)
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.test.ts`

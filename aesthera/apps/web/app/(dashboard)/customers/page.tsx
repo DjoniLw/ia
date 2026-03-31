@@ -929,8 +929,8 @@ const CONTRACT_STATUS_LABEL: Record<CustomerContract['status'], string> = {
   signed:  'Assinado',
 }
 const CONTRACT_STATUS_CLASS: Record<CustomerContract['status'], string> = {
-  pending: 'bg-amber-100 text-amber-700',
-  signed:  'bg-green-100 text-green-700',
+  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  signed:  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
 }
 
 function SignatureCanvas({
@@ -1815,9 +1815,12 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
     completed: 'Concluído', cancelled: 'Cancelado', no_show: 'Não compareceu',
   }
   const STATUS_COLOR: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-700', confirmed: 'bg-blue-100 text-blue-800',
-    in_progress: 'bg-amber-100 text-amber-900', completed: 'bg-green-100 text-green-800',
-    cancelled: 'bg-muted text-muted-foreground', no_show: 'bg-red-100 text-red-800',
+    draft:       'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+    confirmed:   'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+    in_progress: 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
+    completed:   'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+    cancelled:   'bg-muted text-muted-foreground',
+    no_show:     'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
   }
 
   return (
@@ -2683,6 +2686,9 @@ function CustomersPageContent() {
                     </button>
                     {!c.active && (
                       <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Inativo</span>
+                    )}
+                    {c.active && (
+                      <span className="rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900/40 dark:text-green-200">Ativo</span>
                     )}
                   </div>
                 </td>

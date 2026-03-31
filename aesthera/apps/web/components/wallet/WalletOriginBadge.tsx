@@ -8,12 +8,12 @@ interface WalletOriginBadgeProps {
 }
 
 const ORIGIN_COLORS: Record<WalletOriginType, string> = {
-  OVERPAYMENT:        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  GIFT:               'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
-  REFUND:             'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-  CASHBACK_PROMOTION: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  PACKAGE_PURCHASE:   'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  VOUCHER_SPLIT:      'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+  OVERPAYMENT:        'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200',
+  GIFT:               'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-200',
+  REFUND:             'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200',
+  CASHBACK_PROMOTION: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-200',
+  PACKAGE_PURCHASE:   'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200',
+  VOUCHER_SPLIT:      'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200',
 }
 
 function getEnrichedLabel(originType: string, originReference?: string | null): string {

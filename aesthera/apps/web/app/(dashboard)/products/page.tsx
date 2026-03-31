@@ -535,7 +535,7 @@ function ProductsPageContent() {
                       {isLow && <span className="ml-1 text-xs">(baixo)</span>}
                     </td>
                     <td className="hidden sm:table-cell px-2 py-3 text-center">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.active ? 'bg-green-100 text-green-800' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.active ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' : 'bg-muted text-muted-foreground'}`}>
                         {p.active ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>

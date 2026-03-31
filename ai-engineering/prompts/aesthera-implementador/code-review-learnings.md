@@ -321,6 +321,25 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: qualquer constante visual compartilhada entre ≥2 componentes pertence a um arquivo central — alterar uma cor de status deve ser uma mudança em 1 único lugar
   - 📅 Aprendido em: 24/03/2026 — revisão de STATUS_COLOR duplicado em múltiplas páginas sem suporte a dark mode
 
+- [ ] **Ao adicionar dark mode em constantes de cor de uma página, verificar TODAS as outras constantes de cor da mesma página antes de concluir**
+  - 🔴 Anti-padrão: implementar dark mode em `STATUS_COLOR` de uma página e considerar o trabalho concluído, sem perceber que a mesma página tem outras constantes como `TYPE_COLOR`, `CONTRACT_STATUS_CLASS`, `PAYMENT_STATUS_COLOR` também sem dark mode — entrega parcial que gera inconsistência visual na mesma tela
+  - ✅ Correto: ao iniciar qualquer task de dark mode em uma página, primeiro mapear **todos os objetos de mapeamento de cor existentes** no arquivo:
+    ```ts
+    // Antes de implementar, buscar no arquivo por esses padrões:
+    // const *COLOR* = {
+    // const *CLASS* = {
+    // const *STYLE* = {
+    // e objetos com chaves de status/tipo → classes CSS
+    ```
+    Só marcar como concluído quando **todas** as constantes mapeadas tiverem variantes dark mode adicionadas.
+  - 📌 Exemplo real — `customers/page.tsx` tinha múltiplas constantes simultâneas sem dark mode:
+    - `STATUS_COLOR` (status de atendimento)
+    - `CONTRACT_STATUS_CLASS` (status de contrato)
+    - `TYPE_COLOR` (tipo de cliente)
+    → Todas devem receber dark mode na mesma task, não em tasks separadas
+  - 📌 Regra geral: constantes de cor são "irmãs" dentro de uma página — quando uma recebe dark mode, todas devem receber. Entregar dark mode parcial em uma tela é sempre um bug visual.
+  - 📅 Aprendido em: 30/03/2026 — task de dark mode em `customers/page.tsx` entregou `STATUS_COLOR` mas deixou `CONTRACT_STATUS_CLASS` e `TYPE_COLOR` sem suporte a dark mode
+
 ### Formulários e Validação
 
 - [ ] **Verificar lógica `disabled` do botão salvar/gravar em todo formulário implementado**
