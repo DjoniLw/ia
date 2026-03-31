@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DataPagination } from '@/components/ui/data-pagination'
+import { SESSION_STATUS_STYLE, SESSION_LABEL } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { useCustomers, useServices } from '@/lib/hooks/use-resources'
@@ -560,20 +561,21 @@ function PurchaseModal({
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
               disabled={purchase.isPending}
-              className="rounded-lg border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-accent disabled:opacity-50"
-            >Cancelar</button>
-            <button
+            >
+              Cancelar
+            </Button>
+            <Button
               type="submit"
               disabled={!canConfirm}
-              className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
-              {purchase.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {purchase.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {purchase.isPending ? 'Processando…' : 'Confirmar venda'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -612,20 +614,6 @@ function CustomerPackageCard({ cp }: { cp: CustomerPackage }) {
   const finalizedSessions = cp.sessions.filter((s) => s.status === 'FINALIZADO').length
   const totalSessions = cp.sessions.length
   const progress = totalSessions > 0 ? (finalizedSessions / totalSessions) * 100 : 0
-
-  const SESSION_STATUS_STYLE: Record<string, string> = {
-    ABERTO: 'text-muted-foreground/40',
-    AGENDADO: 'text-blue-500',
-    FINALIZADO: 'text-green-500',
-    EXPIRADO: 'text-amber-400',
-  }
-
-  const SESSION_LABEL: Record<string, string> = {
-    ABERTO: 'disponível',
-    AGENDADO: 'agendada',
-    FINALIZADO: 'utilizada',
-    EXPIRADO: 'expirada',
-  }
 
   return (
     <div className="rounded-lg border bg-card p-4">

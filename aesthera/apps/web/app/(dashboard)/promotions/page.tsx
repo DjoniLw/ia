@@ -317,20 +317,21 @@ function ToggleStatusButton({ promotion }: { promotion: Promotion }) {
   const isActive = promotion.status === 'active'
 
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="sm"
       onClick={() => toggle.mutate(!isActive)}
       disabled={toggle.isPending || promotion.status === 'expired'}
       title={isActive ? 'Desativar promoção' : 'Ativar promoção'}
-      className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
     >
       {toggle.isPending ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : isActive ? (
-        <ToggleRight className="h-4 w-4 text-green-500" />
+        <ToggleRight className="h-3.5 w-3.5 text-green-500" />
       ) : (
-        <ToggleLeft className="h-4 w-4" />
+        <ToggleLeft className="h-3.5 w-3.5" />
       )}
-    </button>
+    </Button>
   )
 }
 

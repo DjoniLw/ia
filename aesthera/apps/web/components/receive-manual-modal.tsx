@@ -430,7 +430,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
             </Button>
           </div>
           {appliedCoupon && (
-            <div className="mt-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-300">
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-300">
               <span>✓ Cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span> — {formatCurrency(appliedCoupon.discountAmount)} de desconto</span>
               <button
                 type="button"
