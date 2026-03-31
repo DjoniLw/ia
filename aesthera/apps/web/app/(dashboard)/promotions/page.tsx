@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DataPagination } from '@/components/ui/data-pagination'
+import { PROMOTION_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import {
@@ -34,12 +35,6 @@ const STATUS_LABEL: Record<PromotionStatus, string> = {
   active: 'Ativo',
   inactive: 'Inativo',
   expired: 'Expirado',
-}
-
-const STATUS_COLOR: Record<PromotionStatus, string> = {
-  active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  inactive: 'bg-muted text-muted-foreground',
-  expired: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 }
 
 // ──── Create / Edit Modal ──────────────────────────────────────────────────────
@@ -530,7 +525,7 @@ function PromotionsPageContent() {
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[promo.status]}`}
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${PROMOTION_STATUS_COLOR[promo.status]}`}
                         >
                           {STATUS_LABEL[promo.status]}
                         </span>
