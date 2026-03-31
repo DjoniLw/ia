@@ -28,7 +28,7 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 | **Billing** | ✅ Implementado | Criação automática em `appointment.completed`, link de pagamento, cron de vencimento |
 | **Payments** | ✅ Implementado | Stripe (cartão) + MercadoPago (PIX + boleto), webhooks, página pública `/pay/:token` |
 | **Ledger** | ✅ Implementado | Entradas em `payment.succeeded`, resumo financeiro por período |
-| **Notifications** | ✅ Implementado | WhatsApp (Z-API/Evolution) + e-mail (Resend), filas BullMQ, log de envios |
+| **Notifications** | ⚠️ Parcial | WhatsApp via **Evolution API** + e-mail (SMTP clínica / Resend), `NotificationLog`, log de envios. **BullMQ instalado mas NÃO utilizado** — envios são síncronos (fire-and-forget). Lembrete D-1 ausente em código apesar de documentado. |
 | **AI** | ✅ Implementado | Chat streaming (Gemini), resumo de cliente, briefing do dashboard, function calling |
 | **Equipment** | ✅ Implementado | CRUD de equipamentos + vínculo com agendamentos |
 | **Rooms** | ✅ Implementado | CRUD de salas + vínculo com agendamentos |
@@ -82,10 +82,18 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 
 ### Notificações automáticas (triggers)
 - Confirmação de agendamento → WhatsApp + e-mail
-- Lembrete D-1 → WhatsApp
+- Lembrete D-1 → WhatsApp (**job delayed ausente em código — pendente issue #131 corrigida**)
 - Link de pagamento → WhatsApp + e-mail
 - Recibo ao pagar → WhatsApp
 - Vencimento de cobrança → WhatsApp
+
+### Notificações — Estado real do provider e fila
+- Provider WhatsApp: **Evolution API** (não Z-API). Endpoint: `POST /message/sendText/{instance}`, header `apikey`
+- Instância por clínica (`Clinic.whatsappInstance`) tem prioridade sobre `EVOLUTION_INSTANCE` global
+- Envios são síncronos via `void sendWhatsApp(...)` — **sem fila real**
+- BullMQ 5 instalado (`package.json`) mas sem uso no módulo de notificações
+- O lembrete D-1 **não está implementado** apesar de marcado como [x] no PLAN.md Fase 6
+- Issue #131 foi reescrita — spec corrigida: `outputs/tasks/014-messaging-queue-bullmq-evolution.md`
 
 ---
 

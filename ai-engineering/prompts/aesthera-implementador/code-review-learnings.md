@@ -317,7 +317,8 @@ Se a resposta for não → revise antes de prosseguir.
 
 - [ ] **`STATUS_COLOR` e `EVENT_COLOR` devem ser definidos em um único arquivo central — nunca replicados por página**
   - 🔴 Anti-padrão: definir `const STATUS_COLOR = { pending: '...', completed: '...' }` diretamente em cada página/componente que usa — resulta em divergência de cores entre páginas e dark mode inconsistente
-  - ✅ Correto: centralizar em um único arquivo (ex.: `lib/constants/colors.ts`) e importar em todos os componentes que precisam
+  - ✅ Correto: centralizar em `lib/status-colors.ts` (arquivo canônico do projeto) e importar em todos os componentes que precisam. Não criar variantes locais nem duplicar para uma "versão da tela X"
+  - 📌 Arquivo canônico: `aesthera/apps/web/lib/status-colors.ts` — qualquer nova constante de cor/status pertence aqui
   - 📌 Regra geral: qualquer constante visual compartilhada entre ≥2 componentes pertence a um arquivo central — alterar uma cor de status deve ser uma mudança em 1 único lugar
   - 📅 Aprendido em: 24/03/2026 — revisão de STATUS_COLOR duplicado em múltiplas páginas sem suporte a dark mode
 
@@ -339,6 +340,84 @@ Se a resposta for não → revise antes de prosseguir.
     → Todas devem receber dark mode na mesma task, não em tasks separadas
   - 📌 Regra geral: constantes de cor são "irmãs" dentro de uma página — quando uma recebe dark mode, todas devem receber. Entregar dark mode parcial em uma tela é sempre um bug visual.
   - 📅 Aprendido em: 30/03/2026 — task de dark mode em `customers/page.tsx` entregou `STATUS_COLOR` mas deixou `CONTRACT_STATUS_CLASS` e `TYPE_COLOR` sem suporte a dark mode
+
+- [ ] **`dark:bg-{color}-900/30` é opacidade insuficiente para dark mode — usar `/40` como mínimo**
+  - 🔴 Anti-padrão: usar `/30` de opacidade em fundos de badge/status no dark mode — a discriminação visual entre estados fica comprometida porque os fundos ficam quase idênticos em tonalidade escura:
+    ```tsx
+    // INSUFICIENTE — /30 não gera contraste adequado
+    dark:bg-green-900/30 dark:text-green-300
+    dark:bg-red-900/30 dark:text-red-300
+    ```
+  - ✅ Correto: usar `/40` como valor mínimo de opacidade para fundos de badge em dark mode; usar `/50` quando o badge precisa de destaque maior (ex: status crítico, vencido, bloqueado):
+    ```tsx
+    // CORRETO — /40 garante discriminação visual adequada
+    dark:bg-green-900/40 dark:text-green-300
+    dark:bg-red-900/40 dark:text-red-300
+    // Para status crítico:
+    dark:bg-red-900/50 dark:text-red-200
+    ```
+  - 📌 Regra geral: em dark mode, o fundo escurecido pelo `/30` de opacidade mal se distingue do fundo da célula/linha. `/40` é o mínimo aceitável; preferir `/40` a `/50` — valores acima de `/50` começam a parecer "pesados" na tela escura.
+  - 📅 Aprendido em: 30/03/2026 — revisão transversal de telas com dark mode em `customers/page.tsx`
+
+- [ ] **Badge de status deve sempre ser exibido para TODOS os estados — nunca omitir o estado "positivo"**
+  - 🔴 Anti-padrão: exibir badge apenas para o estado negativo/inativo (ex: só mostrar badge "Inativo" e não mostrar nada quando o item está "Ativo") — ao fazer scan da lista, o usuário precisa inferir por ausência que o item está ativo, criando ambiguidade:
+    ```tsx
+    // ERRADO — só mostra badge para inativo
+    {item.status === 'inactive' && (
+      <Badge variant="outline">Inativo</Badge>
+    )}
+    ```
+  - ✅ Correto: sempre renderizar o badge para ambos os estados com cores distintas:
+    ```tsx
+    // CORRETO — badge para ambos os estados
+    <Badge className={STATUS_COLOR[item.status]}>
+      {STATUS_LABEL[item.status]}
+    </Badge>
+    ```
+  - 📌 Regra geral: listas com itens de múltiplos estados devem tornar cada estado visualmente explícito — o usuário não deve precisar inferir por ausência de elemento visual. Todo estado tem um badge, toda badge tem uma cor.
+  - 📅 Aprendido em: 30/03/2026 — revisão de listagens que omitiam badge para o estado "Ativo"
+
+- [ ] **Usar a mesma semântica de cor para o mesmo conceito em todas as telas — `zinc` vs `muted` para "Inativo" é inaceitável**
+  - 🔴 Anti-padrão: usar `zinc-100 text-zinc-600` em uma tela e `bg-muted text-muted-foreground` em outra para o mesmo status "Inativo" — ou usar `green-700` em uma tela e `green-800` em outra para "Ativo". O usuário aprende a cor do status e fica confuso quando varia entre telas:
+    ```tsx
+    // Tela A — "Inativo"
+    className="bg-zinc-100 text-zinc-600 dark:bg-zinc-800/40 dark:text-zinc-400"
+    // Tela B — "Inativo" (DIVERGENTE)
+    className="bg-muted text-muted-foreground"
+    ```
+  - ✅ Correto: importar sempre de `lib/status-colors.ts` — a constante centralizada garante que "Inativo" tem exatamente a mesma aparência em todas as telas:
+    ```tsx
+    import { STATUS_COLOR } from '@/lib/status-colors';
+    // Ambas as telas usam o mesmo token → mesma cor garantida
+    <Badge className={STATUS_COLOR.inactive}>Inativo</Badge>
+    ```
+  - 📌 Regra geral: inconsistência de cor para o mesmo conceito entre telas é sempre um bug de design system. A fonte da verdade é `lib/status-colors.ts` — nunca recriar localmente.
+  - 📅 Aprendido em: 30/03/2026 — auditoria transversal de status badges identificou divergência zinc vs muted e green-700 vs green-800 entre telas
+
+- [ ] **Nunca usar a mesma cor para todos os valores de um enum — cada valor deve ter cor semântica distinta**
+  - 🔴 Anti-padrão: mapear todos os métodos de pagamento (ou qualquer enum com múltiplos valores) para a mesma cor (ex: todos em azul) — o badge perde o valor semântico e o usuário não consegue distinguir os tipos visualmente:
+    ```tsx
+    // ERRADO — todos os métodos de pagamento em azul
+    const PAYMENT_METHOD_COLOR = {
+      credit_card: 'bg-blue-100 text-blue-700',
+      debit_card:  'bg-blue-100 text-blue-700',
+      pix:         'bg-blue-100 text-blue-700',
+      cash:        'bg-blue-100 text-blue-700',
+    }
+    ```
+  - ✅ Correto: atribuir cor com semântica distinta por valor — usar a "cor natural" do conceito quando existir (PIX = verde, dinheiro = esmeralda, cartão = azul/roxo) e garantir que nenhum par adjacente de valores use a mesma cor:
+    ```tsx
+    // CORRETO — cores distintas com semântica
+    const PAYMENT_METHOD_COLOR = {
+      credit_card: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+      debit_card:  'bg-blue-100   text-blue-700   dark:bg-blue-900/40   dark:text-blue-300',
+      pix:         'bg-green-100  text-green-700  dark:bg-green-900/40  dark:text-green-300',
+      cash:        'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+    }
+    ```
+  - 📌 Regra geral: se ao olhar para a lista de itens todos os badges têm a mesma cor, a constante está errada. Cada estado/tipo de um enum deve ser identificável pela cor sem precisar ler o texto do badge.
+  - 📌 Aplica-se a: métodos de pagamento, tipos de serviço, categorias de produto, origens de lead, tipos de contrato — qualquer enum com ≥3 valores que apareça em listagem.
+  - 📅 Aprendido em: 30/03/2026 — revisão de `PAYMENT_METHOD_COLOR` com todos os valores mapeados para azul
 
 ### Formulários e Validação
 

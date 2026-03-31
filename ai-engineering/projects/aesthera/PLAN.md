@@ -278,6 +278,47 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
+### [2026-03-30] — PO: Spec corrigida da issue #131 — NotificationsService + BullMQ (Evolution API)
+- **Módulo:** Notifications
+- **O que foi feito:** Spec corrigida para refletir o estado real do código. Issue original referenciava Z-API como provider atual; a spec foi reescrita para usar Evolution API (já implementada). Identificado que BullMQ está instalado mas não utilizado — notificações são enviadas de forma síncrona. Spec inclui: (1) fila BullMQ assíncrona para `sendWhatsApp` e `sendEmail`; (2) worker com retry automático (max 3x, backoff exponencial); (3) lembrete D-1 via delayed job (ausente em código apesar de marcado como [x] no PLAN); (4) refatoração do `retry()` para usar fila; (5) correção de comentários Z-API em `contracts.service.ts`.
+- **Artefato:** `outputs/tasks/014-messaging-queue-bullmq-evolution.md`
+
+### [2026-03-30] — fix: auditoria completa de padronização de badges e status (UX 30/03)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/app/(dashboard)/services/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/professionals/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/supplies/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/products/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/sales/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/billing/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/contas-a-pagar/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/financial/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/notifications/page.tsx`
+  - `aesthera/apps/web/lib/wallet-labels.ts`
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/equipment/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/rooms/page.tsx`
+- **O que foi feito:**
+  - **Grupo 1 — Padronização de cores:** `services`, `professionals`, `supplies`, `products` corrigidos para padrão `/40 text-200` em dark e `text-800` em light. `supplies` também teve o `zinc` removido em favor de `bg-muted`.
+  - **Vendas:** Substituída cor única azul para todos os métodos de pagamento por `PAYMENT_BADGE_COLORS` com cores distintas (verde=Dinheiro, azul=PIX, violeta=Cartão, âmbar=Transferência).
+  - **Billing / Contas a Pagar:** `/30 → /40` e texto dark `/300 → /200` em todos os status.
+  - **Financeiro:** badge Crédito/Débito: `/30 → /40`, texto `-400 → /200` dark, `-700 → -800` light.
+  - **Notificações:** todos os 3 status corrigidos para `/40` e texto `-800/-200`.
+  - **wallet-labels.ts — WALLET_ENTRY_STATUS_CONFIG:** `ACTIVE` e `EXPIRED` corrigidos para `/40`, texto `-800/-200`.
+  - **Grupo 3 — Badge visível para ativos:** `customers/page.tsx`, `equipment/page.tsx` e `rooms/page.tsx` agora exibem badge verde "Ativo/Ativa" para itens ativos — antes só exibiam "Inativo" para inativos.
+- **Impacto:** Apenas frontend — mudanças puramente cosméticas (classes Tailwind + lógica condicional de badge). Nenhuma lógica de negócio alterada. Cobre 13 dos 19 itens da auditoria UX de 30/03. Itens 18 (wallet button nativo) e 15/Grupo5 (Switch para Ativar/Inativar) não implementados — são refatorações arquiteturais que requerem spec separada.
+
+### [2026-03-30] — fix: dark mode em badges de estoque, anamnese e aniversariantes (task #013-ux)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/app/(dashboard)/reports/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/settings/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/dashboard/page.tsx`
+- **O que foi feito:**
+  - **reports/page.tsx**: badges de estoque (`Sem estoque`, `Baixo`, `OK`) receberam variantes `dark:bg-{color}-900/40 dark:text-{color}-300`.
+  - **settings/page.tsx**: 3 badges de anamnese — tipo de pergunta (azul), `Obrigatório` (vermelho) e tag `com descrição` (azul pequeno) — receberam variantes dark mode.
+  - **dashboard/page.tsx**: badge "próximos 7 dias" e avatar não-aniversariante do widget de aniversariantes receberam `dark:bg-pink-900/40 dark:text-pink-300`.
+- **Impacto:** Apenas frontend — mudanças puramente cosméticas (classes Tailwind). Completa a varredura de dark mode do relatório UX pós-issues #116/#117.
+
 ### [2026-03-30] — fix: correções de contraste e dark mode pós-review #116/#117
 - **Arquivo(s) afetado(s):**
   - `aesthera/apps/web/app/(dashboard)/settings/_components/body-measurements-tab.tsx`
