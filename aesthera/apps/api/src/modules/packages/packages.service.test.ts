@@ -62,7 +62,6 @@ const CLINIC_ID = 'clinic-1'
 const PKG_ID = 'pkg-1'
 const CUSTOMER_ID = 'cust-1'
 const SESSION_ID = 'sess-1'
-const NOW = new Date()
 
 function makePackage(overrides: Record<string, unknown> = {}) {
   return {
