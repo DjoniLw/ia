@@ -57,7 +57,7 @@ export class PromotionsService {
     isPackageSale = false,
   ): Promise<{ promotion: NonNullable<Awaited<ReturnType<PromotionsRepository['findByCode']>>>; discountAmount: number }> {
     const promotion = await this.repo.findByCode(clinicId, code)
-    if (!promotion) throw new NotFoundError('Cupom não encontrado. (PROMOTION_NOT_FOUND)')
+    if (!promotion) throw new AppError('Cupom não encontrado.', 404, 'PROMOTION_NOT_FOUND')
 
     // Coupons are not applicable to package sales
     if (isPackageSale) {
@@ -132,15 +132,8 @@ export class PromotionsService {
       dto.customerId,
     )
 
-    await this.repo.createUsage({
-      clinicId,
-      promotionId: promotion.id,
-      customerId: dto.customerId,
-      billingId: dto.billingId,
-      discountAmount,
-    })
-
-    // Atomic increment — only if still under maxUses (prevents race condition)
+    // Atomic increment FIRST — only if still under maxUses (prevents race condition)
+    // Must run before createUsage to guarantee consistency: if this fails, no usage is recorded
     if (promotion.maxUses !== null) {
       const updated = await prisma.promotion.updateMany({
         where: { id: promotion.id, usesCount: { lt: promotion.maxUses } },
@@ -152,6 +145,15 @@ export class PromotionsService {
     } else {
       await this.repo.incrementUsage(promotion.id)
     }
+
+    // Only create usage record after increment succeeds
+    await this.repo.createUsage({
+      clinicId,
+      promotionId: promotion.id,
+      customerId: dto.customerId,
+      billingId: dto.billingId,
+      discountAmount,
+    })
 
     return { discountAmount }
   }

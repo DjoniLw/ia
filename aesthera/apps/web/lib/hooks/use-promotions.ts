@@ -53,12 +53,12 @@ export interface UpdatePromotionInput {
   description?: string
   status?: PromotionStatus
   maxUses?: number | null
+  maxUsesPerCustomer?: number | null
   validUntil?: string | null
 }
 
 export interface ValidatePromotionResult {
   discountAmount: number
-  promotion: Promotion
 }
 
 // ──── Hooks ────────────────────────────────────────────────────────────────────

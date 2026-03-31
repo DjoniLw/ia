@@ -20,6 +20,15 @@ export async function promotionsRoutes(app: FastifyInstance) {
   // Per-IP in-memory counters for /validate rate limiting
   const validateHits = new Map<string, { count: number; resetAt: number }>()
 
+  // Cleanup expired entries every 5 minutes to prevent unbounded memory growth
+  const cleanupInterval = setInterval(() => {
+    const now = Date.now()
+    for (const [ip, entry] of validateHits) {
+      if (entry.resetAt < now) validateHits.delete(ip)
+    }
+  }, 5 * 60 * 1000)
+  app.addHook('onClose', () => clearInterval(cleanupInterval))
+
   function checkValidateRateLimit(ip: string): { limited: boolean; retryAfter: number } {
     const now = Date.now()
     const entry = validateHits.get(ip)
@@ -83,7 +92,7 @@ export async function promotionsRoutes(app: FastifyInstance) {
         return reply
           .status(429)
           .header('Retry-After', String(retryAfter))
-          .send({ error: 'Muitas tentativas. Tente novamente em alguns instantes.', code: 'RATE_LIMIT_EXCEEDED' })
+          .send({ error: 'RATE_LIMIT_EXCEEDED', message: 'Muitas tentativas. Tente novamente em alguns instantes.' })
       }
       const dto = ValidatePromotionDto.parse(req.body)
       const result = await svc.validate(

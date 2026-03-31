@@ -97,6 +97,12 @@ export interface CustomerPackage {
   sessions: CustomerPackageSession[]
 }
 
+export interface PurchasePackageResult {
+  customerPackageId: string | undefined
+  billingId: string
+  sessions: CustomerPackageSession[]
+}
+
 export interface CreatePackageInput {
   name: string
   description?: string
@@ -168,7 +174,7 @@ export function usePurchasePackage(packageId: string) {
   return useMutation({
     mutationFn: ({ dto, idempotencyKey }: { dto: PurchasePackageInput; idempotencyKey: string }) =>
       api
-        .post<CustomerPackage>(`/packages/${packageId}/purchase`, dto, {
+        .post<PurchasePackageResult>(`/packages/${packageId}/purchase`, dto, {
           headers: { 'Idempotency-Key': idempotencyKey },
         })
         .then((r) => r.data),

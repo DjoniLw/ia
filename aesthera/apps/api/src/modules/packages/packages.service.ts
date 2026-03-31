@@ -72,6 +72,7 @@ export class PackagesService {
         customerPackageId: existingBilling.customerPackage?.id,
         billingId: existingBilling.id,
         sessions: existingBilling.customerPackage?.sessions ?? [],
+        wasCreated: false,
       }
     }
 
@@ -185,7 +186,27 @@ export class PackagesService {
         customerPackageId: customerPackage.id,
         billingId: billing.id,
         sessions,
+        wasCreated: true,
       }
+    }).catch(async (e: unknown) => {
+      // Handle race condition: concurrent requests with same idempotency key may both pass
+      // the findFirst check and one will fail with P2002 (unique constraint on paymentToken).
+      // In that case, find and return the existing billing created by the winner.
+      if ((e as { code?: string })?.code === 'P2002') {
+        const raceExisting = await prisma.billing.findFirst({
+          where: { clinicId, paymentToken: idempotencyKey },
+          include: { customerPackage: { include: { sessions: true } } },
+        })
+        if (raceExisting) {
+          return {
+            customerPackageId: raceExisting.customerPackage?.id,
+            billingId: raceExisting.id,
+            sessions: raceExisting.customerPackage?.sessions ?? [],
+            wasCreated: false,
+          }
+        }
+      }
+      throw e
     })
   }
 

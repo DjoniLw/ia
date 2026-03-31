@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -86,7 +86,8 @@ function CustomerSearchInput({
   function updatePos() {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect()
-      setDropdownPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX, width: rect.width })
+      // getBoundingClientRect() is already viewport-relative — no scroll offset needed with fixed positioning
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
     }
   }
 
@@ -409,8 +410,18 @@ function PurchaseModal({
   const [customer, setCustomer] = useState<{ id: string; name: string } | null>(null)
   const [lines, setLines] = useState([{ id: saleLineCounter++, method: 'cash', amountStr: '' }])
   const [notes, setNotes] = useState('')
-  const [idempotencyKey] = useState(() => crypto.randomUUID())
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
   const purchase = usePurchasePackage(pkg.id)
+
+  // Reset form state and generate a fresh idempotency key each time the modal opens
+  useEffect(() => {
+    if (open) {
+      setIdempotencyKey(crypto.randomUUID())
+      setCustomer(null)
+      setLines([{ id: saleLineCounter++, method: 'cash', amountStr: '' }])
+      setNotes('')
+    }
+  }, [open])
 
   if (!open) return null
 

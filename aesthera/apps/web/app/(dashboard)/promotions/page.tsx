@@ -99,6 +99,7 @@ function PromotionModal({
           description: description.trim() || undefined,
           status,
           maxUses: maxUses ? Number(maxUses) : null,
+          maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
           validUntil: validUntil || null,
         }
         await updateMutation.mutateAsync(dto)

@@ -11,6 +11,9 @@ const ledger = new LedgerService()
 const wallet = new WalletService()
 const promotionsSvc = new PromotionsService()
 
+// NOTE: promotionsSvc is used only for pre-validation (validate()) before the transaction.
+// Inside the transaction, promotion apply logic is inlined with tx for full atomicity.
+
 export class ManualReceiptsService {
   private billingRepo = new BillingRepository()
 
@@ -105,20 +108,42 @@ export class ManualReceiptsService {
         throw e
       }
 
-      // 2. Apply promotion discount if provided (SELECT FOR UPDATE inside apply())
+      // 2. Apply promotion discount atomically using this transaction (ensures rollback consistency)
       let appliedDiscountAmount = 0
       if (dto.promotionCode && billing.customerId && preValidatedPromotion) {
-        const applyResult = await promotionsSvc.apply(
-          clinicId,
-          {
-            code: dto.promotionCode,
+        const promotion = preValidatedPromotion.promotion
+        appliedDiscountAmount = preValidatedPromotion.discountAmount
+
+        // Atomic increment FIRST — only if still under maxUses (prevents race condition)
+        if (promotion.maxUses !== null) {
+          const updated = await tx.promotion.updateMany({
+            where: { id: promotion.id, usesCount: { lt: promotion.maxUses } },
+            data: { usesCount: { increment: 1 } },
+          })
+          if (updated.count === 0) {
+            throw new AppError('Limite de usos foi atingido concorrentemente.', 409, 'PROMOTION_MAX_USES_REACHED')
+          }
+        } else {
+          await tx.promotion.update({
+            where: { id: promotion.id },
+            data: { usesCount: { increment: 1 } },
+          })
+        }
+
+        // Create usage record after increment succeeds
+        await tx.promotionUsage.create({
+          data: {
+            clinicId,
+            promotionId: promotion.id,
             customerId: billing.customerId,
             billingId,
-            billingAmount: billing.amount,
+            discountAmount: appliedDiscountAmount,
           },
-        )
-        appliedDiscountAmount = applyResult.discountAmount
+        })
       }
+
+      // Recalculate effective amount inside the tx to ensure ledger uses the real applied discount
+      const txEffectiveAmount = billing.amount - appliedDiscountAmount
 
       // 3. Update billing status to paid — use receivedAt for consistency with retroactive receipts
       const effectivePaidAt = dto.receivedAt ? new Date(dto.receivedAt) : new Date()
@@ -142,10 +167,10 @@ export class ManualReceiptsService {
         }
       }
 
-      // 5. Create ledger credit entries (one per payment line, up to effectiveBillingAmount)
+      // 5. Create ledger credit entries (one per payment line, up to txEffectiveAmount)
       let allocatedToLedger = 0
       for (const line of dto.lines) {
-        const ledgerAmount = Math.min(line.amount, effectiveBillingAmount - allocatedToLedger)
+        const ledgerAmount = Math.min(line.amount, txEffectiveAmount - allocatedToLedger)
         if (ledgerAmount <= 0) break
         allocatedToLedger += ledgerAmount
         await ledger.createCreditEntry(

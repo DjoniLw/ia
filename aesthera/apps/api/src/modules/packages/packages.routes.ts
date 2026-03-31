@@ -72,7 +72,8 @@ export async function packagesRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string }
       const dto = PurchasePackageDto.parse(req.body)
       const idempotencyKey = (req.headers['idempotency-key'] as string) || crypto.randomUUID()
-      return reply.status(201).send(await svc.purchasePackage(req.clinicId, id, dto, idempotencyKey))
+      const { wasCreated, ...data } = await svc.purchasePackage(req.clinicId, id, dto, idempotencyKey)
+      return reply.status(wasCreated ? 201 : 200).send(data)
     },
   )
 

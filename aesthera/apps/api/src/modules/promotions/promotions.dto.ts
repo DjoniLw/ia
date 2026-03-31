@@ -17,8 +17,8 @@ export const CreatePromotionDto = z.object({
   minAmount: z.number().int().min(0).optional(),
   applicableServiceIds: z.array(z.string().uuid()).default([]),
   applicableProductIds: z.array(z.string().uuid()).default([]),
-  validFrom: z.string().min(1).transform(dateTransform),
-  validUntil: z.string().min(1).transform(dateUntilTransform).optional(),
+  validFrom: z.string().min(1).transform(dateTransform).pipe(z.string().datetime()),
+  validUntil: z.string().min(1).transform(dateUntilTransform).pipe(z.string().datetime()).optional(),
 })
 export type CreatePromotionDto = z.infer<typeof CreatePromotionDto>
 
@@ -30,7 +30,7 @@ export const UpdatePromotionDto = z.object({
   maxUsesPerCustomer: z.number().int().positive().optional().nullable(),
   applicableServiceIds: z.array(z.string().uuid()).optional(),
   applicableProductIds: z.array(z.string().uuid()).optional(),
-  validUntil: z.string().min(1).transform(dateUntilTransform).optional().nullable(),
+  validUntil: z.string().min(1).transform(dateUntilTransform).pipe(z.string().datetime()).optional().nullable(),
 })
 export type UpdatePromotionDto = z.infer<typeof UpdatePromotionDto>
 
