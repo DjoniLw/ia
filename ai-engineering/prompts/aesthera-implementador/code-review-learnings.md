@@ -180,6 +180,37 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Aplica-se a: webhook secrets, chaves de API de terceiros (pagamentos, notificações, WhatsApp), tokens de integração, segredos de HMAC.
   - 📅 Aprendido em: 30/03/2026 — revisão de assinatura remota por link (PR #136): handler de callback de assinatura permitia requests sem secret quando `WEBHOOK_SECRET` não estava no env
 
+- [ ] **Chamar outros services dentro de `prisma.$transaction` sem propagar o cliente `tx` — operações ficam fora da transação**
+  - 🔴 Anti-padrão: dentro de um bloco `prisma.$transaction(async (tx) => { ... })`, chamar um método de outro service que internamente usa `this.prisma` em vez de `tx` — essas operações rodam fora da transação e não são revertidas em caso de erro:
+    ```ts
+    // ERRADO — promotionService usa this.prisma internamente, não tx
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.create({ data: paymentData });
+      await this.promotionService.applyPromotion(customerId, promotionId); // ← fora da tx!
+    });
+    ```
+  - ✅ Correto: propagar o cliente `tx` para qualquer operação que deve participar da transação. Se o service externo não aceita `tx`, mover a lógica inline ou refatorar o método para aceitar um `PrismaClient | Prisma.TransactionClient` como parâmetro:
+    ```ts
+    // CORRETO — tx propagado
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.create({ data: paymentData });
+      await this.promotionService.applyPromotion(customerId, promotionId, tx); // ← dentro da tx
+    });
+
+    // No promotionService:
+    async applyPromotion(
+      customerId: string,
+      promotionId: string,
+      tx?: Prisma.TransactionClient,
+    ) {
+      const client = tx ?? this.prisma;
+      await client.promotion.update({ ... });
+    }
+    ```
+  - 📌 Regra geral: dentro de `$transaction`, **toda** operação de banco que deve ser atômica com o restante precisa usar o `tx` recebido como parâmetro — nunca `this.prisma`. Verificar chamadas a services externos como se fossem chamadas de banco diretas.
+  - 📌 Sinal de alerta: se um service externo é chamado dentro de `$transaction` e esse service não recebe `tx` como parâmetro, há grande chance de violação de atomicidade.
+  - 📅 Aprendido em: 30/03/2026 — revisão de fluxo de recebimento: `promotionService.applyPromotion` chamado dentro da `$transaction` de pagamento usava `this.prisma`, ficando fora da transação
+
 ---
 
 ## Frontend
@@ -535,6 +566,31 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: estado otimista (atualizar UI antes da API responder) é aceitável apenas com rollback em `onError`. Qualquer feedback de "salvo" sem API call — ou sem tratamento de erro — é um bug que erode a confiança do usuário e mascara falhas silenciosas.
   - 📌 Checklist antes de adicionar qualquer `toast.success`: existe uma `mutationFn` correspondente? O toast está dentro do `onSuccess`? Existe um `onError` com mensagem de falha?
   - 📅 Aprendido em: 30/03/2026 — revisão de PR #136 (assinatura remota): feedback visual de ativação exibido sem chamada à API
+
+- [ ] **`idempotencyKey` gerado em `useState` de modal com `if (!open) return null` persiste entre aberturas — usar `useMemo` com dependência em `open`**
+  - 🔴 Anti-padrão: gerar a `idempotencyKey` (ou qualquer valor que precisa ser único por abertura de modal) em `useState(() => uuid())` dentro de um componente modal que usa `if (!open) return null` como early return — como o `useState` é inicializado apenas na primeira montagem e o componente **não é desmontado** ao fechar (o `if` só bloqueia o render, não desmonta), a chave permanece a mesma em todas as aberturas subsequentes:
+    ```tsx
+    // ERRADO — key persiste entre aberturas (useState inicializa só na montagem)
+    const [idempotencyKey] = useState(() => crypto.randomUUID());
+
+    if (!open) return null; // não desmonta, só para de renderizar
+    ```
+  - ✅ Correto: duas opções, dependendo do contexto:
+    ```tsx
+    // Opção 1 — useMemo com dependência em `open`: recalcula quando o modal abre
+    const idempotencyKey = useMemo(
+      () => (open ? crypto.randomUUID() : ''),
+      [open] // nova key a cada abertura
+    );
+
+    // Opção 2 — mover o early return para fora do componente (preferred):
+    // No componente pai:
+    {open && <PaymentModal open={open} onClose={...} />}
+    // O componente é desmontado ao fechar → useState gera nova key na remontagem
+    ```
+  - 📌 Regra geral: `useState` com valor inicial calculado (`useState(() => fn())`) só executa `fn` **uma vez** — na primeira montagem. Se o componente usa `if (!open) return null`, ele não é desmontado ao fechar. Para valores que devem ser únicos por abertura (idempotency keys, seeds de formulário), usar `useMemo([open])` ou garantir desmontagem real via renderização condicional no pai (`{open && <Modal />}`).
+  - 📌 Aplica-se a: qualquer modal que gera UUID, seed de formulário, token de sessão local, ou qualquer valor que precisa ser recriado a cada abertura.
+  - 📅 Aprendido em: 30/03/2026 — revisão de modal de pagamento: `idempotencyKey` em `useState` com early return `if (!open) return null` enviava a mesma chave em pagamentos repetidos
 
 ---
 
