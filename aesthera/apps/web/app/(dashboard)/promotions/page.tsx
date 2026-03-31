@@ -1,10 +1,11 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { PROMOTION_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
@@ -74,11 +75,27 @@ function PromotionModal({
   const [status, setStatus] = useState<PromotionStatus>(editing?.status ?? 'active')
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(editing?.applicableServiceIds ?? [])
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>(editing?.applicableProductIds ?? [])
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [productSearch, setProductSearch] = useState('')
 
   const { data: servicesData } = useServices({ active: 'true', limit: '200' })
   const { data: productsData } = useProducts({ active: 'true', limit: '200' })
-  const services: Service[] = servicesData?.items ?? []
-  const products: Product[] = productsData?.items ?? []
+  const allServices: Service[] = servicesData?.items ?? []
+  const allProducts: Product[] = productsData?.items ?? []
+
+  const serviceItems = useMemo<ComboboxItem[]>(() => {
+    const q = serviceSearch.trim().toLowerCase()
+    return allServices
+      .filter((s) => !selectedServiceIds.includes(s.id) && (!q || s.name.toLowerCase().includes(q)))
+      .map((s) => ({ value: s.id, label: s.name }))
+  }, [allServices, serviceSearch, selectedServiceIds])
+
+  const productItems = useMemo<ComboboxItem[]>(() => {
+    const q = productSearch.trim().toLowerCase()
+    return allProducts
+      .filter((p) => !selectedProductIds.includes(p.id) && (!q || p.name.toLowerCase().includes(q)))
+      .map((p) => ({ value: p.id, label: p.name }))
+  }, [allProducts, productSearch, selectedProductIds])
 
   const createMutation = useCreatePromotion()
   const updateMutation = useUpdatePromotion(editing?.id ?? '')
@@ -313,72 +330,86 @@ function PromotionModal({
           )}
 
           {/* Serviços aplicáveis */}
-          {services.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                Serviços aplicáveis
-                <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5 rounded-lg border bg-background p-2">
-                {services.map((s) => {
-                  const checked = selectedServiceIds.includes(s.id)
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Serviços aplicáveis
+              <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
+            </label>
+            <ComboboxSearch
+              value={null}
+              onChange={(item) => {
+                if (item) setSelectedServiceIds((prev) => [...prev, item.value])
+              }}
+              onSearch={setServiceSearch}
+              items={serviceItems}
+              isLoading={!servicesData}
+              placeholder="Buscar serviço…"
+            />
+            {selectedServiceIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {selectedServiceIds.map((id) => {
+                  const svc = allServices.find((s) => s.id === id)
                   return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() =>
-                        setSelectedServiceIds((prev) =>
-                          checked ? prev.filter((id) => id !== s.id) : [...prev, s.id],
-                        )
-                      }
-                      className={[
-                        'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-                        checked
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-input bg-card text-muted-foreground hover:bg-accent',
-                      ].join(' ')}
+                    <span
+                      key={id}
+                      className="inline-flex items-center gap-1 rounded-full border bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
                     >
-                      {s.name}
-                    </button>
+                      {svc?.name ?? id}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedServiceIds((prev) => prev.filter((x) => x !== id))}
+                        className="ml-0.5 text-primary/70 hover:text-primary"
+                        aria-label="Remover"
+                      >
+                        ✕
+                      </button>
+                    </span>
                   )
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Produtos aplicáveis */}
-          {products.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                Produtos aplicáveis
-                <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5 rounded-lg border bg-background p-2">
-                {products.map((p) => {
-                  const checked = selectedProductIds.includes(p.id)
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Produtos aplicáveis
+              <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
+            </label>
+            <ComboboxSearch
+              value={null}
+              onChange={(item) => {
+                if (item) setSelectedProductIds((prev) => [...prev, item.value])
+              }}
+              onSearch={setProductSearch}
+              items={productItems}
+              isLoading={!productsData}
+              placeholder="Buscar produto…"
+            />
+            {selectedProductIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {selectedProductIds.map((id) => {
+                  const prod = allProducts.find((p) => p.id === id)
                   return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() =>
-                        setSelectedProductIds((prev) =>
-                          checked ? prev.filter((id) => id !== p.id) : [...prev, p.id],
-                        )
-                      }
-                      className={[
-                        'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
-                        checked
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-input bg-card text-muted-foreground hover:bg-accent',
-                      ].join(' ')}
+                    <span
+                      key={id}
+                      className="inline-flex items-center gap-1 rounded-full border bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
                     >
-                      {p.name}
-                    </button>
+                      {prod?.name ?? id}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProductIds((prev) => prev.filter((x) => x !== id))}
+                        className="ml-0.5 text-primary/70 hover:text-primary"
+                        aria-label="Remover"
+                      >
+                        ✕
+                      </button>
+                    </span>
                   )
                 })}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
