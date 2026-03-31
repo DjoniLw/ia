@@ -148,7 +148,7 @@ describe('PackagesService', () => {
         paymentMethods: [{ method: 'pix', amount: 30000 }],
       }, 'idem-key')
 
-      expect(result).toEqual({ customerPackageId: 'cp-1', billingId: 'billing-already', sessions: [] })
+      expect(result).toEqual({ customerPackageId: 'cp-1', billingId: 'billing-already', sessions: [], wasCreated: false })
       expect(mockRepo.createCustomerPackage).not.toHaveBeenCalled()
     })
   })
