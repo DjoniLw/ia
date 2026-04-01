@@ -117,11 +117,15 @@ export function useTogglePromotion(id: string) {
   })
 }
 
-export function useActivePromotionsForService(serviceId: string, enabled = true) {
+export function useActivePromotionsForService(serviceId: string, customerId?: string, enabled = true) {
   return useQuery<Promotion[]>({
-    queryKey: ['promotions-for-service', serviceId],
+    queryKey: ['promotions-for-service', serviceId, customerId],
     queryFn: () =>
-      api.get('/promotions', { params: { serviceId, status: 'active' } }).then((r) => r.data?.items ?? []),
+      api
+        .get(`/promotions/active-for-service/${serviceId}`, {
+          params: customerId ? { customerId } : undefined,
+        })
+        .then((r) => r.data),
     enabled: !!serviceId && enabled,
     staleTime: 30_000,
   })

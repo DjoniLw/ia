@@ -133,4 +133,14 @@ export async function promotionsRoutes(app: FastifyInstance) {
       return reply.send(await svc.findActiveForProduct(req.clinicId, productId))
     },
   )
+
+  app.get(
+    '/promotions/active-for-service/:serviceId',
+    { preHandler: [jwtClinicGuard] },
+    async (req, reply) => {
+      const { serviceId } = req.params as { serviceId: string }
+      const { customerId } = req.query as { customerId?: string }
+      return reply.send(await svc.findActiveForService(req.clinicId, serviceId, customerId))
+    },
+  )
 }

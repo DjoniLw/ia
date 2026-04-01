@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -217,12 +217,36 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   // Coupon state
   const [couponInput, setCouponInput] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null)
+  const [autoApplied, setAutoApplied] = useState(false)
   const validatePromotion = useValidatePromotion()
 
-  // Auto-detect active promotions for the service being billed
+  // Auto-detect active promotions for the service being billed, filtered by customer limit
   const serviceId = billing.appointment?.service?.id ?? ''
-  const { data: servicePromotions } = useActivePromotionsForService(serviceId, open && !!serviceId && !appliedCoupon)
+  const customerId = billing.customer.id
+  const { data: servicePromotions } = useActivePromotionsForService(
+    serviceId,
+    customerId,
+    open && !!serviceId,
+  )
   const suggestedPromotion = servicePromotions?.[0] ?? null
+
+  // Auto-apply the suggested promotion when the modal opens
+  useEffect(() => {
+    if (!suggestedPromotion || appliedCoupon || autoApplied || !open) return
+    setAutoApplied(true)
+    validatePromotion.mutateAsync({
+      code: suggestedPromotion.code,
+      billingAmount: billing.amount,
+      serviceIds: serviceId ? [serviceId] : [],
+      customerId,
+    }).then((r) => {
+      setAppliedCoupon({ code: suggestedPromotion.code, discountAmount: r.discountAmount })
+      setCouponInput(suggestedPromotion.code)
+    }).catch(() => {
+      // silently ignore — customer may see manual coupon field
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedPromotion, open])
 
   const receive = useCreateManualReceipt(billing.id)
 
@@ -406,41 +430,22 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
 
         {/* Coupon / Promotion Code */}
         <div>
-          {/* Suggested promotion banner */}
-          {suggestedPromotion && !appliedCoupon && (
-            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs dark:border-blue-800/50 dark:bg-blue-950/30">
-              <span className="text-blue-800 dark:text-blue-300">
-                <Tag className="mr-1 inline h-3 w-3" />
-                Promoção disponível para este serviço:{' '}
-                <span className="font-mono font-semibold">{suggestedPromotion.code}</span>
-                {' — '}
-                {suggestedPromotion.discountType === 'PERCENTAGE'
-                  ? `${suggestedPromotion.discountValue}%`
-                  : formatCurrency(suggestedPromotion.discountValue)}{' '}
-                de desconto
+          {/* Auto-applied promotion banner */}
+          {appliedCoupon && suggestedPromotion?.code === appliedCoupon.code && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-xs dark:border-green-800/60 dark:bg-green-950/40">
+              <span className="flex items-center gap-1.5 text-green-800 dark:text-green-300">
+                <Check className="h-3.5 w-3.5 shrink-0" />
+                Promoção <span className="font-mono font-semibold">{appliedCoupon.code}</span> aplicada automaticamente —{' '}
+                {formatCurrency(appliedCoupon.discountAmount)} de desconto
               </span>
               <button
                 type="button"
-                disabled={validatePromotion.isPending}
-                onClick={() => {
-                  setCouponInput(suggestedPromotion.code)
-                  void validatePromotion.mutateAsync({
-                    code: suggestedPromotion.code,
-                    billingAmount: billing.amount,
-                    serviceIds: serviceId ? [serviceId] : [],
-                    customerId: billing.customer.id,
-                  }).then((r) => {
-                    setAppliedCoupon({ code: suggestedPromotion.code, discountAmount: r.discountAmount })
-                    toast.success(`Cupom aplicado! Desconto de ${formatCurrency(r.discountAmount)}`)
-                  }).catch(() => toast.error('Não foi possível aplicar a promoção'))
-                }}
-                className="shrink-0 rounded-full border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                onClick={() => { setAppliedCoupon(null); setCouponInput(''); setAutoApplied(false) }}
+                className="shrink-0 text-green-700 hover:text-green-900 dark:text-green-400"
+                aria-label="Remover promoção"
+                title="Remover promoção"
               >
-                {validatePromotion.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  'Aplicar'
-                )}
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           )}

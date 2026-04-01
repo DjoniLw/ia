@@ -38,8 +38,18 @@ export class PromotionsService {
     return this.repo.toggleStatus(clinicId, id, dto.active)
   }
 
-  async findActiveForService(clinicId: string, serviceId: string) {
-    return this.repo.findActiveForService(clinicId, serviceId)
+  async findActiveForService(clinicId: string, serviceId: string, customerId?: string) {
+    const promotions = await this.repo.findActiveForService(clinicId, serviceId)
+    if (!customerId) return promotions
+    // Filter out promotions where this customer has already reached maxUsesPerCustomer
+    const filtered = await Promise.all(
+      promotions.map(async (p) => {
+        if (p.maxUsesPerCustomer === null || p.maxUsesPerCustomer === undefined) return p
+        const uses = await this.repo.countCustomerUsage(clinicId, p.id, customerId)
+        return uses < p.maxUsesPerCustomer ? p : null
+      }),
+    )
+    return filtered.filter((p): p is NonNullable<typeof p> => p !== null)
   }
 
   async findActiveForProduct(clinicId: string, productId: string) {
