@@ -2,7 +2,8 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Info, Loader2, Package, Plus, Search, ShoppingCart, Tag } from 'lucide-react'
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -16,6 +17,7 @@ import { useActivePromotionsForProduct } from '@/lib/hooks/use-promotions'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
+import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_BADGE_COLORS } from '@/lib/status-colors'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
@@ -31,8 +33,6 @@ function formatDate(iso: string) {
 // ──── New Sale Schema ──────────────────────────────────────────────────────────
 
 const saleSchema = z.object({
-  productId: z.string().min(1, 'Selecione um produto'),
-  customerId: z.string().optional(),
   quantity: z.coerce.number().int().positive('Quantidade deve ser maior que 0'),
   discount: z.coerce.number().min(0).default(0),
   paymentMethod: z.enum(['cash', 'pix', 'card', 'transfer']).optional(),
@@ -40,12 +40,128 @@ const saleSchema = z.object({
 })
 type SaleFormData = z.infer<typeof saleSchema>
 
+// ──── CustomerSearchInput ───────────────────────────────────────────────────────
+
+function CustomerSearchInput({
+  value,
+  onChange,
+  placeholder = 'Buscar cliente…',
+}: {
+  value: { id: string; name: string } | null
+  onChange: (customer: { id: string; name: string } | null) => void
+  placeholder?: string
+}) {
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [debounced, setDebounced] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 })
+
+  const { data } = useCustomers(
+    debounced.trim().length >= 1 ? { name: debounced.trim(), limit: '20' } : undefined,
+  )
+  const results = data?.items ?? []
+
+  function updatePos() {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
+  }
+
+  function handleInput(v: string) {
+    setSearch(v)
+    setOpen(true)
+    updatePos()
+    if (!v) onChange(null)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => setDebounced(v), 250)
+  }
+
+  function handleSelect(c: { id: string; name: string }) {
+    onChange(c)
+    setSearch('')
+    setDebounced('')
+    setOpen(false)
+  }
+
+  const dropdown =
+    open && search.trim().length >= 1 && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="fixed z-[9999] rounded-md border bg-background shadow-lg max-h-48 overflow-auto"
+            style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+          >
+            {results.length === 0 ? (
+              <p className="p-3 text-sm text-muted-foreground">Nenhum cliente encontrado</p>
+            ) : (
+              results.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelect(c)}
+                >
+                  <span className="font-medium">{c.name}</span>
+                  {c.phone && (
+                    <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>,
+          document.body,
+        )
+      : null
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2">
+        <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <input
+          value={value && !open ? value.name : search}
+          onChange={(e) => handleInput(e.target.value)}
+          onFocus={() => { updatePos(); setSearch(''); setOpen(true) }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder={value ? value.name : placeholder}
+          className="flex-1 bg-transparent text-sm focus:outline-none"
+          autoComplete="off"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => { onChange(null); setSearch('') }}
+            className="text-muted-foreground hover:text-foreground text-xs"
+          >✕</button>
+        )}
+      </div>
+      {dropdown}
+    </div>
+  )
+}
+
 // ──── New Sale Form ────────────────────────────────────────────────────────────
 
 function NewSaleForm({ onClose }: { onClose: () => void }) {
   const { data: products } = useProducts({ active: 'true', limit: '100' })
-  const { data: customers } = useCustomers({ limit: '50' })
   const sell = useSellProduct()
+
+  const [selectedProduct, setSelectedProduct] = useState<ComboboxItem | null>(null)
+  const [productSearch, setProductSearch] = useState('')
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null)
+
+  const productItems = useMemo(() => {
+    const q = productSearch.trim().toLowerCase()
+    return (products?.items ?? [])
+      .filter((p) => !q || p.name.toLowerCase().includes(q))
+      .map((p) => ({
+        value: p.id,
+        label: p.name,
+        sublabel: `${formatCurrency(p.price)} · Estoque: ${p.stock} ${p.unit}${p.stock <= 0 ? ' — sem estoque' : ''}`,
+      }))
+  }, [products, productSearch])
 
   const {
     register,
@@ -57,12 +173,12 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
     defaultValues: { quantity: 1, discount: 0 },
   })
 
-  const selectedProductId = watch('productId')
+  const selectedProductId = selectedProduct?.value ?? ''
   const quantity = watch('quantity') || 1
   const discount = watch('discount') || 0
 
-  const selectedProduct = products?.items.find((p) => p.id === selectedProductId)
-  const unitPrice = selectedProduct?.price ?? 0
+  const selectedProductObj = products?.items.find((p) => p.id === selectedProductId)
+  const unitPrice = selectedProductObj?.price ?? 0
 
   // Auto-detect active promotions for the selected product
   const { data: activePromotions } = useActivePromotionsForProduct(selectedProductId, !!selectedProductId)
@@ -78,10 +194,13 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
   const total = Math.max(0, unitPrice * quantity - appliedDiscount)
 
   async function onSubmit(data: SaleFormData) {
+    if (!selectedProduct) {
+      return
+    }
     try {
       await sell.mutateAsync({
-        productId: data.productId,
-        customerId: data.customerId || null,
+        productId: selectedProduct.value,
+        customerId: selectedCustomer?.id ?? null,
         quantity: data.quantity,
         discount: Math.min(appliedDiscount, unitPrice * data.quantity),
         paymentMethod: data.paymentMethod || null,
@@ -100,19 +219,15 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-2">
         <Label>Produto *</Label>
-        <select
-          {...register('productId')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="">Selecione um produto…</option>
-          {products?.items.map((p) => (
-            <option key={p.id} value={p.id} disabled={p.stock <= 0}>
-              {p.name} — {formatCurrency(p.price)} — Estoque: {p.stock} {p.unit}
-              {p.stock <= 0 ? ' (sem estoque)' : ''}
-            </option>
-          ))}
-        </select>
-        {errors.productId && <p className="text-xs text-red-500">{errors.productId.message}</p>}
+        <ComboboxSearch
+          value={selectedProduct}
+          onChange={setSelectedProduct}
+          onSearch={setProductSearch}
+          items={productItems}
+          placeholder="Buscar produto…"
+          className="w-full"
+        />
+        {!selectedProduct && <p className="text-xs text-red-500">Selecione um produto</p>}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -121,7 +236,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
           <Input
             type="number"
             min="1"
-            max={selectedProduct?.stock ?? 999}
+            max={selectedProductObj?.stock ?? 999}
             {...register('quantity')}
           />
           {errors.quantity && <p className="text-xs text-red-500">{errors.quantity.message}</p>}
@@ -171,15 +286,11 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
 
       <div className="space-y-2">
         <Label>Cliente (opcional)</Label>
-        <select
-          {...register('customerId')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="">Sem cliente vinculado</option>
-          {customers?.items.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+        <CustomerSearchInput
+          value={selectedCustomer}
+          onChange={setSelectedCustomer}
+          placeholder="Sem cliente vinculado — busque pelo nome…"
+        />
       </div>
 
       <div className="space-y-2">
