@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Info, Loader2, Package, Plus, Search, ShoppingCart } from 'lucide-react'
+import { Info, Loader2, Package, Plus, Search, ShoppingCart, Tag } from 'lucide-react'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
@@ -150,7 +150,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
         <>
           {bestPromotion && (
             <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-800 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
-              <span>🏷</span>
+              <Tag className="h-3.5 w-3.5 shrink-0" />
               <span>
                 Promoção <span className="font-mono font-semibold">{bestPromotion.code}</span> aplicada automaticamente —{' '}
                 {bestPromotion.discountType === 'PERCENTAGE'
@@ -166,8 +166,8 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
             </div>
             {appliedDiscount > 0 && (
               <div className="flex justify-between font-medium text-green-700 dark:text-green-400">
-                <span>
-                  {bestPromotion ? `🏷 Desconto (${bestPromotion.code})` : 'Desconto'}
+                <span className="flex items-center gap-1">
+                  {bestPromotion ? <><Tag className="h-3 w-3" /> Desconto ({bestPromotion.code})</> : 'Desconto'}
                 </span>
                 <span>- {formatCurrency(appliedDiscount)}</span>
               </div>

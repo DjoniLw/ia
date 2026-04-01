@@ -455,19 +455,20 @@ function PurchaseModal({
       <DialogTitle>Vender pacote</DialogTitle>
       <form onSubmit={handleSubmit} className="space-y-4">
           {/* Package summary */}
-          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+          <div className="rounded-lg border bg-muted/30 p-3">
             <div className="font-medium text-foreground">{pkg.name}</div>
-            <div className="mt-0.5 text-muted-foreground">{formatCurrency(pkg.price)}</div>
+            <div className="mt-1 text-xl font-semibold text-foreground">{formatCurrency(pkg.price)}</div>
             {pkg.validityDays && (
               <div className="mt-0.5 text-xs text-muted-foreground">Validade: {pkg.validityDays} dias</div>
             )}
-            <div className="mt-1 flex flex-wrap gap-1">
+            <ul className="mt-2 space-y-0.5 text-sm text-foreground">
               {pkg.items.map((item) => (
-                <span key={item.serviceId} className="rounded-full border bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
-                  {item.service.name} × {item.quantity}
-                </span>
+                <li key={item.serviceId} className="flex justify-between gap-2">
+                  <span>{item.service.name}</span>
+                  <span className="text-muted-foreground">{item.quantity}×</span>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
 
           {/* Customer */}
@@ -508,11 +509,18 @@ function PurchaseModal({
                 )}
               </div>
             ))}
-            <button type="button" onClick={addLine} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-              <Plus className="h-3.5 w-3.5" />
+            <Button type="button" variant="outline" size="sm" onClick={addLine} className="w-full">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
               Adicionar forma de pagamento
-            </button>
+            </Button>
           </div>
+
+          {/* Faltam — próximo às linhas de pagamento */}
+          {diffCents > 0 && (
+            <p className="-mt-2 text-xs font-medium text-red-600">
+              Faltam {formatCurrency(diffCents)} para cobrir o valor do pacote
+            </p>
+          )}
 
           {/* Totals */}
           <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-sm">
@@ -524,10 +532,10 @@ function PurchaseModal({
               <span className="text-muted-foreground">Valor do pacote</span>
               <span className="font-semibold">{formatCurrency(pkg.price)}</span>
             </div>
-            {diffCents > 0 && (
-              <div className="flex justify-between text-red-600">
-                <span>Faltam</span>
-                <span className="font-semibold">{formatCurrency(diffCents)}</span>
+            {totalPaid > pkg.price && (
+              <div className="flex justify-between text-green-700 dark:text-green-400">
+                <span>Troco</span>
+                <span className="font-semibold">{formatCurrency(totalPaid - pkg.price)}</span>
               </div>
             )}
           </div>

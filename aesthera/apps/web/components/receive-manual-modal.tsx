@@ -406,13 +406,12 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
 
         {/* Coupon / Promotion Code */}
         <div>
-          <Label className="mb-1.5 block">Cupom de desconto</Label>
-
           {/* Suggested promotion banner */}
           {suggestedPromotion && !appliedCoupon && (
             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs dark:border-blue-800/50 dark:bg-blue-950/30">
               <span className="text-blue-800 dark:text-blue-300">
-                🏷 Promoção disponível para este serviço:{' '}
+                <Tag className="mr-1 inline h-3 w-3" />
+                Promoção disponível para este serviço:{' '}
                 <span className="font-mono font-semibold">{suggestedPromotion.code}</span>
                 {' — '}
                 {suggestedPromotion.discountType === 'PERCENTAGE'
@@ -422,6 +421,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
               </span>
               <button
                 type="button"
+                disabled={validatePromotion.isPending}
                 onClick={() => {
                   setCouponInput(suggestedPromotion.code)
                   void validatePromotion.mutateAsync({
@@ -434,12 +434,18 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
                     toast.success(`Cupom aplicado! Desconto de ${formatCurrency(r.discountAmount)}`)
                   }).catch(() => toast.error('Não foi possível aplicar a promoção'))
                 }}
-                className="shrink-0 rounded-full border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                className="shrink-0 rounded-full border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
               >
-                Aplicar
+                {validatePromotion.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  'Aplicar'
+                )}
               </button>
             </div>
           )}
+
+          <Label className="mb-1.5 block">Cupom de desconto</Label>
 
           <div className="flex gap-2">
             <Input
