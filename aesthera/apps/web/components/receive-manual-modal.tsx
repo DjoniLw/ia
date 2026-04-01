@@ -159,13 +159,13 @@ function OverpaymentSection({ excedente, selected, onChange }: OverpaymentSectio
   ]
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 p-4 space-y-3">
+    <div className="rounded-lg border border-amber-300 bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/20 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-amber-800 dark:text-amber-400">
+        <span className="text-sm font-medium text-amber-900 dark:text-amber-400">
           ⚠️ Excedente de {formatCurrency(excedente)}
         </span>
       </div>
-      <p className="text-xs text-amber-700 dark:text-amber-500">O que fazer com o excedente?</p>
+      <p className="text-xs text-amber-800 dark:text-amber-500">O que fazer com o excedente?</p>
       <div className="space-y-2">
         {options.map((opt) => (
           <label
@@ -233,6 +233,15 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   // Auto-apply the suggested promotion when the modal opens — only for service-specific promotions
   // Promotions with empty applicableServiceIds (applies to all) must be applied manually
   const isSpecificPromotion = (suggestedPromotion?.applicableServiceIds.length ?? 0) > 0
+
+  // Reset coupon state when modal closes so reopening always starts fresh
+  useEffect(() => {
+    if (!open) {
+      setAppliedCoupon(null)
+      setCouponInput('')
+      setAutoApplied(false)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!suggestedPromotion || !isSpecificPromotion || appliedCoupon || autoApplied || !open) return

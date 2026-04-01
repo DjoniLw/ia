@@ -129,7 +129,8 @@ export function useActivePromotionsForService(serviceId: string, customerId?: st
         })
         .then((r) => r.data),
     enabled: !!serviceId && enabled,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 }
 
@@ -139,6 +140,7 @@ export function useActivePromotionsForProduct(productId: string, enabled = true)
     queryFn: () =>
       api.get(`/promotions/active-for-product/${productId}`).then((r) => r.data),
     enabled: !!productId && enabled,
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 }
