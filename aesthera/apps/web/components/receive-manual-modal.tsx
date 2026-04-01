@@ -232,11 +232,14 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
     customerId,
     open && !!serviceId && !hasLockedPromo,
   )
-  const suggestedPromotion = servicePromotions?.[0] ?? null
-
-  // Auto-apply the suggested promotion when the modal opens — only for service-specific promotions
-  // Promotions with empty applicableServiceIds (applies to all) must be applied manually
-  const isSpecificPromotion = (suggestedPromotion?.applicableServiceIds.length ?? 0) > 0
+  const specificPromotion = servicePromotions?.find(
+    (p) => p.applicableServiceIds.includes(serviceId)
+  ) ?? null
+  const universalPromotion = servicePromotions?.find(
+    (p) => p.applicableServiceIds.length === 0
+  ) ?? null
+  const suggestedPromotion = specificPromotion ?? universalPromotion
+  const isSpecificPromotion = !!specificPromotion
 
   useEffect(() => {
     if (!suggestedPromotion || !isSpecificPromotion || appliedCoupon || autoApplied || !open) return
@@ -479,6 +482,41 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
                 title="Remover promoção"
               >
                 <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Promoção universal disponível como opção de troca (quando específica está ativa) */}
+          {universalPromotion && appliedCoupon && isSpecificPromotion && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs dark:border-blue-700 dark:bg-blue-800">
+              <span className="flex items-center gap-1.5 text-white">
+                <Tag className="h-3 w-3 shrink-0" />
+                Promoção universal disponível:{' '}
+                <span className="font-mono font-semibold">{universalPromotion.code}</span>
+                {' — '}
+                {universalPromotion.discountType === 'PERCENTAGE'
+                  ? `${universalPromotion.discountValue}% de desconto`
+                  : `${formatCurrency(universalPromotion.discountValue)} de desconto`}
+              </span>
+              <button
+                type="button"
+                disabled={validatePromotion.isPending}
+                onClick={() => {
+                  setAppliedCoupon(null)
+                  setCouponInput(universalPromotion.code)
+                  void validatePromotion.mutateAsync({
+                    code: universalPromotion.code,
+                    billingAmount: billing.amount,
+                    serviceIds: serviceId ? [serviceId] : [],
+                    customerId,
+                  }).then((r) => {
+                    setAppliedCoupon({ code: universalPromotion.code, discountAmount: r.discountAmount })
+                    setCouponInput(universalPromotion.code)
+                  }).catch(() => toast.error('Não foi possível aplicar a promoção'))
+                }}
+                className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {validatePromotion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Usar esta'}
               </button>
             </div>
           )}

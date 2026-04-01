@@ -226,14 +226,17 @@ export function SellProductForm({ onClose, defaultProduct = null }: SellProductF
   const specificPromotion = activePromotions?.find(
     (p) => p.applicableProductIds.includes(selectedProductId),
   ) ?? null
-  const universalPromotion = (!specificPromotion
-    ? activePromotions?.find((p) => p.applicableProductIds.length === 0)
-    : null) ?? null
+  const universalPromotion = activePromotions?.find(
+    (p) => p.applicableProductIds.length === 0
+  ) ?? null
   const [appliedUniversalPromo, setAppliedUniversalPromo] = useState<typeof universalPromotion>(null)
+  const [specificDismissed, setSpecificDismissed] = useState(false)
 
-  useEffect(() => { setAppliedUniversalPromo(null) }, [selectedProductId])
+  useEffect(() => { setAppliedUniversalPromo(null); setSpecificDismissed(false) }, [selectedProductId])
 
-  const autoPromotion = specificPromotion ?? appliedUniversalPromo
+  const autoPromotion = (!specificDismissed && specificPromotion)
+    ? specificPromotion
+    : appliedUniversalPromo
 
   const promoDiscount = autoPromotion
     ? autoPromotion.discountType === 'PERCENTAGE'
@@ -321,7 +324,7 @@ export function SellProductForm({ onClose, defaultProduct = null }: SellProductF
 
       {selectedProduct && (
         <>
-          {specificPromotion && (
+          {specificPromotion && !specificDismissed && (
             <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-xs text-green-800 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
               <Tag className="h-3.5 w-3.5 shrink-0" />
               <span>
@@ -340,7 +343,7 @@ export function SellProductForm({ onClose, defaultProduct = null }: SellProductF
               </span>
               <button
                 type="button"
-                onClick={() => setAppliedUniversalPromo(null)}
+                onClick={() => { setAppliedUniversalPromo(null); setSpecificDismissed(false) }}
                 className="text-green-700 hover:text-green-900 dark:text-green-400"
               >✕</button>
             </div>
@@ -358,10 +361,13 @@ export function SellProductForm({ onClose, defaultProduct = null }: SellProductF
               </span>
               <button
                 type="button"
-                onClick={() => setAppliedUniversalPromo(universalPromotion)}
+                onClick={() => {
+                  if (specificPromotion && !specificDismissed) setSpecificDismissed(true)
+                  setAppliedUniversalPromo(universalPromotion)
+                }}
                 className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
               >
-                Aplicar
+                {specificPromotion && !specificDismissed ? 'Usar esta' : 'Aplicar'}
               </button>
             </div>
           )}
