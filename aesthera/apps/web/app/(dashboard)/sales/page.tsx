@@ -57,7 +57,7 @@ type SaleFormData = z.infer<typeof saleSchema>
 
 function NewSaleForm({ onClose }: { onClose: () => void }) {
   const { data: products } = useProducts({ active: 'true', limit: '100' })
-  const { data: customers } = useCustomers()
+  const { data: customers } = useCustomers({ limit: '50' })
   const sell = useSellProduct()
 
   const {
@@ -139,11 +139,13 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
           />
           {errors.quantity && <p className="text-xs text-red-500">{errors.quantity.message}</p>}
         </div>
-        <div className="space-y-2">
-          <Label>Desconto (R$)</Label>
-          <Input type="number" min="0" step="0.01" {...register('discount')} />
-          {errors.discount && <p className="text-xs text-destructive">{errors.discount.message}</p>}
-        </div>
+        {!bestPromotion && (
+          <div className="space-y-2">
+            <Label>Desconto (R$)</Label>
+            <Input type="number" min="0" step="0.01" {...register('discount')} />
+            {errors.discount && <p className="text-xs text-destructive">{errors.discount.message}</p>}
+          </div>
+        )}
       </div>
 
       {selectedProduct && (

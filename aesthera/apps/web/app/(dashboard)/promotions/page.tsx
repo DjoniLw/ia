@@ -646,6 +646,16 @@ function PromotionsPageContent() {
                                 : `${promo.applicableServiceIds.length} serviço(s)`}
                             </div>
                             <div>
+                              <span className="font-semibold text-foreground">Limite por cliente:</span>{' '}
+                              {promo.maxUsesPerCustomer ?? 'Ilimitado'}
+                            </div>
+                            {promo.applicableProductIds.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Produtos aplicáveis:</span>{' '}
+                                {promo.applicableProductIds.length} produto(s)
+                              </div>
+                            )}
+                            <div>
                               <span className="font-semibold text-foreground">Criado em:</span>{' '}
                               {formatDate(promo.createdAt)}
                             </div>
