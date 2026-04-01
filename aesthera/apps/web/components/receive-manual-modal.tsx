@@ -455,8 +455,8 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
 
           {/* Promoção específica removida manualmente — sugestão para re-aplicar */}
           {suggestedPromotion && isSpecificPromotion && !appliedCoupon && autoApplied && (
-            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-100 px-3 py-2 text-xs dark:border-blue-800/50 dark:bg-blue-950/30">
-              <span className="flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs dark:border-blue-700 dark:bg-blue-800">
+              <span className="flex items-center gap-1.5 text-white">
                 <Tag className="h-3 w-3 shrink-0" />
                 Promoção disponível:{' '}
                 <span className="font-mono font-semibold">{suggestedPromotion.code}</span>
@@ -480,7 +480,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
                     toast.success(`Cupom aplicado! Desconto de ${formatCurrency(r.discountAmount)}`)
                   }).catch(() => toast.error('Não foi possível aplicar a promoção'))
                 }}
-                className="shrink-0 rounded-full border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {validatePromotion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
               </button>
@@ -489,8 +489,8 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
 
           {/* Promoção aberta (todos os serviços): apenas sugestão, aplicar manualmente */}
           {suggestedPromotion && !isSpecificPromotion && !appliedCoupon && (
-            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-100 px-3 py-2 text-xs dark:border-blue-800/50 dark:bg-blue-950/30">
-              <span className="flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs dark:border-blue-700 dark:bg-blue-800">
+              <span className="flex items-center gap-1.5 text-white">
                 <Tag className="h-3 w-3 shrink-0" />
                 Promoção disponível:{' '}
                 <span className="font-mono font-semibold">{suggestedPromotion.code}</span>
@@ -514,7 +514,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
                     toast.success(`Cupom aplicado! Desconto de ${formatCurrency(r.discountAmount)}`)
                   }).catch(() => toast.error('Não foi possível aplicar a promoção'))
                 }}
-                className="shrink-0 rounded-full border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {validatePromotion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
               </button>
