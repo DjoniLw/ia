@@ -234,15 +234,6 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   // Promotions with empty applicableServiceIds (applies to all) must be applied manually
   const isSpecificPromotion = (suggestedPromotion?.applicableServiceIds.length ?? 0) > 0
 
-  // Reset coupon state when modal closes so reopening always starts fresh
-  useEffect(() => {
-    if (!open) {
-      setAppliedCoupon(null)
-      setCouponInput('')
-      setAutoApplied(false)
-    }
-  }, [open])
-
   useEffect(() => {
     if (!suggestedPromotion || !isSpecificPromotion || appliedCoupon || autoApplied || !open) return
     setAutoApplied(true)
@@ -452,12 +443,46 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
               </span>
               <button
                 type="button"
-                onClick={() => { setAppliedCoupon(null); setCouponInput(''); setAutoApplied(false) }}
+                onClick={() => { setAppliedCoupon(null); setCouponInput('') }}
                 className="shrink-0 text-green-700 hover:text-green-900 dark:text-green-400"
                 aria-label="Remover promoção"
                 title="Remover promoção"
               >
                 <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Promoção específica removida manualmente — sugestão para re-aplicar */}
+          {suggestedPromotion && isSpecificPromotion && !appliedCoupon && autoApplied && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-100 px-3 py-2 text-xs dark:border-blue-800/50 dark:bg-blue-950/30">
+              <span className="flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
+                <Tag className="h-3 w-3 shrink-0" />
+                Promoção disponível:{' '}
+                <span className="font-mono font-semibold">{suggestedPromotion.code}</span>
+                {' — '}
+                {suggestedPromotion.discountType === 'PERCENTAGE'
+                  ? `${suggestedPromotion.discountValue}% de desconto`
+                  : `${formatCurrency(suggestedPromotion.discountValue)} de desconto`}
+              </span>
+              <button
+                type="button"
+                disabled={validatePromotion.isPending}
+                onClick={() => {
+                  setCouponInput(suggestedPromotion.code)
+                  void validatePromotion.mutateAsync({
+                    code: suggestedPromotion.code,
+                    billingAmount: billing.amount,
+                    serviceIds: serviceId ? [serviceId] : [],
+                    customerId,
+                  }).then((r) => {
+                    setAppliedCoupon({ code: suggestedPromotion.code, discountAmount: r.discountAmount })
+                    toast.success(`Cupom aplicado! Desconto de ${formatCurrency(r.discountAmount)}`)
+                  }).catch(() => toast.error('Não foi possível aplicar a promoção'))
+                }}
+                className="shrink-0 rounded-full border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+              >
+                {validatePromotion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
               </button>
             </div>
           )}

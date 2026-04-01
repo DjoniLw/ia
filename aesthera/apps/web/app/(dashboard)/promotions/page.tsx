@@ -61,7 +61,9 @@ function PromotionModal({
     editing?.discountType ?? 'PERCENTAGE',
   )
   const [discountValue, setDiscountValue] = useState(
-    editing ? String(editing.discountValue) : '',
+    editing
+      ? String(editing.discountType === 'FIXED' ? editing.discountValue / 100 : editing.discountValue)
+      : '',
   )
   const [maxUses, setMaxUses] = useState(editing?.maxUses != null ? String(editing.maxUses) : '')
   const [maxUsesPerCustomer, setMaxUsesPerCustomer] = useState(
@@ -112,7 +114,7 @@ function PromotionModal({
       name !== (editing.name ?? '') ||
       description !== (editing.description ?? '') ||
       discountType !== (editing.discountType ?? 'PERCENTAGE') ||
-      discountValue !== String(editing.discountValue ?? '') ||
+      discountValue !== String(editing.discountType === 'FIXED' ? (editing.discountValue ?? 0) / 100 : (editing.discountValue ?? '')) ||
       maxUses !== (editing.maxUses != null ? String(editing.maxUses) : '') ||
       maxUsesPerCustomer !== (editing.maxUsesPerCustomer != null ? String(editing.maxUsesPerCustomer) : '') ||
       minAmount !== (editing.minAmount != null ? String(editing.minAmount / 100) : '') ||
@@ -145,7 +147,7 @@ function PromotionModal({
           description: description.trim() || undefined,
           status,
           discountType,
-          discountValue: Number(discountValue),
+          discountValue: discountType === 'FIXED' ? Math.round(Number(discountValue) * 100) : Number(discountValue),
           maxUses: maxUses ? Number(maxUses) : null,
           maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
           minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
@@ -161,7 +163,7 @@ function PromotionModal({
           code: code.trim().toUpperCase(),
           description: description.trim() || undefined,
           discountType,
-          discountValue: Number(discountValue),
+          discountValue: discountType === 'FIXED' ? Math.round(Number(discountValue) * 100) : Number(discountValue),
           maxUses: maxUses ? Number(maxUses) : null,
           maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
           minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
@@ -241,7 +243,8 @@ function PromotionModal({
                 </label>
                 <input
                   type="number"
-                  min="1"
+                  min={discountType === 'FIXED' ? '0.01' : '1'}
+                  step={discountType === 'FIXED' ? '0.01' : '1'}
                   max={discountType === 'PERCENTAGE' ? '100' : undefined}
                   value={discountValue}
                   onChange={(e) => setDiscountValue(e.target.value)}

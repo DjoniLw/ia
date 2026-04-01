@@ -47,9 +47,16 @@ export class PromotionsRepository {
       where: {
         clinicId,
         status: 'active',
-        applicableServiceIds: { has: serviceId },
         validFrom: { lte: new Date() },
-        OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+        AND: [
+          {
+            OR: [
+              { applicableServiceIds: { has: serviceId } },
+              { applicableServiceIds: { isEmpty: true } },
+            ],
+          },
+          { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] },
+        ],
       },
       orderBy: { discountValue: 'desc' },
     })
@@ -60,9 +67,16 @@ export class PromotionsRepository {
       where: {
         clinicId,
         status: 'active',
-        applicableProductIds: { has: productId },
         validFrom: { lte: new Date() },
-        OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+        AND: [
+          {
+            OR: [
+              { applicableProductIds: { has: productId } },
+              { applicableProductIds: { isEmpty: true } },
+            ],
+          },
+          { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] },
+        ],
       },
       orderBy: { discountValue: 'desc' },
     })
