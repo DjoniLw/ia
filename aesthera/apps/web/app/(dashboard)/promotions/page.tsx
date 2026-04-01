@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { MultiCombobox } from '@/components/ui/multi-combobox'
 import type { ComboboxItem } from '@/components/ui/combobox-search'
 import { DataPagination } from '@/components/ui/data-pagination'
@@ -97,6 +98,29 @@ function PromotionModal({
 
   const isPending = createMutation.isPending || updateMutation.isPending
 
+  const isDirty = useMemo(() => {
+    if (!editing) {
+      return (
+        name !== '' || code !== '' || description !== '' ||
+        discountValue !== '' || maxUses !== '' || maxUsesPerCustomer !== '' ||
+        minAmount !== '' || validUntil !== '' ||
+        selectedServiceIds.length > 0 || selectedProductIds.length > 0 ||
+        validFrom !== today
+      )
+    }
+    return (
+      name !== (editing.name ?? '') ||
+      description !== (editing.description ?? '') ||
+      maxUses !== (editing.maxUses != null ? String(editing.maxUses) : '') ||
+      maxUsesPerCustomer !== (editing.maxUsesPerCustomer != null ? String(editing.maxUsesPerCustomer) : '') ||
+      minAmount !== (editing.minAmount != null ? String(editing.minAmount / 100) : '') ||
+      validUntil !== (editing.validUntil?.slice(0, 10) ?? '') ||
+      status !== (editing.status ?? 'active') ||
+      JSON.stringify(selectedServiceIds) !== JSON.stringify(editing.applicableServiceIds ?? []) ||
+      JSON.stringify(selectedProductIds) !== JSON.stringify(editing.applicableProductIds ?? [])
+    )
+  }, [editing, name, code, description, discountValue, maxUses, maxUsesPerCustomer, minAmount, validFrom, validUntil, status, selectedServiceIds, selectedProductIds, today])
+
   if (!open) return null
 
   async function handleSubmit(e: React.FormEvent) {
@@ -152,21 +176,11 @@ function PromotionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl border bg-card shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">
-            {editing ? 'Editar promoção' : 'Nova promoção'}
-          </h3>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-muted-foreground hover:text-foreground"
-          >
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+    <Dialog open={open} onClose={onClose} isDirty={isDirty}>
+      <DialogTitle>
+        {editing ? 'Editar promoção' : 'Nova promoção'}
+      </DialogTitle>
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Nome *</label>
@@ -366,8 +380,7 @@ function PromotionModal({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   )
 }
 
