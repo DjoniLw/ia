@@ -109,7 +109,7 @@ export interface Billing {
   lockedPromotionCode?: string | null
   originalAmount?: number | null
   customer: AppointmentCustomer
-  appointment: BillingAppointment
+  appointment: BillingAppointment | null
 }
 
 interface Paginated<T> {

@@ -274,13 +274,13 @@ function BillingPageContent() {
               <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="py-3 pl-4 pr-2 font-medium">{b.customer.name}</td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">
-                  {b.appointment.service.name}
+                  {b.appointment?.service?.name ?? '—'}
                   <span className="block text-[11px]">
-                    por {b.appointment.professional.name}
+                    por {b.appointment?.professional?.name ?? '—'}
                   </span>
                 </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">
-                  {formatDate(b.appointment.scheduledAt)}
+                  {formatDate(b.appointment?.scheduledAt ?? null)}
                 </td>
                 <td className="px-2 py-3 font-medium">
                   {b.lockedPromotionCode && b.originalAmount ? (

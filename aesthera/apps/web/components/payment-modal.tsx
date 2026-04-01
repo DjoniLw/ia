@@ -121,7 +121,7 @@ export function PaymentModal({ billing, open, onClose }: PaymentModalProps) {
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Serviço</span>
-          <span className="font-medium">{billing.appointment.service.name}</span>
+          <span className="font-medium">{billing.appointment?.service?.name ?? '—'}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Valor da cobrança</span>
