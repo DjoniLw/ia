@@ -30,12 +30,18 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function parseCurrencyInput(value: string): number {
+  const normalized = value.trim().replace(/\./g, '').replace(',', '.')
+  if (!normalized) return 0
+  const parsed = parseFloat(normalized)
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0
+}
+
 // ──── New Sale Schema ──────────────────────────────────────────────────────────
 
 const saleSchema = z.object({
   quantity: z.coerce.number().int().positive('Quantidade deve ser maior que 0'),
   discount: z.coerce.number().min(0).default(0),
-  paymentMethod: z.enum(['cash', 'pix', 'card', 'transfer']).optional(),
   notes: z.string().optional(),
 })
 type SaleFormData = z.infer<typeof saleSchema>
@@ -152,6 +158,20 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
   const [productSearch, setProductSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null)
 
+  // ── Múltiplas formas de pagamento ──────────────────────────────────────────
+  const [payLines, setPayLines] = useState([{ id: 1, method: 'cash', amountStr: '' }])
+  const nextPayId = useRef(2)
+
+  function updatePayLine(id: number, patch: { method?: string; amountStr?: string }) {
+    setPayLines((lines) => lines.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+  }
+  function addPayLine() {
+    setPayLines((lines) => [...lines, { id: nextPayId.current++, method: 'cash', amountStr: '' }])
+  }
+  function removePayLine(id: number) {
+    setPayLines((lines) => lines.filter((l) => l.id !== id))
+  }
+
   const productItems = useMemo(() => {
     const q = productSearch.trim().toLowerCase()
     return (products?.items ?? [])
@@ -182,30 +202,54 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
 
   // Auto-detect active promotions for the selected product
   const { data: activePromotions } = useActivePromotionsForProduct(selectedProductId, !!selectedProductId)
-  const bestPromotion = activePromotions?.[0] ?? null
-  const promoDiscount = bestPromotion
-    ? bestPromotion.discountType === 'PERCENTAGE'
-      ? Math.floor((unitPrice * quantity * bestPromotion.discountValue) / 100)
-      : Math.min(bestPromotion.discountValue, unitPrice * quantity)
+
+  // Específica = tem applicableProductIds preenchido → aplica automaticamente
+  // Universal = lista vazia → sugestão com botão Aplicar
+  const specificPromotion = activePromotions?.find(
+    (p) => p.applicableProductIds.includes(selectedProductId)
+  ) ?? null
+  const universalPromotion = (!specificPromotion
+    ? activePromotions?.find((p) => p.applicableProductIds.length === 0)
+    : null) ?? null
+  const [appliedUniversalPromo, setAppliedUniversalPromo] = useState<typeof universalPromotion>(null)
+
+  // Reseta promoção universal quando muda o produto
+  useEffect(() => { setAppliedUniversalPromo(null) }, [selectedProductId])
+
+  const autoPromotion = specificPromotion ?? appliedUniversalPromo
+
+  const promoDiscount = autoPromotion
+    ? autoPromotion.discountType === 'PERCENTAGE'
+      ? Math.floor((unitPrice * quantity * autoPromotion.discountValue) / 100)
+      : Math.min(autoPromotion.discountValue, unitPrice * quantity)
     : 0
 
   const manualDiscount = Math.round((discount || 0) * 100)
   const appliedDiscount = promoDiscount > 0 ? promoDiscount : manualDiscount
   const total = Math.max(0, unitPrice * quantity - appliedDiscount)
 
+  // ── Totais de pagamento ────────────────────────────────────────────────────
+  const totalPaid = payLines.reduce((sum, l) => sum + parseCurrencyInput(l.amountStr), 0)
+  const diffCents = totalPaid - total
+  const troco = diffCents > 0 ? diffCents : 0
+  const falta = diffCents < 0 ? -diffCents : 0
+
   async function onSubmit(data: SaleFormData) {
     if (!selectedProduct) {
       return
     }
+    const activeMethods = payLines
+      .filter((l) => parseCurrencyInput(l.amountStr) > 0)
+      .map((l) => l.method)
     try {
       await sell.mutateAsync({
         productId: selectedProduct.value,
         customerId: selectedCustomer?.id ?? null,
         quantity: data.quantity,
         discount: Math.min(appliedDiscount, unitPrice * data.quantity),
-        paymentMethod: data.paymentMethod || null,
-        notes: bestPromotion
-          ? `[Promoção: ${bestPromotion.code}]${data.notes ? ' ' + data.notes : ''}`
+        paymentMethods: activeMethods,
+        notes: autoPromotion
+          ? `[Promoção: ${autoPromotion.code}]${data.notes ? ' ' + data.notes : ''}`
           : data.notes || null,
       })
       toast.success('Venda registrada com sucesso!')
@@ -241,7 +285,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
           />
           {errors.quantity && <p className="text-xs text-red-500">{errors.quantity.message}</p>}
         </div>
-        {!bestPromotion && (
+        {!autoPromotion && (
           <div className="space-y-2">
             <Label>Desconto (R$)</Label>
             <Input type="number" min="0" step="0.01" {...register('discount')} />
@@ -252,18 +296,51 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
 
       {selectedProduct && (
         <>
-          {bestPromotion && (
+          {specificPromotion && (
             <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-xs text-green-800 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
               <Tag className="h-3.5 w-3.5 shrink-0" />
               <span>
-                Promoção <span className="font-mono font-semibold">{bestPromotion.code}</span> aplicada automaticamente —{' '}
-                {bestPromotion.discountType === 'PERCENTAGE'
-                  ? `${bestPromotion.discountValue}% de desconto`
-                  : `${formatCurrency(bestPromotion.discountValue)} de desconto`}
+                Promoção <span className="font-mono font-semibold">{specificPromotion.code}</span> aplicada automaticamente —{' '}
+                {specificPromotion.discountType === 'PERCENTAGE'
+                  ? `${specificPromotion.discountValue}% de desconto`
+                  : `${formatCurrency(specificPromotion.discountValue)} de desconto`}
               </span>
             </div>
           )}
-          <div className={`rounded-lg px-4 py-3 text-sm ${bestPromotion ? 'border border-green-200 bg-green-100/60 dark:border-green-900/40 dark:bg-green-950/20' : 'bg-muted/40'}`}>
+          {appliedUniversalPromo && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-xs text-green-800 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
+              <span className="flex items-center gap-1.5">
+                <Tag className="h-3.5 w-3.5 shrink-0" />
+                Promoção <span className="font-mono font-semibold">{appliedUniversalPromo.code}</span> aplicada
+              </span>
+              <button
+                type="button"
+                onClick={() => setAppliedUniversalPromo(null)}
+                className="text-green-700 hover:text-green-900 dark:text-green-400"
+              >✕</button>
+            </div>
+          )}
+          {universalPromotion && !appliedUniversalPromo && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs">
+              <span className="flex items-center gap-1.5 text-white">
+                <Tag className="h-3 w-3 shrink-0" />
+                Promoção disponível:{' '}
+                <span className="font-mono font-semibold">{universalPromotion.code}</span>
+                {' — '}
+                {universalPromotion.discountType === 'PERCENTAGE'
+                  ? `${universalPromotion.discountValue}% de desconto`
+                  : `${formatCurrency(universalPromotion.discountValue)} de desconto`}
+              </span>
+              <button
+                type="button"
+                onClick={() => setAppliedUniversalPromo(universalPromotion)}
+                className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+              >
+                Aplicar
+              </button>
+            </div>
+          )}
+          <div className={`rounded-lg px-4 py-3 text-sm ${autoPromotion ? 'border border-green-200 bg-green-100/60 dark:border-green-900/40 dark:bg-green-950/20' : 'bg-muted/40'}`}>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(unitPrice * quantity)}</span>
@@ -271,7 +348,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
             {appliedDiscount > 0 && (
               <div className="flex justify-between font-medium text-green-700 dark:text-green-400">
                 <span className="flex items-center gap-1">
-                  {bestPromotion ? <><Tag className="h-3 w-3" /> Desconto ({bestPromotion.code})</> : 'Desconto'}
+                  {autoPromotion ? <><Tag className="h-3 w-3" /> Desconto ({autoPromotion.code})</> : 'Desconto'}
                 </span>
                 <span>- {formatCurrency(appliedDiscount)}</span>
               </div>
@@ -294,17 +371,75 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <Label>Forma de pagamento</Label>
-        <select
-          {...register('paymentMethod')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="">Não informado</option>
-          <option value="cash">Dinheiro</option>
-          <option value="pix">PIX</option>
-          <option value="card">Cartão</option>
-          <option value="transfer">Transferência</option>
-        </select>
+        <div className="flex items-center justify-between">
+          <Label>Forma de pagamento</Label>
+          <button
+            type="button"
+            onClick={addPayLine}
+            className="flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <Plus className="h-3 w-3" /> Adicionar
+          </button>
+        </div>
+        <div className="space-y-2">
+          {payLines.map((line) => (
+            <div key={line.id} className="flex items-center gap-2">
+              <select
+                value={line.method}
+                onChange={(e) => updatePayLine(line.id, { method: e.target.value })}
+                className="flex-1 h-9 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                <option value="cash">Dinheiro</option>
+                <option value="pix">PIX</option>
+                <option value="card">Cartão</option>
+                <option value="transfer">Transferência</option>
+              </select>
+              <Input
+                value={line.amountStr}
+                onChange={(e) => updatePayLine(line.id, { amountStr: e.target.value })}
+                placeholder="0,00"
+                className="h-9 w-28 text-sm"
+              />
+              {payLines.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removePayLine(line.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                >✕</button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Resumo de pagamento */}
+        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm space-y-1">
+          <div className="flex justify-between text-muted-foreground">
+            <span>Total da venda</span>
+            <span className="font-medium text-foreground">{formatCurrency(total)}</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Total informado</span>
+            <span className={totalPaid > 0 ? 'font-medium text-foreground' : ''}>{formatCurrency(totalPaid)}</span>
+          </div>
+          {falta > 0 && (
+            <div className="flex justify-between border-t pt-1 font-semibold text-red-600 dark:text-red-400">
+              <span>Faltam</span>
+              <span>{formatCurrency(falta)}</span>
+            </div>
+          )}
+          {troco > 0 && (
+            <div className="flex justify-between border-t pt-1 font-semibold text-green-600 dark:text-green-400">
+              <span>Troco</span>
+              <span>{formatCurrency(troco)}</span>
+            </div>
+          )}
+          {totalPaid > 0 && diffCents === 0 && (
+            <div className="flex justify-between border-t pt-1 font-semibold text-green-600 dark:text-green-400">
+              <span>Pagamento exato</span>
+              <span>✓</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -581,10 +716,14 @@ function SalesPageContent() {
                       {sale.quantity} {sale.product.unit}
                     </td>
                     <td className="hidden sm:table-cell px-5 py-3">
-                      {sale.paymentMethod ? (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[sale.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}>
-                          {PAYMENT_METHOD_LABELS[sale.paymentMethod] ?? sale.paymentMethod}
-                        </span>
+                      {sale.paymentMethods.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {sale.paymentMethods.map((m) => (
+                            <span key={m} className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[m] ?? 'bg-muted text-muted-foreground'}`}>
+                              {PAYMENT_METHOD_LABELS[m] ?? m}
+                            </span>
+                          ))}
+                        </div>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}

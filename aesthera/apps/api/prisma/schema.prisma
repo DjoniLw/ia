@@ -614,10 +614,12 @@ model Billing {
   dueDate        DateTime          @map("due_date")
   paidAt         DateTime?                              @map("paid_at")
   overdueAt      DateTime?                              @map("overdue_at")
-  cancelledAt    DateTime?                              @map("cancelled_at")
-  notes          String?
-  createdAt      DateTime          @default(now())      @map("created_at")
-  updatedAt      DateTime          @updatedAt           @map("updated_at")
+  cancelledAt         DateTime?                              @map("cancelled_at")
+  notes               String?
+  lockedPromotionCode String?                                @map("locked_promotion_code") // promoção travada no momento do agendamento
+  originalAmount      Int?                                   @map("original_amount")       // valor original antes do desconto travado
+  createdAt           DateTime          @default(now())      @map("created_at")
+  updatedAt           DateTime          @updatedAt           @map("updated_at")
 
   clinic           Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
@@ -767,9 +769,9 @@ model ProductSale {
   quantity   Int
   unitPrice  Int                              @map("unit_price")
   totalPrice Int                              @map("total_price")
-  discount      Int       @default(0)
-  paymentMethod String?                          @map("payment_method") // cash, pix, card, transfer
-  notes         String?
+  discount       Int      @default(0)
+  paymentMethods String[]                        @map("payment_methods") // ['cash','pix','card','transfer']
+  notes          String?
   soldAt        DateTime  @default(now())        @map("sold_at")
   createdAt  DateTime  @default(now())        @map("created_at")
 

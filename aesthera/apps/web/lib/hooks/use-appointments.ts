@@ -106,6 +106,8 @@ export interface Billing {
   overdueAt: string | null
   cancelledAt: string | null
   createdAt: string
+  lockedPromotionCode?: string | null
+  originalAmount?: number | null
   customer: AppointmentCustomer
   appointment: BillingAppointment
 }

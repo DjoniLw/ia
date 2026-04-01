@@ -22,6 +22,10 @@ Ao iniciar qualquer sessão, você **deve** ler os seguintes arquivos nesta orde
 3. **Se a solicitação envolver um módulo existente**, leia o arquivo de feature correspondente:
    - `ai-engineering/projects/aesthera/features/{modulo}.md`
 
+4. **Se a solicitação envolver criação ou alteração de telas**, leia:
+   - `aesthera/docs/screen-mapping.md` → mapeamento canônico de todas as telas do sistema
+   - Use para verificar se a tela já existe, quais campos/ações já estão mapeados, e para garantir que a spec não contradiga o que está implementado
+
 > ⚠️ Nunca responda sem ter lido a base de conhecimento. Especificar algo que o sistema já possui é um erro crítico.
 
 ---

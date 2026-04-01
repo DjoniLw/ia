@@ -15,6 +15,22 @@ Se não → sinalize como quebra de padrão no relatório de UX.
 
 ---
 
+## Metodologia de Revisão
+
+### Mapeamento de Telas — Inspecionar imports, não só o page.tsx
+
+- [ ] **Ao mapear formulários e ações de uma tela, nunca analisar apenas o arquivo `page.tsx` — é obrigatório inspecionar também os componentes externos importados**
+  - 🔴 Anti-padrão: buscar apenas por `<form>`, `handleSubmit`, `required` dentro do `page.tsx` e concluir que a tela não tem formulários ou ações se não encontrar nada — isso gera falso negativo
+  - ✅ Correto: ao fazer o mapeamento de uma tela, verificar os imports do arquivo e inspecionar componentes do tipo `Modal`, `Dialog`, `Tab`, `Button de ação por linha`, `Drawer`, `Sheet` que possam conter formulários ou operações críticas
+  - 📌 Casos reais onde isso causou erro:
+    - `/billing` → ação de recebimento estava em `ReceiveManualModal` importado — tela classificada erroneamente como "somente visual"
+    - `/sales` → arquivo `page.tsx` não foi lido — tela omitida completamente do mapeamento
+    - `/carteira` → lida sob ótica de formulários, ignorando a `OverviewTable` que caracteriza a tela também como consulta
+  - 📌 Regra prática: para cada tela mapeada, fazer `grep` nos imports do `page.tsx` e verificar se há componentes externos com `Modal`, `Form`, `Dialog`, `Tab` no nome
+  - 📅 Registrado em: 31/03/2026 — mapeamento completo de telas do Aesthera identificou 3 telas classificadas incorretamente por este motivo
+
+---
+
 ## Componentes e Padrões Visuais
 
 ### Estados Vazios (Empty States)
@@ -172,3 +188,4 @@ Se não → sinalize como quebra de padrão no relatório de UX.
 | 25/03/2026 | 5 padrões adicionados pelo treinador-agent (issue #124 — revisão transversal de filtros): (1) `<ComboboxSearch>` obrigatório para entidades cadastradas; (2) pills arredondados para status/tipo ≤ 6 opções fixas; (3) legenda descritiva de filtros ativos (`bg-muted/50` + ícone `Info`); (4) botão "Restaurar padrão" em toda tela com filtros; (5) presets de período + URL sync via `useSearchParams` em telas financeiras |
 | 30/03/2026 | 6 padrões adicionados pelo treinador-agent: nova seção "Cores e Dark Mode" (opacidade `/30` insuficiente; badge para todos os estados; consistência de cor entre telas; cor distinta por valor de enum) + seção "Listagens e Tabelas" (paginação server-side obrigatória; busca textual server-side em telas paginadas) |
 | 30/03/2026 | 2 padrões adicionados pelo treinador-agent em "Cores e Dark Mode": (1) contraste WCAG insuficiente — `text-white` sobre amber/orange intermediário; (2) constantes `STATUS_COLOR`/`EVENT_COLOR` centralizadas em `lib/status-colors.ts`, nunca por página |
+| 31/03/2026 | 1 padrão adicionado pelo treinador-agent: nova seção "Metodologia de Revisão" — inspecionar imports do `page.tsx` ao mapear formulários e ações de uma tela (anti-padrão: analisar apenas `page.tsx` e gerar falso negativo) |

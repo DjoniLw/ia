@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { ExternalLink, Info, Search } from 'lucide-react'
+import { ExternalLink, Info, Search, Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -282,7 +282,20 @@ function BillingPageContent() {
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">
                   {formatDate(b.appointment.scheduledAt)}
                 </td>
-                <td className="px-2 py-3 font-medium">{formatCurrency(b.amount)}</td>
+                <td className="px-2 py-3 font-medium">
+                  {b.lockedPromotionCode && b.originalAmount ? (
+                    <div>
+                      <span>{formatCurrency(b.amount)}</span>
+                      <span className="flex items-center gap-0.5 text-[11px] text-green-700 dark:text-green-400">
+                        <Tag className="h-2.5 w-2.5" />
+                        {b.lockedPromotionCode}
+                        <span className="line-through text-muted-foreground ml-1">{formatCurrency(b.originalAmount)}</span>
+                      </span>
+                    </div>
+                  ) : (
+                    formatCurrency(b.amount)
+                  )}
+                </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(b.dueDate)}</td>
                 <td className="px-2 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[b.status]}`}>

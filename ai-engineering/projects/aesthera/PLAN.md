@@ -278,7 +278,36 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ## Histórico de Atualizações
 
-### [2026-03-30] — feat(#120): Fluxo de Pagamento, Pacotes e Promoções — Ciclo Completo
+### [2026-03-31] — treinamento: aesthera-implementador — Scan pré-código obrigatório + reincidência modal PR #144
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`
+  - `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+- **O que foi feito:** Anti-padrão `fixed inset-0 z-50` documentado em 25/03 reincidiu no PR #144 — evidência de que os learnings eram consultados pós-implementação, não antes. Três mudanças aplicadas: (1) Item 7 do Carregamento de Contexto reescrito como "PRÉ-REQUISITO BLOQUEANTE" com gate explícito: após ler os learnings, listar quais padrões se aplicam antes de começar a codificar; (2) Fluxo de Trabalho reestruturado — novo passo 3 "Scan PRÉ-CÓDIGO de padrões treinados" inserido ANTES do passo Implementar, com instrução explícita de que só avança após confirmar o scan; (3) Entrada do modal no `code-review-learnings.md` marcada com "🔁 REINCIDÊNCIA (PR #144)" e nota explicando que ler como pós-checklist não previne reincidências.
+- **Impacto:** O scan dos learnings deixa de ser pós-verificação e passa a ser gate pré-código, prevenindo que anti-padrões já catalogados reapareçam em PRs futuros.
+
+### [2026-03-31] — treinamento: aesthera-implementador — Gate de conformidade com padrões treinados
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`
+- **O que foi feito:** Três mudanças para corrigir o problema de padrões treinados sendo ignorados: (1) `ux-reviewer-learnings.md` adicionado ao carregamento de contexto obrigatório para toda tarefa com arquivos `.tsx` — o implementador agora lê os padrões visuais/UX treinados antes de qualquer trabalho frontend; (2) Nova seção `⚠️ Padrões Treinados — Requisitos de Implementação (INEGOCIÁVEL)` com gate de compliance item a item (backend e frontend) antes de qualquer commit — cobre segurança, dark mode, filtros, paginação, formulários, PT-BR; (3) Step 4 adicionado ao Fluxo de Trabalho Obrigatório: "Verificar conformidade com padrões treinados" como etapa bloqueante entre implementar e o checklist de conformidade UI. O prompt declara explicitamente: "padrões treinados não são sugestões — são requisitos tão obrigatórios quanto a spec da feature".
+- **Impacto:** O implementador passa a verificar sistematicamente todos os itens dos learnings (code-review-learnings.md + ux-reviewer-learnings.md) antes de concluir qualquer tarefa, evitando que padrões treinados sejam ignorados.
+
+### [2026-03-31] — treinamento: ux-reviewer — Regra de Cobertura Total e exaustividade de revisão
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/ux-reviewer/ux-reviewer-prompt.md`
+- **O que foi feito:** Adicionados ao prompt do UX Reviewer quatro grupos de mudanças para corrigir o problema de entregas parciais: (1) Nova seção `⚠️ Regra de Cobertura Total (INEGOCIÁVEL)` com prioridade sobre todas as outras regras — exige listar o escopo no início, cobrir cada item sem exceção e confirmar a cobertura no encerramento; (2) Auto-verificação obrigatória de 6 pontos antes de finalizar qualquer relatório; (3) Fluxo de trabalho reescrito — Passo 4 exige que todas as 10 seções do checklist apareçam no relatório (mesmo com "Sem ocorrências"), Passo 6 de auto-verificação adicionado antes do parecer final; (4) Seção "Ler código real" reescrita com regra de imports obrigatória e proibição de começar o relatório antes de ler todos os arquivos do escopo; (5) Fluxo de PR atualizado com exigência de listar e ler TODOS os arquivos filtrados; (6) Regras Importantes com 4 novas regras anti-omissão.
+- **Impacto:** O agente UX Reviewer passa a entregar 100% do escopo solicitado em toda revisão, com cobertura explícita de todos os itens do checklist e todos os arquivos solicitados.
+
+### [2026-03-31] — docs: criação do mapeamento canônico de telas (screen-mapping.md)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/docs/screen-mapping.md` *(novo)*
+  - `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`
+  - `ai-engineering/prompts/ux-reviewer/ux-reviewer-prompt.md`
+  - `ai-engineering/prompts/aesthera-product-owner/aesthera-product-owner-prompt.md`
+  - `ai-engineering/prompts/aesthera-system-architect/aesthera-system-architect-prompt.md`
+- **O que foi feito:** Criado arquivo `aesthera/docs/screen-mapping.md` como registro canônico de todas as 21 telas do sistema Aesthera. O arquivo documenta rota, tipo, campos obrigatórios, abas, formulários e ações disponíveis em cada tela. Agentes (Implementador, UX Reviewer, Product Owner, System Architect) foram atualizados para carregar e manter este arquivo sempre que houver criação, alteração ou remoção de telas.
+- **Impacto:** Todo agente que mexer em telas do sistema passa a ter contexto estruturado do que existe. Toda tela nova, alterada ou removida deve ser refletida neste arquivo — obrigatoriamente.
+
+
 - **Branch:** `feature/issue-120-payment-packages-promotions`
 - **Módulos:** Packages, Promotions, ManualReceipts, Appointments
 - **O que foi feito:**

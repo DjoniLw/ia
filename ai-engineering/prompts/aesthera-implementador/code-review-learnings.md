@@ -44,6 +44,25 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: o Zod valida apenas a **forma dos dados** (tipo, formato, presença de string) — **regras de negócio** (ex.: "sala é obrigatória para este tipo de agendamento") devem ser verificadas no service, onde o contexto de negócio está disponível
   - 📅 Aprendido em: 23/03/2026 — revisão de `appointments.service.create()` (roomId requerido por R10 não validado no service)
 
+- [ ] **Campos opcionais que podem ser zerados pelo frontend devem usar `.nullable().optional()` — apenas `.optional()` rejeita `null`**
+  - 🔴 Anti-padrão: definir campo como `z.string().optional()` (ou `z.number().optional()`) para um campo que pode ser limpo pelo usuário no frontend — quando o usuário apaga o valor, o frontend envia `null`, e o Zod rejeita com erro 400 porque `.optional()` aceita `undefined` mas não `null`:
+    ```ts
+    // ERRADO — rejeita null enviado pelo frontend quando campo é limpo
+    maxUses: z.number().optional(),
+    minAmount: z.number().optional(),
+    validUntil: z.string().optional(),
+    ```
+  - ✅ Correto: para campos que podem ser zerados/limpos pelo usuário, sempre combinar `.nullable()` com `.optional()`:
+    ```ts
+    // CORRETO — aceita tanto undefined (campo não enviado) quanto null (campo limpo)
+    maxUses: z.number().nullable().optional(),
+    minAmount: z.number().nullable().optional(),
+    validUntil: z.string().nullable().optional(),
+    ```
+  - 📌 Regra geral: `.optional()` = o campo pode ser omitido da requisição (`undefined`). `.nullable()` = o campo pode ser enviado com valor `null`. Em formulários onde o usuário pode limpar um campo (input de número, date picker, select), o frontend envia `null` — não omite o campo. Para esses casos, sempre usar `.nullable().optional()`.
+  - 📌 Aplica-se a: qualquer campo de formulário que pode ser deixado em branco após ter sido preenchido (limites de uso, valores mínimos, datas de validade, descontos, porcentagens, campos de configuração opcionais).
+  - 📅 Aprendido em: 31/03/2026 — revisão de DTOs Zod para campos opcionais zeráveis (maxUses, minAmount, validUntil)
+
 - [ ] **Campos de data em DTOs Zod devem usar `.refine(v => Number.isFinite(Date.parse(v)))` além do regex de formato**
   - 🔴 Anti-padrão: validar apenas o formato visual com regex (`/^\d{4}-\d{2}-\d{2}$/`) sem garantir que a string representa uma data real — `"2026-02-30"` passa no regex mas não é uma data válida
   - ✅ Correto: combinar regex de formato com `.refine()` para validação semântica:
@@ -221,6 +240,28 @@ Se a resposta for não → revise antes de prosseguir.
   - 🔴 Anti-padrão: qualquer `<select>/<option>` ou `<datalist>` para campos que carregam dados dinâmicos da API (clientes, serviços, profissionais, insumos, salas, equipamentos)
   - ✅ Correto: sempre usar `<ComboboxSearch>` do design system (`/components/ui/combobox-search.tsx`). O componente deve ser criado antes de qualquer tela nova que precise desse padrão.
   - 📅 Aprendido em: 25/03/2026 — revisão transversal de filtros (issue #124)
+
+---
+
+- [ ] **Seleção de entidades cadastradas DEVE usar `<ComboboxSearch>` com chips removíveis — nunca pills estáticas nem `<select>` nativo (BLOQUEANTE)**
+  - 🔴 Anti-padrão: exibir a seleção de uma entidade da API (cliente, serviço, profissional, sala, equipamento) como:
+    - `<select>` ou `<datalist>` nativo
+    - Pills/badges estáticas que não podem ser removidas individualmente (ex.: `<span className="rounded-full ...">`)
+  - ✅ Correto: usar exclusivamente `<ComboboxSearch>` com chips removíveis (ícone de `×` em cada item selecionado):
+    ```tsx
+    import { ComboboxSearch } from '@/components/ui/combobox-search';
+
+    <ComboboxSearch
+      options={services.map(s => ({ value: s.id, label: s.name }))}
+      selected={selectedIds}
+      onSelect={(id) => setSelectedIds(prev => [...prev, id])}
+      onRemove={(id) => setSelectedIds(prev => prev.filter(x => x !== id))}
+      placeholder="Buscar serviço…"
+    />
+    ```
+  - 📌 Regra geral: toda seleção de entidade dinamicamente carregada da API usa `<ComboboxSearch>` com chips removíveis, independentemente de ser seleção única ou múltipla. Pills estáticas são elementos de exibição de informação (read-only), não controles de seleção interativos.
+  - 📌 Fonte: `docs/ui-standards.md` seção 7.1 — padrão obrigatório de seleção de entidades no design system Aesthera.
+  - 📅 Aprendido em: 31/03/2026 — mapeamento/validação de telas (auditoria UX 2026-03-31)
 
 ---
 
@@ -475,7 +516,8 @@ Se a resposta for não → revise antes de prosseguir.
 
 ### Componentes e Estado
 
-- [ ] **Nunca criar modais manualmente com `fixed inset-0 z-50` — sempre usar o componente `<Dialog>` do shadcn/ui**
+- [ ] **🔁 REINCIDÊNCIA (PR #144, 30/03/2026) — Nunca criar modais manualmente com `fixed inset-0 z-50` — sempre usar o componente `<Dialog>` do shadcn/ui**
+  - ⚠️ Este padrão foi documentado em 25/03/2026 e **reincidiu no PR #144** — evidência de que o `code-review-learnings.md` não estava sendo consultado ANTES de escrever código. Ler os learnings como pós-checklist não previne reincidências — o scan deve ocorrer ANTES de implementar qualquer componente de UI.
   - 🔴 Anti-padrão: implementar modal com `<div className="fixed inset-0 z-50 ...">` ou overlay customizado — não garante foco trap (acessibilidade), não respeita o `isDirty` guard, não possui animações padronizadas e viola o `ui-standards.md`
   - ✅ Correto: importar e usar o componente `<Dialog>` disponível em `@/components/ui/dialog`:
     ```tsx
@@ -594,6 +636,70 @@ Se a resposta for não → revise antes de prosseguir.
 
 ---
 
+- [ ] **Nunca usar caracteres unicode como ícones — sempre usar equivalentes Lucide React (BLOQUEANTE)**
+  - 🔴 Anti-padrão: usar emoji ou símbolos unicode diretamente em JSX para representar ações ou indicadores visuais (ex.: `🏷`, `✓`, `✕`, `×`, `●`, `★`) — esses caracteres têm renderização inconsistente entre sistemas operacionais e navegadores, não respeitam o tema (dark/light), não seguem o design system e não são acessíveis:
+    ```tsx
+    // ERRADO — unicode como ícone
+    <span>🏷 Etiqueta</span>
+    <button>✕</button>
+    <span>✓ Confirmado</span>
+    ```
+  - ✅ Correto: importar sempre o ícone equivalente do pacote `lucide-react` com tamanho e cor controlados por classes Tailwind:
+    ```tsx
+    import { Tag, X, Check } from 'lucide-react';
+
+    // CORRETO — ícones Lucide
+    <Tag className="h-4 w-4" />
+    <button><X className="h-4 w-4" /></button>
+    <Check className="h-4 w-4 text-green-600" />
+    ```
+  - 📌 Tabela de equivalências mais comuns:
+    | Unicode | Lucide React |
+    |---------|-------------|
+    | 🏷      | `<Tag />`   |
+    | ✓ / ✔  | `<Check />` |
+    | ✕ / × / ✗ | `<X />` |
+    | ●      | `<Circle />` |
+    | ★      | `<Star />`  |
+    | ⚠      | `<AlertTriangle />` |
+    | ℹ      | `<Info />`  |
+    | ✉      | `<Mail />`  |
+  - 📌 Regra geral: qualquer caractere que não seja texto de conteúdo (letras, números, pontuação gramatical) deve ser substituído por um componente Lucide. Se não houver equivalente exato, escolher o ícone semanticamente mais próximo da biblioteca.
+  - 📅 Aprendido em: 31/03/2026 — code review identificou uso de `🏷 ✓ ✕ ×` como ícones em componentes de UI
+
+---
+
+- [ ] **Banners informativos verdes devem usar `bg-green-100 text-green-700` — nunca inventar classes fora do padrão (ui-standards.md §6)**
+  - 🔴 Anti-padrão: criar banners informativos de sucesso/confirmação com classes arbitrárias como `bg-emerald-50`, `bg-teal-100`, `border-green-400 text-green-900`, ou qualquer variação não especificada em `ui-standards.md`:
+    ```tsx
+    // ERRADO — classes fora do padrão
+    <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-md p-3">
+      Operação realizada com sucesso.
+    </div>
+    ```
+  - ✅ Correto: usar exatamente `bg-green-100 text-green-700` conforme `ui-standards.md` seção 6:
+    ```tsx
+    // CORRETO — padrão ui-standards.md §6
+    <div className="bg-green-100 text-green-700 rounded-md p-3 text-sm">
+      Operação realizada com sucesso.
+    </div>
+    // Com dark mode:
+    <div className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 rounded-md p-3 text-sm">
+      Operação realizada com sucesso.
+    </div>
+    ```
+  - 📌 Paleta de banners informativos definida em `ui-standards.md` seção 6:
+    | Tipo        | Classes base                          |
+    |-------------|---------------------------------------|
+    | Sucesso/Info verde | `bg-green-100 text-green-700`  |
+    | Atenção/Aviso  | `bg-yellow-100 text-yellow-700`    |
+    | Erro/Crítico   | `bg-red-100 text-red-700`          |
+    | Neutro/Info    | `bg-blue-100 text-blue-700`        |
+  - 📌 Regra geral: qualquer banner informativo deve usar as classes especificadas em `ui-standards.md` — nunca inferir variações de tom (50 vs 100, emerald vs green, teal vs green) fora do que está documentado.
+  - 📅 Aprendido em: 31/03/2026 — code review identificou uso de classes fora do padrão em banners informativos
+
+---
+
 ## Geral
 
 ### Escopo e Disciplina de PR
@@ -706,6 +812,7 @@ Se a resposta for não → revise antes de prosseguir.
 | 24/03/2026 | — | 6 padrões adicionados pelo treinador-agent: (1) contraste WCAG para texto branco sobre amber/orange em EVENT_COLOR; (2) STATUS_COLOR centralizado em arquivo único; (3) guards de role na menor granularidade possível; (4) safe parse de data em DTOs Zod com `.refine(Number.isFinite(Date.parse(v)))`; (5) toISODate em frontend usando hora local, não `toISOString()`; (6) seção `## Test Change Justification` obrigatória em PRs com arquivos de teste |
 | 25/03/2026 | — | 2 padrões adicionados pelo treinador-agent: (1) IDOR em updates Prisma — `update({ where: { id } })` sem `clinicId` permite alteração cross-tenant; padrão correto é `updateMany` + `findFirst` com `clinicId`; (2) catch genérico mascarando erros de infra em storage/API externo — inspecionar código de erro antes de silenciar |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: modal manual com `fixed inset-0 z-50` é anti-padrão — sempre usar `<Dialog>` do shadcn/ui (`@/components/ui/dialog`) para foco trap, animações e consistência visual |
+| 31/03/2026 | PR #144 | 🔁 Reincidência do anti-padrão `fixed inset-0 z-50` (já documentado em 25/03) — confirmado que `code-review-learnings.md` estava sendo usado como checklist pós-implementação, não como pré-requisito pré-código. Prompt do implementador atualizado: scan pré-código dos learnings agora é passo 3 explícito do Fluxo de Trabalho (ANTES do passo Implementar) |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: fluxo presign/confirm de upload — `presign` deve persistir `PendingUpload` no banco; `confirm` valida pelo `id` server-side com `clinicId`, nunca aceita `storageKey` bruto do cliente |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: CTA em empty state nunca usa `<button>` nativo com underline — padrão correto é `<Button variant="outline" size="sm" className="mt-3">` dentro de container `rounded-lg border bg-card py-16 text-center text-muted-foreground` (ui-standards.md §2.3) |
 | 25/03/2026 | — | 1 padrão adicionado pelo treinador-agent: teste existente quebrando = nunca alterar o teste, acionar test-guardian; assumir que o código está errado por padrão |
@@ -716,3 +823,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 29/03/2026 | — | 2 padrões adicionados pelo treinador-agent (levantamento UX transversal — 15 telas de listagem): (1) filtragem client-side com `.filter()` sobre array local é anti-padrão — qualquer mudança de filtro deve disparar nova requisição à API com parâmetros de query; (2) toda nova tela de listagem deve incluir `<DataPagination>` e `usePaginatedQuery` com URL sync desde a primeira implementação — nunca usar `limit` hardcoded |
 | 30/03/2026 | PR #136 | 2 padrões adicionados pelo treinador-agent (revisão de assinatura remota por link): (1) `_clinicId` em repositório multi-tenant é bug de segurança — `clinicId` deve sempre estar no `WHERE`, defesa em profundidade exige isolamento em toda camada; (2) webhook secret condicional com `if (expected && ...)` desabilita proteção silenciosamente quando env não configurado — usar fail-fast: lançar erro se secret ausente, nunca skip |
 | 30/03/2026 | PR #136 | 2 padrões adicionados pelo treinador-agent (revisão de assinatura remota por link — UX/componentes): (1) controles booleanos devem sempre usar `<Switch>` do shadcn/ui — `<button>` nativo como toggle quebra acessibilidade e consistência visual; (2) feedback de sucesso (toast, badge, estado visual) só pode ser exibido após confirmação da API em `onSuccess` — nunca antes ou sem chamada de API |
+| 31/03/2026 | — | 2 padrões adicionados pelo treinador-agent: (1) nunca usar caracteres unicode como ícones (`🏷 ✓ ✕ ×`) — sempre usar equivalentes Lucide React com classes Tailwind para controle de tamanho e cor; (2) banners informativos verdes devem usar `bg-green-100 text-green-700` conforme `ui-standards.md` seção 6 — nunca inventar variações de tom (emerald, teal, green-50) fora do padrão documentado |

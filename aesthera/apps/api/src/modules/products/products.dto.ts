@@ -55,7 +55,7 @@ export const CreateSaleDto = z.object({
   quantity: z.number().int().positive(),
   unitPrice: z.number().int().min(0).optional(), // override price if needed
   discount: z.number().int().min(0).default(0),
-  paymentMethod: z.enum(['cash', 'pix', 'card', 'transfer']).optional().nullable(),
+  paymentMethods: z.array(z.enum(['cash', 'pix', 'card', 'transfer'])).optional().default([]),
   notes: z.string().optional().nullable(),
 })
 export type CreateSaleDto = z.infer<typeof CreateSaleDto>

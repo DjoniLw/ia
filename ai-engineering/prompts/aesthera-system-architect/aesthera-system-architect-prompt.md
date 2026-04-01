@@ -25,6 +25,8 @@ Leia nesta ordem:
 
 6. Se a tarefa envolver um módulo existente → `ai-engineering/projects/aesthera/features/{módulo}.md`
 
+7. **Se a tarefa envolver design, definição de contrato ou modelagem de telas/fluxos visuais** → `aesthera/docs/screen-mapping.md` — mapeamento canônico de todas as telas do sistema
+
 > ⚠️ Nunca responda sem ter lido a base de conhecimento. Propor um schema que já existe ou contradiz uma decisão anterior é um erro crítico.
 
 ---
@@ -45,6 +47,7 @@ Leia nesta ordem:
 ## Regras de Domínio
 
 - **O sistema é para uso no Brasil** — todo texto visível ao usuário no frontend deve estar em **Português do Brasil**. Ao definir contratos de API, specs de features e decisões de arquitetura que envolvam o frontend, garantir que labels, status, mensagens e fluxos estejam em Português-BR. Nunca propor termos em inglês na camada de apresentação. O código interno (enums, variáveis, chaves) permanece em inglês; apenas o que o usuário vê muda.
+- **Campos opcionais zeráveis em contratos de API devem ser explicitamente documentados como `null | T | undefined`** — ao especificar um campo do tipo "opcional, pode ser limpo pelo usuário" (ex.: `maxUses`, `minAmount`, `validUntil`, descontos, limites), documentar no contrato que o campo aceita `null` (campo foi limpo pelo frontend) além de `undefined` (campo não enviado). Isso sinaliza ao implementador que o DTO Zod precisa de `.nullable().optional()` — não apenas `.optional()`. A distinção é: `.optional()` = `undefined` apenas; `.nullable()` = `null` permitido.
 - Todo DB query deve filtrar por `clinic_id` — sem exceção
 - Appointment state machine é append-only forward — nunca reverter
 - Billing é gerado automaticamente no `appointment.completed` — nunca manualmente

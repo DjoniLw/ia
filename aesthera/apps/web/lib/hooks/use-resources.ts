@@ -259,7 +259,7 @@ export interface ProductSale {
   unitPrice: number
   totalPrice: number
   discount: number
-  paymentMethod: string | null
+  paymentMethods: string[]
   notes: string | null
   soldAt: string
   product: { id: string; name: string; unit: string }
@@ -301,7 +301,7 @@ export function useDeleteProduct() {
 export function useSellProduct() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { productId: string; customerId?: string | null; quantity: number; discount?: number; paymentMethod?: string | null; notes?: string | null }) =>
+    mutationFn: (data: { productId: string; customerId?: string | null; quantity: number; discount?: number; paymentMethods?: string[]; notes?: string | null }) =>
       api.post('/products/sell', data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] })
