@@ -151,7 +151,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
       {selectedProduct && (
         <>
           {bestPromotion && (
-            <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-800 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
+            <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-xs text-green-800 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
               <Tag className="h-3.5 w-3.5 shrink-0" />
               <span>
                 Promoção <span className="font-mono font-semibold">{bestPromotion.code}</span> aplicada automaticamente —{' '}
@@ -161,7 +161,7 @@ function NewSaleForm({ onClose }: { onClose: () => void }) {
               </span>
             </div>
           )}
-          <div className={`rounded-lg px-4 py-3 text-sm ${bestPromotion ? 'border border-green-200 bg-green-50/50 dark:border-green-900/40 dark:bg-green-950/20' : 'bg-muted/40'}`}>
+          <div className={`rounded-lg px-4 py-3 text-sm ${bestPromotion ? 'border border-green-200 bg-green-100/60 dark:border-green-900/40 dark:bg-green-950/20' : 'bg-muted/40'}`}>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(unitPrice * quantity)}</span>

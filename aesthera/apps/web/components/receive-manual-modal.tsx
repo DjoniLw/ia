@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Minus, Plus, Tag } from 'lucide-react'
+import { Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -363,7 +363,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
         </div>
 
         {/* Total & diff */}
-        <div className={`rounded-lg border p-3 space-y-1 text-sm transition-colors ${appliedCoupon ? 'border-green-300 bg-green-50 dark:border-green-800/60 dark:bg-green-950/40' : 'bg-muted/20'}`}>
+        <div className={`rounded-lg border p-3 space-y-1 text-sm transition-colors ${appliedCoupon ? 'border-green-300 bg-green-100 dark:border-green-800/60 dark:bg-green-950/40' : 'bg-muted/20'}`}>
           {appliedCoupon && (
             <div className="flex justify-between text-muted-foreground">
               <span>Valor original</span>
@@ -372,7 +372,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
           )}
           {appliedCoupon && (
             <div className="flex justify-between font-medium text-green-700 dark:text-green-400">
-              <span>🏷 Desconto cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span></span>
+              <span className="flex items-center gap-1.5"><Tag className="h-3 w-3 shrink-0" /> Desconto cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span></span>
               <span className="font-semibold">- {formatCurrency(appliedCoupon.discountAmount)}</span>
             </div>
           )}
@@ -476,8 +476,9 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
             </Button>
           </div>
           {appliedCoupon && (
-            <div className="mt-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-300">
-              <span>✓ Cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span> — {formatCurrency(appliedCoupon.discountAmount)} de desconto</span>
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-100 px-3 py-1.5 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-300">
+              <Check className="h-3.5 w-3.5 shrink-0" />
+              <span>Cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span> — {formatCurrency(appliedCoupon.discountAmount)} de desconto</span>
               <button
                 type="button"
                 onClick={() => { setAppliedCoupon(null); setCouponInput('') }}
@@ -485,7 +486,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
                 aria-label="Remover cupom"
                 title="Remover cupom"
               >
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           )}
