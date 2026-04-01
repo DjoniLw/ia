@@ -220,13 +220,17 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   const [autoApplied, setAutoApplied] = useState(false)
   const validatePromotion = useValidatePromotion()
 
+  // Detect if billing already has a promotion locked at booking time
+  const hasLockedPromo = !!billing.lockedPromotionCode && !!billing.originalAmount
+
   // Auto-detect active promotions for the service being billed, filtered by customer limit
+  // Skip when billing already has a locked promotion (avoid double-discount)
   const serviceId = billing.appointment?.service?.id ?? ''
   const customerId = billing.customer.id
   const { data: servicePromotions } = useActivePromotionsForService(
     serviceId,
     customerId,
-    open && !!serviceId,
+    open && !!serviceId && !hasLockedPromo,
   )
   const suggestedPromotion = servicePromotions?.[0] ?? null
 
@@ -254,7 +258,10 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   const receive = useCreateManualReceipt(billing.id)
 
   const totalPaid = lines.reduce((sum, l) => sum + parseCurrencyInput(l.amountStr), 0)
-  const effectiveAmount = billing.amount - (appliedCoupon?.discountAmount ?? 0)
+  // When billing has a locked promotion, billing.amount already reflects the discount
+  const effectiveAmount = hasLockedPromo
+    ? billing.amount
+    : billing.amount - (appliedCoupon?.discountAmount ?? 0)
   const diffCents = effectiveAmount - totalPaid
   const excedente = totalPaid - effectiveAmount
 
@@ -388,6 +395,29 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
             Adicionar forma de pagamento
           </Button>
         </div>
+
+        {/* Promoção travada no agendamento */}
+        {hasLockedPromo && (
+          <div className="rounded-lg border p-3 space-y-1 text-sm border-green-300 bg-green-100 dark:border-green-800/60 dark:bg-green-950/40">
+            <div className="flex justify-between text-green-900 dark:text-green-300">
+              <span>Valor original</span>
+              <span>{formatCurrency(billing.originalAmount!)}</span>
+            </div>
+            <div className="flex justify-between font-medium text-green-700 dark:text-green-400">
+              <span className="flex items-center gap-1.5">
+                <Tag className="h-3 w-3 shrink-0" />
+                Promoção{' '}
+                <span className="font-mono font-semibold">{billing.lockedPromotionCode}</span>
+                <span className="text-xs font-normal text-green-600 dark:text-green-500">(garantida no agendamento)</span>
+              </span>
+              <span>- {formatCurrency(billing.originalAmount! - billing.amount)}</span>
+            </div>
+            <div className="border-t border-green-200 dark:border-green-800/50 pt-1 mt-1 flex justify-between font-semibold">
+              <span>Valor a pagar</span>
+              <span>{formatCurrency(billing.amount)}</span>
+            </div>
+          </div>
+        )}
 
         {/* Total & diff */}
         <div className={`rounded-lg border p-3 space-y-1 text-sm transition-colors ${appliedCoupon ? 'border-green-300 bg-green-100 dark:border-green-800/60 dark:bg-green-950/40' : 'bg-muted/20'}`}>
