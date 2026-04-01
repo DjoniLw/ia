@@ -16,6 +16,7 @@ import { useActivePromotionsForProduct } from '@/lib/hooks/use-promotions'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_BADGE_COLORS } from '@/lib/status-colors'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -25,20 +26,6 @@ function formatCurrency(cents: number) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-const PAYMENT_LABELS: Record<string, string> = {
-  cash: 'Dinheiro',
-  pix: 'PIX',
-  card: 'Cartão',
-  transfer: 'Transferência',
-}
-
-const PAYMENT_BADGE_COLORS: Record<string, string> = {
-  cash:     'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  pix:      'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  card:     'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  transfer: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
 }
 
 // ──── New Sale Schema ──────────────────────────────────────────────────────────
@@ -239,6 +226,7 @@ function SalesPageContent() {
   const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
   const [from, setFrom] = useState(searchParams.get('from') ?? defaultFrom)
   const [to, setTo] = useState(searchParams.get('to') ?? defaultTo)
+  const [paymentFilter, setPaymentFilter] = usePersistedFilter('aesthera-filter-sales-payment', searchParams.get('paymentMethod'), '')
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
@@ -251,16 +239,18 @@ function SalesPageContent() {
     from !== defaultFrom ? p.set('from', from) : p.delete('from')
     to !== defaultTo ? p.set('to', to) : p.delete('to')
     search ? p.set('search', search) : p.delete('search')
+    paymentFilter ? p.set('paymentMethod', paymentFilter) : p.delete('paymentMethod')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, searchParams, from, to, search, defaultFrom, defaultTo])
+  }, [router, searchParams, from, to, search, paymentFilter, defaultFrom, defaultTo])
 
-  const isDefaultFilters = from === defaultFrom && to === defaultTo && search === ''
+  const isDefaultFilters = from === defaultFrom && to === defaultTo && search === '' && paymentFilter === ''
 
   function resetFilters() {
     setFrom(defaultFrom)
     setTo(defaultTo)
     setSearch('')
     setDebouncedSearch('')
+    setPaymentFilter('')
     resetPage()
   }
 
@@ -270,7 +260,32 @@ function SalesPageContent() {
     const toDate = new Date(to + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
     parts.push(`${fromDate} a ${toDate}`)
     if (debouncedSearch) parts.push(`busca: ${debouncedSearch}`)
+    if (paymentFilter) parts.push(`pagamento: ${PAYMENT_METHOD_LABELS[paymentFilter] ?? paymentFilter}`)
     return parts.join(' · ')
+  }
+
+  function applyPreset(preset: number | 'today' | '6months' | '1year') {
+    const now = new Date()
+    const toDate = now.toISOString().slice(0, 10)
+    let fromDate: string
+    if (preset === 'today') {
+      fromDate = toDate
+    } else if (preset === '6months') {
+      const d = new Date(now)
+      d.setMonth(d.getMonth() - 6)
+      fromDate = d.toISOString().slice(0, 10)
+    } else if (preset === '1year') {
+      const d = new Date(now)
+      d.setFullYear(d.getFullYear() - 1)
+      fromDate = d.toISOString().slice(0, 10)
+    } else {
+      const d = new Date(now)
+      d.setDate(d.getDate() - preset)
+      fromDate = d.toISOString().slice(0, 10)
+    }
+    setFrom(fromDate)
+    setTo(toDate)
+    resetPage()
   }
 
   const params: Record<string, string> = {
@@ -278,6 +293,7 @@ function SalesPageContent() {
     from,
     to,
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(paymentFilter && { paymentMethod: paymentFilter }),
   }
 
   const { data, isLoading } = useProductSales(params)
@@ -314,26 +330,33 @@ function SalesPageContent() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filtros */}
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">De</label>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => { setFrom(e.target.value); resetPage() }}
-              className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Até</label>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => { setTo(e.target.value); resetPage() }}
-              className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+
+        {/* Linha 1: pills por forma de pagamento + busca textual */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 flex-wrap">
+            {([
+              { value: '', label: 'Todos' },
+              { value: 'cash', label: 'Dinheiro' },
+              { value: 'pix', label: 'PIX' },
+              { value: 'card', label: 'Cartão' },
+              { value: 'transfer', label: 'Transferência' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { setPaymentFilter(opt.value); resetPage() }}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  paymentFilter === opt.value
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -344,6 +367,48 @@ function SalesPageContent() {
               onChange={(e) => { setSearch(e.target.value); resetPage() }}
               className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
+          </div>
+        </div>
+
+        {/* Linha 2: presets de data + inputs De/Até */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex gap-1 flex-wrap">
+            {([
+              { label: 'Hoje', preset: 'today' },
+              { label: '7 dias', preset: 7 },
+              { label: '30 dias', preset: 30 },
+              { label: '6 meses', preset: '6months' },
+              { label: '1 ano', preset: '1year' },
+            ] as const).map(({ label, preset }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                className="rounded-full border border-input bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-xs text-muted-foreground">De</label>
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => { setFrom(e.target.value); resetPage() }}
+                className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-xs text-muted-foreground">Até</label>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => { setTo(e.target.value); resetPage() }}
+                className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
         </div>
 
@@ -406,8 +471,8 @@ function SalesPageContent() {
                     </td>
                     <td className="hidden sm:table-cell px-5 py-3">
                       {sale.paymentMethod ? (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_BADGE_COLORS[sale.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}>
-                          {PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod}
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[sale.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}>
+                          {PAYMENT_METHOD_LABELS[sale.paymentMethod] ?? sale.paymentMethod}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>

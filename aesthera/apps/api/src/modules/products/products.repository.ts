@@ -93,6 +93,7 @@ export class ProductsRepository {
       clinicId,
       ...(q.productId && { productId: q.productId }),
       ...(q.customerId && { customerId: q.customerId }),
+      ...(q.paymentMethod && { paymentMethod: q.paymentMethod }),
       ...(q.search && {
         OR: [
           { product: { name: { contains: q.search, mode: 'insensitive' as const } } },

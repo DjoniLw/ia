@@ -64,6 +64,7 @@ export const ListSalesQuery = z.object({
   productId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
   search: z.string().optional(),
+  paymentMethod: z.enum(['cash', 'pix', 'card', 'transfer']).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
