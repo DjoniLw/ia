@@ -1,4 +1,5 @@
 import { prisma } from '../../database/prisma/client'
+import { NotFoundError } from '../../shared/errors/app-error'
 import type { CreatePromotionDto, ListPromotionsQuery, UpdatePromotionDto } from './promotions.dto'
 
 export class PromotionsRepository {
@@ -108,11 +109,13 @@ export class PromotionsRepository {
     })
   }
 
-  async toggleStatus(id: string, active: boolean) {
-    return prisma.promotion.update({
-      where: { id },
+  async toggleStatus(clinicId: string, id: string, active: boolean) {
+    const updated = await prisma.promotion.updateMany({
+      where: { id, clinicId },
       data: { status: active ? 'active' : 'inactive', updatedAt: new Date() },
     })
+    if (updated.count === 0) throw new NotFoundError('Promotion')
+    return prisma.promotion.findFirst({ where: { id, clinicId } })
   }
 
   async incrementUsage(id: string) {
@@ -133,7 +136,7 @@ export class PromotionsRepository {
     return prisma.promotionUsage.create({ data })
   }
 
-  async countCustomerUsage(promotionId: string, customerId: string): Promise<number> {
-    return prisma.promotionUsage.count({ where: { promotionId, customerId } })
+  async countCustomerUsage(clinicId: string, promotionId: string, customerId: string): Promise<number> {
+    return prisma.promotionUsage.count({ where: { clinicId, promotionId, customerId } })
   }
 }

@@ -228,7 +228,7 @@ export class PackagesRepository {
   }
 
   /** Count customer usages of a specific promotion */
-  async countCustomerPromotionUsage(promotionId: string, customerId: string): Promise<number> {
-    return prisma.promotionUsage.count({ where: { promotionId, customerId } })
+  async countCustomerPromotionUsage(clinicId: string, promotionId: string, customerId: string): Promise<number> {
+    return prisma.promotionUsage.count({ where: { clinicId, promotionId, customerId } })
   }
 }

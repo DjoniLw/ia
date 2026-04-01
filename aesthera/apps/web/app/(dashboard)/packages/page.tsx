@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -18,6 +18,7 @@ import {
   ShoppingBag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { SESSION_STATUS_STYLE, SESSION_LABEL } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
@@ -195,8 +196,6 @@ function PackageModal({
   const updateMutation = useUpdatePackage(editing?.id ?? '')
   const isPending = createMutation.isPending || updateMutation.isPending
 
-  if (!open) return null
-
   function addItem() {
     setItems((prev) => [...prev, { serviceId: '', quantity: 1 }])
   }
@@ -249,18 +248,10 @@ function PackageModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg overflow-y-auto rounded-xl border bg-card shadow-xl max-h-[90vh]">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">
-            {editing ? 'Editar pacote' : 'Novo pacote'}
-          </h3>
-          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
-        </div>
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>{editing ? 'Editar pacote' : 'Novo pacote'}</DialogTitle>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Nome *</label>
             <input
@@ -390,8 +381,7 @@ function PackageModal({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   )
 }
 
@@ -411,20 +401,17 @@ function PurchaseModal({
   const [customer, setCustomer] = useState<{ id: string; name: string } | null>(null)
   const [lines, setLines] = useState([{ id: saleLineCounter++, method: 'cash', amountStr: '' }])
   const [notes, setNotes] = useState('')
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
+  const idempotencyKey = useMemo(() => (open ? crypto.randomUUID() : ''), [open])
   const purchase = usePurchasePackage(pkg.id)
 
-  // Reset form state and generate a fresh idempotency key each time the modal opens
+  // Reset form state each time the modal opens
   useEffect(() => {
     if (open) {
-      setIdempotencyKey(crypto.randomUUID())
       setCustomer(null)
       setLines([{ id: saleLineCounter++, method: 'cash', amountStr: '' }])
       setNotes('')
     }
   }, [open])
-
-  if (!open) return null
 
   const totalPaid = lines.reduce((sum, l) => sum + parseCurrencyInput(l.amountStr), 0)
   const diffCents = pkg.price - totalPaid
@@ -464,13 +451,9 @@ function PurchaseModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl border bg-card shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">Vender pacote</h3>
-          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground">✕</button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+    <Dialog open={open} onClose={onClose} className="max-w-md">
+      <DialogTitle>Vender pacote</DialogTitle>
+      <form onSubmit={handleSubmit} className="space-y-4">
           {/* Package summary */}
           <div className="rounded-lg border bg-muted/30 p-3 text-sm">
             <div className="font-medium text-foreground">{pkg.name}</div>
@@ -578,8 +561,7 @@ function PurchaseModal({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   )
 }
 

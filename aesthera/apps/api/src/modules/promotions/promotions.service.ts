@@ -35,9 +35,7 @@ export class PromotionsService {
   }
 
   async toggleStatus(clinicId: string, id: string, dto: TogglePromotionStatusDto) {
-    const promotion = await this.repo.findById(clinicId, id)
-    if (!promotion) throw new NotFoundError('Promotion')
-    return this.repo.toggleStatus(id, dto.active)
+    return this.repo.toggleStatus(clinicId, id, dto.active)
   }
 
   async findActiveForService(clinicId: string, serviceId: string) {
@@ -93,7 +91,7 @@ export class PromotionsService {
 
     // maxUsesPerCustomer check
     if (customerId && promotion.maxUsesPerCustomer !== null && promotion.maxUsesPerCustomer !== undefined) {
-      const customerUses = await this.repo.countCustomerUsage(promotion.id, customerId)
+      const customerUses = await this.repo.countCustomerUsage(clinicId, promotion.id, customerId)
       if (customerUses >= promotion.maxUsesPerCustomer) {
         throw new AppError(
           'Você já utilizou este cupom o número máximo de vezes.',
