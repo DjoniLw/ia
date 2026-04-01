@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
+import { MultiCombobox } from '@/components/ui/multi-combobox'
+import type { ComboboxItem } from '@/components/ui/combobox-search'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { PROMOTION_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
@@ -75,27 +76,21 @@ function PromotionModal({
   const [status, setStatus] = useState<PromotionStatus>(editing?.status ?? 'active')
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(editing?.applicableServiceIds ?? [])
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>(editing?.applicableProductIds ?? [])
-  const [serviceSearch, setServiceSearch] = useState('')
-  const [productSearch, setProductSearch] = useState('')
 
   const { data: servicesData } = useServices({ active: 'true', limit: '200' })
   const { data: productsData } = useProducts({ active: 'true', limit: '200' })
   const allServices: Service[] = servicesData?.items ?? []
   const allProducts: Product[] = productsData?.items ?? []
 
-  const serviceItems = useMemo<ComboboxItem[]>(() => {
-    const q = serviceSearch.trim().toLowerCase()
-    return allServices
-      .filter((s) => !selectedServiceIds.includes(s.id) && (!q || s.name.toLowerCase().includes(q)))
-      .map((s) => ({ value: s.id, label: s.name }))
-  }, [allServices, serviceSearch, selectedServiceIds])
+  const serviceItems = useMemo<ComboboxItem[]>(
+    () => allServices.map((s) => ({ value: s.id, label: s.name })),
+    [allServices],
+  )
 
-  const productItems = useMemo<ComboboxItem[]>(() => {
-    const q = productSearch.trim().toLowerCase()
-    return allProducts
-      .filter((p) => !selectedProductIds.includes(p.id) && (!q || p.name.toLowerCase().includes(q)))
-      .map((p) => ({ value: p.id, label: p.name }))
-  }, [allProducts, productSearch, selectedProductIds])
+  const productItems = useMemo<ComboboxItem[]>(
+    () => allProducts.map((p) => ({ value: p.id, label: p.name })),
+    [allProducts],
+  )
 
   const createMutation = useCreatePromotion()
   const updateMutation = useUpdatePromotion(editing?.id ?? '')
@@ -335,39 +330,13 @@ function PromotionModal({
               Serviços aplicáveis
               <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
             </label>
-            <ComboboxSearch
-              value={null}
-              onChange={(item) => {
-                if (item) setSelectedServiceIds((prev) => [...prev, item.value])
-              }}
-              onSearch={setServiceSearch}
+            <MultiCombobox
+              values={selectedServiceIds}
+              onChange={setSelectedServiceIds}
               items={serviceItems}
               isLoading={!servicesData}
               placeholder="Buscar serviço…"
             />
-            {selectedServiceIds.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {selectedServiceIds.map((id) => {
-                  const svc = allServices.find((s) => s.id === id)
-                  return (
-                    <span
-                      key={id}
-                      className="inline-flex items-center gap-1 rounded-full border bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-                    >
-                      {svc?.name ?? id}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedServiceIds((prev) => prev.filter((x) => x !== id))}
-                        className="ml-0.5 text-primary/70 hover:text-primary"
-                        aria-label="Remover"
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  )
-                })}
-              </div>
-            )}
           </div>
 
           {/* Produtos aplicáveis */}
@@ -376,39 +345,13 @@ function PromotionModal({
               Produtos aplicáveis
               <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
             </label>
-            <ComboboxSearch
-              value={null}
-              onChange={(item) => {
-                if (item) setSelectedProductIds((prev) => [...prev, item.value])
-              }}
-              onSearch={setProductSearch}
+            <MultiCombobox
+              values={selectedProductIds}
+              onChange={setSelectedProductIds}
               items={productItems}
               isLoading={!productsData}
               placeholder="Buscar produto…"
             />
-            {selectedProductIds.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {selectedProductIds.map((id) => {
-                  const prod = allProducts.find((p) => p.id === id)
-                  return (
-                    <span
-                      key={id}
-                      className="inline-flex items-center gap-1 rounded-full border bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-                    >
-                      {prod?.name ?? id}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedProductIds((prev) => prev.filter((x) => x !== id))}
-                        className="ml-0.5 text-primary/70 hover:text-primary"
-                        aria-label="Remover"
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  )
-                })}
-              </div>
-            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
