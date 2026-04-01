@@ -111,6 +111,8 @@ function PromotionModal({
     return (
       name !== (editing.name ?? '') ||
       description !== (editing.description ?? '') ||
+      discountType !== (editing.discountType ?? 'PERCENTAGE') ||
+      discountValue !== String(editing.discountValue ?? '') ||
       maxUses !== (editing.maxUses != null ? String(editing.maxUses) : '') ||
       maxUsesPerCustomer !== (editing.maxUsesPerCustomer != null ? String(editing.maxUsesPerCustomer) : '') ||
       minAmount !== (editing.minAmount != null ? String(editing.minAmount / 100) : '') ||
@@ -119,7 +121,7 @@ function PromotionModal({
       JSON.stringify(selectedServiceIds) !== JSON.stringify(editing.applicableServiceIds ?? []) ||
       JSON.stringify(selectedProductIds) !== JSON.stringify(editing.applicableProductIds ?? [])
     )
-  }, [editing, name, code, description, discountValue, maxUses, maxUsesPerCustomer, minAmount, validFrom, validUntil, status, selectedServiceIds, selectedProductIds, today])
+  }, [editing, name, code, description, discountType, discountValue, maxUses, maxUsesPerCustomer, minAmount, validFrom, validUntil, status, selectedServiceIds, selectedProductIds, today])
 
   if (!open) return null
 
@@ -142,6 +144,8 @@ function PromotionModal({
           name: name.trim() || undefined,
           description: description.trim() || undefined,
           status,
+          discountType,
+          discountValue: Number(discountValue),
           maxUses: maxUses ? Number(maxUses) : null,
           maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
           minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
@@ -218,10 +222,9 @@ function PromotionModal({
             />
           </div>
 
-          {!editing && (
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Tipo de desconto *</label>
+                <label className="text-xs font-medium text-muted-foreground">Tipo de desconto</label>
                 <select
                   value={discountType}
                   onChange={(e) => setDiscountType(e.target.value as 'PERCENTAGE' | 'FIXED')}
@@ -248,7 +251,6 @@ function PromotionModal({
                 />
               </div>
             </div>
-          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">

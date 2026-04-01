@@ -52,6 +52,8 @@ export interface UpdatePromotionInput {
   name?: string
   description?: string
   status?: PromotionStatus
+  discountType?: 'PERCENTAGE' | 'FIXED'
+  discountValue?: number
   maxUses?: number | null
   maxUsesPerCustomer?: number | null
   minAmount?: number | null

@@ -26,6 +26,8 @@ export const UpdatePromotionDto = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   status: z.enum(['active', 'inactive']).optional(),
+  discountType: z.enum(['PERCENTAGE', 'FIXED']).optional(),
+  discountValue: z.number().int().positive().optional(),
   maxUses: z.number().int().positive().optional().nullable(),
   maxUsesPerCustomer: z.number().int().positive().optional().nullable(),
   minAmount: z.number().int().min(0).optional().nullable(),

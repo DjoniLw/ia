@@ -96,6 +96,8 @@ export class PromotionsRepository {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.discountType !== undefined && { discountType: dto.discountType }),
+        ...(dto.discountValue !== undefined && { discountValue: dto.discountValue }),
         ...(dto.maxUses !== undefined && { maxUses: dto.maxUses }),
         ...(dto.maxUsesPerCustomer !== undefined && { maxUsesPerCustomer: dto.maxUsesPerCustomer }),
         ...(dto.minAmount !== undefined && { minAmount: dto.minAmount }),
