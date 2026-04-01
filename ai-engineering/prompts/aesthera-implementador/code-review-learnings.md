@@ -199,6 +199,31 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Aplica-se a: webhook secrets, chaves de API de terceiros (pagamentos, notificações, WhatsApp), tokens de integração, segredos de HMAC.
   - 📅 Aprendido em: 30/03/2026 — revisão de assinatura remota por link (PR #136): handler de callback de assinatura permitia requests sem secret quando `WEBHOOK_SECRET` não estava no env
 
+- [ ] **Migration criada localmente mas não commitada — Railway não encontra a migration e banco permanece desatualizado (BLOQUEANTE)**
+  - 🔴 Anti-padrão: criar o arquivo `migration.sql` localmente via `prisma migrate dev` (ou manualmente) sem forçar o commit. O arquivo existe no disco mas não no git porque o `.gitignore` do projeto contém a regra `apps/api/prisma/migrations/` — que ignora **novos** arquivos de migration (migrations mais antigas já estavam rastreadas antes dessa regra existir). Resultado: Railway executa `prisma migrate deploy` e não encontra a migration → banco permanece com schema antigo → queries falham ou dados somem silenciosamente:
+    ```bash
+    # ERRADO — migration existe localmente mas não no repositório
+    npx prisma migrate dev --name add_payment_method
+    git add .
+    git commit -m "feat: add payment method"
+    # ⚠️ migration.sql não foi incluída — .gitignore a ignorou
+    ```
+  - ✅ Correto: sempre que criar um novo arquivo em `prisma/migrations/`, usar `git add -f` para forçar o rastreamento **antes** do commit, no mesmo PR das mudanças de código:
+    ```bash
+    # CORRETO — forçar inclusão da migration no git
+    npx prisma migrate dev --name add_payment_method
+    git add -f aesthera/apps/api/prisma/migrations/<nome_da_migration>/migration.sql
+    git commit -m "feat: add payment method + migration"
+    ```
+  - 📌 Checklist obrigatório após qualquer alteração de schema:
+    1. `npx prisma generate` — regenerar o client
+    2. `npx prisma migrate dev --name <descricao>` — gerar o arquivo SQL
+    3. `git add -f aesthera/apps/api/prisma/migrations/<nome>/migration.sql` — forçar rastreamento
+    4. Commitar migration **no mesmo PR** das mudanças de código que dependem do novo schema
+  - 📌 Regra geral: o `.gitignore` ignora por padrão arquivos novos em `prisma/migrations/`. Qualquer migration nova **exige** `git add -f`. Nunca assumir que `git add .` incluiu a migration — verificar com `git status` que o arquivo está na staging area antes de commitar.
+  - 📌 Sinal de alerta: se `git status` não lista nenhum arquivo de migration após um `prisma migrate dev`, é porque o `.gitignore` a ocultou — usar `git add -f` imediatamente.
+  - 📅 Aprendido em: 01/04/2026 — anti-padrão identificado com `.gitignore` contendo `apps/api/prisma/migrations/` ignorando novas migrations, causando falha silenciosa no deploy Railway
+
 - [ ] **Chamar outros services dentro de `prisma.$transaction` sem propagar o cliente `tx` — operações ficam fora da transação**
   - 🔴 Anti-padrão: dentro de um bloco `prisma.$transaction(async (tx) => { ... })`, chamar um método de outro service que internamente usa `this.prisma` em vez de `tx` — essas operações rodam fora da transação e não são revertidas em caso de erro:
     ```ts
@@ -824,3 +849,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 30/03/2026 | PR #136 | 2 padrões adicionados pelo treinador-agent (revisão de assinatura remota por link): (1) `_clinicId` em repositório multi-tenant é bug de segurança — `clinicId` deve sempre estar no `WHERE`, defesa em profundidade exige isolamento em toda camada; (2) webhook secret condicional com `if (expected && ...)` desabilita proteção silenciosamente quando env não configurado — usar fail-fast: lançar erro se secret ausente, nunca skip |
 | 30/03/2026 | PR #136 | 2 padrões adicionados pelo treinador-agent (revisão de assinatura remota por link — UX/componentes): (1) controles booleanos devem sempre usar `<Switch>` do shadcn/ui — `<button>` nativo como toggle quebra acessibilidade e consistência visual; (2) feedback de sucesso (toast, badge, estado visual) só pode ser exibido após confirmação da API em `onSuccess` — nunca antes ou sem chamada de API |
 | 31/03/2026 | — | 2 padrões adicionados pelo treinador-agent: (1) nunca usar caracteres unicode como ícones (`🏷 ✓ ✕ ×`) — sempre usar equivalentes Lucide React com classes Tailwind para controle de tamanho e cor; (2) banners informativos verdes devem usar `bg-green-100 text-green-700` conforme `ui-standards.md` seção 6 — nunca inventar variações de tom (emerald, teal, green-50) fora do padrão documentado |
+| 01/04/2026 | — | 1 padrão adicionado pelo treinador-agent: migration não commitada — `.gitignore` contém `apps/api/prisma/migrations/` e ignora novos arquivos de migration; sempre usar `git add -f` para forçar rastreamento da migration.sql no mesmo PR das mudanças de código; checklist obrigatório: `prisma generate` + `prisma migrate dev` + `git add -f` + commit da migration junto com o código |
