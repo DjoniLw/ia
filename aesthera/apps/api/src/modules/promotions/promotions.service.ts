@@ -40,10 +40,16 @@ export class PromotionsService {
 
   async findActiveForService(clinicId: string, serviceId: string, customerId?: string) {
     const promotions = await this.repo.findActiveForService(clinicId, serviceId)
-    if (!customerId) return promotions
+
+    // Filtrar promoções com limite global de usos atingido
+    const withinGlobalLimit = promotions.filter(
+      (p) => p.maxUses === null || p.usesCount < p.maxUses,
+    )
+
+    if (!customerId) return withinGlobalLimit
     // Filter out promotions where this customer has already reached maxUsesPerCustomer
     const filtered = await Promise.all(
-      promotions.map(async (p) => {
+      withinGlobalLimit.map(async (p) => {
         if (p.maxUsesPerCustomer === null || p.maxUsesPerCustomer === undefined) return p
         const uses = await this.repo.countCustomerUsage(clinicId, p.id, customerId)
         return uses < p.maxUsesPerCustomer ? p : null

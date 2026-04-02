@@ -92,6 +92,7 @@ function CancelBillingButton({ id, status }: { id: string; status: BillingStatus
 
 function BillingActions({ billing }: { billing: Billing }) {
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalKey, setModalKey] = useState(0)
 
   if (billing.status !== 'pending' && billing.status !== 'overdue') {
     return null
@@ -104,7 +105,7 @@ function BillingActions({ billing }: { billing: Billing }) {
           variant="ghost"
           size="sm"
           className="text-green-700 hover:text-green-800 hover:bg-green-50 dark:text-green-400"
-          onClick={() => setModalOpen(true)}
+          onClick={() => { setModalKey((k) => k + 1); setModalOpen(true) }}
         >
           Registrar Recebimento
         </Button>
@@ -112,6 +113,7 @@ function BillingActions({ billing }: { billing: Billing }) {
       </div>
 
       <ReceiveManualModal
+        key={modalKey}
         billing={billing}
         open={modalOpen}
         onClose={() => setModalOpen(false)}

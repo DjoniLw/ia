@@ -347,6 +347,10 @@ export function useCreateManualReceipt(billingId: string) {
   const qc = useQueryClient()
   return useMutation<ManualReceiptResult, Error, CreateManualReceiptPayload>({
     mutationFn: (data) => api.post(`/billing/${billingId}/receive`, data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing'] })
+      // Força re-fetch das promoções disponíveis — usesCount pode ter mudado após aplicação
+      qc.invalidateQueries({ queryKey: ['promotions-for-service'] })
+    },
   })
 }
