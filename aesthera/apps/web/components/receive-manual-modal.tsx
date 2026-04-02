@@ -242,7 +242,8 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   const isSpecificPromotion = !!specificPromotion
 
   useEffect(() => {
-    if (!suggestedPromotion || !isSpecificPromotion || appliedCoupon || autoApplied || !open) return
+    // Nunca auto-aplicar quando a cobrança já tem promoção travada no agendamento
+    if (!suggestedPromotion || !isSpecificPromotion || appliedCoupon || autoApplied || !open || hasLockedPromo) return
     setAutoApplied(true)
     validatePromotion.mutateAsync({
       code: suggestedPromotion.code,
@@ -326,7 +327,8 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
           ...(l.walletEntryId ? { walletEntryId: l.walletEntryId } : {}),
         })),
         ...(excedente > 0 ? { overpaymentHandling: { type: overpaymentHandling } } : {}),
-        ...(appliedCoupon ? { promotionCode: appliedCoupon.code } : {}),
+        // Não enviar promotionCode quando billing já tem promoção travada (evita duplo desconto)
+        ...(appliedCoupon && !hasLockedPromo ? { promotionCode: appliedCoupon.code } : {}),
       })
 
       if (result.walletEntry) {
@@ -464,7 +466,8 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
           />
         )}
 
-        {/* Coupon / Promotion Code */}
+        {/* Coupon / Promotion Code — ocultado quando billing já tem promoção travada no agendamento */}
+        {!hasLockedPromo && (
         <div>
           {/* Promoção específica: aplicada automaticamente, com botão remover */}
           {appliedCoupon && suggestedPromotion?.code === appliedCoupon.code && isSpecificPromotion && (
@@ -635,6 +638,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
             </div>
           )}
         </div>
+        )}
 
         {/* Notes */}
         <div>
