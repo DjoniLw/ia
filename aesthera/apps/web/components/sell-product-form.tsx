@@ -34,6 +34,13 @@ function parseCurrencyInput(value: string): number {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0
 }
 
+const PAYMENT_METHODS = [
+  { value: 'cash',     label: 'Dinheiro' },
+  { value: 'pix',      label: 'PIX' },
+  { value: 'card',     label: 'Cartão' },
+  { value: 'transfer', label: 'Transferência' },
+] as const
+
 const saleSchema = z.object({
   quantity: z.coerce.number().int().positive('Quantidade deve ser maior que 0'),
   discount: z.coerce.number().min(0).default(0),
@@ -312,6 +319,9 @@ export function SellProductForm({ onClose, defaultProduct = null }: SellProductF
             {...register('quantity')}
           />
           {errors.quantity && <p className="text-xs text-red-500">{errors.quantity.message}</p>}
+          {selectedProductObj && selectedProductObj.stock === 0 && (
+            <p className="text-xs text-destructive">Produto sem estoque disponível</p>
+          )}
         </div>
         {!autoPromotion && (
           <div className="space-y-2">
@@ -349,8 +359,8 @@ export function SellProductForm({ onClose, defaultProduct = null }: SellProductF
             </div>
           )}
           {universalPromotion && !appliedUniversalPromo && (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs">
-              <span className="flex items-center gap-1.5 text-white">
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs dark:border-blue-800/60 dark:bg-blue-950/40">
+              <span className="flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
                 <Tag className="h-3 w-3 shrink-0" />
                 Promoção disponível:{' '}
                 <span className="font-mono font-semibold">{universalPromotion.code}</span>
@@ -365,7 +375,7 @@ export function SellProductForm({ onClose, defaultProduct = null }: SellProductF
                   if (specificPromotion && !specificDismissed) setSpecificDismissed(true)
                   setAppliedUniversalPromo(universalPromotion)
                 }}
-                className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                className="shrink-0 rounded-full border border-blue-300 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900"
               >
                 {specificPromotion && !specificDismissed ? 'Usar esta' : 'Aplicar'}
               </button>
@@ -412,32 +422,41 @@ export function SellProductForm({ onClose, defaultProduct = null }: SellProductF
             <Plus className="h-3 w-3" /> Adicionar
           </button>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {payLines.map((line) => (
-            <div key={line.id} className="flex items-center gap-2">
-              <select
-                value={line.method}
-                onChange={(e) => updatePayLine(line.id, { method: e.target.value })}
-                className="flex-1 h-9 rounded-md border border-input bg-background px-2 text-sm"
-              >
-                <option value="cash">Dinheiro</option>
-                <option value="pix">PIX</option>
-                <option value="card">Cartão</option>
-                <option value="transfer">Transferência</option>
-              </select>
-              <Input
-                value={line.amountStr}
-                onChange={(e) => updatePayLine(line.id, { amountStr: e.target.value })}
-                placeholder="0,00"
-                className="h-9 w-28 text-sm"
-              />
-              {payLines.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removePayLine(line.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                >✕</button>
-              )}
+            <div key={line.id} className="space-y-1.5">
+              <div className="flex flex-wrap gap-1">
+                {PAYMENT_METHODS.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => updatePayLine(line.id, { method: m.value })}
+                    className={[
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      line.method === m.value
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                    ].join(' ')}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={line.amountStr}
+                  onChange={(e) => updatePayLine(line.id, { amountStr: e.target.value })}
+                  placeholder="0,00"
+                  className="h-9 flex-1 text-sm"
+                />
+                {payLines.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removePayLine(line.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >✕</button>
+                )}
+              </div>
             </div>
           ))}
         </div>
