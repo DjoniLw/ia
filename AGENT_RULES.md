@@ -81,6 +81,18 @@ Never implement against an undefined or stale specification.
 
 ---
 
+## 9. Agent Responsibility Boundaries
+
+**Only the `aesthera-implementador` agent may write or modify system code** (files under `aesthera/`).
+
+All other agents — including `code-reviewer`, `ux-reviewer`, `security-auditor`, `aesthera-system-architect`, `aesthera-product-owner`, `aesthera-issue-writer`, `aesthera-consolidador`, and `aesthera-pipeline` — must **only generate documents** describing what needs to be done or corrected, targeting the implementador agent.
+
+Exception: `test-guardian` may create or modify test files (`*.test.ts`, `*.spec.ts`) exclusively.
+
+> ⚠️ Generating a document with corrections is not optional — it is the required output format for any agent that detects a problem but is not the implementador.
+
+---
+
 ## 9. Concurrency and State Consistency (CRITICAL)
 
 The system MUST handle concurrent operations safely.
