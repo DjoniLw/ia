@@ -215,7 +215,27 @@ export class ManualReceiptsService {
         // cash_change: no action needed — note was added in buildNotes()
       }
 
-      return { receipt, walletEntry }
+      // 7. RN11 — Se cobrança de pré-venda (PRESALE): criar WalletEntry SERVICE_PRESALE
+      // Gera o "vale de procedimento" que o cliente usa ao concluir o agendamento.
+      let serviceVoucherEntry: { code: string; balance: number } | null = null
+      if (billing.sourceType === 'PRESALE' && billing.serviceId && billing.customerId) {
+        serviceVoucherEntry = await wallet.createInternal(
+          {
+            clinicId,
+            customerId: billing.customerId,
+            type: 'VOUCHER',
+            value: txEffectiveAmount,
+            originType: 'SERVICE_PRESALE',
+            originReference: billingId,
+            notes: `Vale de procedimento gerado por pré-venda — cobrança ${billingId}`,
+            transactionDescription: `Vale de procedimento criado — pré-venda ${billingId}`,
+            serviceId: billing.serviceId,
+          },
+          tx,
+        )
+      }
+
+      return { receipt, walletEntry, serviceVoucherEntry }
     })
   }
 
