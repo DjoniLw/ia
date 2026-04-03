@@ -11,7 +11,6 @@ import type {
 } from './appointments.dto'
 import { AppointmentsRepository } from './appointments.repository'
 import { PackagesRepository } from '../packages/packages.repository'
-import { BillingService } from '../billing/billing.service'
 import { PromotionsRepository } from '../promotions/promotions.repository'
 
 // HH:MM → minutes from midnight
@@ -39,7 +38,6 @@ function hashToInt32(s: string): number {
 export class AppointmentsService {
   private repo = new AppointmentsRepository()
   private pkgRepo = new PackagesRepository()
-  private billingService = new BillingService()
   private promotionsRepo = new PromotionsRepository()
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -457,27 +455,43 @@ export class AppointmentsService {
     if (linkedSession) {
       // Redeem the session — no billing is created since the package was pre-paid
       await this.pkgRepo.redeemSession(linkedSession.id, id)
-      return completed
+      // RN02 — Retorno normalizado para todos os paths: packageSession → serviceVouchers: []
+      return { appointment: completed, serviceVouchers: [] }
     }
 
-    // Se já foi criado um billing pending no momento do agendamento (promoção travada),
-    // não cria um novo — o recebimento ocorre normalmente pelo modal existente
+    // Se já existe billing paid, não buscar vouchers (não há necessidade de gerar cobrança)
     const existingBilling = await prisma.billing.findUnique({ where: { appointmentId: id } })
-    if (existingBilling && existingBilling.status === 'pending') {
-      return completed
+    if (existingBilling && existingBilling.status === 'paid') {
+      return { appointment: completed, serviceVouchers: [] }
     }
 
-    // If multi-service appointment, compute total price from service items
-    const serviceItems = completed.serviceItems
-    const billingPrice =
-      serviceItems && serviceItems.length > 0
-        ? serviceItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0)
-        : completed.price
+    // RN07 — Buscar vouchers SERVICE_PRESALE ativos para o serviço do agendamento
+    // Retornar serviceVouchers para o frontend montar CompleteAppointmentModal
+    let serviceVouchers: Array<{ id: string; serviceId: string | null; balance: number; expirationDate: Date | null; code: string }> = []
 
-    // Auto-create billing (idempotent)
-    await this.billingService.createForAppointment({ ...completed, price: billingPrice })
+    // Identificar serviceId do appointment (single ou multi-service)
+    const serviceItems = (completed as { serviceItems?: Array<{ serviceId: string }> }).serviceItems
+    const serviceIds: string[] = serviceItems && serviceItems.length > 0
+      ? serviceItems.map((item) => item.serviceId)
+      : (completed.serviceId ? [completed.serviceId] : [])
 
-    return completed
+    if (serviceIds.length > 0) {
+      const vouchers = await prisma.walletEntry.findMany({
+        where: {
+          clinicId,
+          customerId: completed.customerId,
+          originType: 'SERVICE_PRESALE',
+          status: 'ACTIVE',
+          serviceId: { in: serviceIds },
+        },
+        select: { id: true, serviceId: true, balance: true, expirationDate: true, code: true },
+      })
+      serviceVouchers = vouchers
+    }
+
+    // RN02 — Billing NÃO é criado automaticamente aqui.
+    // O frontend abre CompleteAppointmentModal para o staff decidir se gera cobrança.
+    return { appointment: completed, serviceVouchers }
   }
 
   async cancel(clinicId: string, id: string, dto: CancelAppointmentDto) {

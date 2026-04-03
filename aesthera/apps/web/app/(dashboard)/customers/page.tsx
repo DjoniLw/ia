@@ -55,6 +55,7 @@ import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
+import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
 import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
@@ -718,9 +719,10 @@ function CustomerPackageItem({ pkg }: { pkg: CustomerPackage }) {
   )
 }
 
-function CustomerWalletTab({ customerId }: { customerId: string }) {
+function CustomerWalletTab({ customerId, customerName }: { customerId: string; customerName?: string }) {
   const role = useRole()
   const [walletSubTab, setWalletSubTab] = useState<'carteira' | 'pacotes'>('carteira')
+  const [showSellService, setShowSellService] = useState(false)
   const [statusFilter, setStatusFilter] = useState<WalletEntryStatus>('ACTIVE')
   const [page, setPage] = useState(1)
 
@@ -742,8 +744,9 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
 
   return (
     <div className="space-y-4 text-sm">
-      {/* Sub-tabs: Carteira e Pacotes */}
-      <div className="flex rounded-lg border overflow-hidden">
+      {/* Cabeçalho: sub-tabs + botão vender serviço */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-1 rounded-lg border overflow-hidden">
         <button
           type="button"
           onClick={() => setWalletSubTab('carteira')}
@@ -770,7 +773,35 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
           <Package className="h-3 w-3" />
           Pacotes
         </button>
+        </div>
+        {role !== 'professional' && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="shrink-0 text-xs"
+            onClick={() => setShowSellService(true)}
+          >
+            <Plus className="mr-1 h-3 w-3" />
+            Vender Serviço
+          </Button>
+        )}
       </div>
+
+      {/* Modal de pré-venda de serviço */}
+      {showSellService && (
+        <Dialog open onClose={() => setShowSellService(false)}>
+          <DialogTitle>Pré-venda de Serviço</DialogTitle>
+          <div className="mt-4">
+            <SellServiceForm
+              defaultCustomerId={customerId}
+              defaultCustomerName={customerName}
+              onSuccess={() => setShowSellService(false)}
+              onCancel={() => setShowSellService(false)}
+            />
+          </div>
+        </Dialog>
+      )}
 
       {/* ── Sub-tab: Carteira ─────────────────────────────────────── */}
       {walletSubTab === 'carteira' && (
@@ -1946,7 +1977,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* ── Carteira ─────────────────────────────────────────────────── */}
       {detailTab === 'wallet' && (
-        <CustomerWalletTab customerId={customer.id} />
+        <CustomerWalletTab customerId={customer.id} customerName={customer.name} />
       )}
 
       {/* ── Prontuário (anamnese + exames + observações…) ─────────────── */}

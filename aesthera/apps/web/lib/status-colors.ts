@@ -4,6 +4,18 @@ export const PROMOTION_STATUS_COLOR: Record<string, string> = {
   expired: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 }
 
+export const BILLING_SOURCE_TYPE_LABEL: Record<string, string> = {
+  APPOINTMENT: 'Agendamento',
+  PRESALE:     'Pré-venda',
+  MANUAL:      'Avulso',
+}
+
+export const BILLING_SOURCE_TYPE_COLOR: Record<string, string> = {
+  APPOINTMENT: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  PRESALE:     'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+  MANUAL:      'bg-muted text-muted-foreground',
+}
+
 export const SESSION_STATUS_STYLE: Record<string, string> = {
   ABERTO: 'text-muted-foreground/40',
   AGENDADO: 'text-blue-500 dark:text-blue-400',

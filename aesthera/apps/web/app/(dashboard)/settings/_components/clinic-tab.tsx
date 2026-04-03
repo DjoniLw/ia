@@ -14,6 +14,7 @@ import { MaskedInputPhone } from '@/components/ui/masked-input-phone'
 import { MaskedInputCep } from '@/components/ui/masked-input-cep'
 import { Loader2 } from 'lucide-react'
 import { api } from '@/lib/api'
+import { Switch } from '@/components/ui/switch'
 import { useClinic, useUpdateClinic } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
 
@@ -34,6 +35,7 @@ const clinicSchema = z.object({
       zip: z.string().optional(),
     })
     .optional(),
+  chargeVoucherDifference: z.boolean().optional(),
 })
 
 type ClinicFormData = z.infer<typeof clinicSchema>
@@ -67,6 +69,7 @@ export function ClinicTab() {
           ...clinic.address,
           zip: (clinic.address?.zip ?? '').replace(/\D/g, ''),
         },
+        chargeVoucherDifference: clinic.chargeVoucherDifference ?? false,
       })
     }
   }, [clinic, reset])
@@ -252,6 +255,29 @@ export function ClinicTab() {
           <Button type="submit" disabled={isPending || lookingUpCnpj}>
             {isPending ? 'Salvando...' : 'Salvar alterações'}
           </Button>
+
+          <div className="rounded-lg border p-4 space-y-2">
+            <p className="text-sm font-medium">Cobrança de saldo de pré-venda</p>
+            <p className="text-xs text-muted-foreground">
+              Quando ativado, ao usar um voucher de pré-venda cuja cobrança foi menor que o valor do serviço, uma cobrança complementar será gerada automaticamente pela diferença.
+            </p>
+            <Controller
+              control={control}
+              name="chargeVoucherDifference"
+              render={({ field }) => (
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="chargeVoucherDifference"
+                    checked={field.value ?? false}
+                    onCheckedChange={field.onChange}
+                  />
+                  <Label htmlFor="chargeVoucherDifference" className="text-sm">
+                    Cobrar diferença de pré-venda
+                  </Label>
+                </div>
+              )}
+            />
+          </div>
         </form>
       </CardContent>
     </Card>

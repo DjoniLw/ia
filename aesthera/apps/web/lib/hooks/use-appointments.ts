@@ -95,10 +95,13 @@ export interface BillingAppointment {
 
 export type BillingStatus = 'pending' | 'paid' | 'overdue' | 'cancelled'
 
+export type BillingSourceType = 'APPOINTMENT' | 'PRESALE' | 'MANUAL'
+
 export interface Billing {
   id: string
   amount: number
   status: BillingStatus
+  sourceType: BillingSourceType
   paymentLink: string | null
   paymentToken: string
   dueDate: string
@@ -108,6 +111,8 @@ export interface Billing {
   createdAt: string
   lockedPromotionCode?: string | null
   originalAmount?: number | null
+  serviceId?: string | null
+  service?: { id: string; name: string } | null
   customer: AppointmentCustomer
   appointment: BillingAppointment | null
 }
@@ -351,6 +356,27 @@ export function useCreateManualReceipt(billingId: string) {
       qc.invalidateQueries({ queryKey: ['billing'] })
       // Força re-fetch das promoções disponíveis — usesCount pode ter mudado após aplicação
       qc.invalidateQueries({ queryKey: ['promotions-for-service'] })
+    },
+  })
+}
+
+export interface CreateBillingPayload {
+  customerId: string
+  sourceType: BillingSourceType
+  amount: number
+  serviceId?: string
+  appointmentId?: string
+  dueDate?: string
+  notes?: string
+}
+
+export function useCreateBilling() {
+  const qc = useQueryClient()
+  return useMutation<Billing, Error, CreateBillingPayload>({
+    mutationFn: (data) => api.post('/billing', data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing'] })
+      qc.invalidateQueries({ queryKey: ['appointments'] })
     },
   })
 }

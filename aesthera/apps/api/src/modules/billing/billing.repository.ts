@@ -12,6 +12,7 @@ const billingInclude = {
       professional: { select: { id: true, name: true } },
     },
   },
+  service: { select: { id: true, name: true } },
 } as const
 
 export class BillingRepository {
@@ -20,6 +21,7 @@ export class BillingRepository {
     if (q.customerId) where.customerId = q.customerId
     if (q.appointmentId) where.appointmentId = q.appointmentId
     if (q.status) where.status = q.status
+    if (q.sourceType) where.sourceType = q.sourceType
     if (q.customerName) {
       where.customer = { name: { contains: q.customerName, mode: 'insensitive' } }
     }

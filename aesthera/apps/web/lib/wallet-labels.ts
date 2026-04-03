@@ -11,12 +11,13 @@ export type { WalletOriginType, WalletTransactionType, WalletEntryType, WalletEn
 // Se novo valor for adicionado ao enum sem label aqui, o TypeScript apontará erro imediatamente.
 
 export const WALLET_ORIGIN_LABELS: Record<WalletOriginType, { label: string; description: string }> = {
-  OVERPAYMENT:        { label: 'Troco de cobrança',   description: 'Excedente pago em relação ao valor da cobrança' },
-  GIFT:               { label: 'Presente / Brinde',    description: 'Crédito concedido como presente ou brinde pela clínica' },
-  REFUND:             { label: 'Estorno',              description: 'Devolução de valor referente a cancelamento ou ajuste' },
-  CASHBACK_PROMOTION: { label: 'Bônus de retorno',     description: 'Cashback gerado por promoção da clínica' },
-  PACKAGE_PURCHASE:   { label: 'Compra de pacote',     description: 'Saldo proveniente da compra de pacote de sessões' },
-  VOUCHER_SPLIT:      { label: 'Troco de voucher',     description: 'Saldo restante de voucher utilizado parcialmente' },
+  OVERPAYMENT:        { label: 'Troco de cobrança',          description: 'Excedente pago em relação ao valor da cobrança' },
+  GIFT:               { label: 'Presente / Brinde',           description: 'Crédito concedido como presente ou brinde pela clínica' },
+  REFUND:             { label: 'Estorno',                     description: 'Devolução de valor referente a cancelamento ou ajuste' },
+  CASHBACK_PROMOTION: { label: 'Bônus de retorno',            description: 'Cashback gerado por promoção da clínica' },
+  PACKAGE_PURCHASE:   { label: 'Compra de pacote',            description: 'Saldo proveniente da compra de pacote de sessões' },
+  VOUCHER_SPLIT:      { label: 'Troco de voucher',            description: 'Saldo restante de voucher utilizado parcialmente' },
+  SERVICE_PRESALE:    { label: 'Pré-venda de serviço',        description: 'Vale de serviço gerado por pré-venda' },
 }
 
 export const WALLET_TRANSACTION_LABELS: Record<WalletTransactionType, string> = {

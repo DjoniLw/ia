@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { ExternalLink, Info, Search, Tag } from 'lucide-react'
+import { ExternalLink, Info, Plus, Search, Tag } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
-import { type BillingStatus, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
+import { SellServiceForm } from '@/components/billing/SellServiceForm'
+import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
+import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
@@ -129,8 +131,10 @@ function BillingPageContent() {
   const searchParams = useSearchParams()
 
   const [statusFilter, setStatusFilter] = usePersistedFilter<BillingStatus | ''>('aesthera-filter-billing-status', (searchParams.get('status') as BillingStatus | null), '')
+  const [sourceTypeFilter, setSourceTypeFilter] = usePersistedFilter<BillingSourceType | ''>('aesthera-filter-billing-sourcetype', (searchParams.get('sourceType') as BillingSourceType | null), '')
   const [customerSearch, setCustomerSearch] = usePersistedFilter('aesthera-filter-billing-customer', searchParams.get('customer'), '')
   const [customerSearchDebounced, setCustomerSearchDebounced] = useState(customerSearch)
+  const [showNewBillingModal, setShowNewBillingModal] = useState(false)
 
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 
@@ -147,10 +151,11 @@ function BillingPageContent() {
     router.replace(`?${p.toString()}`, { scroll: false })
   }, [router, statusFilter, customerSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isDefaultFilters = statusFilter === '' && customerSearch === ''
+  const isDefaultFilters = statusFilter === '' && sourceTypeFilter === '' && customerSearch === ''
 
   function resetFilters() {
     setStatusFilter('')
+    setSourceTypeFilter('')
     setCustomerSearch('')
     setCustomerSearchDebounced('')
     resetPage()
@@ -172,6 +177,7 @@ function BillingPageContent() {
 
   const params: Record<string, string> = {
     ...(statusFilter && { status: statusFilter }),
+    ...(sourceTypeFilter && { sourceType: sourceTypeFilter }),
     ...(customerSearchDebounced && { customerName: customerSearchDebounced }),
     ...paginationParams,
   }
@@ -191,9 +197,13 @@ function BillingPageContent() {
         <div>
           <h2 className="text-xl font-semibold">Cobranças</h2>
           <p className="text-sm text-muted-foreground">
-            Geradas automaticamente ao concluir agendamentos
+            Cobranças de serviços, pré-vendas e registros avulsos
           </p>
         </div>
+        <Button size="sm" onClick={() => setShowNewBillingModal(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nova Pré-venda
+        </Button>
       </div>
 
       {/* Filters */}
@@ -214,6 +224,24 @@ function BillingPageContent() {
               {s.label}
             </button>
           ))}
+          </div>
+
+          {/* sourceType filter */}
+          <div className="flex gap-1">
+            {(['', 'APPOINTMENT', 'PRESALE', 'MANUAL'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => { setSourceTypeFilter(t); resetPage() }}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  sourceTypeFilter === t
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {t === '' ? 'Todas origens' : BILLING_SOURCE_TYPE_LABEL[t]}
+              </button>
+            ))}
           </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -300,9 +328,16 @@ function BillingPageContent() {
                 </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(b.dueDate)}</td>
                 <td className="px-2 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[b.status]}`}>
-                    {STATUS_LABEL[b.status]}
-                  </span>
+                  <div className="flex flex-col gap-1">
+                    <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[b.status]}`}>
+                      {STATUS_LABEL[b.status]}
+                    </span>
+                    {b.sourceType && (
+                      <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${BILLING_SOURCE_TYPE_COLOR[b.sourceType] ?? 'bg-muted text-muted-foreground'}`}>
+                        {BILLING_SOURCE_TYPE_LABEL[b.sourceType] ?? b.sourceType}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-2 py-3">
                   <div className="flex justify-end gap-1">
@@ -333,6 +368,19 @@ function BillingPageContent() {
         onPageChange={setPage}
         onPageSizeChange={setPageSize}
       />
+
+      {/* Modal de nova pré-venda */}
+      {showNewBillingModal && (
+        <Dialog open onClose={() => setShowNewBillingModal(false)}>
+          <DialogTitle>Nova Pré-venda de Serviço</DialogTitle>
+          <div className="mt-4">
+            <SellServiceForm
+              onSuccess={() => setShowNewBillingModal(false)}
+              onCancel={() => setShowNewBillingModal(false)}
+            />
+          </div>
+        </Dialog>
+      )}
 
       {/* Summary */}
       {data && data.items.length > 0 && (

@@ -44,6 +44,36 @@ export class WalletService {
   }
 
   /**
+   * Retorna vouchers SERVICE_PRESALE ativos de um cliente, opcionalmente filtrados por serviceId.
+   * SEC03 — Valida que o customerId pertence à clinicId do JWT antes de retornar dados.
+   */
+  async findActiveServiceVouchers(clinicId: string, customerId: string, serviceId?: string) {
+    // SEC03 — Validar que o customerId pertence à clínica
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, clinicId } })
+    if (!customer) {
+      throw new ForbiddenError('Cliente não encontrado ou não pertence a esta clínica')
+    }
+
+    return prisma.walletEntry.findMany({
+      where: {
+        clinicId,
+        customerId,
+        originType: 'SERVICE_PRESALE',
+        status: 'ACTIVE',
+        ...(serviceId ? { serviceId } : {}),
+      },
+      select: {
+        id: true,
+        serviceId: true,
+        balance: true,
+        expirationDate: true,
+        code: true,
+        service: { select: { id: true, name: true } },
+      },
+    })
+  }
+
+  /**
    * Retorna o saldo total ativo de um cliente.
    * Valida que o customerId pertence à clínica do JWT (proteção contra IDOR).
    */
@@ -109,6 +139,7 @@ export class WalletService {
       notes?: string
       transactionType?: string
       transactionDescription?: string
+      serviceId?: string
     },
     tx?: Tx,
   ) {
@@ -126,6 +157,7 @@ export class WalletService {
           originType: data.originType,
           originReference: data.originReference,
           notes: data.notes,
+          ...(data.serviceId ? { serviceId: data.serviceId } : {}),
         },
         client,
       )
@@ -181,7 +213,8 @@ export class WalletService {
    * Runs inside a database transaction with a row-level lock (FOR UPDATE) to prevent
    * double spending under concurrent requests.
    * Returns: { entry, newEntry (if split), remaining (if insufficient) }
-   * Uses Redis distributed lock to prevent concurrent usage of the same wallet entry.
+   * SEC04 — Busca billing por { id, clinicId } para proteção multi-tenant.
+   * RN10 — Validação de serviceId: voucher com serviceId só pode ser usado em billing com mesmo serviceId.
    */
   async use(
     clinicId: string,
@@ -200,6 +233,25 @@ export class WalletService {
 
       if (entry.status !== 'ACTIVE') {
         throw new AppError('Este voucher não está ativo', 400, 'WALLET_NOT_ACTIVE')
+      }
+
+      // Verificar se voucher expirou
+      if (entry.expirationDate && new Date(entry.expirationDate) < new Date()) {
+        throw new AppError('Este voucher está vencido', 400, 'VOUCHER_EXPIRED')
+      }
+
+      // RN10 — Se voucher tem serviceId, validar que billing tem o mesmo serviceId
+      if ((entry as { serviceId?: string | null }).serviceId) {
+        // SEC04 — Buscar billing por { id, clinicId }
+        const billing = await tx.billing.findFirst({ where: { id: billingId, clinicId } })
+        if (!billing) throw new NotFoundError('Billing')
+        if (billing.serviceId !== (entry as { serviceId?: string | null }).serviceId) {
+          throw new AppError(
+            'Este vale não pode ser utilizado para este serviço',
+            400,
+            'VOUCHER_NOT_APPLICABLE_FOR_SERVICE',
+          )
+        }
       }
 
       if (entry.balance < amount) {

@@ -12,6 +12,7 @@ export type WalletOriginType =
   | 'CASHBACK_PROMOTION'
   | 'PACKAGE_PURCHASE'
   | 'VOUCHER_SPLIT'
+  | 'SERVICE_PRESALE'
 export type WalletTransactionType = 'CREATE' | 'USE' | 'SPLIT' | 'ADJUST'
 
 export interface WalletTransaction {
@@ -166,5 +167,27 @@ export function useReceivePayment(billingId: string) {
       qc.invalidateQueries({ queryKey: ['billing'] })
       qc.invalidateQueries({ queryKey: ['wallet'] })
     },
+  })
+}
+
+export interface ServiceVoucher {
+  id: string
+  serviceId: string | null
+  balance: number
+  expirationDate: string | null
+  code: string
+  service: { id: string; name: string } | null
+}
+
+export function useServiceVouchers(customerId: string, serviceId?: string, enabled = true) {
+  return useQuery<ServiceVoucher[]>({
+    queryKey: ['wallet', 'service-vouchers', customerId, serviceId],
+    queryFn: () =>
+      api
+        .get(`/wallet/service-vouchers/${customerId}`, {
+          params: serviceId ? { serviceId } : undefined,
+        })
+        .then((r) => r.data),
+    enabled: enabled && !!customerId,
   })
 }

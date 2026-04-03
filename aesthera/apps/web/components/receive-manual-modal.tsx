@@ -202,14 +202,17 @@ interface ReceiveManualModalProps {
   billing: Billing
   open: boolean
   onClose: () => void
+  preSelectedVoucherId?: string
 }
 
 let lineIdCounter = 1
 
-export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModalProps) {
-  const [lines, setLines] = useState<PaymentLineState[]>([
-    { id: lineIdCounter++, method: 'cash', amountStr: '', walletEntryId: '' },
-  ])
+export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherId }: ReceiveManualModalProps) {
+  const [lines, setLines] = useState<PaymentLineState[]>(() =>
+    preSelectedVoucherId
+      ? [{ id: lineIdCounter++, method: 'wallet_voucher', amountStr: '', walletEntryId: preSelectedVoucherId }]
+      : [{ id: lineIdCounter++, method: 'cash', amountStr: '', walletEntryId: '' }],
+  )
   const [notes, setNotes] = useState('')
   const [overpaymentHandling, setOverpaymentHandling] =
     useState<OverpaymentHandlingType>('cash_change')
@@ -371,6 +374,18 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
           </span>
         </div>
       </div>
+
+      {/* Aviso de voucher pré-selecionado (via CompleteAppointmentModal) */}
+      {preSelectedVoucherId && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            Vale pré-venda selecionado
+          </p>
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+            O vale selecionado será utilizado como forma de pagamento. Se o valor do vale for inferior ao da cobrança, uma cobrança complementar poderá ser gerada pela clínica.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Payment lines */}

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
-import { CancelBillingDto, ListBillingQuery, ReceivePaymentDto } from './billing.dto'
+import { CancelBillingDto, CreateBillingDto, ListBillingQuery, ReceivePaymentDto } from './billing.dto'
 import { BillingService } from './billing.service'
 
 export async function billingRoutes(app: FastifyInstance) {
@@ -21,6 +21,19 @@ export async function billingRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     return reply.send(await svc.getPaymentLink(req.clinicId, id))
   })
+
+  // SEC01 — POST /billing público com roleGuard(['admin', 'staff']) — profissional não pode criar billing
+  app.post(
+    '/billing',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const dto = CreateBillingDto.parse(req.body)
+      const billing = await svc.createManual(dto, req.clinicId)
+      // SEC07 — Response sem paymentToken e campos internos
+      const { paymentToken: _pt, ...safeResponse } = billing as typeof billing & { paymentToken?: string }
+      return reply.status(201).send(safeResponse)
+    },
+  )
 
   app.post(
     '/billing/:id/cancel',

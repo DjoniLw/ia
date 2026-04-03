@@ -33,6 +33,8 @@ const mockPrisma = vi.hoisted(() => ({
   professional: { findFirst: vi.fn(), findMany: vi.fn() },
   service: { findFirst: vi.fn() },
   businessHour: { findFirst: vi.fn() },
+  billing: { findUnique: vi.fn() },
+  walletEntry: { findMany: vi.fn() },
 }))
 
 // ── Hoisted: mock do repositório de agendamentos ─────────────────────────────
@@ -562,5 +564,105 @@ describe('AppointmentsService', () => {
 
       expect(result).toMatchObject({ id: 'appt-created', status: 'draft' })
     })
+  })
+})
+
+// ── T15-T19: AppointmentsService.complete() ────────────────────────────────────
+describe('AppointmentsService.complete()', () => {
+  let service: AppointmentsService
+
+  const makeCompletedAppointment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'appt-1',
+    clinicId: 'clinic-1',
+    customerId: 'customer-1',
+    serviceId: 'service-1',
+    status: 'in_progress',
+    serviceItems: [],
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AppointmentsService()
+  })
+
+  // T19 — Regressão: complete() NÃO auto-cria billing
+  it('T19 (regressão): complete() NÃO chama BillingService.createForAppointment automaticamente', async () => {
+    const appt = makeCompletedAppointment()
+    const { BillingService } = await import('../billing/billing.service')
+    const billingInstance = (BillingService as ReturnType<typeof vi.fn>).mock.results[0]?.value
+
+    mockRepo.findById.mockResolvedValue(appt)
+    mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
+
+    // Packages repo mock — sem linked session
+    const { PackagesRepository } = await import('../packages/packages.repository')
+    const pkgInstance = (PackagesRepository as ReturnType<typeof vi.fn>).mock.results[0]?.value
+    if (pkgInstance) pkgInstance.findLinkedSession.mockResolvedValue(null)
+
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockPrisma.walletEntry.findMany.mockResolvedValue([])
+
+    await service.complete('clinic-1', 'appt-1')
+
+    if (billingInstance) {
+      expect(billingInstance.createForAppointment).not.toHaveBeenCalled()
+    }
+  })
+
+  // T16 — complete() retorna serviceVouchers quando há vouchers SERVICE_PRESALE ativos
+  it('T16: complete() retorna serviceVouchers com vouchers SERVICE_PRESALE ativos', async () => {
+    const appt = makeCompletedAppointment({ serviceId: 'service-1' })
+    mockRepo.findById.mockResolvedValue(appt)
+    mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
+
+    const { PackagesRepository } = await import('../packages/packages.repository')
+    const pkgInstance = (PackagesRepository as ReturnType<typeof vi.fn>).mock.results[0]?.value
+    if (pkgInstance) pkgInstance.findLinkedSession.mockResolvedValue(null)
+
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockPrisma.walletEntry.findMany.mockResolvedValue([
+      { id: 'voucher-1', serviceId: 'service-1', balance: 20000, expirationDate: null, code: 'VCHR-ABC1' },
+    ])
+
+    const result = await service.complete('clinic-1', 'appt-1')
+
+    expect(result).toMatchObject({ serviceVouchers: [{ id: 'voucher-1' }] })
+  })
+
+  // T17 — complete() retorna serviceVouchers vazio quando não há vouchers ativos
+  it('T17: complete() retorna serviceVouchers=[] quando não há vouchers SERVICE_PRESALE', async () => {
+    const appt = makeCompletedAppointment()
+    mockRepo.findById.mockResolvedValue(appt)
+    mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
+
+    const { PackagesRepository } = await import('../packages/packages.repository')
+    const pkgInstance = (PackagesRepository as ReturnType<typeof vi.fn>).mock.results[0]?.value
+    if (pkgInstance) pkgInstance.findLinkedSession.mockResolvedValue(null)
+
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockPrisma.walletEntry.findMany.mockResolvedValue([])
+
+    const result = await service.complete('clinic-1', 'appt-1')
+
+    expect(result).toMatchObject({ serviceVouchers: [] })
+  })
+
+  // T18 — complete() retorna { appointment, serviceVouchers: [] } para agendamento via pacote
+  it('T18: complete() retorna serviceVouchers=[] quando appointment usa linkedSession (pacote)', async () => {
+    const appt = makeCompletedAppointment()
+    mockRepo.findById.mockResolvedValue(appt)
+    mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
+
+    const { PackagesRepository } = await import('../packages/packages.repository')
+    const pkgInstance = (PackagesRepository as ReturnType<typeof vi.fn>).mock.results[0]?.value
+    if (pkgInstance) {
+      pkgInstance.findLinkedSession.mockResolvedValue({ id: 'pkg-session-1' })
+      pkgInstance.redeemSession = vi.fn().mockResolvedValue({})
+    }
+
+    const result = await service.complete('clinic-1', 'appt-1')
+
+    expect(result).toMatchObject({ serviceVouchers: [] })
   })
 })

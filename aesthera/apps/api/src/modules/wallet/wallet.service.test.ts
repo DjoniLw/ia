@@ -7,6 +7,7 @@ const mockTx = vi.hoisted(() => ({
   $queryRaw: vi.fn().mockResolvedValue([]),
   walletEntry: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   walletTransaction: { create: vi.fn() },
+  billing: { findFirst: vi.fn() },
 }))
 
 const mockRepo = vi.hoisted(() => ({
@@ -404,3 +405,81 @@ describe('WalletService.getSummary()', () => {
     expect(mockRepo.sumActiveBalance).not.toHaveBeenCalled()
   })
 })
+
+// ─── T11-T13: RN10 + T13 Expiração + SEC04 ─────────────────────────────────────
+describe('WalletService.use() — RN10 serviceId + T13 expiração', () => {
+  let service: WalletService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new WalletService()
+  })
+
+  // T11 — VOUCHER_NOT_APPLICABLE_FOR_SERVICE
+  it('T11: lança VOUCHER_NOT_APPLICABLE_FOR_SERVICE quando voucher.serviceId não coincide com billing.serviceId', async () => {
+    const entry = makeEntry({ serviceId: 'service-A', expirationDate: null })
+    mockRepo.findByIdForUpdate.mockResolvedValue(entry)
+    // billing pertence à clínica mas tem serviceId diferente
+    mockTx.billing.findFirst.mockResolvedValue({ id: 'billing-1', clinicId: 'clinic-1', serviceId: 'service-B' })
+
+    await expect(service.use('clinic-1', 'entry-1', 5000, 'billing-1')).rejects.toMatchObject({
+      code: 'VOUCHER_NOT_APPLICABLE_FOR_SERVICE',
+    })
+    expect(mockRepo.updateBalance).not.toHaveBeenCalled()
+  })
+
+  // T12 — Voucher genérico (sem serviceId) aceita qualquer billing
+  it('T12: não lança quando voucher não tem serviceId (voucher genérico)', async () => {
+    const entry = makeEntry({ serviceId: null, balance: 5000, expirationDate: null })
+    mockRepo.findByIdForUpdate.mockResolvedValue(entry)
+    mockRepo.updateBalance.mockResolvedValue({ ...entry, balance: 0, status: 'USED' })
+    mockRepo.createTransaction.mockResolvedValue({})
+
+    await expect(service.use('clinic-1', 'entry-1', 5000, 'billing-1')).resolves.toBeDefined()
+    // billing.findFirst NÃO deve ser chamado quando entry.serviceId é null
+    expect(mockTx.billing.findFirst).not.toHaveBeenCalled()
+  })
+
+  // T13 — Voucher expirado
+  it('T13: lança VOUCHER_EXPIRED quando entry.expirationDate está no passado', async () => {
+    const past = new Date(Date.now() - 86_400_000) // ontem
+    const entry = makeEntry({ expirationDate: past })
+    mockRepo.findByIdForUpdate.mockResolvedValue(entry)
+
+    await expect(service.use('clinic-1', 'entry-1', 5000, 'billing-1')).rejects.toMatchObject({
+      code: 'VOUCHER_EXPIRED',
+    })
+    expect(mockRepo.updateBalance).not.toHaveBeenCalled()
+  })
+
+  // T12b — Voucher com expirationDate no futuro funciona normalmente
+  it('T12b: aceita quando expirationDate está no futuro', async () => {
+    const future = new Date(Date.now() + 86_400_000) // amanhã
+    const entry = makeEntry({ serviceId: null, balance: 5000, expirationDate: future })
+    mockRepo.findByIdForUpdate.mockResolvedValue(entry)
+    mockRepo.updateBalance.mockResolvedValue({ ...entry, balance: 0, status: 'USED' })
+    mockRepo.createTransaction.mockResolvedValue({})
+
+    await expect(service.use('clinic-1', 'entry-1', 5000, 'billing-1')).resolves.toBeDefined()
+  })
+})
+
+// ─── T14: findActiveServiceVouchers SEC03 ─────────────────────────────────────
+describe('WalletService.findActiveServiceVouchers()', () => {
+  let service: WalletService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new WalletService()
+  })
+
+  it('T14: lança 403 quando customerId não pertence à clínica (SEC03)', async () => {
+    const { prisma } = await import('../../database/prisma/client')
+    ;(prisma.customer.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null)
+
+    await expect(
+      service.findActiveServiceVouchers('clinic-1', 'customer-outro'),
+    ).rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
