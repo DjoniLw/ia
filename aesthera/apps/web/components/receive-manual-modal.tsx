@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
+import { Check, CheckCircle, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -382,13 +382,16 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
 
       {/* Aviso de voucher pré-selecionado (via CompleteAppointmentModal) */}
       {preSelectedVoucherId && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3">
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-            Vale pré-venda selecionado
-          </p>
-          <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-            O vale selecionado será utilizado como forma de pagamento. Se o valor do vale for inferior ao da cobrança, uma cobrança complementar poderá ser gerada pela clínica.
-          </p>
+        <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 dark:border-teal-800 dark:bg-teal-950/30 p-3 flex items-start gap-2">
+          <CheckCircle className="h-4 w-4 text-teal-600 dark:text-teal-400 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-teal-800 dark:text-teal-200">
+              Vale de pré-venda selecionado
+            </p>
+            <p className="text-xs text-teal-700 dark:text-teal-300 mt-0.5">
+              O vale será utilizado como forma de pagamento. Se o saldo for inferior ao valor da cobrança, selecione uma forma de pagamento complementar abaixo.
+            </p>
+          </div>
         </div>
       )}
 

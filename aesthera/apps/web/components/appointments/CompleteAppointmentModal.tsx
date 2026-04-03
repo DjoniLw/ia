@@ -85,33 +85,34 @@ export function CompleteAppointmentModal({
 
           <div className="space-y-2">
             {serviceVouchers.map((voucher) => (
-              <button
+              <div
                 key={voucher.id}
-                type="button"
-                onClick={() => onUseVoucher(voucher)}
-                className="w-full rounded-lg border border-border bg-card p-3 text-left hover:bg-muted/50 transition-colors"
+                className="rounded-lg border border-teal-200 bg-teal-50 dark:border-teal-800 dark:bg-teal-950/30 p-3"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-medium text-foreground">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">
                       Vale {voucher.code}
-                    </span>
-                    {voucher.service && (
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        · {voucher.service.name}
-                      </span>
+                    </p>
+                    {voucher.expirationDate && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Válido até {formatDate(voucher.expirationDate)}
+                      </p>
                     )}
                   </div>
-                  <span className="text-sm font-semibold text-teal-700 dark:text-teal-300">
+                  <span className="text-base font-bold text-teal-700 dark:text-teal-300 shrink-0">
                     {formatCurrency(voucher.balance)}
                   </span>
                 </div>
-                {voucher.expirationDate && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Válido até {formatDate(voucher.expirationDate)}
-                  </p>
-                )}
-              </button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="mt-3 w-full"
+                  onClick={() => onUseVoucher(voucher)}
+                >
+                  Usar este vale
+                </Button>
+              </div>
             ))}
           </div>
         </div>
@@ -144,7 +145,7 @@ export function CompleteAppointmentModal({
 
           {hasVouchers && (
             <p className="text-center text-xs text-muted-foreground">
-              ou use um vale acima para quitar automaticamente
+              ou gere uma cobrança avulsa abaixo
             </p>
           )}
 

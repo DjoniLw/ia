@@ -1207,6 +1207,7 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
       sourceType: 'APPOINTMENT',
       amount: slot.price,
       appointmentId: slot.id,
+      serviceId: voucher.serviceId ?? undefined,
     }).then((billing) => {
       setCompletedBilling(billing)
       setShowReceiveModal(true)
