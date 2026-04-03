@@ -56,16 +56,16 @@ export class BillingRepository {
   }
 
   async updateStatus(
-    _clinicId: string,
+    clinicId: string,
     id: string,
     status: string,
     extra?: Partial<{ paidAt: Date; overdueAt: Date; cancelledAt: Date }>,
   ) {
-    return prisma.billing.update({
-      where: { id },
+    await prisma.billing.updateMany({
+      where: { id, clinicId },
       data: { status: status as never, ...extra, updatedAt: new Date() },
-      include: billingInclude,
     })
+    return prisma.billing.findFirst({ where: { id, clinicId }, include: billingInclude })
   }
 
   // Cron: mark pending past due_date as overdue

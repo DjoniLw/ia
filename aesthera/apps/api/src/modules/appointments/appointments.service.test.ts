@@ -56,6 +56,17 @@ const mockRepo = vi.hoisted(() => ({
 }))
 
 // ── vi.mock deve vir antes dos imports de módulos que o usam ─────────────────
+const mockBillingInstance = vi.hoisted(() => ({
+  createForAppointment: vi.fn(),
+}))
+
+const mockPackagesInstance = vi.hoisted(() => ({
+  linkSession: vi.fn(),
+  findLinkedSession: vi.fn(),
+  redeemSession: vi.fn(),
+  unlinkSession: vi.fn(),
+}))
+
 vi.mock('../../database/prisma/client', () => ({ prisma: mockPrisma }))
 
 vi.mock('./appointments.repository', () => ({
@@ -66,13 +77,13 @@ vi.mock('./appointments.repository', () => ({
 
 vi.mock('../packages/packages.repository', () => ({
   PackagesRepository: vi.fn(function PackagesRepository() {
-    return { linkSession: vi.fn(), findLinkedSession: vi.fn(), unlinkSession: vi.fn() }
+    return mockPackagesInstance
   }),
 }))
 
 vi.mock('../billing/billing.service', () => ({
   BillingService: vi.fn(function BillingService() {
-    return { createForAppointment: vi.fn() }
+    return mockBillingInstance
   }),
 }))
 
@@ -586,28 +597,22 @@ describe('AppointmentsService.complete()', () => {
     service = new AppointmentsService()
   })
 
-  // T19 — Regressão: complete() NÃO auto-cria billing
+  // T19 — Regressão: complete() NÃO auto-cria billing (assertiva determinística via vi.hoisted)
   it('T19 (regressão): complete() NÃO chama BillingService.createForAppointment automaticamente', async () => {
     const appt = makeCompletedAppointment()
-    const { BillingService } = await import('../billing/billing.service')
-    const billingInstance = (BillingService as ReturnType<typeof vi.fn>).mock.results[0]?.value
-
     mockRepo.findById.mockResolvedValue(appt)
     mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
 
-    // Packages repo mock — sem linked session
-    const { PackagesRepository } = await import('../packages/packages.repository')
-    const pkgInstance = (PackagesRepository as ReturnType<typeof vi.fn>).mock.results[0]?.value
-    if (pkgInstance) pkgInstance.findLinkedSession.mockResolvedValue(null)
+    // Packages repo — referência direta via mockPackagesInstance (sem dynamic import + if)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
 
     mockPrisma.billing.findUnique.mockResolvedValue(null)
     mockPrisma.walletEntry.findMany.mockResolvedValue([])
 
     await service.complete('clinic-1', 'appt-1')
 
-    if (billingInstance) {
-      expect(billingInstance.createForAppointment).not.toHaveBeenCalled()
-    }
+    // Assertiva determinística — nunca silenciosamente pulada
+    expect(mockBillingInstance.createForAppointment).not.toHaveBeenCalled()
   })
 
   // T16 — complete() retorna serviceVouchers quando há vouchers SERVICE_PRESALE ativos
@@ -616,9 +621,7 @@ describe('AppointmentsService.complete()', () => {
     mockRepo.findById.mockResolvedValue(appt)
     mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
 
-    const { PackagesRepository } = await import('../packages/packages.repository')
-    const pkgInstance = (PackagesRepository as ReturnType<typeof vi.fn>).mock.results[0]?.value
-    if (pkgInstance) pkgInstance.findLinkedSession.mockResolvedValue(null)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
 
     mockPrisma.billing.findUnique.mockResolvedValue(null)
     mockPrisma.walletEntry.findMany.mockResolvedValue([
@@ -636,9 +639,7 @@ describe('AppointmentsService.complete()', () => {
     mockRepo.findById.mockResolvedValue(appt)
     mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
 
-    const { PackagesRepository } = await import('../packages/packages.repository')
-    const pkgInstance = (PackagesRepository as ReturnType<typeof vi.fn>).mock.results[0]?.value
-    if (pkgInstance) pkgInstance.findLinkedSession.mockResolvedValue(null)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
 
     mockPrisma.billing.findUnique.mockResolvedValue(null)
     mockPrisma.walletEntry.findMany.mockResolvedValue([])
@@ -654,12 +655,8 @@ describe('AppointmentsService.complete()', () => {
     mockRepo.findById.mockResolvedValue(appt)
     mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
 
-    const { PackagesRepository } = await import('../packages/packages.repository')
-    const pkgInstance = (PackagesRepository as ReturnType<typeof vi.fn>).mock.results[0]?.value
-    if (pkgInstance) {
-      pkgInstance.findLinkedSession.mockResolvedValue({ id: 'pkg-session-1' })
-      pkgInstance.redeemSession = vi.fn().mockResolvedValue({})
-    }
+    mockPackagesInstance.findLinkedSession.mockResolvedValue({ id: 'pkg-session-1' })
+    mockPackagesInstance.redeemSession.mockResolvedValue({})
 
     const result = await service.complete('clinic-1', 'appt-1')
 

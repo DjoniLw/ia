@@ -76,7 +76,7 @@ export function CompleteAppointmentModal({
           <div className="rounded-lg border border-teal-200 bg-teal-50 dark:border-teal-800 dark:bg-teal-950/30 p-3">
             <p className="text-sm font-medium text-teal-800 dark:text-teal-200 flex items-center gap-1.5">
               <CheckCircle className="h-4 w-4" />
-              Vale(s) de pré-venda disponível
+              {serviceVouchers.length > 1 ? 'Vales de pré-venda disponíveis' : 'Vale de pré-venda disponível'}
             </p>
             <p className="text-xs text-teal-700 dark:text-teal-300 mt-0.5">
               Este cliente possui vale(s) pré-pago(s) para {serviceName}. Deseja utilizá-lo para quitação?

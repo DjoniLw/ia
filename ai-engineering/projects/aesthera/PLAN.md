@@ -296,7 +296,7 @@ Desacoplar billing do agendamento e suportar 3 cenários de cobrança: pós-serv
 - [x] `/settings`: toggle `chargeVoucherDifference`
 
 ### Documentação
-- [ ] `system-architect-knowledge.md`: revogar regra de billing automático em complete()
+- [x] `system-architect-knowledge.md`: revogar regra de billing automático em complete()
 - [ ] `screen-mapping.md`: atualizar após implementação
 
 ---
@@ -322,6 +322,24 @@ Desacoplar billing do agendamento e suportar 3 cenários de cobrança: pós-serv
 ---
 
 ## Histórico de Atualizações
+
+### [2026-04-03] — Code Review PR #148
+- **Arquivo gerado:** `outputs/code-review/pr/revisao_pr148_2026-04-03.md`
+- **O que foi feito:** Revisão do PR #148 (feat: redesenho fluxo cobrança de serviços — issue #147). Orquestração: security-auditor, ux-reviewer, test-guardian.
+- **Resultado:** REPROVADO — 8 bloqueantes, 9 sugestões. Principais bloqueantes: fluxo Cash/PIX/Card sem `$transaction` (corrupção de dados financeiros), T05/T19 com assertivas condicionais que podem ser silenciosamente puladas, T06 ausente (billing complementar RN14/RN15 sem testes), badges PACKAGE_SALE/PRODUCT_SALE exibindo enum inglês na UI.
+
+### [2026-04-03] — treinamento: aesthera-implementador — 2 novos anti-padrões (PR #148)
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+- **O que foi feito:** Dois anti-padrões registrados via treinador-agent com origem no code review do PR #148: (1) Múltiplos branches de pagamento com atomicidade inconsistente — quando um método tem ≥2 caminhos (voucher/cash/card), todos devem estar dentro da mesma `$transaction`; misturar `this.prisma.X` fora da transação com branches dentro dela é silenciosamente perigoso; (2) Assertivas condicionais com `if (instance)` + `?.mock.results[0]?.value` criam testes que passam verde sem executar o `expect()` — padrão correto é `vi.hoisted()` para capturar referências de mock; nenhum `expect()` deve ser envolvido em `if`.
+- **Impacto:** Prevenção de regressões financeiras por falha de atomicidade em pagamentos e de testes falso-positivos que mascaram bugs de lógica.
+
+### [2026-04-03] — agente: criação do code-reviewer (orquestrador de PR reviews)
+- **Arquivo(s) afetado(s):**
+  - `.github/agents/code-reviewer.agent.md`
+  - `ai-engineering/prompts/code-reviewer/code-reviewer-prompt.md`
+- **O que foi feito:** Criado novo agente `code-reviewer` — revisor de PRs com papel duplo: (1) revisor especialista em integridade do sistema (anti-padrões, violações de padrão, PLAN.md, copilot-instructions) e (2) orquestrador que aciona `ux-reviewer`, `security-auditor`, `aesthera-system-architect` e `test-guardian` conforme o tipo de mudança no PR. Consolida os resultados filtrando apenas o que precisa ser corrigido. Gera relatório em `outputs/code-review/pr/revisao_pr{N}_{data}.md`.
+- **Impacto:** Pipeline de qualidade de código com revisão automatizada e especializada para todos os PRs do projeto.
 
 ### [2026-03-31] — treinamento: aesthera-implementador — Scan pré-código obrigatório + reincidência modal PR #144
 - **Arquivo(s) afetado(s):**

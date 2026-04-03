@@ -222,9 +222,9 @@ export class BillingService {
         // wallet.use() lança INSUFFICIENT_BALANCE se saldo < valor; não há pagamento parcial via voucher
         await wallet.use(clinicId, dto.voucherId!, lockedBilling.amount, lockedBilling.id, tx as never)
 
-        // Full payment via voucher — marcar como pago
-        await tx.billing.update({
-          where: { id },
+        // Full payment via voucher — marcar como pago (updateMany garante clinicId no WHERE per S1)
+        await tx.billing.updateMany({
+          where: { id, clinicId },
           data: { status: 'paid', paidAt: new Date() },
         })
 
@@ -234,7 +234,7 @@ export class BillingService {
 
         if (clinic?.chargeVoucherDifference && billing.serviceId) {
           const service = await tx.service.findUnique({ where: { id: billing.serviceId } })
-          const voucherEntry = await tx.walletEntry.findUnique({ where: { id: dto.voucherId } })
+          const voucherEntry = await tx.walletEntry.findFirst({ where: { id: dto.voucherId!, clinicId } })
           if (service && voucherEntry && voucherEntry.originalValue < service.price) {
             const diferenca = service.price - voucherEntry.originalValue
             if (diferenca > 0) {
@@ -290,7 +290,7 @@ export class BillingService {
       return { status: 'paid', billing: updated, billingComplementar: result.billingComplementar }
     }
 
-    // Cash / PIX / Card — também envolto em transação
+    // Cash / PIX / Card — envolto em $transaction com SELECT FOR UPDATE (evita TOCTOU e double-payment)
     if (dto.receivedAmount < billing.amount) {
       throw new AppError(
         'Valor recebido é menor que o valor da cobrança',
@@ -321,7 +321,21 @@ export class BillingService {
       )
     }
 
-    const updated = await this.repo.updateStatus(clinicId, id, 'paid', { paidAt: new Date() })
+    // SEC05 — SELECT FOR UPDATE: garante atomicidade e evita race condition (TOCTOU / double-payment)
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM billing WHERE id = ${id}::uuid AND clinic_id = ${clinicId}::uuid FOR UPDATE`
+      const lockedBilling = await tx.billing.findFirst({ where: { id, clinicId } })
+      if (!lockedBilling || !['pending', 'overdue'].includes(lockedBilling.status)) {
+        throw new AppError('Cobrança inválida para recebimento', 400, 'INVALID_STATUS')
+      }
+      await tx.billing.update({
+        where: { id },
+        data: { status: 'paid', paidAt: new Date() },
+      })
+    })
+
+    // Side effects após commit da transação
+    const updated = await this.repo.findById(clinicId, id)
 
     await ledger.createCreditEntry({
       clinicId,

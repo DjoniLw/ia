@@ -426,6 +426,10 @@ describe('WalletService.use() — RN10 serviceId + T13 expiração', () => {
       code: 'VOUCHER_NOT_APPLICABLE_FOR_SERVICE',
     })
     expect(mockRepo.updateBalance).not.toHaveBeenCalled()
+    // SEC04: billing deve ser buscado com clinicId no WHERE (multi-tenancy)
+    expect(mockTx.billing.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: 'billing-1', clinicId: 'clinic-1' }) }),
+    )
   })
 
   // T12 — Voucher genérico (sem serviceId) aceita qualquer billing

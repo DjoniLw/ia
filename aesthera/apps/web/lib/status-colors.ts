@@ -5,15 +5,33 @@ export const PROMOTION_STATUS_COLOR: Record<string, string> = {
 }
 
 export const BILLING_SOURCE_TYPE_LABEL: Record<string, string> = {
-  APPOINTMENT: 'Agendamento',
-  PRESALE:     'Pré-venda',
-  MANUAL:      'Avulso',
+  APPOINTMENT:  'Agendamento',
+  PRESALE:      'Pré-venda',
+  MANUAL:       'Avulso',
+  PACKAGE_SALE: 'Venda de pacote',
+  PRODUCT_SALE: 'Venda de produto',
 }
 
 export const BILLING_SOURCE_TYPE_COLOR: Record<string, string> = {
-  APPOINTMENT: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  PRESALE:     'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  MANUAL:      'bg-muted text-muted-foreground',
+  APPOINTMENT:  'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  PRESALE:      'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+  MANUAL:       'bg-muted text-muted-foreground',
+  PACKAGE_SALE: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  PRODUCT_SALE: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200',
+}
+
+export const BILLING_STATUS_LABEL: Record<string, string> = {
+  pending:   'Pendente',
+  paid:      'Pago',
+  overdue:   'Vencido',
+  cancelled: 'Cancelado',
+}
+
+export const BILLING_STATUS_COLOR: Record<string, string> = {
+  pending:   'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200',
+  paid:      'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  overdue:   'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+  cancelled: 'bg-muted text-muted-foreground',
 }
 
 export const SESSION_STATUS_STYLE: Record<string, string> = {

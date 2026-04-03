@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
-import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR } from '@/lib/status-colors'
+import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
@@ -24,20 +24,6 @@ function formatCurrency(cents: number) {
 function formatDate(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('pt-BR')
-}
-
-const STATUS_LABEL: Record<BillingStatus, string> = {
-  pending: 'Pendente',
-  paid: 'Pago',
-  overdue: 'Vencido',
-  cancelled: 'Cancelado',
-}
-
-const STATUS_COLOR: Record<BillingStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200',
-  paid: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  overdue: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
-  cancelled: 'bg-muted text-muted-foreground',
 }
 
 // ──── Cancel Button ────────────────────────────────────────────────────────────
@@ -167,12 +153,10 @@ function BillingPageContent() {
     const parts: string[] = []
     const statusLabel: Record<string, string> = {
       '': 'todos os status',
-      pending: 'Pendente',
-      paid: 'Pago',
-      overdue: 'Vencido',
-      cancelled: 'Cancelado',
+      ...BILLING_STATUS_LABEL,
     }
     parts.push(statusLabel[statusFilter] ?? statusFilter)
+    if (sourceTypeFilter) parts.push(`origem: ${BILLING_SOURCE_TYPE_LABEL[sourceTypeFilter] ?? sourceTypeFilter}`)
     if (customerSearchDebounced) parts.push(`cliente: ${customerSearchDebounced}`)
     return parts.join(' · ')
   }
@@ -337,8 +321,8 @@ function BillingPageContent() {
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(b.dueDate)}</td>
                 <td className="px-2 py-3">
                   <div className="flex flex-col gap-1">
-                    <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[b.status]}`}>
-                      {STATUS_LABEL[b.status]}
+                    <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${BILLING_STATUS_COLOR[b.status] ?? 'bg-muted text-muted-foreground'}`}>
+                      {BILLING_STATUS_LABEL[b.status] ?? b.status}
                     </span>
                     {b.sourceType && (
                       <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${BILLING_SOURCE_TYPE_COLOR[b.sourceType] ?? 'bg-muted text-muted-foreground'}`}>

@@ -252,10 +252,6 @@ export function ClinicTab() {
             </div>
           </div>
 
-          <Button type="submit" disabled={isPending || lookingUpCnpj}>
-            {isPending ? 'Salvando...' : 'Salvar alterações'}
-          </Button>
-
           <div className="rounded-lg border p-4 space-y-2">
             <p className="text-sm font-medium">Cobrança de saldo de pré-venda</p>
             <p className="text-xs text-muted-foreground">
@@ -278,6 +274,10 @@ export function ClinicTab() {
               )}
             />
           </div>
+
+          <Button type="submit" disabled={isPending || lookingUpCnpj}>
+            {isPending ? 'Salvando...' : 'Salvar alterações'}
+          </Button>
         </form>
       </CardContent>
     </Card>
