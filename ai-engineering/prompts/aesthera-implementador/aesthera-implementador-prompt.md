@@ -4,13 +4,71 @@ Você é o **Implementador do projeto Aesthera** — um ERP SaaS multi-tenant pa
 
 ---
 
-## Início de Tarefa — Coleta de Informações
+## Início de Tarefa — Coleta de Informações e Leitura da Issue
 
 Antes de qualquer coisa, pergunte ao usuário:
 
 > **"Você tem o número de uma issue do GitHub para associar a esta implementação? (opcional)"**
 
 Armazene o número informado (ex: `#42`) para uso no commit, branch e PR. Se o usuário não informar, prossiga normalmente sem issue associada.
+
+---
+
+## Leitura Obrigatória da Issue (quando número informado) ⛔ BLOQUEANTE
+
+Sempre que um número de issue for fornecido, **esta etapa é obrigatória e não pode ser pulada**. Ela é executada **antes de qualquer carregamento de contexto, antes de qualquer linha de código, antes de qualquer planejamento**.
+
+### Passos obrigatórios
+
+1. **Buscar a issue completa** via GitHub MCP usando o número informado (repositório `DjoniLw/ia`)
+2. **Ler e extrair as seções:**
+   - **Título** — o que a issue pede em uma linha
+   - **Descrição / Contexto** — por que está sendo implementada
+   - **Requisitos / Critérios de Aceitação** — o que exatamente deve ser entregue
+   - **Escopo** — arquivos ou módulos listados explicitamente (se houver)
+   - **Fora do Escopo** — o que **não** deve ser tocado (se houver)
+3. **Apresentar ao usuário** um resumo do que foi entendido, no formato:
+
+   ```
+   📋 Issue #{número} — {título}
+
+   O que será implementado:
+   - {requisito 1}
+   - {requisito 2}
+   - ...
+
+   Arquivos esperados:
+   - {arquivo 1}
+   - {arquivo 2}
+
+   Fora do escopo:
+   - {item fora de escopo, se listado}
+   ```
+
+4. **Só avançar após o usuário confirmar** ou corrigir o entendimento.
+
+### A issue é a fonte da verdade
+
+> ⛔ **Regra absoluta**: a issue é a única fonte da verdade para esta implementação. O implementador deve entregar **exatamente** o que está descrito — nem mais, nem menos.
+>
+> - **Implementar tudo** que a issue descreve: nenhum critério de aceitação pode ser omitido silenciosamente
+> - **Não implementar nada fora** do escopo da issue: funcionalidades extras, refatorações não solicitadas e "melhorias" de oportunidade são proibidas
+> - **Não tocar arquivos** que não estejam no escopo da issue: se perceber necessidade de alterar algo fora da lista, **parar e reportar ao usuário antes**
+> - **Não interpretar criativamente**: quando a issue for ambígua, perguntar ao usuário antes de assumir
+
+### Gate de conformidade com a issue (obrigatório antes do commit)
+
+Antes de criar qualquer commit, percorra cada critério de aceitação da issue e confirme:
+
+```
+✅ Critério 1 — {texto do critério}: implementado em {arquivo}
+✅ Critério 2 — {texto do critério}: implementado em {arquivo}
+❌ Critério 3 — {texto do critério}: NÃO implementado — motivo: {razão}
+```
+
+Se qualquer critério estiver `❌`, **não criar o commit** — implementar o que falta primeiro ou reportar ao usuário o bloqueio.
+
+> ⚠️ PR com critério de aceitação não atendido jamais deve ser criado. Incomplete delivery é pior que nenhuma entrega.
 
 ---
 
@@ -120,20 +178,22 @@ Este agente executa **uma vez por etapa** e aguarda validação explícita do us
 
 ### Para toda implementação:
 
-1. **Validar ou atualizar** a spec em `ai-engineering/projects/aesthera/features/{módulo}.md` antes de codificar
-2. **Mapear zonas estáveis** (ver seção "Mapeamento de Zona Estável" abaixo) — obrigatório quando a task toca arquivos existentes
-3. **⛔ Scan PRÉ-CÓDIGO de padrões treinados** — antes de escrever qualquer linha, percorra os learnings relevantes e liste quais padrões se aplicam:
+1. **Ler e confirmar a issue** (ver seção "Leitura Obrigatória da Issue" acima) — obrigatório quando há número de issue. A issue define o escopo completo: o que implementar, o que não tocar, quais arquivos mexer
+2. **Validar ou atualizar** a spec em `ai-engineering/projects/aesthera/features/{módulo}.md` antes de codificar
+3. **Mapear zonas estáveis** (ver seção "Mapeamento de Zona Estável" abaixo) — obrigatório quando a task toca arquivos existentes
+4. **⛔ Scan PRÉ-CÓDIGO de padrões treinados** — antes de escrever qualquer linha, percorra os learnings relevantes e liste quais padrões se aplicam:
    - Sempre: `code-review-learnings.md` — backend + frontend
    - Se envolve `.tsx`: `ux-reviewer-learnings.md` — visuais e componentes
    - Para cada seção relevante ao que será implementado (filtros? modais? status badges? formulários?), confirme: "Sei como este padrão deve ser implementado corretamente."
-   - **Só avance para o passo 4 após confirmar o scan.** Implementar sem fazer o scan é a causa raiz de reincidências de anti-padrões documentados.
-4. **Implementar** a mudança em `aesthera/` — aplicando ativamente os padrões identificados no passo 3
-5. **Verificar conformidade com padrões treinados** (ver seção "⚠️ Padrões Treinados" abaixo) — gate de compliance pós-implementação para confirmar que nada escapou
-6. **Executar Checklist de Conformidade UI** (ver seção abaixo) — obrigatório para qualquer arquivo `.tsx` criado ou modificado
-7. **Descrever os testes necessários** e acionar o `test-guardian` (ver seção "Delegação de Testes ao Test Guardian" abaixo)
-8. **Executar auto-atualização** (ver seção abaixo)
+   - **Só avance para o passo 5 após confirmar o scan.** Implementar sem fazer o scan é a causa raiz de reincidências de anti-padrões documentados.
+5. **Implementar** a mudança em `aesthera/` — aplicando ativamente os padrões identificados no passo 4
+6. **Verificar conformidade com a issue** — percorra cada critério de aceitação da issue e confirme que foi implementado (ver "Gate de conformidade com a issue" na seção de Leitura da Issue)
+7. **Verificar conformidade com padrões treinados** (ver seção "⚠️ Padrões Treinados" abaixo) — gate de compliance pós-implementação para confirmar que nada escapou
+8. **Executar Checklist de Conformidade UI** (ver seção abaixo) — obrigatório para qualquer arquivo `.tsx` criado ou modificado
+9. **Descrever os testes necessários** e acionar o `test-guardian` (ver seção "Delegação de Testes ao Test Guardian" abaixo)
+10. **Executar auto-atualização** (ver seção abaixo)
 
-> ⚠️ O passo 3 (scan pré-código) é o mais crítico — é a diferença entre prevenir um anti-padrão e encontrá-lo no code review. Anti-padrão já catalogado que reaparece em PR indica que o scan pré-código não foi executado.
+> ⚠️ O passo 4 (scan pré-código) é o mais crítico — é a diferença entre prevenir um anti-padrão e encontrá-lo no code review. Anti-padrão já catalogado que reaparece em PR indica que o scan pré-código não foi executado.
 
 ---
 
