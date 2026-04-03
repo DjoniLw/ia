@@ -168,8 +168,14 @@ export class ManualReceiptsService {
       }
 
       // 5. Create ledger credit entries (one per payment line, up to txEffectiveAmount)
+      // RN-FIN01: voucher SERVICE_PRESALE não gera entrada no caixa — dinheiro já foi
+      // contabilizado quando a pré-venda foi paga. Pular o ledger nesse caso.
       let allocatedToLedger = 0
       for (const line of dto.lines) {
+        if (line.paymentMethod === 'wallet_voucher' && 'walletEntryId' in line && line.walletEntryId) {
+          const entry = await tx.walletEntry.findUnique({ where: { id: line.walletEntryId } })
+          if (entry?.originType === 'SERVICE_PRESALE') continue
+        }
         const ledgerAmount = Math.min(line.amount, txEffectiveAmount - allocatedToLedger)
         if (ledgerAmount <= 0) break
         allocatedToLedger += ledgerAmount

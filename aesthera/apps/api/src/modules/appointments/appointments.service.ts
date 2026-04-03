@@ -11,6 +11,8 @@ import type {
 } from './appointments.dto'
 import { AppointmentsRepository } from './appointments.repository'
 import { PackagesRepository } from '../packages/packages.repository'
+import { BillingService } from '../billing/billing.service'
+import { BillingRepository } from '../billing/billing.repository'
 
 // HH:MM → minutes from midnight
 function timeToMinutes(t: string): number {
@@ -37,6 +39,8 @@ function hashToInt32(s: string): number {
 export class AppointmentsService {
   private repo = new AppointmentsRepository()
   private pkgRepo = new PackagesRepository()
+  private billingSvc = new BillingService()
+  private billingRepo = new BillingRepository()
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
 
@@ -393,33 +397,22 @@ export class AppointmentsService {
       completedAt: new Date(),
     })
 
-    // Check if this appointment has a reserved (but not yet used) package session
+    // RN-PA02 — PackageSession: resgata sessão, sem billing, nenhum modal
     const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)
     if (linkedSession) {
-      // Redeem the session — no billing is created since the package was pre-paid
       await this.pkgRepo.redeemSession(linkedSession.id, id)
-      // RN02 — Retorno normalizado para todos os paths: packageSession → serviceVouchers: []
-      return { appointment: completed, serviceVouchers: [] }
+      return { appointment: completed, billing: null, serviceVouchers: [] }
     }
 
-    // Se já existe billing paid, não buscar vouchers (não há necessidade de gerar cobrança)
-    const existingBilling = await prisma.billing.findUnique({ where: { appointmentId: id } })
-    if (existingBilling && existingBilling.status === 'paid') {
-      return { appointment: completed, serviceVouchers: [] }
-    }
-
-    // RN07 — Buscar vouchers SERVICE_PRESALE ativos para o serviço do agendamento
-    // Retornar serviceVouchers para o frontend montar CompleteAppointmentModal
-    let serviceVouchers: Array<{ id: string; serviceId: string | null; balance: number; expirationDate: Date | null; code: string }> = []
-
-    // Identificar serviceId do appointment (single ou multi-service)
+    // Helper: busca vouchers SERVICE_PRESALE ativos para os serviços do agendamento
     const serviceItems = (completed as { serviceItems?: Array<{ serviceId: string }> }).serviceItems
     const serviceIds: string[] = serviceItems && serviceItems.length > 0
       ? serviceItems.map((item) => item.serviceId)
       : (completed.serviceId ? [completed.serviceId] : [])
 
-    if (serviceIds.length > 0) {
-      const vouchers = await prisma.walletEntry.findMany({
+    const findServiceVouchers = async () => {
+      if (serviceIds.length === 0) return []
+      return prisma.walletEntry.findMany({
         where: {
           clinicId,
           customerId: completed.customerId,
@@ -430,12 +423,44 @@ export class AppointmentsService {
         },
         select: { id: true, serviceId: true, balance: true, expirationDate: true, code: true },
       })
-      serviceVouchers = vouchers
     }
 
-    // RN02 — Billing NÃO é criado automaticamente aqui.
-    // O frontend abre CompleteAppointmentModal para o staff decidir se gera cobrança.
-    return { appointment: completed, serviceVouchers }
+    // RN-PA03 — Billing já existe (promoção travada ou criado anteriormente)
+    const existingByAppt = await prisma.billing.findUnique({
+      where: { appointmentId: id },
+    })
+
+    if (existingByAppt) {
+      const fullExisting = await this.billingRepo.findById(clinicId, existingByAppt.id)
+      if (!fullExisting) {
+        throw new NotFoundError('Billing')
+      }
+      if (fullExisting.status === 'paid') {
+        // Já pago — retorna sem abrir modal
+        return { appointment: completed, billing: fullExisting, serviceVouchers: [] }
+      }
+      // Billing pendente/overdue — usar existente, buscar vouchers normalmente
+      const serviceVouchers = await findServiceVouchers()
+      return { appointment: completed, billing: fullExisting, serviceVouchers }
+    }
+
+    // RN-PA01 — Caso geral: criar billing automaticamente
+    const newBilling = await this.billingSvc.createManual(
+      {
+        customerId: completed.customerId,
+        sourceType: 'APPOINTMENT',
+        amount: completed.price,
+        appointmentId: id,
+        serviceId: completed.serviceId ?? undefined,
+      },
+      clinicId,
+    )
+    // Buscar com includes completos (appointment.service para o ReceiveManualModal)
+    const fullBilling = await this.billingRepo.findById(clinicId, newBilling.id)
+    if (!fullBilling) throw new NotFoundError('Billing')
+
+    const serviceVouchers = await findServiceVouchers()
+    return { appointment: completed, billing: fullBilling, serviceVouchers }
   }
 
   async cancel(clinicId: string, id: string, dto: CancelAppointmentDto) {

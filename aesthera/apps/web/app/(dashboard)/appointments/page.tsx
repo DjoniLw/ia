@@ -11,20 +11,19 @@ import {
   type AppointmentStatus,
   type Billing,
   type CalendarSlot,
+  type CompleteResult,
   useAppointmentTransition,
   useAvailableProfessionals,
   useAvailableRooms,
   useAvailableSlots,
   useCalendar,
   useCreateAppointment,
-  useCreateBilling,
 } from '@/lib/hooks/use-appointments'
 import type { ServiceVoucher } from '@/lib/hooks/use-wallet'
 import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
 import { useCustomers, useGetCustomer, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
 import { useActivePromotionsForService } from '@/lib/hooks/use-promotions'
 import { formatCpf, formatPhone } from '@/lib/masks'
-import { CompleteAppointmentModal } from '@/components/appointments/CompleteAppointmentModal'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
@@ -1139,17 +1138,12 @@ function CustomerQuickView({ customerId, onClose }: { customerId: string; onClos
 
 function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => void }) {
   const transitions = useAppointmentTransition(slot.id)
-  const createBilling = useCreateBilling()
   const status = slot.status!
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [viewingCustomerId, setViewingCustomerId] = useState<string | null>(null)
-  const [completeResult, setCompleteResult] = useState<{
-    appointment: import('@/lib/hooks/use-appointments').Appointment | null
-    serviceVouchers: ServiceVoucher[]
-  } | null>(null)
-  const [selectedVoucher, setSelectedVoucher] = useState<ServiceVoucher | null>(null)
   const [showReceiveModal, setShowReceiveModal] = useState(false)
-  const [completedBilling, setCompletedBilling] = useState<Billing | null>(null)
+  const [pendingReceiptBilling, setPendingReceiptBilling] = useState<Billing | null>(null)
+  const [preSelectedVoucher, setPreSelectedVoucher] = useState<ServiceVoucher | null>(null)
 
   const profName = (slot as CalendarSlot & { _profName?: string })._profName ?? slot.professional?.name
 
@@ -1158,10 +1152,21 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
       if (action === 'confirm') await transitions.confirm.mutateAsync()
       else if (action === 'start') await transitions.start.mutateAsync()
       else if (action === 'complete') {
-        // RN02 — complete() retorna { appointment, serviceVouchers }
-        const result = await transitions.complete.mutateAsync() as { appointment: import('@/lib/hooks/use-appointments').Appointment; serviceVouchers: ServiceVoucher[] }
-        setCompleteResult({ appointment: result.appointment, serviceVouchers: result.serviceVouchers ?? [] })
-        return // Não fechar o modal — aguardar ação no CompleteAppointmentModal
+        const result = await transitions.complete.mutateAsync() as CompleteResult
+        if (!result.billing) {
+          // Pacote utilizado — sem cobrança a registrar
+          toast.success('Atendimento concluído. Sessão do pacote utilizada.')
+          onClose()
+          return
+        }
+        // Pré-selecionar o voucher de maior saldo, se houver
+        const bestVoucher = result.serviceVouchers
+          .slice()
+          .sort((a, b) => b.balance - a.balance)[0] ?? null
+        setPendingReceiptBilling(result.billing)
+        setPreSelectedVoucher(bestVoucher)
+        setShowReceiveModal(true)
+        return
       }
       else if (action === 'cancel') await transitions.cancel.mutateAsync(undefined)
       else if (action === 'noShow') await transitions.noShow.mutateAsync()
@@ -1170,56 +1175,6 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
     } catch {
       toast.error('Erro ao atualizar agendamento')
     }
-  }
-
-  async function handleGenerateBilling() {
-    try {
-      if (!slot.price || slot.price <= 0) {
-        toast.error('Valor do agendamento não disponível. Verifique o serviço cadastrado.')
-        return
-      }
-      const billing = await createBilling.mutateAsync({
-        customerId: slot.customerId!,
-        sourceType: 'APPOINTMENT',
-        amount: slot.price,
-        appointmentId: slot.id,
-      })
-      toast.success('Cobrança gerada com sucesso!')
-      setCompletedBilling(billing)
-      setCompleteResult(null)
-      // Mostrar modal de recebimento para registrar pagamento imediatamente
-      setShowReceiveModal(true)
-    } catch {
-      toast.error('Erro ao gerar cobrança')
-    }
-  }
-
-  function handleUseVoucher(voucher: ServiceVoucher) {
-    setSelectedVoucher(voucher)
-    setCompleteResult(null)
-    // Gerar billing de APPOINTMENT para poder registrar recebimento via voucher
-    if (!slot.price || slot.price <= 0) {
-      toast.error('Valor do agendamento não disponível. Verifique o serviço cadastrado.')
-      return
-    }
-    createBilling.mutateAsync({
-      customerId: slot.customerId!,
-      sourceType: 'APPOINTMENT',
-      amount: slot.price,
-      appointmentId: slot.id,
-      serviceId: voucher.serviceId ?? undefined,
-    }).then((billing) => {
-      setCompletedBilling(billing)
-      setShowReceiveModal(true)
-    }).catch(() => {
-      toast.error('Erro ao preparar cobrança para voucher')
-    })
-  }
-
-  function handleSkip() {
-    setCompleteResult(null)
-    toast.success('Atendimento concluído')
-    onClose()
   }
 
   const appointmentDate = slot.start
@@ -1309,28 +1264,19 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         <CustomerQuickView customerId={viewingCustomerId} onClose={() => setViewingCustomerId(null)} />
       )}
 
-      {/* CompleteAppointmentModal — abre após concluir atendimento */}
-      {completeResult && (
-        <CompleteAppointmentModal
-          open={!!completeResult}
-          onClose={() => { setCompleteResult(null); onClose() }}
-          appointment={completeResult.appointment}
-          serviceVouchers={completeResult.serviceVouchers}
-          isLoadingVouchers={false}
-          onGenerateBilling={handleGenerateBilling}
-          onUseVoucher={handleUseVoucher}
-          onSkip={handleSkip}
-          isGenerating={createBilling.isPending}
-        />
-      )}
-
-      {/* ReceiveManualModal — após gerar cobrança */}
-      {showReceiveModal && completedBilling && (
+      {/* ReceiveManualModal — abre automaticamente após concluir atendimento */}
+      {showReceiveModal && pendingReceiptBilling && (
         <ReceiveManualModal
-          billing={completedBilling}
+          billing={pendingReceiptBilling}
           open={showReceiveModal}
-          onClose={() => { setShowReceiveModal(false); setCompletedBilling(null); onClose() }}
-          preSelectedVoucherId={selectedVoucher?.id}
+          onClose={() => {
+            setShowReceiveModal(false)
+            setPendingReceiptBilling(null)
+            setPreSelectedVoucher(null)
+            toast.success('Atendimento concluído')
+            onClose()
+          }}
+          preSelectedVoucherId={preSelectedVoucher?.id}
         />
       )}
     </div>

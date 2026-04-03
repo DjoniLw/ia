@@ -117,6 +117,19 @@ export interface Billing {
   appointment: BillingAppointment | null
 }
 
+export interface CompleteResult {
+  appointment: Appointment
+  billing: Billing | null
+  serviceVouchers: Array<{
+    id: string
+    serviceId: string | null
+    balance: number
+    expirationDate: string | null
+    code: string
+    service: { id: string; name: string } | null
+  }>
+}
+
 interface Paginated<T> {
   items: T[]
   total: number
@@ -265,6 +278,7 @@ export function useAppointmentTransition(id: string) {
       onSuccess: () => {
         invalidate()
         qc.invalidateQueries({ queryKey: ['billing'] })
+        qc.invalidateQueries({ queryKey: ['wallet'] })
       },
     }),
     cancel: useMutation({

@@ -285,15 +285,22 @@ export class BillingService {
       }
 
       const updated = await this.repo.findById(clinicId, id)
-      await ledger.createCreditEntry({
-        clinicId,
-        amount: billing.amount,
-        billingId: billing.id,
-        appointmentId: billing.appointmentId ?? undefined,
-        customerId: billing.customerId ?? undefined,
-        description: `Pagamento via voucher — ${billing.appointment?.service?.name ?? billing.service?.name ?? ''}`,
-        metadata: { source: 'voucher_payment', voucherId: dto.voucherId },
-      })
+      // RN-FIN01: voucher SERVICE_PRESALE não gera entrada no caixa — a receita já foi
+      // contabilizada quando a pré-venda foi paga. Só registrar o ledger para outros tipos.
+      const voucherEntry = dto.voucherId
+        ? await prisma.walletEntry.findFirst({ where: { id: dto.voucherId, clinicId } })
+        : null
+      if (voucherEntry?.originType !== 'SERVICE_PRESALE') {
+        await ledger.createCreditEntry({
+          clinicId,
+          amount: billing.amount,
+          billingId: billing.id,
+          appointmentId: billing.appointmentId ?? undefined,
+          customerId: billing.customerId ?? undefined,
+          description: `Pagamento via voucher — ${billing.appointment?.service?.name ?? billing.service?.name ?? ''}`,
+          metadata: { source: 'voucher_payment', voucherId: dto.voucherId },
+        })
+      }
 
       return { status: 'paid', billing: updated, billingComplementar: result.billingComplementar }
     }

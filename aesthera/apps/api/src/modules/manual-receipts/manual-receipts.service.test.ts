@@ -18,6 +18,9 @@ const mockTx = vi.hoisted(() => ({
   promotionUsage: {
     create: vi.fn(),
   },
+  walletEntry: {
+    findUnique: vi.fn(),
+  },
 }))
 
 const mockPrisma = vi.hoisted(() => ({
@@ -193,5 +196,87 @@ describe('ManualReceiptsService.receive() — RN11 (PRESALE → WalletEntry SERV
     mockWalletInstance.createInternal.mockRejectedValue(new Error('DB connection error'))
 
     await expect(service.receive('clinic-1', 'billing-1', baseDto)).rejects.toThrow('DB connection error')
+  })
+})
+
+// ── T-FIN01–T-FIN03: RN-FIN01 — voucher SERVICE_PRESALE não gera entrada no Ledger ──
+describe('ManualReceiptsService.receive() — RN-FIN01 (SERVICE_PRESALE skip ledger)', () => {
+  let service: ManualReceiptsService
+
+  const appointmentBilling = {
+    id: 'billing-appt',
+    clinicId: 'clinic-1',
+    customerId: 'customer-1',
+    sourceType: 'APPOINTMENT',
+    serviceId: 'service-1',
+    status: 'pending',
+    amount: 18000,
+    appointmentId: 'appt-1',
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new ManualReceiptsService()
+    mockPrisma.manualReceipt.findUnique.mockResolvedValue(null)
+    mockTx.manualReceipt.create.mockResolvedValue({ id: 'receipt-fin', lines: [] })
+    mockTx.billing.update.mockResolvedValue({})
+    mockLedgerInstance.createCreditEntry.mockResolvedValue({})
+    mockWalletInstance.use.mockResolvedValue({})
+    mockWalletInstance.createInternal.mockResolvedValue({ code: 'VCHR-OUT', balance: 0 })
+  })
+
+  // T-FIN01: voucher SERVICE_PRESALE → ledger.createCreditEntry NÃO chamado
+  it('T-FIN01: pagamento com voucher SERVICE_PRESALE não gera LedgerEntry (dinheiro já contabilizado)', async () => {
+    mockBillingRepo.findById.mockResolvedValue(appointmentBilling)
+    mockTx.walletEntry.findUnique.mockResolvedValue({ id: 'we-1', originType: 'SERVICE_PRESALE' })
+    mockWalletInstance.use.mockResolvedValue({})
+
+    const dto = {
+      lines: [{ paymentMethod: 'wallet_voucher' as const, amount: 18000, walletEntryId: 'we-1' }],
+    }
+
+    await service.receive('clinic-1', 'billing-appt', dto)
+
+    expect(mockLedgerInstance.createCreditEntry).not.toHaveBeenCalled()
+  })
+
+  // T-FIN02: voucher OVERPAYMENT → ledger.createCreditEntry chamado normalmente
+  it('T-FIN02: pagamento com voucher OVERPAYMENT gera LedgerEntry normalmente', async () => {
+    mockBillingRepo.findById.mockResolvedValue(appointmentBilling)
+    mockTx.walletEntry.findUnique.mockResolvedValue({ id: 'we-2', originType: 'OVERPAYMENT' })
+    mockWalletInstance.use.mockResolvedValue({})
+
+    const dto = {
+      lines: [{ paymentMethod: 'wallet_voucher' as const, amount: 18000, walletEntryId: 'we-2' }],
+    }
+
+    await service.receive('clinic-1', 'billing-appt', dto)
+
+    expect(mockLedgerInstance.createCreditEntry).toHaveBeenCalledOnce()
+  })
+
+  // T-FIN03: pagamento misto (dinheiro + voucher SERVICE_PRESALE) → LedgerEntry apenas para linha de dinheiro
+  it('T-FIN03: pagamento misto — LedgerEntry apenas para linha de dinheiro, não para SERVICE_PRESALE', async () => {
+    const billing = { ...appointmentBilling, amount: 18000 }
+    mockBillingRepo.findById.mockResolvedValue(billing)
+    // linha 1: dinheiro (9000), linha 2: voucher SERVICE_PRESALE (9000)
+    mockTx.walletEntry.findUnique.mockResolvedValue({ id: 'we-sp', originType: 'SERVICE_PRESALE' })
+    mockWalletInstance.use.mockResolvedValue({})
+
+    const dto = {
+      lines: [
+        { paymentMethod: 'cash' as const, amount: 9000 },
+        { paymentMethod: 'wallet_voucher' as const, amount: 9000, walletEntryId: 'we-sp' },
+      ],
+    }
+
+    await service.receive('clinic-1', 'billing-appt', dto)
+
+    // Somente a linha de dinheiro deve gerar entrada no ledger
+    expect(mockLedgerInstance.createCreditEntry).toHaveBeenCalledOnce()
+    expect(mockLedgerInstance.createCreditEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 9000 }),
+      mockTx,
+    )
   })
 })
