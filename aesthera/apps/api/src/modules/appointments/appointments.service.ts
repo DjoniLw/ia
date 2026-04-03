@@ -482,6 +482,7 @@ export class AppointmentsService {
           customerId: completed.customerId,
           originType: 'SERVICE_PRESALE',
           status: 'ACTIVE',
+          OR: [{ expirationDate: null }, { expirationDate: { gte: new Date() } }],
           serviceId: { in: serviceIds },
         },
         select: { id: true, serviceId: true, balance: true, expirationDate: true, code: true },

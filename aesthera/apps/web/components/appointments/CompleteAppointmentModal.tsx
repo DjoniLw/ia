@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, CheckCircle, Loader2, ShoppingCart } from 'lucide-react'
+import { CheckCircle, Loader2, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import type { Appointment } from '@/lib/hooks/use-appointments'

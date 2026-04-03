@@ -208,7 +208,9 @@ export class BillingService {
 
       // SEC05 — Transação com SELECT FOR UPDATE via $transaction
       const result = await prisma.$transaction(async (tx) => {
-        // SELECT FOR UPDATE no billing para evitar race condition
+        // SELECT FOR UPDATE real — bloqueia a linha no Postgres para evitar race condition
+        await tx.$queryRaw`SELECT id FROM billing WHERE id = ${id}::uuid AND clinic_id = ${clinicId}::uuid FOR UPDATE`
+
         const lockedBilling = await tx.billing.findFirst({
           where: { id, clinicId }, // SEC04
         })
@@ -217,17 +219,8 @@ export class BillingService {
         }
 
         // Use wallet balance (com validação de serviceId — RN10)
-        const { remaining } = await wallet.use(clinicId, dto.voucherId!, billing.amount, billing.id, tx as never)
-
-        if (remaining > 0) {
-          return {
-            status: 'partial' as const,
-            coveredAmount: billing.amount - remaining,
-            remainingAmount: remaining,
-            billing,
-            billingComplementar: null,
-          }
-        }
+        // wallet.use() lança INSUFFICIENT_BALANCE se saldo < valor; não há pagamento parcial via voucher
+        await wallet.use(clinicId, dto.voucherId!, lockedBilling.amount, lockedBilling.id, tx as never)
 
         // Full payment via voucher — marcar como pago
         await tx.billing.update({
@@ -238,12 +231,6 @@ export class BillingService {
         // Verificar se clínica cobra diferença (chargeVoucherDifference)
         const clinic = await tx.clinic.findUnique({ where: { id: clinicId } })
         let billingComplementar = null
-
-        // Nota: se voucher.balance === billing.amount, não há diferença a cobrar
-        // O billing complementar só se aplica quando voucher cobre menos que o preço atual do serviço
-        // Nesse caso remaining === 0 mas o voucher foi o único pagamento
-        // A lógica real de diferença é verificada antes de chamar wallet.use() — remaining > 0 = parcial
-        // Quando remaining === 0 e chargeVoucherDifference=true: sem diferença neste caso
 
         if (clinic?.chargeVoucherDifference && billing.serviceId) {
           const service = await tx.service.findUnique({ where: { id: billing.serviceId } })
@@ -279,15 +266,6 @@ export class BillingService {
 
         return { status: 'paid' as const, billingComplementar }
       })
-
-      if (result.status === 'partial') {
-        return {
-          status: 'partial',
-          coveredAmount: result.coveredAmount,
-          remainingAmount: result.remainingAmount,
-          billing,
-        }
-      }
 
       // RN15 — Domain event emitido APÓS o commit da transação
       if (result.billingComplementar) {

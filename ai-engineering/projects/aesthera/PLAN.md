@@ -260,40 +260,40 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 > Spec do PO: `outputs/po/redesenho-fluxo-cobranca-servicos-doc.md`
 > **Spec final consolidada:** `outputs/consolidador/redesenho-fluxo-cobranca-servicos-spec-final.md`
-> Status: ✅ Spec consolidada — pronta para Issue Writer
+> Status: ✅ Implementada — PR #148
 
 ### Objetivo
 Desacoplar billing do agendamento e suportar 3 cenários de cobrança: pós-serviço (manual), pré-venda de serviço (com voucher) e cobrança manual avulsa.
 
 ### Backend
-- [ ] Migration: `serviceId` nullable em `Billing` + `@@index([clinicId, serviceId])`
-- [ ] Migration: `serviceId` nullable em `WalletEntry` + `@@index([clinicId, customerId, serviceId, status])`
-- [ ] Migration: `chargeVoucherDifference` em `Clinic`
-- [ ] Migration: enum `PRESALE` em `BillingSourceType`
-- [ ] Migration: enum `SERVICE_PRESALE` em `WalletOriginType`
-- [ ] `BillingService.createManual()` com roleGuard([admin, staff]) e validações SEC01-SEC06
-- [ ] Remover criação automática de billing em `appointment.completed`
-- [ ] Endpoint `POST /billing` manual (staff/admin) com DTO restrito
-- [ ] Endpoint `GET /wallet/service-vouchers/:customerId` (módulo wallet, não billing)
-- [ ] `AppointmentService.complete()` retorno normalizado `{ appointment, serviceVouchers[] }`
-- [ ] `WalletService.use()` valida `serviceId` + busca segura por `{ id, clinicId }`
-- [ ] `receivePayment` em `prisma.$transaction()` + billing complementar (appointmentId=null)
-- [ ] Domain event `billing.created` após commit da transação
-- [ ] `PATCH /clinics/me` aceitar `chargeVoucherDifference`
-- [ ] Atualizar `domain-event-handlers.ts` linha 18
+- [x] Migration: `serviceId` nullable em `Billing` + `@@index([clinicId, serviceId])`
+- [x] Migration: `serviceId` nullable em `WalletEntry` + `@@index([clinicId, customerId, serviceId, status])`
+- [x] Migration: `chargeVoucherDifference` em `Clinic`
+- [x] Migration: enum `PRESALE` em `BillingSourceType`
+- [x] Migration: enum `SERVICE_PRESALE` em `WalletOriginType`
+- [x] `BillingService.createManual()` com roleGuard([admin, staff]) e validações SEC01-SEC06
+- [x] Remover criação automática de billing em `appointment.completed`
+- [x] Endpoint `POST /billing` manual (staff/admin) com DTO restrito
+- [x] Endpoint `GET /wallet/service-vouchers/:customerId` (módulo wallet, não billing)
+- [x] `AppointmentService.complete()` retorno normalizado `{ appointment, serviceVouchers[] }`
+- [x] `WalletService.use()` valida `serviceId` + busca segura por `{ id, clinicId }`
+- [x] `receivePayment` em `prisma.$transaction()` + billing complementar (appointmentId=null)
+- [x] Domain event `billing.created` após commit da transação
+- [x] `PATCH /clinics/me` aceitar `chargeVoucherDifference`
+- [x] Atualizar `domain-event-handlers.ts` linha 18
 
 ### Frontend
-- [ ] `CompleteAppointmentModal` (loading/erro/sem voucher/com voucher + hierarquia de botões)
-- [ ] `SellServiceForm` com campos corretos, validações e toasts PT-BR
-- [ ] Botão "Vender Serviço" na ficha do cliente
-- [ ] Botão "Nova Cobrança" na tela `/billing`
-- [ ] `/billing`: filtro pills por `sourceType` + badges + legenda filtros + empty state
-- [ ] `lib/status-colors.ts`: `BILLING_SOURCE_TYPE_LABEL` + `BILLING_SOURCE_TYPE_COLOR`
-- [ ] `ReceiveManualModal`: prop `preSelectedVoucherId` + Alert RN13
-- [ ] `useAppointmentTransition.complete`: abrir modal apenas em sucesso
-- [ ] `wallet-labels.ts`: SERVICE_PRESALE
-- [ ] Ficha do cliente: badge "Vale disponível" aba Carteira e Histórico
-- [ ] `/settings`: toggle `chargeVoucherDifference`
+- [x] `CompleteAppointmentModal` (loading/erro/sem voucher/com voucher + hierarquia de botões)
+- [x] `SellServiceForm` com campos corretos, validações e toasts PT-BR
+- [x] Botão "Vender Serviço" na ficha do cliente
+- [x] Botão "Nova Cobrança" na tela `/billing`
+- [x] `/billing`: filtro pills por `sourceType` + badges + legenda filtros + empty state
+- [x] `lib/status-colors.ts`: `BILLING_SOURCE_TYPE_LABEL` + `BILLING_SOURCE_TYPE_COLOR`
+- [x] `ReceiveManualModal`: prop `preSelectedVoucherId` + Alert RN13
+- [x] `useAppointmentTransition.complete`: abrir modal apenas em sucesso
+- [x] `wallet-labels.ts`: SERVICE_PRESALE
+- [x] Ficha do cliente: botão "Vender Serviço" aba Carteira
+- [x] `/settings`: toggle `chargeVoucherDifference`
 
 ### Documentação
 - [ ] `system-architect-knowledge.md`: revogar regra de billing automático em complete()

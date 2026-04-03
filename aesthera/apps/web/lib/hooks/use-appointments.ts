@@ -103,7 +103,7 @@ export interface Billing {
   status: BillingStatus
   sourceType: BillingSourceType
   paymentLink: string | null
-  paymentToken: string
+  paymentToken?: string
   dueDate: string
   paidAt: string | null
   overdueAt: string | null

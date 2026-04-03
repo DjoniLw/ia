@@ -147,9 +147,10 @@ function BillingPageContent() {
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString())
     if (statusFilter) p.set('status', statusFilter); else p.delete('status')
+    if (sourceTypeFilter) p.set('sourceType', sourceTypeFilter); else p.delete('sourceType')
     if (customerSearch) p.set('customer', customerSearch); else p.delete('customer')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, statusFilter, customerSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router, statusFilter, sourceTypeFilter, customerSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDefaultFilters = statusFilter === '' && sourceTypeFilter === '' && customerSearch === ''
 

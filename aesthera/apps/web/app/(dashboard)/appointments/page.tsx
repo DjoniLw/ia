@@ -1144,6 +1144,7 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [viewingCustomerId, setViewingCustomerId] = useState<string | null>(null)
   const [completeResult, setCompleteResult] = useState<{
+    appointment: import('@/lib/hooks/use-appointments').Appointment | null
     serviceVouchers: ServiceVoucher[]
   } | null>(null)
   const [selectedVoucher, setSelectedVoucher] = useState<ServiceVoucher | null>(null)
@@ -1158,8 +1159,8 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
       else if (action === 'start') await transitions.start.mutateAsync()
       else if (action === 'complete') {
         // RN02 — complete() retorna { appointment, serviceVouchers }
-        const result = await transitions.complete.mutateAsync() as { appointment: unknown; serviceVouchers: ServiceVoucher[] }
-        setCompleteResult({ serviceVouchers: result.serviceVouchers ?? [] })
+        const result = await transitions.complete.mutateAsync() as { appointment: import('@/lib/hooks/use-appointments').Appointment; serviceVouchers: ServiceVoucher[] }
+        setCompleteResult({ appointment: result.appointment, serviceVouchers: result.serviceVouchers ?? [] })
         return // Não fechar o modal — aguardar ação no CompleteAppointmentModal
       }
       else if (action === 'cancel') await transitions.cancel.mutateAsync(undefined)
@@ -1173,10 +1174,14 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
 
   async function handleGenerateBilling() {
     try {
+      if (!slot.price || slot.price <= 0) {
+        toast.error('Valor do agendamento não disponível. Verifique o serviço cadastrado.')
+        return
+      }
       const billing = await createBilling.mutateAsync({
         customerId: slot.customerId!,
         sourceType: 'APPOINTMENT',
-        amount: slot.price ?? 0,
+        amount: slot.price,
         appointmentId: slot.id,
       })
       toast.success('Cobrança gerada com sucesso!')
@@ -1193,10 +1198,14 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
     setSelectedVoucher(voucher)
     setCompleteResult(null)
     // Gerar billing de APPOINTMENT para poder registrar recebimento via voucher
+    if (!slot.price || slot.price <= 0) {
+      toast.error('Valor do agendamento não disponível. Verifique o serviço cadastrado.')
+      return
+    }
     createBilling.mutateAsync({
       customerId: slot.customerId!,
       sourceType: 'APPOINTMENT',
-      amount: slot.price ?? 0,
+      amount: slot.price,
       appointmentId: slot.id,
     }).then((billing) => {
       setCompletedBilling(billing)
@@ -1304,7 +1313,7 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         <CompleteAppointmentModal
           open={!!completeResult}
           onClose={() => { setCompleteResult(null); onClose() }}
-          appointment={null}
+          appointment={completeResult.appointment}
           serviceVouchers={completeResult.serviceVouchers}
           isLoadingVouchers={false}
           onGenerateBilling={handleGenerateBilling}

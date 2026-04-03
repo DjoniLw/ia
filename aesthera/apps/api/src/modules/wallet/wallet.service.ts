@@ -60,6 +60,7 @@ export class WalletService {
         customerId,
         originType: 'SERVICE_PRESALE',
         status: 'ACTIVE',
+        OR: [{ expirationDate: null }, { expirationDate: { gte: new Date() } }],
         ...(serviceId ? { serviceId } : {}),
       },
       select: {
