@@ -208,11 +208,16 @@ interface ReceiveManualModalProps {
 let lineIdCounter = 1
 
 export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherId }: ReceiveManualModalProps) {
-  const [lines, setLines] = useState<PaymentLineState[]>(() =>
-    preSelectedVoucherId
-      ? [{ id: lineIdCounter++, method: 'wallet_voucher', amountStr: '', walletEntryId: preSelectedVoucherId }]
-      : [{ id: lineIdCounter++, method: 'cash', amountStr: '', walletEntryId: '' }],
-  )
+  const [lines, setLines] = useState<PaymentLineState[]>(() => {
+    if (preSelectedVoucherId) {
+      // Pré-preencher o valor do voucher com o total da cobrança
+      const amountStr = billing.amount > 0
+        ? (billing.amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : ''
+      return [{ id: lineIdCounter++, method: 'wallet_voucher', amountStr, walletEntryId: preSelectedVoucherId }]
+    }
+    return [{ id: lineIdCounter++, method: 'cash', amountStr: '', walletEntryId: '' }]
+  })
   const [notes, setNotes] = useState('')
   const [overpaymentHandling, setOverpaymentHandling] =
     useState<OverpaymentHandlingType>('cash_change')

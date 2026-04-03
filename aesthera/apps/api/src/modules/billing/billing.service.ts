@@ -69,8 +69,16 @@ export class BillingService {
       if (existing && existing.status === 'paid') {
         throw new AppError('Billing já pago para este agendamento', 409, 'BILLING_ALREADY_PAID')
       }
-      // Idempotência: retornar existing se já existe (pending/overdue)
-      if (existing) return existing
+      // Idempotência: retornar existing com includes para o frontend conseguir montar ReceiveManualModal
+      if (existing) {
+        return prisma.billing.findUniqueOrThrow({
+          where: { id: existing.id },
+          include: {
+            customer: { select: { id: true, name: true } },
+            service: { select: { id: true, name: true } },
+          },
+        })
+      }
     }
 
     const config = normalizePaymentMethodConfig(

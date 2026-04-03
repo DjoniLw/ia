@@ -11,6 +11,7 @@ const mockPrisma = vi.hoisted(() => ({
   $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(mockTxBilling)),
   billing: {
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -161,6 +162,7 @@ describe('BillingService.createForAppointment()', () => {
   it('deve manter a operação idempotente quando a cobrança já existir', async () => {
     mockPrisma.customer.findFirst.mockResolvedValue({ id: 'customer-3', clinicId: 'clinic-1' })
     mockPrisma.billing.findUnique.mockResolvedValue({ id: 'billing-existing', status: 'pending' })
+    mockPrisma.billing.findUniqueOrThrow.mockResolvedValue({ id: 'billing-existing', status: 'pending', customer: { id: 'customer-3', name: 'Test' }, service: null })
 
     const result = await service.createForAppointment({
       id: 'appointment-3',
@@ -210,6 +212,7 @@ describe('BillingService.createManual()', () => {
     mockPrisma.service.findUnique.mockResolvedValue(null)
     mockPrisma.customer.findFirst.mockResolvedValue({ id: 'customer-1', clinicId: 'clinic-1' })
     mockPrisma.billing.findUnique.mockResolvedValue({ id: 'billing-existing', status: 'pending', appointmentId: 'appt-1' })
+    mockPrisma.billing.findUniqueOrThrow.mockResolvedValue({ id: 'billing-existing', status: 'pending', appointmentId: 'appt-1', customer: { id: 'customer-1', name: 'Test' }, service: null })
 
     const result = await service.createManual(
       { customerId: 'customer-1', sourceType: 'APPOINTMENT', amount: 15000, appointmentId: 'appt-1' },

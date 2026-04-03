@@ -354,6 +354,7 @@ export function useCreateManualReceipt(billingId: string) {
     mutationFn: (data) => api.post(`/billing/${billingId}/receive`, data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['billing'] })
+      qc.invalidateQueries({ queryKey: ['wallet'] })
       // Força re-fetch das promoções disponíveis — usesCount pode ter mudado após aplicação
       qc.invalidateQueries({ queryKey: ['promotions-for-service'] })
     },
