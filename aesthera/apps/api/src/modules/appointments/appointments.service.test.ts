@@ -663,3 +663,98 @@ describe('AppointmentsService.complete()', () => {
     expect(result).toMatchObject({ serviceVouchers: [] })
   })
 })
+
+// ── R13: AppointmentsService.update() — conflito de horário no reagendamento ──
+describe('R13 — AppointmentsService.update(): reagendamento bloqueia conflito de profissional', () => {
+  let service: AppointmentsService
+
+  const makeExistingAppointment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'appt-1',
+    clinicId: 'clinic-1',
+    professionalId: 'professional-1',
+    serviceId: 'service-1',
+    scheduledAt: new Date('2026-03-25T09:00:00.000Z'), // 09:00–10:00
+    durationMinutes: 60,
+    status: 'draft',
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AppointmentsService()
+  })
+
+  it('deve lançar SLOT_UNAVAILABLE ao reagendar para horário conflitante com outro agendamento do profissional', async () => {
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment())
+    // Outro agendamento do mesmo profissional às 11:00–12:00
+    mockRepo.getConflictingAppointments.mockResolvedValue([
+      { scheduledAt: new Date('2026-03-25T11:00:00.000Z'), durationMinutes: 60 },
+    ])
+    mockRepo.getBlockedSlotsForDate.mockResolvedValue([])
+
+    await expect(
+      service.update('clinic-1', 'appt-1', { scheduledAt: '2026-03-25T11:00:00.000Z' }),
+    ).rejects.toMatchObject({ statusCode: 409, code: 'SLOT_UNAVAILABLE' })
+  })
+
+  it('deve permitir reagendamento quando novo horário está livre', async () => {
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment())
+    mockRepo.getConflictingAppointments.mockResolvedValue([]) // sem conflitos
+    mockRepo.getBlockedSlotsForDate.mockResolvedValue([])
+    mockRepo.update.mockResolvedValue({
+      ...makeExistingAppointment(),
+      scheduledAt: new Date('2026-03-25T14:00:00.000Z'),
+    })
+
+    const result = await service.update('clinic-1', 'appt-1', {
+      scheduledAt: '2026-03-25T14:00:00.000Z',
+    })
+
+    expect(result).toMatchObject({ id: 'appt-1' })
+  })
+
+  it('deve excluir o próprio agendamento da verificação de conflito ao reagendar (sem falso positivo)', async () => {
+    // Agendamento A em 09:00. Reagendar para 09:30 sobrepõe o slot atual —
+    // sem exclusão do próprio ID, erraria com SLOT_UNAVAILABLE.
+    // Com excludeId correto, o repositório ignora o próprio agendamento.
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment())
+    // getConflictingAppointments já exclui o próprio agendamento (excludeId=appt-1) → retorna vazio
+    mockRepo.getConflictingAppointments.mockResolvedValue([])
+    mockRepo.getBlockedSlotsForDate.mockResolvedValue([])
+    mockRepo.update.mockResolvedValue({
+      ...makeExistingAppointment(),
+      scheduledAt: new Date('2026-03-25T09:30:00.000Z'),
+    })
+
+    const result = await service.update('clinic-1', 'appt-1', {
+      scheduledAt: '2026-03-25T09:30:00.000Z',
+    })
+
+    // Verifica que o repositório recebeu o excludeId correto
+    expect(mockRepo.getConflictingAppointments).toHaveBeenCalledWith(
+      'clinic-1',
+      'professional-1',
+      '2026-03-25',
+      'appt-1', // excludeId — obrigatório para evitar falso positivo
+    )
+    expect(result).toMatchObject({ id: 'appt-1' })
+  })
+
+  it('deve bloquear reagendamento em status inválido (completed/cancelled)', async () => {
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment({ status: 'completed' }))
+
+    await expect(
+      service.update('clinic-1', 'appt-1', { scheduledAt: '2026-03-25T14:00:00.000Z' }),
+    ).rejects.toMatchObject({ statusCode: 400, code: 'INVALID_STATUS' })
+  })
+
+  it('não deve verificar conflito de horário quando scheduledAt não é alterado', async () => {
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment())
+    mockRepo.update.mockResolvedValue(makeExistingAppointment({ notes: 'Observação adicionada' }))
+
+    await service.update('clinic-1', 'appt-1', { notes: 'Observação adicionada' })
+
+    // Nenhuma verificação de conflito deve ser feita quando o horário não muda
+    expect(mockRepo.getConflictingAppointments).not.toHaveBeenCalled()
+  })
+})

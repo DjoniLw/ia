@@ -822,13 +822,13 @@ export class AppointmentsService {
     scheduledAt: Date,
     durationMinutes: number,
     dateStr: string,
-    _excludeId?: string,
+    excludeId?: string,
   ) {
     const slotStart = dateToMinutes(scheduledAt)
     const slotEnd = slotStart + durationMinutes
 
     const [appointments, blockedSlots] = await Promise.all([
-      this.repo.getConflictingAppointments(clinicId, professionalId, dateStr),
+      this.repo.getConflictingAppointments(clinicId, professionalId, dateStr, excludeId),
       this.repo.getBlockedSlotsForDate(clinicId, professionalId, dateStr),
     ])
 
