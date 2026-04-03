@@ -106,8 +106,10 @@ export interface Billing {
   overdueAt: string | null
   cancelledAt: string | null
   createdAt: string
+  lockedPromotionCode?: string | null
+  originalAmount?: number | null
   customer: AppointmentCustomer
-  appointment: BillingAppointment
+  appointment: BillingAppointment | null
 }
 
 interface Paginated<T> {
@@ -321,6 +323,7 @@ export interface CreateManualReceiptPayload {
   notes?: string
   lines: ManualReceiptLine[]
   overpaymentHandling?: { type: OverpaymentHandlingType }
+  promotionCode?: string
 }
 
 export interface ManualReceiptResult {
@@ -344,6 +347,10 @@ export function useCreateManualReceipt(billingId: string) {
   const qc = useQueryClient()
   return useMutation<ManualReceiptResult, Error, CreateManualReceiptPayload>({
     mutationFn: (data) => api.post(`/billing/${billingId}/receive`, data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing'] })
+      // Força re-fetch das promoções disponíveis — usesCount pode ter mudado após aplicação
+      qc.invalidateQueries({ queryKey: ['promotions-for-service'] })
+    },
   })
 }

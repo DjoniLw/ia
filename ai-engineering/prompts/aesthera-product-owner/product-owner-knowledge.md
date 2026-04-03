@@ -115,6 +115,7 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 |--------|--------|-------|
 | **BodyMeasurements** | 📋 Especificado | Medidas corporais configuráveis + fotos. Pré-requisito: módulo `uploads`. Spec: `fase3-cliente-relacionamento-doc.md` |
 | **Uploads** | 📋 Especificado | Pre-signed URL (Cloudflare R2 / S3), CustomerFile, TTL 1h. Pré-requisito do BodyMeasurements. |
+| **AnamnesisRequest** | 📋 Especificado | Envio de ficha de anamnese (branco ou pré-preenchida) para cliente preencher/validar e assinar digitalmente. Assinatura idêntica ao padrão de contratos. Spec: `outputs/po/anamnese-assinatura-digital-doc.md` |
 
 ---
 
@@ -200,6 +201,21 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 
 ---
 
+## Regras de Negócio — Anamnese Digital (atualizado 30/03/2026)
+
+- Token de assinatura: `crypto.randomBytes(32).toString('hex')` — nunca UUID diretamente para tokens públicos
+- Links de anamnese expiram em **72h** por padrão (configurável futuramente)
+- Dois modos: `blank` (cliente preenche) e `prefilled` (staff preenche, cliente valida)
+- Questões do grupo são **snapshot** no momento do envio — imutáveis após criação do `AnamnesisRequest`
+- Status: `pending → signed` (final) | `pending → expired` | `pending → correction_requested` | `expired → pending` (reenvio)
+- Assinatura é atômica com criação do `ClinicalRecord` (tipo `anamnesis`) — transação Prisma
+- `ClinicalRecord` criado é append-only — nunca pode ser deletado (dados clínicos LGPD)
+- Endpoint público retorna 410 se token expirado; 409 se já assinado
+- Reenvio de ficha `pending`/`expired` renova `expiresAt` se restam < 24h
+- `clinic_id` em todas as queries (multi-tenancy obrigatório)
+
+---
+
 ## Padrões de Filtros (obrigatório em specs)
 
 > Definido em: 25/03/2026 — revisão transversal de filtros (`outputs/ux/aesthera-ux-review-filtros-padronizacao-2026-03-25.md`)
@@ -224,6 +240,7 @@ Qualquer spec que descreva uma tela com filtros **DEVE especificar obrigatoriame
 | Data | Funcionalidade | Arquivo de spec | Status |
 |------|---------------|-----------------|--------|
 | 2026-03-24 | FASE 3 — Cliente e Relacionamento (itens 3, 10, 11, 20) | ai-engineering/projects/aesthera/features/fase3-cliente-relacionamento-doc.md | Especificado |
+| 2026-03-30 | Ficha de Anamnese Digital com Assinatura Eletrônica | outputs/po/anamnese-assinatura-digital-doc.md | Especificado |
 
 ---
 
@@ -241,3 +258,6 @@ Qualquer spec que descreva uma tela com filtros **DEVE especificar obrigatoriame
 | 2026-03-24 | **DP-05** Idempotency-Key TTL: **(B) 7 dias** | 24h curto para problemas percebidos após fim de semana; sem expiração acumula dados desnecessários |
 | 2026-03-24 | **DP-06** Pacote expirado com sessões AGENDADO: **(B) Alerta visual na UI** (não cron/WhatsApp) | Badge âmbar na aba de pacotes do cliente e na listagem de agendamentos. WhatsApp ao cliente = evolução futura |
 | 2026-03-24 | **DP-07** GET /packages/sold filtros: **(B) Período + cliente + status + serviceId** | Tela de gestão financeira; custo marginal de implementar completo vs. refatorar depois |
+| 2026-03-30 | **DP-08** Assinatura de anamnese segue exatamente o padrão de contratos (`/sign/[token]`) — nova rota `/anamnese/[token]` com `SignatureCanvas` reutilizado | Consistência UX; cliente já conhece o fluxo; componente compartilhável |
+| 2026-03-30 | **DP-09** AnamnesisRequest armazena snapshot das perguntas no momento do envio | Imutabilidade — alterações futuras no formulário da clínica não afetam fichas já enviadas |
+| 2026-03-30 | **DP-10** Criação do ClinicalRecord (type=anamnesis) deve ser atômica com a assinatura (transação Prisma) | Garantia de consistência: ficha nunca é marcada como assinada sem o registro clínico correspondente |

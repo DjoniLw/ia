@@ -30,6 +30,14 @@ O sistema Aesthera é destinado ao mercado brasileiro. Em toda revisão de códi
 
 Para cada PR ou conjunto de mudanças revisado, verificar obrigatoriamente:
 
+### 0. Anti-padrões acumulados (verificar ANTES de qualquer outro item)
+
+Antes de iniciar a revisão, leia o arquivo `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`. Ele contém todos os anti-padrões identificados em revisões anteriores — organizados por categoria (Backend, Frontend, Geral).
+
+Para cada item do `code-review-learnings.md`, verificar se o código em revisão comete o mesmo erro. Se sim, sinalizar com o mesmo nível de severidade indicado no item (bloqueante ou sugestão).
+
+> ⚠️ Esta etapa é obrigatória e tem prioridade sobre as demais. Anti-padrões já catalogados não devem passar despercebidos em nenhuma revisão.
+
 ### 1. Conformidade com a estrutura do projeto
 - O que foi implementado condiz com as specs definidas em `ai-engineering/projects/{projeto}/features/{módulo}.md`?
 - A implementação segue a arquitetura documentada em `ai-engineering/projects/{projeto}/context/architecture.md`?

@@ -33,11 +33,46 @@ interface PackagesPage {
   limit: number
 }
 
+export type PackageSessionStatus = 'ABERTO' | 'AGENDADO' | 'FINALIZADO' | 'EXPIRADO'
+
 export interface CustomerPackageSession {
   id: string
   serviceId: string
+  status: PackageSessionStatus
   usedAt: string | null
   appointmentId: string | null
+}
+
+export interface CustomerPackagesQuery {
+  status?: 'ativo' | 'expirado' | 'esgotado'
+  packageName?: string
+  purchasedFrom?: string
+  purchasedUntil?: string
+}
+
+export interface SoldPackage {
+  id: string
+  customerId: string
+  packageId: string
+  purchasedAt: string
+  expiresAt: string | null
+  billingId: string | null
+  package: ServicePackage
+  customer: { id: string; name: string; email: string }
+  sessions: CustomerPackageSession[]
+}
+
+interface SoldPackagesPage {
+  items: SoldPackage[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface PurchasePackageInput {
+  customerId: string
+  paymentMethods: Array<{ method: string; amount: number }>
+  notes?: string
 }
 
 export interface AvailableSessionEntry {
@@ -59,6 +94,12 @@ export interface CustomerPackage {
   purchasedAt: string
   expiresAt: string | null
   package: ServicePackage
+  sessions: CustomerPackageSession[]
+}
+
+export interface PurchasePackageResult {
+  customerPackageId: string | undefined
+  billingId: string
   sessions: CustomerPackageSession[]
 }
 
@@ -95,11 +136,18 @@ export function usePackage(id: string) {
   })
 }
 
-export function useCustomerPackages(customerId: string) {
+export function useCustomerPackages(customerId: string, query?: CustomerPackagesQuery) {
   return useQuery<CustomerPackage[]>({
-    queryKey: ['customer-packages', customerId],
-    queryFn: () => api.get(`/packages/customer/${customerId}`).then((r) => r.data),
+    queryKey: ['customer-packages', customerId, query],
+    queryFn: () => api.get(`/packages/customer/${customerId}`, { params: query }).then((r) => r.data),
     enabled: !!customerId,
+  })
+}
+
+export function useSoldPackages(params?: { page?: number; limit?: number; customerId?: string }) {
+  return useQuery<SoldPackagesPage>({
+    queryKey: ['sold-packages', params],
+    queryFn: () => api.get('/packages/sold', { params }).then((r) => r.data),
   })
 }
 
@@ -124,10 +172,15 @@ export function useUpdatePackage(id: string) {
 export function usePurchasePackage(packageId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (customerId: string) =>
-      api.post<CustomerPackage>(`/packages/${packageId}/purchase`, { customerId }).then((r) => r.data),
-    onSuccess: (_data, customerId) => {
-      qc.invalidateQueries({ queryKey: ['customer-packages', customerId] })
+    mutationFn: ({ dto, idempotencyKey }: { dto: PurchasePackageInput; idempotencyKey: string }) =>
+      api
+        .post<PurchasePackageResult>(`/packages/${packageId}/purchase`, dto, {
+          headers: { 'Idempotency-Key': idempotencyKey },
+        })
+        .then((r) => r.data),
+    onSuccess: (_data, { dto }) => {
+      qc.invalidateQueries({ queryKey: ['customer-packages', dto.customerId] })
+      qc.invalidateQueries({ queryKey: ['sold-packages'] })
       qc.invalidateQueries({ queryKey: ['wallet'] })
     },
   })
@@ -174,8 +227,8 @@ export function useAvailableSessionsForService(customerId: string, serviceId: st
 
         // Number all sessions 1..N in the order they appear (stable API order)
         allForService.forEach((session, idx) => {
-          // Only include sessions that are not yet used AND not linked to another appointment
-          if (session.usedAt === null && session.appointmentId === null) {
+          // Only include sessions that are ABERTO (not yet scheduled or redeemed)
+          if (session.status === 'ABERTO') {
             result.push({
               session,
               packageName: cp.package.name,

@@ -101,6 +101,20 @@ enum WalletEntryType {
   PACKAGE
 }
 
+enum PackageSessionStatus {
+  ABERTO
+  AGENDADO
+  FINALIZADO
+  EXPIRADO
+}
+
+enum BillingSourceType {
+  APPOINTMENT
+  PACKAGE_SALE
+  PRODUCT_SALE
+  MANUAL
+}
+
 enum AccountsPayableStatus {
   PENDING
   PAID
@@ -584,35 +598,42 @@ model Appointment {
 }
 
 // ─── Billing ─────────────────────────────────────────────────────────────────
-// Auto-created by appointment.completed event — never created manually.
+// Auto-created by appointment.completed event — or by package sale.
 
 model Billing {
-  id             String        @id @default(uuid())
-  clinicId       String                             @map("clinic_id")
-  customerId     String                             @map("customer_id")
-  appointmentId  String        @unique              @map("appointment_id") // 1:1 with Appointment
-  amount         Int                                // BRL cents
-  status         BillingStatus @default(pending)
-  paymentMethods String[]                           @map("payment_methods") // ['pix','boleto','card','installments','duplicata']
-  paymentLink    String?                            @map("payment_link")
-  paymentToken   String        @unique              @map("payment_token")   // public payment page token
-  dueDate        DateTime      @db.Date             @map("due_date")
-  paidAt         DateTime?                          @map("paid_at")
-  overdueAt      DateTime?                          @map("overdue_at")
-  cancelledAt    DateTime?                          @map("cancelled_at")
-  createdAt      DateTime      @default(now())      @map("created_at")
-  updatedAt      DateTime      @updatedAt           @map("updated_at")
+  id             String            @id @default(uuid())
+  clinicId       String                                 @map("clinic_id")
+  customerId     String                                 @map("customer_id")
+  appointmentId  String?           @unique              @map("appointment_id") // nullable for PACKAGE_SALE
+  amount         Int                                    // BRL cents
+  status         BillingStatus     @default(pending)
+  sourceType     BillingSourceType @default(APPOINTMENT) @map("source_type")
+  paymentMethods String[]                               @map("payment_methods") // ['pix','boleto','card','installments','duplicata']
+  paymentLink    String?                                @map("payment_link")
+  paymentToken   String            @unique              @map("payment_token")   // public payment page token
+  dueDate        DateTime          @map("due_date")
+  paidAt         DateTime?                              @map("paid_at")
+  overdueAt      DateTime?                              @map("overdue_at")
+  cancelledAt         DateTime?                              @map("cancelled_at")
+  notes               String?
+  lockedPromotionCode String?                                @map("locked_promotion_code") // promoção travada no momento do agendamento
+  originalAmount      Int?                                   @map("original_amount")       // valor original antes do desconto travado
+  createdAt           DateTime          @default(now())      @map("created_at")
+  updatedAt           DateTime          @updatedAt           @map("updated_at")
 
-  clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  appointment      Appointment       @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  clinic           Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  appointment      Appointment?       @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
   payments         Payment[]
-  ledgerEntries    LedgerEntry[]     // credit on paid, debit on refund
+  ledgerEntries    LedgerEntry[]      // credit on paid, debit on refund
   notificationLogs NotificationLog[]
+  customerPackage  CustomerPackage?
+  manualReceipt    ManualReceipt?
 
   @@index([clinicId])
   @@index([clinicId, customerId])
   @@index([clinicId, status])
+  @@index([clinicId, sourceType, createdAt])
   @@map("billing")
 }
 
@@ -748,9 +769,9 @@ model ProductSale {
   quantity   Int
   unitPrice  Int                              @map("unit_price")
   totalPrice Int                              @map("total_price")
-  discount      Int       @default(0)
-  paymentMethod String?                          @map("payment_method") // cash, pix, card, transfer
-  notes         String?
+  discount       Int      @default(0)
+  paymentMethods String[]                        @map("payment_methods") // ['cash','pix','card','transfer']
+  notes          String?
   soldAt        DateTime  @default(now())        @map("sold_at")
   createdAt  DateTime  @default(now())        @map("created_at")
 
@@ -983,6 +1004,8 @@ model Promotion {
   usesCount            Int                  @default(0) @map("uses_count")
   minAmount            Int?                 @map("min_amount")
   applicableServiceIds String[]             @map("applicable_service_ids")
+  applicableProductIds String[]             @default([]) @map("applicable_product_ids")
+  maxUsesPerCustomer   Int?                 @map("max_uses_per_customer")
   validFrom            DateTime             @map("valid_from")
   validUntil           DateTime?            @map("valid_until")
   status               PromotionStatus      @default(active)
@@ -1003,6 +1026,7 @@ model PromotionUsage {
   promotionId    String   @map("promotion_id")
   customerId     String   @map("customer_id")
   billingId      String?  @map("billing_id")
+  saleId         String?  @map("sale_id")
   discountAmount Int      @map("discount_amount")
   usedAt         DateTime @default(now()) @map("used_at")
 
@@ -1010,6 +1034,7 @@ model PromotionUsage {
 
   @@index([clinicId])
   @@index([promotionId])
+  @@index([promotionId, customerId])
   @@map("promotion_usages")
 }
 
@@ -1055,12 +1080,14 @@ model CustomerPackage {
   customerId    String    @map("customer_id")
   packageId     String    @map("package_id")
   walletEntryId String?   @unique @map("wallet_entry_id")
+  billingId     String?   @unique @map("billing_id")
   purchasedAt   DateTime  @default(now()) @map("purchased_at")
   expiresAt     DateTime? @map("expires_at")
 
   clinic    Clinic         @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   customer  Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
   package   ServicePackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  billing   Billing?       @relation(fields: [billingId], references: [id], onDelete: SetNull)
   sessions  CustomerPackageSession[]
 
   @@index([clinicId])
@@ -1069,16 +1096,19 @@ model CustomerPackage {
 }
 
 model CustomerPackageSession {
-  id                String    @id @default(uuid())
-  clinicId          String    @map("clinic_id")
-  customerPackageId String    @map("customer_package_id")
-  serviceId         String    @map("service_id")
-  appointmentId     String?   @map("appointment_id")
-  usedAt            DateTime? @map("used_at")
+  id                String               @id @default(uuid())
+  clinicId          String               @map("clinic_id")
+  customerPackageId String               @map("customer_package_id")
+  serviceId         String               @map("service_id")
+  appointmentId     String?              @map("appointment_id")
+  status            PackageSessionStatus @default(ABERTO)
+  usedAt            DateTime?            @map("used_at")
 
   customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
 
   @@index([clinicId])
+  @@index([clinicId, appointmentId])
+  @@index([clinicId, status])
   @@map("customer_package_sessions")
 }
 
@@ -1143,8 +1173,9 @@ model ManualReceipt {
   notes      String?
   createdAt  DateTime @default(now())     @map("created_at")
 
-  clinic  Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  lines   ManualReceiptLine[]
+  clinic   Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  billing  Billing            @relation(fields: [billingId], references: [id], onDelete: Restrict)
+  lines    ManualReceiptLine[]
 
   @@index([clinicId])
   @@map("manual_receipts")

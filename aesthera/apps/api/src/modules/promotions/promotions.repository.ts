@@ -1,4 +1,5 @@
 import { prisma } from '../../database/prisma/client'
+import { NotFoundError } from '../../shared/errors/app-error'
 import type { CreatePromotionDto, ListPromotionsQuery, UpdatePromotionDto } from './promotions.dto'
 
 export class PromotionsRepository {
@@ -10,6 +11,9 @@ export class PromotionsRepository {
         { name: { contains: q.search, mode: 'insensitive' } },
         { code: { contains: q.search, mode: 'insensitive' } },
       ]
+    }
+    if (q.serviceId) {
+      where.applicableServiceIds = { has: q.serviceId }
     }
 
     const skip = (q.page - 1) * q.limit
@@ -38,6 +42,46 @@ export class PromotionsRepository {
     })
   }
 
+  async findActiveForService(clinicId: string, serviceId: string) {
+    return prisma.promotion.findMany({
+      where: {
+        clinicId,
+        status: 'active',
+        validFrom: { lte: new Date() },
+        AND: [
+          {
+            OR: [
+              { applicableServiceIds: { has: serviceId } },
+              { applicableServiceIds: { isEmpty: true } },
+            ],
+          },
+          { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] },
+        ],
+      },
+      orderBy: { discountValue: 'desc' },
+    })
+  }
+
+  async findActiveForProduct(clinicId: string, productId: string) {
+    return prisma.promotion.findMany({
+      where: {
+        clinicId,
+        status: 'active',
+        validFrom: { lte: new Date() },
+        AND: [
+          {
+            OR: [
+              { applicableProductIds: { has: productId } },
+              { applicableProductIds: { isEmpty: true } },
+            ],
+          },
+          { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] },
+        ],
+      },
+      orderBy: { discountValue: 'desc' },
+    })
+  }
+
   async create(clinicId: string, dto: CreatePromotionDto) {
     return prisma.promotion.create({
       data: {
@@ -48,8 +92,10 @@ export class PromotionsRepository {
         discountType: dto.discountType,
         discountValue: dto.discountValue,
         maxUses: dto.maxUses,
+        maxUsesPerCustomer: dto.maxUsesPerCustomer,
         minAmount: dto.minAmount,
         applicableServiceIds: dto.applicableServiceIds,
+        applicableProductIds: dto.applicableProductIds,
         validFrom: new Date(dto.validFrom),
         validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
         status: 'active',
@@ -64,13 +110,28 @@ export class PromotionsRepository {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.discountType !== undefined && { discountType: dto.discountType }),
+        ...(dto.discountValue !== undefined && { discountValue: dto.discountValue }),
         ...(dto.maxUses !== undefined && { maxUses: dto.maxUses }),
+        ...(dto.maxUsesPerCustomer !== undefined && { maxUsesPerCustomer: dto.maxUsesPerCustomer }),
+        ...(dto.minAmount !== undefined && { minAmount: dto.minAmount }),
+        ...(dto.applicableServiceIds !== undefined && { applicableServiceIds: dto.applicableServiceIds }),
+        ...(dto.applicableProductIds !== undefined && { applicableProductIds: dto.applicableProductIds }),
         ...(dto.validUntil !== undefined && {
           validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
         }),
         updatedAt: new Date(),
       },
     })
+  }
+
+  async toggleStatus(clinicId: string, id: string, active: boolean) {
+    const updated = await prisma.promotion.updateMany({
+      where: { id, clinicId },
+      data: { status: active ? 'active' : 'inactive', updatedAt: new Date() },
+    })
+    if (updated.count === 0) throw new NotFoundError('Promotion')
+    return prisma.promotion.findFirst({ where: { id, clinicId } })
   }
 
   async incrementUsage(id: string) {
@@ -85,8 +146,13 @@ export class PromotionsRepository {
     promotionId: string
     customerId: string
     billingId?: string
+    saleId?: string
     discountAmount: number
   }) {
     return prisma.promotionUsage.create({ data })
+  }
+
+  async countCustomerUsage(clinicId: string, promotionId: string, customerId: string): Promise<number> {
+    return prisma.promotionUsage.count({ where: { clinicId, promotionId, customerId } })
   }
 }

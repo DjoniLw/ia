@@ -1,6 +1,7 @@
 'use client'
 
-import { Suspense, useCallback, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -10,19 +11,23 @@ import {
   Pencil,
   ChevronDown,
   ChevronUp,
-  ShoppingBag,
   CheckCircle2,
   Search,
   Info,
+  Minus,
+  ShoppingBag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { DataPagination } from '@/components/ui/data-pagination'
+import { SESSION_STATUS_STYLE, SESSION_LABEL } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { useCustomers, useServices } from '@/lib/hooks/use-resources'
 import {
   type CreatePackageInput,
   type CustomerPackage,
+  type PurchasePackageInput,
   type ServicePackage,
   type UpdatePackageInput,
   useCreatePackage,
@@ -43,6 +48,20 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('pt-BR')
 }
 
+function parseCurrencyInput(value: string): number {
+  const normalized = value.trim().replace(/\./g, '').replace(',', '.')
+  if (!normalized) return 0
+  const parsed = parseFloat(normalized)
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0
+}
+
+const SIMPLE_PAYMENT_METHODS = [
+  { value: 'cash', label: 'Dinheiro' },
+  { value: 'pix', label: 'PIX' },
+  { value: 'card', label: 'Cartão' },
+  { value: 'transfer', label: 'Transferência' },
+] as const
+
 // ──── Searchable Customer Input ────────────────────────────────────────────────
 
 function CustomerSearchInput({
@@ -58,15 +77,26 @@ function CustomerSearchInput({
   const [open, setOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [debounced, setDebounced] = useState('')
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 })
 
   const { data } = useCustomers(
     debounced.trim().length >= 1 ? { name: debounced.trim(), limit: '20' } : undefined,
   )
   const results = data?.items ?? []
 
+  function updatePos() {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      // getBoundingClientRect() is already viewport-relative — no scroll offset needed with fixed positioning
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
+  }
+
   function handleInput(v: string) {
     setSearch(v)
     setOpen(true)
+    updatePos()
     if (!v) onChange(null)
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => setDebounced(v), 250)
@@ -79,14 +109,44 @@ function CustomerSearchInput({
     setOpen(false)
   }
 
+  const dropdown =
+    open && search.trim().length >= 1 && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="fixed z-[9999] rounded-md border bg-background shadow-lg max-h-48 overflow-auto"
+            style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width }}
+          >
+            {results.length === 0 ? (
+              <p className="p-3 text-sm text-muted-foreground">Nenhum cliente encontrado</p>
+            ) : (
+              results.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelect(c)}
+                >
+                  <span className="font-medium">{c.name}</span>
+                  {c.phone && (
+                    <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>,
+          document.body,
+        )
+      : null
+
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2">
         <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <input
           value={value && !open ? value.name : search}
           onChange={(e) => handleInput(e.target.value)}
-          onFocus={() => { setSearch(''); setOpen(true) }}
+          onFocus={() => { updatePos(); setSearch(''); setOpen(true) }}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           placeholder={value ? value.name : placeholder}
           className="flex-1 bg-transparent text-sm focus:outline-none"
@@ -97,33 +157,10 @@ function CustomerSearchInput({
             type="button"
             onClick={() => { onChange(null); setSearch('') }}
             className="text-muted-foreground hover:text-foreground text-xs"
-          >
-            ✕
-          </button>
+          >✕</button>
         )}
       </div>
-      {open && search.trim().length >= 1 && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-background shadow-lg max-h-48 overflow-auto">
-          {results.length === 0 ? (
-            <p className="p-3 text-sm text-muted-foreground">Nenhum cliente encontrado</p>
-          ) : (
-            results.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleSelect(c)}
-              >
-                <span className="font-medium">{c.name}</span>
-                {c.phone && (
-                  <span className="ml-2 text-xs text-muted-foreground">{c.phone}</span>
-                )}
-              </button>
-            ))
-          )}
-        </div>
-      )}
+      {dropdown}
     </div>
   )
 }
@@ -158,8 +195,6 @@ function PackageModal({
   const createMutation = useCreatePackage()
   const updateMutation = useUpdatePackage(editing?.id ?? '')
   const isPending = createMutation.isPending || updateMutation.isPending
-
-  if (!open) return null
 
   function addItem() {
     setItems((prev) => [...prev, { serviceId: '', quantity: 1 }])
@@ -213,18 +248,10 @@ function PackageModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg overflow-y-auto rounded-xl border bg-card shadow-xl max-h-[90vh]">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">
-            {editing ? 'Editar pacote' : 'Novo pacote'}
-          </h3>
-          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
-        </div>
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>{editing ? 'Editar pacote' : 'Novo pacote'}</DialogTitle>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Nome *</label>
             <input
@@ -354,12 +381,13 @@ function PackageModal({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   )
 }
 
 // ──── Purchase Modal ───────────────────────────────────────────────────────────
+
+let saleLineCounter = 1
 
 function PurchaseModal({
   pkg,
@@ -371,62 +399,177 @@ function PurchaseModal({
   onClose: () => void
 }) {
   const [customer, setCustomer] = useState<{ id: string; name: string } | null>(null)
+  const [lines, setLines] = useState([{ id: saleLineCounter++, method: 'cash', amountStr: '' }])
+  const [notes, setNotes] = useState('')
+  const idempotencyKey = useMemo(() => (open ? crypto.randomUUID() : ''), [open])
   const purchase = usePurchasePackage(pkg.id)
 
-  if (!open) return null
+  // Reset form state each time the modal opens
+  useEffect(() => {
+    if (open) {
+      setCustomer(null)
+      setLines([{ id: saleLineCounter++, method: 'cash', amountStr: '' }])
+      setNotes('')
+    }
+  }, [open])
+
+  const totalPaid = lines.reduce((sum, l) => sum + parseCurrencyInput(l.amountStr), 0)
+  const diffCents = pkg.price - totalPaid
+  const canConfirm = !!customer && totalPaid >= pkg.price && !purchase.isPending
+
+  function addLine() {
+    setLines((prev) => [...prev, { id: saleLineCounter++, method: 'cash', amountStr: '' }])
+  }
+  function removeLine(id: number) {
+    setLines((prev) => prev.filter((l) => l.id !== id))
+  }
+  function updateLine(id: number, field: 'method' | 'amountStr', value: string) {
+    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, [field]: value } : l)))
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!customer) { toast.error('Selecione um cliente'); return }
     try {
-      await purchase.mutateAsync(customer.id)
-      toast.success('Pacote adquirido com sucesso')
+      await purchase.mutateAsync({
+        dto: {
+          customerId: customer.id,
+          paymentMethods: lines.map((l) => ({ method: l.method, amount: parseCurrencyInput(l.amountStr) })),
+          notes: notes.trim() || undefined,
+        },
+        idempotencyKey,
+      })
+      toast.success('Pacote vendido com sucesso!')
       onClose()
-    } catch {
-      toast.error('Erro ao registrar compra do pacote')
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(msg ?? 'Erro ao registrar venda do pacote')
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">Vender pacote</h3>
-          <button onClick={onClose} className="rounded p-1 text-muted-foreground hover:text-foreground">
-            ✕
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
-          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+    <Dialog open={open} onClose={onClose} className="max-w-md">
+      <DialogTitle>Vender pacote</DialogTitle>
+      <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Package summary */}
+          <div className="rounded-lg border bg-muted/30 p-3">
             <div className="font-medium text-foreground">{pkg.name}</div>
-            <div className="mt-1 text-muted-foreground">{formatCurrency(pkg.price)}</div>
+            <div className="mt-1 text-xl font-semibold text-foreground">{formatCurrency(pkg.price)}</div>
             {pkg.validityDays && (
-              <div className="mt-0.5 text-xs text-muted-foreground">
-                Validade: {pkg.validityDays} dias
+              <div className="mt-0.5 text-xs text-muted-foreground">Validade: {pkg.validityDays} dias</div>
+            )}
+            <ul className="mt-2 space-y-0.5 text-sm text-foreground">
+              {pkg.items.map((item) => (
+                <li key={item.serviceId} className="flex justify-between gap-2">
+                  <span>{item.service.name}</span>
+                  <span className="text-muted-foreground">{item.quantity}×</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Customer */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Cliente *</label>
+            <CustomerSearchInput value={customer} onChange={setCustomer} />
+          </div>
+
+          {/* Payment lines */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Formas de Pagamento</label>
+            {lines.map((line) => (
+              <div key={line.id} className="flex items-center gap-2">
+                <select
+                  value={line.method}
+                  onChange={(e) => updateLine(line.id, 'method', e.target.value)}
+                  className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  {SIMPLE_PAYMENT_METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={line.amountStr}
+                  onChange={(e) => updateLine(line.id, 'amountStr', e.target.value)}
+                  placeholder="0,00"
+                  className="h-9 w-28 rounded-md border border-input bg-background px-2 text-sm"
+                />
+                {lines.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeLine(line.id)}
+                    className="rounded p-1.5 text-muted-foreground hover:text-destructive"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={addLine} className="w-full">
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Adicionar forma de pagamento
+            </Button>
+          </div>
+
+          {/* Faltam — próximo às linhas de pagamento */}
+          {diffCents > 0 && (
+            <p className="-mt-2 text-xs font-medium text-red-600">
+              Faltam {formatCurrency(diffCents)} para cobrir o valor do pacote
+            </p>
+          )}
+
+          {/* Totals */}
+          <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total informado</span>
+              <span className="font-semibold">{formatCurrency(totalPaid)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Valor do pacote</span>
+              <span className="font-semibold">{formatCurrency(pkg.price)}</span>
+            </div>
+            {totalPaid > pkg.price && (
+              <div className="flex justify-between text-green-700 dark:text-green-400">
+                <span>Troco</span>
+                <span className="font-semibold">{formatCurrency(totalPaid - pkg.price)}</span>
               </div>
             )}
           </div>
 
+          {/* Notes */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Cliente *</label>
-            <CustomerSearchInput value={customer} onChange={setCustomer} />
-            {customer && (
-              <p className="text-xs text-green-600">✓ {customer.name}</p>
-            )}
+            <label className="text-xs font-medium text-muted-foreground">Observações</label>
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Opcional"
+              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={purchase.isPending}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={purchase.isPending}
+            >
               Cancelar
             </Button>
-            <Button type="submit" disabled={purchase.isPending || !customer}>
+            <Button
+              type="submit"
+              disabled={!canConfirm}
+            >
               {purchase.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirmar venda
+              {purchase.isPending ? 'Processando…' : 'Confirmar venda'}
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   )
 }
 
@@ -458,9 +601,9 @@ function CustomerPackagesPanel({ customerId }: { customerId: string }) {
 }
 
 function CustomerPackageCard({ cp }: { cp: CustomerPackage }) {
-  const usedSessions = cp.sessions.filter((s) => s.usedAt !== null).length
+  const finalizedSessions = cp.sessions.filter((s) => s.status === 'FINALIZADO').length
   const totalSessions = cp.sessions.length
-  const progress = totalSessions > 0 ? (usedSessions / totalSessions) * 100 : 0
+  const progress = totalSessions > 0 ? (finalizedSessions / totalSessions) * 100 : 0
 
   return (
     <div className="rounded-lg border bg-card p-4">
@@ -473,7 +616,7 @@ function CustomerPackageCard({ cp }: { cp: CustomerPackage }) {
           </div>
         </div>
         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-          {usedSessions}/{totalSessions} sessões
+          {finalizedSessions}/{totalSessions} sessões
         </span>
       </div>
 
@@ -500,15 +643,11 @@ function CustomerPackageCard({ cp }: { cp: CustomerPackage }) {
               className="flex items-center gap-2 text-xs text-muted-foreground"
             >
               <CheckCircle2
-                className={`h-3.5 w-3.5 flex-shrink-0 ${
-                  session.usedAt ? 'text-green-500' : 'text-muted-foreground/40'
-                }`}
+                className={`h-3.5 w-3.5 flex-shrink-0 ${SESSION_STATUS_STYLE[session.status] ?? 'text-muted-foreground/40'}`}
               />
-              <span className={session.usedAt ? 'line-through opacity-60' : ''}>
-                Sessão{' '}
-                {session.usedAt
-                  ? `— usada em ${formatDate(session.usedAt)}`
-                  : '— disponível'}
+              <span className={session.status === 'FINALIZADO' ? 'line-through opacity-60' : ''}>
+                Sessão — {SESSION_LABEL[session.status] ?? session.status}
+                {session.status === 'FINALIZADO' && session.usedAt ? ` em ${formatDate(session.usedAt)}` : ''}
               </span>
             </div>
           ))}

@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays, Package } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays, Package, Tag } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,7 @@ import {
 } from '@/lib/hooks/use-appointments'
 import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
 import { useCustomers, useGetCustomer, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
+import { useActivePromotionsForService } from '@/lib/hooks/use-promotions'
 import { formatCpf, formatPhone } from '@/lib/masks'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
@@ -282,6 +283,10 @@ function CreateAppointmentForm({
   const { data: availablePackageSessions } = useAvailableSessionsForService(customerId, serviceId)
   const hasPackageSessions = (availablePackageSessions?.length ?? 0) > 0
 
+  // Promoção específica ativa para o serviço selecionado (badge informativo no form)
+  const { data: serviceActivePromotions } = useActivePromotionsForService(serviceId, customerId || undefined, !!serviceId)
+  const specificServicePromo = serviceActivePromotions?.find((p) => p.applicableServiceIds.length > 0) ?? null
+
   // ── Derived ───────────────────────────────────────────────────────────────────
   const slots = slotsData?.slots ?? []
 
@@ -503,6 +508,18 @@ function CreateAppointmentForm({
         </div>
         {serviceId && !showServiceDropdown && <p className="text-xs text-green-600">✓ {(allServices?.items ?? []).find(s => s.id === serviceId)?.name}</p>}
         {submitted && !serviceId && <p className="text-xs text-destructive">Selecione um serviço</p>}
+        {specificServicePromo && serviceId && (
+          <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-xs text-green-800 dark:border-green-800/60 dark:bg-green-950/40 dark:text-green-300">
+            <Tag className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Promoção <span className="font-mono font-semibold">{specificServicePromo.code}</span> válida —{' '}
+              {specificServicePromo.discountType === 'PERCENTAGE'
+                ? `${specificServicePromo.discountValue}% de desconto`
+                : `R$ ${(specificServicePromo.discountValue / 100).toFixed(2).replace('.', ',')} de desconto`}{' '}
+              garantido ao agendar
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 3. Duração do serviço — auto-carregada, editável, nunca 0 */}

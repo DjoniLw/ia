@@ -161,6 +161,58 @@ Aplicar as mudanças respeitando a estrutura. Validar com o checklist do Passo 4
 
 ---
 
+## Avaliação de Treinamento Cruzado (Obrigatória)
+
+O fluxo de desenvolvimento do Aesthera é uma **cadeia conectada de agentes**. Conhecimento gerado em um ponto do pipeline frequentemente é relevante para outros agentes.
+
+### Quando avaliar
+
+**Sempre** que um treinamento for recebido para qualquer agente, antes de aplicar, avalie se outros agentes do pipeline precisam absorver o mesmo aprendizado (ou a perspectiva equivalente para seu papel).
+
+### Mapa do pipeline e propagação natural de conhecimento
+
+```
+product-owner → system-architect → implementador → ux-reviewer → security-auditor → test-guardian
+```
+
+| Se o treinamento for para... | Avaliar também... |
+|------------------------------|-------------------|
+| `aesthera-implementador` | `ux-reviewer` (padrões visuais que o impl. deve gerar), `test-guardian` (o que testar), `security-auditor` (riscos introduzidos) |
+| `ux-reviewer` | `aesthera-implementador` (como implementar o padrão UX corretamente), `aesthera-product-owner` (requisitos UX a incorporar nas specs) |
+| `security-auditor` | `aesthera-implementador` (padrão seguro a seguir), `aesthera-system-architect` (decisão de arquitetura) |
+| `test-guardian` | `aesthera-implementador` (o que ele precisa facilitar para cobertura de testes) |
+| `aesthera-product-owner` | `aesthera-system-architect` (impacto arquitetural), `aesthera-implementador` (regras de negócio) |
+| `aesthera-system-architect` | `aesthera-implementador` (como executar a decisão arquitetural) |
+| `aesthera-issue-writer` | `aesthera-implementador` (formato esperado de issue), `aesthera-product-owner` (alinhamento de spec) |
+
+### Regra de decisão
+
+Após identificar candidatos a treinamento cruzado:
+
+1. Se a propagação for **óbvia e direta** (ex: um padrão UX que o implementador precisa seguir) → proponha o treinamento cruzado imediatamente, listando os agentes e o que cada um precisaria aprender.
+2. Se houver **incerteza** sobre se outro agente precisa → questione o usuário antes de agir:
+   > _"Identifiquei que esse aprendizado pode ser relevante também para o `[agente]`. Deseja que eu o treine com a perspectiva correspondente?"_
+3. Nunca aplique treinamento cruzado silenciosamente sem informar o usuário.
+
+### Formato de apresentação do treinamento cruzado
+
+Após aplicar o treinamento solicitado, sempre conclua com:
+
+```
+---
+## Avaliação de Treinamento Cruzado
+
+Com base nesse treinamento, avaliei os demais agentes do pipeline:
+
+- ✅ `[agente]` — **não precisa de atualização** (motivo)
+- ⚠️ `[agente]` — **pode se beneficiar** de: [descrição do que precisaria aprender]
+- 🔴 `[agente]` — **precisa ser treinado**: [descrição do conhecimento a propagar]
+
+Deseja que eu aplique o treinamento nos agentes sinalizados?
+```
+
+---
+
 ## Execução Única — Sem Loops Automáticos
 
 Este agente executa **uma operação por instrução do usuário** — cria ou altera um agente, valida, para.

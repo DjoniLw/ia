@@ -5,9 +5,14 @@ import type { CreateManualReceiptDto } from './manual-receipts.dto'
 import { BillingRepository } from '../billing/billing.repository'
 import { LedgerService } from '../ledger/ledger.service'
 import { WalletService } from '../wallet/wallet.service'
+import { PromotionsService } from '../promotions/promotions.service'
 
 const ledger = new LedgerService()
 const wallet = new WalletService()
+const promotionsSvc = new PromotionsService()
+
+// NOTE: promotionsSvc is used only for pre-validation (validate()) before the transaction.
+// Inside the transaction, promotion apply logic is inlined with tx for full atomicity.
 
 export class ManualReceiptsService {
   private billingRepo = new BillingRepository()
@@ -30,9 +35,31 @@ export class ManualReceiptsService {
       throw new AppError('Esta cobrança já foi paga', 409, 'BILLING_ALREADY_PAID')
     }
 
+    // Validate promotion code before entering transaction (fast fail)
+    let preValidatedPromotion: Awaited<ReturnType<PromotionsService['validate']>> | null = null
+    if (dto.promotionCode && billing.customerId) {
+      const serviceIds = billing.appointmentId
+        ? (await prisma.appointmentServiceItem.findMany({
+            where: { appointment: { id: billing.appointmentId, clinicId } },
+            select: { serviceId: true },
+          })).map((s: { serviceId: string }) => s.serviceId)
+        : []
+      preValidatedPromotion = await promotionsSvc.validate(
+        clinicId,
+        dto.promotionCode,
+        billing.amount,
+        serviceIds,
+        billing.customerId,
+      )
+    }
+
+    const effectiveBillingAmount = preValidatedPromotion
+      ? billing.amount - preValidatedPromotion.discountAmount
+      : billing.amount
+
     const totalPaid = dto.lines.reduce((sum, l) => sum + l.amount, 0)
 
-    if (totalPaid < billing.amount) {
+    if (totalPaid < effectiveBillingAmount) {
       throw new AppError(
         'O total informado é menor que o valor da cobrança',
         400,
@@ -40,7 +67,7 @@ export class ManualReceiptsService {
       )
     }
 
-    const excedente = totalPaid - billing.amount
+    const excedente = totalPaid - effectiveBillingAmount
 
     // When overpaid, overpaymentHandling is required
     if (excedente > 0 && !dto.overpaymentHandling) {
@@ -81,14 +108,56 @@ export class ManualReceiptsService {
         throw e
       }
 
-      // 2. Update billing status to paid — use receivedAt for consistency with retroactive receipts
+      // 2. Apply promotion discount atomically using this transaction (ensures rollback consistency)
+      let appliedDiscountAmount = 0
+      if (dto.promotionCode && billing.customerId && preValidatedPromotion) {
+        const promotion = preValidatedPromotion.promotion
+        appliedDiscountAmount = preValidatedPromotion.discountAmount
+
+        // Atomic increment FIRST — only if still under maxUses (prevents race condition)
+        if (promotion.maxUses !== null) {
+          const updated = await tx.promotion.updateMany({
+            where: { id: promotion.id, usesCount: { lt: promotion.maxUses } },
+            data: { usesCount: { increment: 1 } },
+          })
+          if (updated.count === 0) {
+            throw new AppError('Limite de usos foi atingido concorrentemente.', 409, 'PROMOTION_MAX_USES_REACHED')
+          }
+        } else {
+          await tx.promotion.update({
+            where: { id: promotion.id },
+            data: { usesCount: { increment: 1 } },
+          })
+        }
+
+        // Create usage record after increment succeeds
+        await tx.promotionUsage.create({
+          data: {
+            clinicId,
+            promotionId: promotion.id,
+            customerId: billing.customerId,
+            billingId,
+            discountAmount: appliedDiscountAmount,
+          },
+        })
+      }
+
+      // Recalculate effective amount inside the tx to ensure ledger uses the real applied discount
+      const txEffectiveAmount = billing.amount - appliedDiscountAmount
+
+      // 3. Update billing status to paid — use receivedAt for consistency with retroactive receipts
       const effectivePaidAt = dto.receivedAt ? new Date(dto.receivedAt) : new Date()
+      const finalAmount = billing.amount - appliedDiscountAmount
       await tx.billing.update({
         where: { id: billingId },
-        data: { status: 'paid', paidAt: effectivePaidAt },
+        data: {
+          status: 'paid',
+          paidAt: effectivePaidAt,
+          ...(appliedDiscountAmount > 0 ? { amount: finalAmount } : {}),
+        },
       })
 
-      // 3. Debit wallet entries used as payment — pass tx to run atomically
+      // 4. Debit wallet entries used as payment — pass tx to run atomically
       for (const line of dto.lines) {
         if (
           (line.paymentMethod === 'wallet_credit' || line.paymentMethod === 'wallet_voucher') &&
@@ -98,10 +167,10 @@ export class ManualReceiptsService {
         }
       }
 
-      // 4. Create ledger credit entries (one per payment line, up to billing.amount)
+      // 5. Create ledger credit entries (one per payment line, up to txEffectiveAmount)
       let allocatedToLedger = 0
       for (const line of dto.lines) {
-        const ledgerAmount = Math.min(line.amount, billing.amount - allocatedToLedger)
+        const ledgerAmount = Math.min(line.amount, txEffectiveAmount - allocatedToLedger)
         if (ledgerAmount <= 0) break
         allocatedToLedger += ledgerAmount
         await ledger.createCreditEntry(
@@ -118,7 +187,7 @@ export class ManualReceiptsService {
         )
       }
 
-      // 5. Handle overpayment
+      // 6. Handle overpayment
       let walletEntry: { code: string; balance: number } | null = null
       if (excedente > 0 && dto.overpaymentHandling) {
         if (dto.overpaymentHandling.type === 'wallet_credit' || dto.overpaymentHandling.type === 'wallet_voucher') {

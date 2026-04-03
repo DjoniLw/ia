@@ -19,13 +19,12 @@ import { Label } from '@/components/ui/label'
 import {
   type Product,
   useCreateProduct,
-  useCustomers,
   useDeleteProduct,
   useProductSales,
   useProducts,
-  useSellProduct,
   useUpdateProduct,
 } from '@/lib/hooks/use-resources'
+import { SellProductForm } from '@/components/sell-product-form'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
@@ -183,96 +182,6 @@ function ProductForm({
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" disabled={isPending}>
           {isPending ? 'Salvando…' : 'Salvar'}
-        </Button>
-      </div>
-    </form>
-  )
-}
-
-// ──── Sell Dialog ──────────────────────────────────────────────────────────────
-
-const sellSchema = z.object({
-  quantity: z.coerce.number().int().positive('Quantidade deve ser maior que 0'),
-  customerId: z.string().optional(),
-  discount: z.coerce.number().min(0).default(0),
-  notes: z.string().optional(),
-})
-type SellFormData = z.infer<typeof sellSchema>
-
-function SellDialog({ product, onClose }: { product: Product; onClose: () => void }) {
-  const sell = useSellProduct()
-  const { data: customers } = useCustomers()
-
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<SellFormData>({
-    resolver: zodResolver(sellSchema),
-    defaultValues: { quantity: 1, discount: 0 },
-  })
-
-  const qty = watch('quantity') || 0
-  const disc = watch('discount') || 0
-  const total = Math.max(0, product.price * qty - Math.round(disc * 100))
-
-  async function onSell(data: SellFormData) {
-    try {
-      await sell.mutateAsync({
-        productId: product.id,
-        customerId: data.customerId || null,
-        quantity: data.quantity,
-        discount: Math.round((data.discount || 0) * 100),
-        notes: data.notes || null,
-      })
-      toast.success('Venda registrada com sucesso')
-      onClose()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao registrar venda')
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit(onSell)} className="space-y-4">
-      <div className="rounded-lg border bg-muted/30 p-4">
-        <p className="font-semibold">{product.name}</p>
-        <p className="text-sm text-muted-foreground">
-          {product.brand ? `${product.brand} · ` : ''}
-          Preço: {formatCurrency(product.price)} · Estoque: {product.stock} {product.unit}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label>Quantidade *</Label>
-          <Input {...register('quantity')} type="number" min={1} max={product.stock} />
-          {errors.quantity && <p className="text-xs text-destructive">{errors.quantity.message}</p>}
-        </div>
-        <div className="space-y-2">
-          <Label>Desconto (R$)</Label>
-          <Input {...register('discount')} type="number" min={0} step={0.01} placeholder="0,00" />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Cliente (opcional)</Label>
-        <select {...register('customerId')} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-          <option value="">Venda avulsa</option>
-          {customers?.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Observações</Label>
-        <Input {...register('notes')} placeholder="Observação opcional…" />
-      </div>
-
-      <div className="flex items-center justify-between rounded-lg border bg-primary/5 px-4 py-3">
-        <span className="font-medium">Total</span>
-        <span className="text-lg font-bold text-primary">{formatCurrency(total)}</span>
-      </div>
-
-      <div className="flex justify-end gap-2 border-t pt-3">
-        <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-        <Button type="submit" disabled={sell.isPending}>
-          {sell.isPending ? 'Registrando…' : 'Confirmar Venda'}
         </Button>
       </div>
     </form>
@@ -681,7 +590,7 @@ function ProductsPageContent() {
             Registrar Venda
           </DialogTitle>
           <div className="mt-4">
-            <SellDialog product={selling} onClose={() => setSelling(null)} />
+            <SellProductForm defaultProduct={selling} onClose={() => setSelling(null)} />
           </div>
         </Dialog>
       )}

@@ -59,7 +59,11 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 4. `ai-engineering/projects/aesthera/context/architecture.md` — padrões e estrutura de pastas
 5. `ai-engineering/projects/aesthera/features/{módulo-relevante}.md` — spec do módulo sendo implementado
 6. `ai-engineering/projects/aesthera/PLAN.md` — estado atual do plano de desenvolvimento
-7. `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` — checklist acumulado de padrões aprendidos em code reviews anteriores (**leia sempre — aplique todos os itens antes de escrever qualquer linha de código**)
+7. `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` — **PRÉ-REQUISITO BLOQUEANTE: leia este arquivo ANTES de escrever qualquer linha de código**. Após ler, liste explicitamente quais padrões se aplicam à tarefa atual. Só então comece a implementar. Ignorar este passo causou reincidências de anti-padrões documentados em PRs posteriores.
+8. **Se a tarefa envolver qualquer arquivo `.tsx`** → `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md` — **PRÉ-REQUISITO BLOQUEANTE para todo trabalho frontend**: leia antes de escrever qualquer código de UI. Liste quais padrões visuais/UX se aplicam antes de começar.
+9. **Se a tarefa envolver criação, alteração ou remoção de tela** → `aesthera/docs/screen-mapping.md` — mapeamento canônico de todas as telas do sistema
+
+> ⛔ **Gate obrigatório**: antes de passar para a implementação, registre (mentalmente ou em comentário) quais itens dos learnings se aplicam à tarefa. Se não houver nenhum item aplicável, registre explicitamente: "Nenhum padrão dos learnings se aplica a esta tarefa — motivo: {razão}". Silêncio não é verificação.
 
 ---
 
@@ -118,12 +122,18 @@ Este agente executa **uma vez por etapa** e aguarda validação explícita do us
 
 1. **Validar ou atualizar** a spec em `ai-engineering/projects/aesthera/features/{módulo}.md` antes de codificar
 2. **Mapear zonas estáveis** (ver seção "Mapeamento de Zona Estável" abaixo) — obrigatório quando a task toca arquivos existentes
-3. **Implementar** a mudança em `aesthera/`
-4. **Executar Checklist de Conformidade UI** (ver seção abaixo) — obrigatório para qualquer arquivo `.tsx` criado ou modificado
-5. **Descrever os testes necessários** e acionar o `test-guardian` (ver seção "Delegação de Testes ao Test Guardian" abaixo)
-6. **Executar auto-atualização** (ver seção abaixo)
+3. **⛔ Scan PRÉ-CÓDIGO de padrões treinados** — antes de escrever qualquer linha, percorra os learnings relevantes e liste quais padrões se aplicam:
+   - Sempre: `code-review-learnings.md` — backend + frontend
+   - Se envolve `.tsx`: `ux-reviewer-learnings.md` — visuais e componentes
+   - Para cada seção relevante ao que será implementado (filtros? modais? status badges? formulários?), confirme: "Sei como este padrão deve ser implementado corretamente."
+   - **Só avance para o passo 4 após confirmar o scan.** Implementar sem fazer o scan é a causa raiz de reincidências de anti-padrões documentados.
+4. **Implementar** a mudança em `aesthera/` — aplicando ativamente os padrões identificados no passo 3
+5. **Verificar conformidade com padrões treinados** (ver seção "⚠️ Padrões Treinados" abaixo) — gate de compliance pós-implementação para confirmar que nada escapou
+6. **Executar Checklist de Conformidade UI** (ver seção abaixo) — obrigatório para qualquer arquivo `.tsx` criado ou modificado
+7. **Descrever os testes necessários** e acionar o `test-guardian` (ver seção "Delegação de Testes ao Test Guardian" abaixo)
+8. **Executar auto-atualização** (ver seção abaixo)
 
-> ⚠️ Nunca inverter essa ordem. Código sempre segue a documentação. Cobertura de testes **nunca** é opcional — mas quem cria e altera testes é o `test-guardian`, não este agente.
+> ⚠️ O passo 3 (scan pré-código) é o mais crítico — é a diferença entre prevenir um anti-padrão e encontrá-lo no code review. Anti-padrão já catalogado que reaparece em PR indica que o scan pré-código não foi executado.
 
 ---
 
@@ -168,6 +178,42 @@ aesthera/apps/web/app/(dashboard)/{módulo}/
   [id]/page.tsx              ← detalhe/edição
   _components/               ← componentes específicos desta rota
 ```
+
+---
+
+## ⚠️ Padrões Treinados — Requisitos de Implementação (INEGOCIÁVEL)
+
+**Padrões treinados não são sugestões — são requisitos tão obrigatórios quanto a spec da feature.**
+
+Cada item nos arquivos de learnings representa um erro real, identificado e catalogado para nunca se repetir. Ignorar um padrão treinado é tão grave quanto ignorar uma regra de negócio da issue.
+
+### Gate de compliance obrigatório antes de qualquer commit
+
+Antes de concluir qualquer tarefa ou criar qualquer commit, execute a verificação abaixo. Não há exceção.
+
+**Para tarefas com backend:**
+- [ ] Percorri cada item da seção "Backend" do `code-review-learnings.md` e verifiquei no código produzido?
+- [ ] Segurança e multi-tenancy: `clinicId` em todos os `WHERE`, `roleGuard` em todos os endpoints, sem `_clinicId`?
+- [ ] Transações: operações atômicas usam `tx` propagado para todos os services envolvidos?
+- [ ] Webhooks: falha explícita quando secret não está configurado (fail-fast, nunca skip silencioso)?
+
+**Para tarefas com frontend (qualquer arquivo `.tsx`):**
+- [ ] Percorri cada item da seção "Frontend" do `code-review-learnings.md`?
+- [ ] Percorri cada item do `ux-reviewer-learnings.md`? (seções: Cores e Dark Mode, Empty States, Filtros e Barras de Busca, Listagens e Tabelas, Formulários, Textos)
+- [ ] Constantes de cor/status estão em `lib/status-colors.ts` — não definidas inline no arquivo de tela?
+- [ ] Dark mode: opacidade mínima `/40` em todos os badges? Texto branco sobre amber/orange tem contraste ≥ 4.5:1?
+- [ ] Filtros: `<ComboboxSearch>` para entidades da API, pills para status fixo, legenda de filtros ativos, botão "Restaurar padrão"?
+- [ ] Listagens: `<DataPagination>` + `usePaginatedQuery` desde a primeira entrega? Busca textual server-side?
+- [ ] Formulários: `disabled={isPending || !isValid}` — nunca `&& isDirty` em cadastro novo?
+- [ ] Todo texto visível em PT-BR — nenhum termo em inglês na interface?
+
+### Regra de não-omissão
+
+- Se um item se aplica ao código → seguir. Não há exceção.
+- Se um item claramente não se aplica → registrar mentalmente: "não se aplica porque [razão]". Silêncio não equivale a verificação.
+- Se detectar violação já existente no arquivo que está editando → reportar ao usuário, não silenciar.
+
+> ❌ **Anti-padrão proibido**: implementar a feature técnica corretamente mas ignorar os padrões visuais/de UX treinados, deixando para o UX Reviewer encontrar no code review. O custo de corrigir depois é maior que corrigir antes.
 
 ---
 
@@ -367,6 +413,22 @@ Após **toda** ação que produza saída no projeto, você deve:
 4. Se a feature não existia no PLAN.md, adicioná-la na fase correspondente
 
 > ⚠️ Nunca conclua uma tarefa sem atualizar o PLAN.md. Integridade do plano é obrigatória.
+
+### Manutenção do Mapeamento de Telas (obrigatória quando houver alteração de tela)
+
+Se a tarefa envolveu **criação, alteração ou remoção de qualquer tela** (página, rota, formulário, modal, aba, ação disponível), você **deve também**:
+
+1. Abrir `aesthera/docs/screen-mapping.md`
+2. Aplicar a atualização correspondente:
+   - **Nova tela criada** → adicionar entrada completa (rota, tipo, campos, ações)
+   - **Tela alterada** → atualizar a seção correspondente (campos, abas, ações disponíveis)
+   - **Tela removida** → remover a entrada e o item do índice
+3. Adicionar linha no **Histórico de Alterações** ao final do arquivo:
+   ```
+   | {DATA} | {Tela} | {Tipo de mudança} | Implementador |
+   ```
+
+> ⛔ Nenhuma tarefa que toque em telas está concluída sem que `aesthera/docs/screen-mapping.md` esteja atualizado.
 
 ---
 

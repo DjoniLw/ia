@@ -1,20 +1,16 @@
 'use client'
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { Info, Loader2, Package, Plus, Search, ShoppingCart } from 'lucide-react'
 import { useState, useEffect, Suspense } from 'react'
+import { Info, Loader2, Package, Plus, Search, ShoppingCart } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { toast } from 'sonner'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { type ProductSale, useCustomers, useProductSales, useProducts, useSellProduct } from '@/lib/hooks/use-resources'
+import { useProductSales } from '@/lib/hooks/use-resources'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_BADGE_COLORS } from '@/lib/status-colors'
+import { SellProductForm } from '@/components/sell-product-form'
 
 // ──── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,171 +22,6 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-const PAYMENT_LABELS: Record<string, string> = {
-  cash: 'Dinheiro',
-  pix: 'PIX',
-  card: 'Cartão',
-  transfer: 'Transferência',
-}
-
-const PAYMENT_BADGE_COLORS: Record<string, string> = {
-  cash:     'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  pix:      'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  card:     'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  transfer: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-}
-
-// ──── New Sale Schema ──────────────────────────────────────────────────────────
-
-const saleSchema = z.object({
-  productId: z.string().min(1, 'Selecione um produto'),
-  customerId: z.string().optional(),
-  quantity: z.coerce.number().int().positive('Quantidade deve ser maior que 0'),
-  discount: z.coerce.number().min(0).default(0),
-  paymentMethod: z.enum(['cash', 'pix', 'card', 'transfer']).optional(),
-  notes: z.string().optional(),
-})
-type SaleFormData = z.infer<typeof saleSchema>
-
-// ──── New Sale Form ────────────────────────────────────────────────────────────
-
-function NewSaleForm({ onClose }: { onClose: () => void }) {
-  const { data: products } = useProducts({ active: 'true', limit: '100' })
-  const { data: customers } = useCustomers()
-  const sell = useSellProduct()
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useForm<SaleFormData>({
-    resolver: zodResolver(saleSchema),
-    defaultValues: { quantity: 1, discount: 0 },
-  })
-
-  const selectedProductId = watch('productId')
-  const quantity = watch('quantity') || 1
-  const discount = watch('discount') || 0
-
-  const selectedProduct = products?.items.find((p) => p.id === selectedProductId)
-  const unitPrice = selectedProduct?.price ?? 0
-  const total = Math.max(0, unitPrice * quantity - Math.round((discount || 0) * 100))
-
-  async function onSubmit(data: SaleFormData) {
-    try {
-      await sell.mutateAsync({
-        productId: data.productId,
-        customerId: data.customerId || null,
-        quantity: data.quantity,
-        discount: Math.min(Math.round((data.discount || 0) * 100), unitPrice * data.quantity),
-        paymentMethod: data.paymentMethod || null,
-        notes: data.notes || null,
-      })
-      toast.success('Venda registrada com sucesso!')
-      onClose()
-    } catch {
-      toast.error('Erro ao registrar venda.')
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Produto *</Label>
-        <select
-          {...register('productId')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="">Selecione um produto…</option>
-          {products?.items.map((p) => (
-            <option key={p.id} value={p.id} disabled={p.stock <= 0}>
-              {p.name} — {formatCurrency(p.price)} — Estoque: {p.stock} {p.unit}
-              {p.stock <= 0 ? ' (sem estoque)' : ''}
-            </option>
-          ))}
-        </select>
-        {errors.productId && <p className="text-xs text-red-500">{errors.productId.message}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label>Quantidade *</Label>
-          <Input
-            type="number"
-            min="1"
-            max={selectedProduct?.stock ?? 999}
-            {...register('quantity')}
-          />
-          {errors.quantity && <p className="text-xs text-red-500">{errors.quantity.message}</p>}
-        </div>
-        <div className="space-y-2">
-          <Label>Desconto (R$)</Label>
-          <Input type="number" min="0" step="0.01" {...register('discount')} />
-          {errors.discount && <p className="text-xs text-destructive">{errors.discount.message}</p>}
-        </div>
-      </div>
-
-      {selectedProduct && (
-        <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span>{formatCurrency(unitPrice * quantity)}</span>
-          </div>
-          {discount > 0 && (
-            <div className="flex justify-between text-red-600">
-              <span>Desconto</span>
-              <span>- {formatCurrency(Math.round((discount || 0) * 100))}</span>
-            </div>
-          )}
-          <div className="mt-1 flex justify-between border-t pt-1 font-semibold">
-            <span>Total</span>
-            <span className="text-green-600">{formatCurrency(total)}</span>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-2">
-        <Label>Cliente (opcional)</Label>
-        <select
-          {...register('customerId')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="">Sem cliente vinculado</option>
-          {customers?.items.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Forma de pagamento</Label>
-        <select
-          {...register('paymentMethod')}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="">Não informado</option>
-          <option value="cash">Dinheiro</option>
-          <option value="pix">PIX</option>
-          <option value="card">Cartão</option>
-          <option value="transfer">Transferência</option>
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Observações</Label>
-        <Input {...register('notes')} placeholder="Observações sobre a venda…" />
-      </div>
-
-      <div className="flex justify-end gap-2 border-t pt-4">
-        <Button type="button" variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-        <Button type="submit" size="sm" disabled={isSubmitting || sell.isPending}>
-          {(isSubmitting || sell.isPending) ? 'Registrando…' : 'Registrar venda'}
-        </Button>
-      </div>
-    </form>
-  )
-}
 
 // ──── Page ─────────────────────────────────────────────────────────────────────
 
@@ -207,6 +38,7 @@ function SalesPageContent() {
   const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
   const [from, setFrom] = useState(searchParams.get('from') ?? defaultFrom)
   const [to, setTo] = useState(searchParams.get('to') ?? defaultTo)
+  const [paymentFilter, setPaymentFilter] = usePersistedFilter('aesthera-filter-sales-payment', searchParams.get('paymentMethod'), '')
 
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(search); resetPage() }, 250)
@@ -219,16 +51,18 @@ function SalesPageContent() {
     from !== defaultFrom ? p.set('from', from) : p.delete('from')
     to !== defaultTo ? p.set('to', to) : p.delete('to')
     search ? p.set('search', search) : p.delete('search')
+    paymentFilter ? p.set('paymentMethod', paymentFilter) : p.delete('paymentMethod')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, searchParams, from, to, search, defaultFrom, defaultTo])
+  }, [router, searchParams, from, to, search, paymentFilter, defaultFrom, defaultTo])
 
-  const isDefaultFilters = from === defaultFrom && to === defaultTo && search === ''
+  const isDefaultFilters = from === defaultFrom && to === defaultTo && search === '' && paymentFilter === ''
 
   function resetFilters() {
     setFrom(defaultFrom)
     setTo(defaultTo)
     setSearch('')
     setDebouncedSearch('')
+    setPaymentFilter('')
     resetPage()
   }
 
@@ -238,7 +72,32 @@ function SalesPageContent() {
     const toDate = new Date(to + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
     parts.push(`${fromDate} a ${toDate}`)
     if (debouncedSearch) parts.push(`busca: ${debouncedSearch}`)
+    if (paymentFilter) parts.push(`pagamento: ${PAYMENT_METHOD_LABELS[paymentFilter] ?? paymentFilter}`)
     return parts.join(' · ')
+  }
+
+  function applyPreset(preset: number | 'today' | '6months' | '1year') {
+    const now = new Date()
+    const toDate = now.toISOString().slice(0, 10)
+    let fromDate: string
+    if (preset === 'today') {
+      fromDate = toDate
+    } else if (preset === '6months') {
+      const d = new Date(now)
+      d.setMonth(d.getMonth() - 6)
+      fromDate = d.toISOString().slice(0, 10)
+    } else if (preset === '1year') {
+      const d = new Date(now)
+      d.setFullYear(d.getFullYear() - 1)
+      fromDate = d.toISOString().slice(0, 10)
+    } else {
+      const d = new Date(now)
+      d.setDate(d.getDate() - preset)
+      fromDate = d.toISOString().slice(0, 10)
+    }
+    setFrom(fromDate)
+    setTo(toDate)
+    resetPage()
   }
 
   const params: Record<string, string> = {
@@ -246,6 +105,7 @@ function SalesPageContent() {
     from,
     to,
     ...(debouncedSearch && { search: debouncedSearch }),
+    ...(paymentFilter && { paymentMethod: paymentFilter }),
   }
 
   const { data, isLoading } = useProductSales(params)
@@ -282,26 +142,33 @@ function SalesPageContent() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filtros */}
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">De</label>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => { setFrom(e.target.value); resetPage() }}
-              className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Até</label>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => { setTo(e.target.value); resetPage() }}
-              className="rounded-lg border bg-card px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+
+        {/* Linha 1: pills por forma de pagamento + busca textual */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 flex-wrap">
+            {([
+              { value: '', label: 'Todos' },
+              { value: 'cash', label: 'Dinheiro' },
+              { value: 'pix', label: 'PIX' },
+              { value: 'card', label: 'Cartão' },
+              { value: 'transfer', label: 'Transferência' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => { setPaymentFilter(opt.value); resetPage() }}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  paymentFilter === opt.value
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                ].join(' ')}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -312,6 +179,48 @@ function SalesPageContent() {
               onChange={(e) => { setSearch(e.target.value); resetPage() }}
               className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
+          </div>
+        </div>
+
+        {/* Linha 2: presets de data + inputs De/Até */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex gap-1 flex-wrap">
+            {([
+              { label: 'Hoje', preset: 'today' },
+              { label: '7 dias', preset: 7 },
+              { label: '30 dias', preset: 30 },
+              { label: '6 meses', preset: '6months' },
+              { label: '1 ano', preset: '1year' },
+            ] as const).map(({ label, preset }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => applyPreset(preset)}
+                className="rounded-full border border-input bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-0.5">
+              <label className="text-xs text-muted-foreground">De</label>
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => { setFrom(e.target.value); resetPage() }}
+                className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-xs text-muted-foreground">Até</label>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => { setTo(e.target.value); resetPage() }}
+                className="h-8 rounded-lg border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
         </div>
 
@@ -373,10 +282,14 @@ function SalesPageContent() {
                       {sale.quantity} {sale.product.unit}
                     </td>
                     <td className="hidden sm:table-cell px-5 py-3">
-                      {sale.paymentMethod ? (
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_BADGE_COLORS[sale.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}>
-                          {PAYMENT_LABELS[sale.paymentMethod] ?? sale.paymentMethod}
-                        </span>
+                      {sale.paymentMethods.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {sale.paymentMethods.map((m) => (
+                            <span key={m} className={`rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[m] ?? 'bg-muted text-muted-foreground'}`}>
+                              {PAYMENT_METHOD_LABELS[m] ?? m}
+                            </span>
+                          ))}
+                        </div>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
@@ -411,7 +324,7 @@ function SalesPageContent() {
             Nova Venda
           </DialogTitle>
           <div className="mt-4">
-            <NewSaleForm onClose={() => setNewSale(false)} />
+            <SellProductForm onClose={() => setNewSale(false)} />
           </div>
         </Dialog>
       )}

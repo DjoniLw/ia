@@ -71,7 +71,7 @@ export class ProductsRepository {
           unitPrice,
           totalPrice,
           discount: data.discount ?? 0,
-          paymentMethod: data.paymentMethod,
+          paymentMethods: data.paymentMethods ?? [],
           notes: data.notes,
         },
         include: {
@@ -93,6 +93,7 @@ export class ProductsRepository {
       clinicId,
       ...(q.productId && { productId: q.productId }),
       ...(q.customerId && { customerId: q.customerId }),
+      ...(q.paymentMethod && { paymentMethods: { has: q.paymentMethod } }),
       ...(q.search && {
         OR: [
           { product: { name: { contains: q.search, mode: 'insensitive' as const } } },

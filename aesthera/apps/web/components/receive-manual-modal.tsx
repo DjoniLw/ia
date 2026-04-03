@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Minus, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import {
   type ManualReceiptPaymentMethod,
   type OverpaymentHandlingType,
 } from '@/lib/hooks/use-appointments'
+import { useValidatePromotion, useActivePromotionsForService } from '@/lib/hooks/use-promotions'
 import type { Billing } from '@/lib/hooks/use-appointments'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
@@ -158,13 +159,13 @@ function OverpaymentSection({ excedente, selected, onChange }: OverpaymentSectio
   ]
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 p-4 space-y-3">
+    <div className="rounded-lg border border-amber-300 bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/20 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-amber-800 dark:text-amber-400">
+        <span className="text-sm font-medium text-amber-900 dark:text-amber-400">
           ⚠️ Excedente de {formatCurrency(excedente)}
         </span>
       </div>
-      <p className="text-xs text-amber-700 dark:text-amber-500">O que fazer com o excedente?</p>
+      <p className="text-xs text-amber-800 dark:text-amber-500">O que fazer com o excedente?</p>
       <div className="space-y-2">
         {options.map((opt) => (
           <label
@@ -213,11 +214,82 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   const [overpaymentHandling, setOverpaymentHandling] =
     useState<OverpaymentHandlingType>('cash_change')
 
+  // Coupon state
+  const [couponInput, setCouponInput] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null)
+  const [autoApplied, setAutoApplied] = useState(false)
+  const validatePromotion = useValidatePromotion()
+
+  // Detect if billing already has a promotion locked at booking time
+  const hasLockedPromo = !!billing.lockedPromotionCode && !!billing.originalAmount
+
+  // Auto-detect active promotions for the service being billed, filtered by customer limit
+  // Skip when billing already has a locked promotion (avoid double-discount)
+  const serviceId = billing.appointment?.service?.id ?? ''
+  const customerId = billing.customer.id
+  const { data: servicePromotions } = useActivePromotionsForService(
+    serviceId,
+    customerId,
+    open && !!serviceId && !hasLockedPromo,
+  )
+  const specificPromotion = servicePromotions?.find(
+    (p) => p.applicableServiceIds.includes(serviceId)
+  ) ?? null
+  const universalPromotion = servicePromotions?.find(
+    (p) => p.applicableServiceIds.length === 0
+  ) ?? null
+  const suggestedPromotion = specificPromotion ?? universalPromotion
+  const isSpecificPromotion = !!specificPromotion
+
+  useEffect(() => {
+    // Nunca auto-aplicar quando a cobrança já tem promoção travada no agendamento
+    if (!suggestedPromotion || !isSpecificPromotion || appliedCoupon || autoApplied || !open || hasLockedPromo) return
+    setAutoApplied(true)
+    validatePromotion.mutateAsync({
+      code: suggestedPromotion.code,
+      billingAmount: billing.amount,
+      serviceIds: serviceId ? [serviceId] : [],
+      customerId,
+    }).then((r) => {
+      setAppliedCoupon({ code: suggestedPromotion.code, discountAmount: r.discountAmount })
+      setCouponInput(suggestedPromotion.code)
+    }).catch(() => {
+      // silently ignore — customer may see manual coupon field
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedPromotion, open])
+
   const receive = useCreateManualReceipt(billing.id)
 
   const totalPaid = lines.reduce((sum, l) => sum + parseCurrencyInput(l.amountStr), 0)
-  const diffCents = billing.amount - totalPaid
-  const excedente = totalPaid - billing.amount
+  // When billing has a locked promotion, billing.amount already reflects the discount
+  const effectiveAmount = hasLockedPromo
+    ? billing.amount
+    : billing.amount - (appliedCoupon?.discountAmount ?? 0)
+  const diffCents = effectiveAmount - totalPaid
+  const excedente = totalPaid - effectiveAmount
+
+  async function handleApplyCoupon() {
+    const code = couponInput.trim().toUpperCase()
+    if (!code) return
+    try {
+      const result = await validatePromotion.mutateAsync({
+        code,
+        billingAmount: billing.amount,
+        serviceIds: billing.appointment?.service?.id ? [billing.appointment.service.id] : [],
+        customerId: billing.customer.id,
+      })
+      setAppliedCoupon({ code, discountAmount: result.discountAmount })
+      toast.success(`Cupom aplicado! Desconto de ${formatCurrency(result.discountAmount)}`)
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(msg ?? 'Cupom inválido')
+      setAppliedCoupon(null)
+    }
+  }
 
   function addLine() {
     setLines((prev) => [
@@ -235,7 +307,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
   }
 
   const canConfirm =
-    totalPaid >= billing.amount &&
+    totalPaid >= effectiveAmount &&
     lines.every((l) => {
       if (parseCurrencyInput(l.amountStr) <= 0) return false
       if ((l.method === 'wallet_credit' || l.method === 'wallet_voucher') && !l.walletEntryId) return false
@@ -255,6 +327,8 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
           ...(l.walletEntryId ? { walletEntryId: l.walletEntryId } : {}),
         })),
         ...(excedente > 0 ? { overpaymentHandling: { type: overpaymentHandling } } : {}),
+        // Não enviar promotionCode quando billing já tem promoção travada (evita duplo desconto)
+        ...(appliedCoupon && !hasLockedPromo ? { promotionCode: appliedCoupon.code } : {}),
       })
 
       if (result.walletEntry) {
@@ -288,7 +362,7 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Serviço</span>
-          <span className="font-medium">{billing.appointment.service.name}</span>
+          <span className="font-medium">{billing.appointment?.service?.name ?? '—'}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Valor da cobrança</span>
@@ -327,11 +401,47 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
           </Button>
         </div>
 
+        {/* Promoção travada no agendamento */}
+        {hasLockedPromo && (
+          <div className="rounded-lg border p-3 space-y-1 text-sm border-green-300 bg-green-100 dark:border-green-800/60 dark:bg-green-950/40">
+            <div className="flex justify-between text-green-900 dark:text-green-300">
+              <span>Valor original</span>
+              <span>{formatCurrency(billing.originalAmount!)}</span>
+            </div>
+            <div className="flex justify-between font-medium text-green-700 dark:text-green-400">
+              <span className="flex items-center gap-1.5">
+                <Tag className="h-3 w-3 shrink-0" />
+                Promoção{' '}
+                <span className="font-mono font-semibold">{billing.lockedPromotionCode}</span>
+                <span className="text-xs font-normal text-green-600 dark:text-green-500">(garantida no agendamento)</span>
+              </span>
+              <span>- {formatCurrency(billing.originalAmount! - billing.amount)}</span>
+            </div>
+            <div className="border-t border-green-200 dark:border-green-800/50 pt-1 mt-1 flex justify-between font-semibold">
+              <span>Valor a pagar</span>
+              <span>{formatCurrency(billing.amount)}</span>
+            </div>
+          </div>
+        )}
+
         {/* Total & diff */}
-        <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-sm">
+        <div className={`rounded-lg border p-3 space-y-1 text-sm transition-colors ${appliedCoupon ? 'border-green-300 bg-green-100 dark:border-green-800/60 dark:bg-green-950/40' : 'bg-muted/20'}`}>
+          {appliedCoupon && (
+            <div className="flex justify-between text-green-900 dark:text-green-200">
+              <span>Valor original</span>
+              <span>{formatCurrency(billing.amount)}</span>
+            </div>
+          )}
+          {appliedCoupon && (
+            <div className="flex justify-between font-medium text-green-700 dark:text-green-400">
+              <span className="flex items-center gap-1.5"><Tag className="h-3 w-3 shrink-0" /> Desconto cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span></span>
+              <span className="font-semibold">- {formatCurrency(appliedCoupon.discountAmount)}</span>
+            </div>
+          )}
+          {appliedCoupon && <div className="border-t border-green-200 dark:border-green-800/50 pt-1 mt-1" />}
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Total informado</span>
-            <span className="font-semibold">{formatCurrency(totalPaid)}</span>
+            <span className={appliedCoupon ? 'text-green-900 dark:text-green-200' : 'text-muted-foreground'}>{appliedCoupon ? 'Valor a pagar' : 'Total informado'}</span>
+            <span className="font-semibold">{formatCurrency(appliedCoupon ? effectiveAmount : totalPaid)}</span>
           </div>
           {diffCents > 0 && (
             <div className="flex justify-between text-red-600">
@@ -354,6 +464,180 @@ export function ReceiveManualModal({ billing, open, onClose }: ReceiveManualModa
             selected={overpaymentHandling}
             onChange={setOverpaymentHandling}
           />
+        )}
+
+        {/* Coupon / Promotion Code — ocultado quando billing já tem promoção travada no agendamento */}
+        {!hasLockedPromo && (
+        <div>
+          {/* Promoção específica: aplicada automaticamente, com botão remover */}
+          {appliedCoupon && suggestedPromotion?.code === appliedCoupon.code && isSpecificPromotion && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-green-300 bg-green-100 px-3 py-2 text-xs dark:border-green-800/60 dark:bg-green-950/40">
+              <span className="flex items-center gap-1.5 text-green-800 dark:text-green-300">
+                <Check className="h-3.5 w-3.5 shrink-0" />
+                Promoção <span className="font-mono font-semibold">{appliedCoupon.code}</span> aplicada automaticamente —{' '}
+                {formatCurrency(appliedCoupon.discountAmount)} de desconto
+              </span>
+              <button
+                type="button"
+                onClick={() => { setAppliedCoupon(null); setCouponInput('') }}
+                className="shrink-0 text-green-700 hover:text-green-900 dark:text-green-400"
+                aria-label="Remover promoção"
+                title="Remover promoção"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Promoção universal disponível como opção de troca (quando específica está ativa) */}
+          {universalPromotion && appliedCoupon && isSpecificPromotion && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs dark:border-blue-700 dark:bg-blue-800">
+              <span className="flex items-center gap-1.5 text-white">
+                <Tag className="h-3 w-3 shrink-0" />
+                Promoção universal disponível:{' '}
+                <span className="font-mono font-semibold">{universalPromotion.code}</span>
+                {' — '}
+                {universalPromotion.discountType === 'PERCENTAGE'
+                  ? `${universalPromotion.discountValue}% de desconto`
+                  : `${formatCurrency(universalPromotion.discountValue)} de desconto`}
+              </span>
+              <button
+                type="button"
+                disabled={validatePromotion.isPending}
+                onClick={() => {
+                  setAppliedCoupon(null)
+                  setCouponInput(universalPromotion.code)
+                  void validatePromotion.mutateAsync({
+                    code: universalPromotion.code,
+                    billingAmount: billing.amount,
+                    serviceIds: serviceId ? [serviceId] : [],
+                    customerId,
+                  }).then((r) => {
+                    setAppliedCoupon({ code: universalPromotion.code, discountAmount: r.discountAmount })
+                    setCouponInput(universalPromotion.code)
+                  }).catch(() => toast.error('Não foi possível aplicar a promoção'))
+                }}
+                className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {validatePromotion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Usar esta'}
+              </button>
+            </div>
+          )}
+
+          {/* Promoção específica removida manualmente — sugestão para re-aplicar */}
+          {suggestedPromotion && isSpecificPromotion && !appliedCoupon && autoApplied && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs dark:border-blue-700 dark:bg-blue-800">
+              <span className="flex items-center gap-1.5 text-white">
+                <Tag className="h-3 w-3 shrink-0" />
+                Promoção disponível:{' '}
+                <span className="font-mono font-semibold">{suggestedPromotion.code}</span>
+                {' — '}
+                {suggestedPromotion.discountType === 'PERCENTAGE'
+                  ? `${suggestedPromotion.discountValue}% de desconto`
+                  : `${formatCurrency(suggestedPromotion.discountValue)} de desconto`}
+              </span>
+              <button
+                type="button"
+                disabled={validatePromotion.isPending}
+                onClick={() => {
+                  setCouponInput(suggestedPromotion.code)
+                  void validatePromotion.mutateAsync({
+                    code: suggestedPromotion.code,
+                    billingAmount: billing.amount,
+                    serviceIds: serviceId ? [serviceId] : [],
+                    customerId,
+                  }).then((r) => {
+                    setAppliedCoupon({ code: suggestedPromotion.code, discountAmount: r.discountAmount })
+                    toast.success(`Cupom aplicado! Desconto de ${formatCurrency(r.discountAmount)}`)
+                  }).catch(() => toast.error('Não foi possível aplicar a promoção'))
+                }}
+                className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {validatePromotion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
+              </button>
+            </div>
+          )}
+
+          {/* Promoção aberta (todos os serviços): apenas sugestão, aplicar manualmente */}
+          {suggestedPromotion && !isSpecificPromotion && !appliedCoupon && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-blue-700 bg-blue-600 px-3 py-2 text-xs dark:border-blue-700 dark:bg-blue-800">
+              <span className="flex items-center gap-1.5 text-white">
+                <Tag className="h-3 w-3 shrink-0" />
+                Promoção disponível:{' '}
+                <span className="font-mono font-semibold">{suggestedPromotion.code}</span>
+                {' — '}
+                {suggestedPromotion.discountType === 'PERCENTAGE'
+                  ? `${suggestedPromotion.discountValue}% de desconto`
+                  : `${formatCurrency(suggestedPromotion.discountValue)} de desconto`}
+              </span>
+              <button
+                type="button"
+                disabled={validatePromotion.isPending}
+                onClick={() => {
+                  setCouponInput(suggestedPromotion.code)
+                  void validatePromotion.mutateAsync({
+                    code: suggestedPromotion.code,
+                    billingAmount: billing.amount,
+                    serviceIds: serviceId ? [serviceId] : [],
+                    customerId,
+                  }).then((r) => {
+                    setAppliedCoupon({ code: suggestedPromotion.code, discountAmount: r.discountAmount })
+                    toast.success(`Cupom aplicado! Desconto de ${formatCurrency(r.discountAmount)}`)
+                  }).catch(() => toast.error('Não foi possível aplicar a promoção'))
+                }}
+                className="shrink-0 rounded-full border border-white/60 bg-white px-2.5 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {validatePromotion.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Aplicar'}
+              </button>
+            </div>
+          )}
+
+          <Label className="mb-1.5 block">Cupom de desconto</Label>
+
+          <div className="flex gap-2">
+            <Input
+              value={couponInput}
+              onChange={(e) => {
+                setCouponInput(e.target.value.toUpperCase())
+                if (appliedCoupon) setAppliedCoupon(null)
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleApplyCoupon() } }}
+              placeholder="CÓDIGO DO CUPOM"
+              className="h-9 flex-1 font-mono text-sm uppercase"
+              disabled={receive.isPending}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleApplyCoupon()}
+              disabled={!couponInput.trim() || validatePromotion.isPending || receive.isPending}
+              className="h-9 shrink-0"
+            >
+              {validatePromotion.isPending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Tag className="mr-1 h-3.5 w-3.5" />
+              )}
+              Aplicar
+            </Button>
+          </div>
+          {appliedCoupon && (
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-100 px-3 py-1.5 text-xs text-green-800 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-300">
+              <Check className="h-3.5 w-3.5 shrink-0" />
+              <span>Cupom <span className="font-mono font-semibold">{appliedCoupon.code}</span> — {formatCurrency(appliedCoupon.discountAmount)} de desconto</span>
+              <button
+                type="button"
+                onClick={() => { setAppliedCoupon(null); setCouponInput('') }}
+                className="ml-auto text-green-700 hover:text-green-900 dark:text-green-400"
+                aria-label="Remover cupom"
+                title="Remover cupom"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
         )}
 
         {/* Notes */}

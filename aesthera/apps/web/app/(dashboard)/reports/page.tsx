@@ -76,10 +76,13 @@ export default function ReportsPage() {
     const sorted = [...byProduct.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 10)
 
     const byPayment = new Map<string, number>()
+    const methodLabels: Record<string, string> = { cash: 'Dinheiro', pix: 'PIX', card: 'Cartão', transfer: 'Transferência' }
     sales.forEach((s) => {
-      const method = s.paymentMethod ?? 'Não informado'
-      const label = { cash: 'Dinheiro', pix: 'PIX', card: 'Cartão', transfer: 'Transferência' }[method] ?? method
-      byPayment.set(label, (byPayment.get(label) ?? 0) + s.totalPrice)
+      const methods = s.paymentMethods.length > 0 ? s.paymentMethods : ['Não informado']
+      methods.forEach((m) => {
+        const label = methodLabels[m] ?? m
+        byPayment.set(label, (byPayment.get(label) ?? 0) + s.totalPrice)
+      })
     })
     const paymentChart = [...byPayment.entries()].map(([name, value]) => ({ name, value }))
 

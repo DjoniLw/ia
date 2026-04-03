@@ -12,6 +12,7 @@ import type {
 import { AppointmentsRepository } from './appointments.repository'
 import { PackagesRepository } from '../packages/packages.repository'
 import { BillingService } from '../billing/billing.service'
+import { PromotionsRepository } from '../promotions/promotions.repository'
 
 // HH:MM → minutes from midnight
 function timeToMinutes(t: string): number {
@@ -39,6 +40,7 @@ export class AppointmentsService {
   private repo = new AppointmentsRepository()
   private pkgRepo = new PackagesRepository()
   private billingService = new BillingService()
+  private promotionsRepo = new PromotionsRepository()
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
 
@@ -175,7 +177,39 @@ export class AppointmentsService {
         }
 
         if (dto.packageSessionId) {
-          await this.pkgRepo.linkSession(dto.packageSessionId, appointment.id)
+          await this.validateAndLinkPackageSession(
+            clinicId,
+            dto.packageSessionId,
+            appointment.id,
+            serviceIds,
+          )
+        }
+
+        // Trava o desconto no agendamento para promoções específicas de serviço
+        const promos = await this.promotionsRepo.findActiveForService(clinicId, primaryServiceId)
+        const specificPromo = promos.find((p) => p.applicableServiceIds.length > 0) ?? null
+        if (specificPromo) {
+          const discount =
+            specificPromo.discountType === 'PERCENTAGE'
+              ? Math.floor((totalPrice * specificPromo.discountValue) / 100)
+              : Math.min(specificPromo.discountValue, totalPrice)
+          const dueDate = new Date(scheduledDate)
+          dueDate.setUTCDate(dueDate.getUTCDate() + 3)
+          await tx.billing.create({
+            data: {
+              clinicId,
+              customerId: appointment.customerId,
+              appointmentId: appointment.id,
+              amount: totalPrice - discount,
+              originalAmount: totalPrice,
+              lockedPromotionCode: specificPromo.code,
+              status: 'pending',
+              sourceType: 'APPOINTMENT',
+              paymentToken: crypto.randomUUID(),
+              paymentMethods: [],
+              dueDate,
+            },
+          })
         }
 
         return this.repo.findById(clinicId, appointment.id)
@@ -248,11 +282,94 @@ export class AppointmentsService {
       }
 
       if (dto.packageSessionId) {
-        await this.pkgRepo.linkSession(dto.packageSessionId, appointment.id)
+        await this.validateAndLinkPackageSession(
+          clinicId,
+          dto.packageSessionId,
+          appointment.id,
+          [serviceId],
+        )
+      }
+
+      // Trava o desconto no agendamento para promoções específicas de serviço
+      const promos = await this.promotionsRepo.findActiveForService(clinicId, serviceId)
+      const specificPromo = promos.find((p) => p.applicableServiceIds.length > 0) ?? null
+      if (specificPromo) {
+        const svcPrice = dto.price ?? service.price
+        const discount =
+          specificPromo.discountType === 'PERCENTAGE'
+            ? Math.floor((svcPrice * specificPromo.discountValue) / 100)
+            : Math.min(specificPromo.discountValue, svcPrice)
+        const dueDate = new Date(scheduledDate)
+        dueDate.setUTCDate(dueDate.getUTCDate() + 3)
+        await tx.billing.create({
+          data: {
+            clinicId,
+            customerId: appointment.customerId,
+            appointmentId: appointment.id,
+            amount: svcPrice - discount,
+            originalAmount: svcPrice,
+            lockedPromotionCode: specificPromo.code,
+            status: 'pending',
+            sourceType: 'APPOINTMENT',
+            paymentToken: crypto.randomUUID(),
+            paymentMethods: [],
+            dueDate,
+          },
+        })
       }
 
       return appointment
     })
+  }
+
+  /**
+   * Validates a package session before linking it to an appointment (RN-S02).
+   * Throws descriptive errors for each failure condition.
+   */
+  private async validateAndLinkPackageSession(
+    clinicId: string,
+    sessionId: string,
+    appointmentId: string,
+    serviceIds: string[],
+  ) {
+    const session = await this.pkgRepo.findSessionById(clinicId, sessionId)
+
+    if (!session || session.clinicId !== clinicId) {
+      throw new NotFoundError('CustomerPackageSession')
+    }
+
+    if (session.status === 'AGENDADO') {
+      throw new AppError('Sessão já está reservada para outro agendamento', 409, 'SESSION_ALREADY_RESERVED')
+    }
+
+    if (session.status === 'FINALIZADO') {
+      throw new AppError('Sessão já foi utilizada', 400, 'SESSION_ALREADY_REDEEMED')
+    }
+
+    if (session.status === 'EXPIRADO') {
+      throw new AppError('Sessão expirada', 400, 'PACKAGE_EXPIRED')
+    }
+
+    if (session.status !== 'ABERTO') {
+      throw new AppError('Sessão não está disponível', 400, 'PACKAGE_NO_SESSIONS_AVAILABLE')
+    }
+
+    // Check package expiry
+    const cp = await this.pkgRepo.findCustomerPackageById(clinicId, session.customerPackageId)
+    if (cp?.expiresAt && cp.expiresAt < new Date()) {
+      throw new AppError('Pacote expirado', 400, 'PACKAGE_EXPIRED')
+    }
+
+    // Validate serviceId matches one of the appointment services
+    if (!serviceIds.includes(session.serviceId)) {
+      throw new AppError(
+        'Sessão do pacote não é compatível com o serviço do agendamento',
+        400,
+        'SESSION_SERVICE_MISMATCH',
+      )
+    }
+
+    await this.pkgRepo.linkSession(sessionId, appointmentId)
   }
 
   async update(clinicId: string, id: string, dto: UpdateAppointmentDto) {
@@ -343,6 +460,13 @@ export class AppointmentsService {
       return completed
     }
 
+    // Se já foi criado um billing pending no momento do agendamento (promoção travada),
+    // não cria um novo — o recebimento ocorre normalmente pelo modal existente
+    const existingBilling = await prisma.billing.findUnique({ where: { appointmentId: id } })
+    if (existingBilling && existingBilling.status === 'pending') {
+      return completed
+    }
+
     // If multi-service appointment, compute total price from service items
     const serviceItems = completed.serviceItems
     const billingPrice =
@@ -370,6 +494,15 @@ export class AppointmentsService {
     const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)
     if (linkedSession) {
       await this.pkgRepo.unlinkSession(linkedSession.id)
+    }
+
+    // Cancela billing pending que foi criado com o preço travado no agendamento
+    const lockedBilling = await prisma.billing.findUnique({ where: { appointmentId: id } })
+    if (lockedBilling && lockedBilling.status === 'pending' && lockedBilling.lockedPromotionCode) {
+      await prisma.billing.update({
+        where: { id: lockedBilling.id },
+        data: { status: 'cancelled', cancelledAt: new Date() },
+      })
     }
 
     return this.repo.transition(clinicId, id, 'cancelled', {

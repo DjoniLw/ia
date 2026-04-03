@@ -1,13 +1,18 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search } from 'lucide-react'
+import { Plus, Tag, Loader2, Pencil, ChevronDown, ChevronUp, Info, Search, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import { MultiCombobox } from '@/components/ui/multi-combobox'
+import type { ComboboxItem } from '@/components/ui/combobox-search'
 import { DataPagination } from '@/components/ui/data-pagination'
+import { PROMOTION_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
+import { useServices, useProducts, type Service, type Product } from '@/lib/hooks/use-resources'
 import {
   type CreatePromotionInput,
   type Promotion,
@@ -15,6 +20,7 @@ import {
   type UpdatePromotionInput,
   useCreatePromotion,
   usePromotions,
+  useTogglePromotion,
   useUpdatePromotion,
 } from '@/lib/hooks/use-promotions'
 
@@ -33,12 +39,6 @@ const STATUS_LABEL: Record<PromotionStatus, string> = {
   active: 'Ativo',
   inactive: 'Inativo',
   expired: 'Expirado',
-}
-
-const STATUS_COLOR: Record<PromotionStatus, string> = {
-  active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-  inactive: 'bg-muted text-muted-foreground',
-  expired: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 }
 
 // ──── Create / Edit Modal ──────────────────────────────────────────────────────
@@ -61,9 +61,14 @@ function PromotionModal({
     editing?.discountType ?? 'PERCENTAGE',
   )
   const [discountValue, setDiscountValue] = useState(
-    editing ? String(editing.discountValue) : '',
+    editing
+      ? String(editing.discountType === 'FIXED' ? editing.discountValue / 100 : editing.discountValue)
+      : '',
   )
   const [maxUses, setMaxUses] = useState(editing?.maxUses != null ? String(editing.maxUses) : '')
+  const [maxUsesPerCustomer, setMaxUsesPerCustomer] = useState(
+    editing?.maxUsesPerCustomer != null ? String(editing.maxUsesPerCustomer) : '',
+  )
   const [minAmount, setMinAmount] = useState(
     editing?.minAmount != null ? String(editing.minAmount / 100) : '',
   )
@@ -72,11 +77,53 @@ function PromotionModal({
   )
   const [validUntil, setValidUntil] = useState(editing?.validUntil?.slice(0, 10) ?? '')
   const [status, setStatus] = useState<PromotionStatus>(editing?.status ?? 'active')
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(editing?.applicableServiceIds ?? [])
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>(editing?.applicableProductIds ?? [])
+
+  const { data: servicesData } = useServices({ active: 'true', limit: '200' })
+  const { data: productsData } = useProducts({ active: 'true', limit: '200' })
+  const allServices: Service[] = servicesData?.items ?? []
+  const allProducts: Product[] = productsData?.items ?? []
+
+  const serviceItems = useMemo<ComboboxItem[]>(
+    () => allServices.map((s) => ({ value: s.id, label: s.name })),
+    [allServices],
+  )
+
+  const productItems = useMemo<ComboboxItem[]>(
+    () => allProducts.map((p) => ({ value: p.id, label: p.name })),
+    [allProducts],
+  )
 
   const createMutation = useCreatePromotion()
   const updateMutation = useUpdatePromotion(editing?.id ?? '')
 
   const isPending = createMutation.isPending || updateMutation.isPending
+
+  const isDirty = useMemo(() => {
+    if (!editing) {
+      return (
+        name !== '' || code !== '' || description !== '' ||
+        discountValue !== '' || maxUses !== '' || maxUsesPerCustomer !== '' ||
+        minAmount !== '' || validUntil !== '' ||
+        selectedServiceIds.length > 0 || selectedProductIds.length > 0 ||
+        validFrom !== today
+      )
+    }
+    return (
+      name !== (editing.name ?? '') ||
+      description !== (editing.description ?? '') ||
+      discountType !== (editing.discountType ?? 'PERCENTAGE') ||
+      discountValue !== String(editing.discountType === 'FIXED' ? (editing.discountValue ?? 0) / 100 : (editing.discountValue ?? '')) ||
+      maxUses !== (editing.maxUses != null ? String(editing.maxUses) : '') ||
+      maxUsesPerCustomer !== (editing.maxUsesPerCustomer != null ? String(editing.maxUsesPerCustomer) : '') ||
+      minAmount !== (editing.minAmount != null ? String(editing.minAmount / 100) : '') ||
+      validUntil !== (editing.validUntil?.slice(0, 10) ?? '') ||
+      status !== (editing.status ?? 'active') ||
+      JSON.stringify(selectedServiceIds) !== JSON.stringify(editing.applicableServiceIds ?? []) ||
+      JSON.stringify(selectedProductIds) !== JSON.stringify(editing.applicableProductIds ?? [])
+    )
+  }, [editing, name, code, description, discountType, discountValue, maxUses, maxUsesPerCustomer, minAmount, validFrom, validUntil, status, selectedServiceIds, selectedProductIds, today])
 
   if (!open) return null
 
@@ -88,14 +135,25 @@ function PromotionModal({
       return
     }
 
+    if (validUntil && validFrom && validUntil < validFrom) {
+      toast.error('"Válido até" não pode ser anterior a "Válido de"')
+      return
+    }
+
     try {
       if (editing) {
         const dto: UpdatePromotionInput = {
           name: name.trim() || undefined,
           description: description.trim() || undefined,
           status,
+          discountType,
+          discountValue: discountType === 'FIXED' ? Math.round(Number(discountValue) * 100) : Number(discountValue),
           maxUses: maxUses ? Number(maxUses) : null,
+          maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
+          minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
           validUntil: validUntil || null,
+          applicableServiceIds: selectedServiceIds,
+          applicableProductIds: selectedProductIds,
         }
         await updateMutation.mutateAsync(dto)
         toast.success('Promoção atualizada')
@@ -105,11 +163,14 @@ function PromotionModal({
           code: code.trim().toUpperCase(),
           description: description.trim() || undefined,
           discountType,
-          discountValue: Number(discountValue),
+          discountValue: discountType === 'FIXED' ? Math.round(Number(discountValue) * 100) : Number(discountValue),
           maxUses: maxUses ? Number(maxUses) : null,
+          maxUsesPerCustomer: maxUsesPerCustomer ? Number(maxUsesPerCustomer) : null,
           minAmount: minAmount ? Math.round(Number(minAmount) * 100) : null,
-          validFrom,
-          validUntil: validUntil || null,
+          applicableServiceIds: selectedServiceIds,
+          applicableProductIds: selectedProductIds,
+          validFrom: `${validFrom}T00:00:00.000Z`,
+          validUntil: validUntil ? `${validUntil}T23:59:59.999Z` : null,
         }
         await createMutation.mutateAsync(dto)
         toast.success('Promoção criada')
@@ -121,21 +182,11 @@ function PromotionModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl border bg-card shadow-xl">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <h3 className="font-semibold text-foreground">
-            {editing ? 'Editar promoção' : 'Nova promoção'}
-          </h3>
-          <button
-            onClick={onClose}
-            className="rounded p-1 text-muted-foreground hover:text-foreground"
-          >
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+    <Dialog open={open} onClose={onClose} isDirty={isDirty}>
+      <DialogTitle>
+        {editing ? 'Editar promoção' : 'Nova promoção'}
+      </DialogTitle>
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Nome *</label>
@@ -173,10 +224,9 @@ function PromotionModal({
             />
           </div>
 
-          {!editing && (
-            <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Tipo de desconto *</label>
+                <label className="text-xs font-medium text-muted-foreground">Tipo de desconto</label>
                 <select
                   value={discountType}
                   onChange={(e) => setDiscountType(e.target.value as 'PERCENTAGE' | 'FIXED')}
@@ -193,7 +243,8 @@ function PromotionModal({
                 </label>
                 <input
                   type="number"
-                  min="1"
+                  min={discountType === 'FIXED' ? '0.01' : '1'}
+                  step={discountType === 'FIXED' ? '0.01' : '1'}
                   max={discountType === 'PERCENTAGE' ? '100' : undefined}
                   value={discountValue}
                   onChange={(e) => setDiscountValue(e.target.value)}
@@ -203,7 +254,6 @@ function PromotionModal({
                 />
               </div>
             </div>
-          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
@@ -218,20 +268,30 @@ function PromotionModal({
               />
             </div>
 
-            {!editing && (
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Valor mínimo (R$)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={minAmount}
-                  onChange={(e) => setMinAmount(e.target.value)}
-                  placeholder="Sem mínimo"
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            )}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Limite por cliente</label>
+              <input
+                type="number"
+                min="1"
+                value={maxUsesPerCustomer}
+                onChange={(e) => setMaxUsesPerCustomer(e.target.value)}
+                placeholder="Ilimitado"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Valor mínimo (R$)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={minAmount}
+                onChange={(e) => setMinAmount(e.target.value)}
+                placeholder="Sem mínimo"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -263,17 +323,55 @@ function PromotionModal({
           {editing && (
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Status</label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PromotionStatus)}
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="active">Ativo</option>
-                <option value="inactive">Inativo</option>
-                <option value="expired">Expirado</option>
-              </select>
+              <div className="flex gap-2">
+                {(['active', 'inactive'] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatus(s)}
+                    className={[
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      status === s
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-input bg-card text-muted-foreground hover:bg-accent',
+                    ].join(' ')}
+                  >
+                    {s === 'active' ? 'Ativo' : 'Inativo'}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* Serviços aplicáveis */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Serviços aplicáveis
+              <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
+            </label>
+            <MultiCombobox
+              values={selectedServiceIds}
+              onChange={setSelectedServiceIds}
+              items={serviceItems}
+              isLoading={!servicesData}
+              placeholder="Buscar serviço…"
+            />
+          </div>
+
+          {/* Produtos aplicáveis */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Produtos aplicáveis
+              <span className="ml-1 font-normal text-muted-foreground/70">(vazio = todos)</span>
+            </label>
+            <MultiCombobox
+              values={selectedProductIds}
+              onChange={setSelectedProductIds}
+              items={productItems}
+              isLoading={!productsData}
+              placeholder="Buscar produto…"
+            />
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
@@ -287,8 +385,32 @@ function PromotionModal({
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
+  )
+}
+
+// ──── Toggle Button ────────────────────────────────────────────────────────────
+
+function ToggleStatusButton({ promotion }: { promotion: Promotion }) {
+  const toggle = useTogglePromotion(promotion.id)
+  const isActive = promotion.status === 'active'
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => toggle.mutate(!isActive)}
+      disabled={toggle.isPending || promotion.status === 'expired'}
+      title={isActive ? 'Desativar promoção' : 'Ativar promoção'}
+    >
+      {toggle.isPending ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : isActive ? (
+        <ToggleRight className="h-3.5 w-3.5 text-green-500" />
+      ) : (
+        <ToggleLeft className="h-3.5 w-3.5" />
+      )}
+    </Button>
   )
 }
 
@@ -487,13 +609,14 @@ function PromotionsPageContent() {
                       </td>
                       <td className="px-4 py-3">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[promo.status]}`}
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${PROMOTION_STATUS_COLOR[promo.status]}`}
                         >
                           {STATUS_LABEL[promo.status]}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <ToggleStatusButton promotion={promo} />
                           <button
                             onClick={() =>
                               setExpandedId(expandedId === promo.id ? null : promo.id)
@@ -540,6 +663,16 @@ function PromotionsPageContent() {
                                 ? 'Todos'
                                 : `${promo.applicableServiceIds.length} serviço(s)`}
                             </div>
+                            <div>
+                              <span className="font-semibold text-foreground">Limite por cliente:</span>{' '}
+                              {promo.maxUsesPerCustomer ?? 'Ilimitado'}
+                            </div>
+                            {promo.applicableProductIds.length > 0 && (
+                              <div>
+                                <span className="font-semibold text-foreground">Produtos aplicáveis:</span>{' '}
+                                {promo.applicableProductIds.length} produto(s)
+                              </div>
+                            )}
                             <div>
                               <span className="font-semibold text-foreground">Criado em:</span>{' '}
                               {formatDate(promo.createdAt)}
