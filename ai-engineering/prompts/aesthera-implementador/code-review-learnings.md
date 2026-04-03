@@ -257,6 +257,35 @@ Se a resposta for não → revise antes de prosseguir.
 
 ---
 
+- [ ] **Domain events NUNCA devem ser emitidos dentro de `prisma.$transaction()` — emitir APÓS o commit**
+  - 🔴 Anti-padrão: emitir eventos de domínio (ex.: `this.eventEmitter.emit('billing.created', billingId)`) dentro do bloco `prisma.$transaction(async (tx) => { ... })` — se o evento disparar um side effect que por sua vez abre uma nova transação ou lê dados do banco, pode encontrar o estado ainda incompleto (pre-commit) do banco de dados. Em caso de rollback, o evento já foi emitido mas o dado não existe:
+    ```ts
+    // ERRADO — evento emitido antes do commit
+    await this.prisma.$transaction(async (tx) => {
+      const billing = await tx.billing.create({ data: billingData });
+      this.eventEmitter.emit('billing.created', billing.id); // perigoso: tx ainda não commitou
+    });
+    ```
+  - ✅ Correto: guardar o ID ou payload do que foi criado, sair da transação (deixar o commit acontecer), e emitir o evento **depois**:
+    ```ts
+    // CORRETO — evento emitido após o commit
+    let createdBillingId: string;
+
+    await this.prisma.$transaction(async (tx) => {
+      const billing = await tx.billing.create({ data: billingData });
+      createdBillingId = billing.id;
+      // Nenhum evento emitido aqui
+    });
+
+    // Após o commit:
+    this.eventEmitter.emit('billing.created', createdBillingId);
+    ```
+  - 📌 Regra geral: domain events são notificações de que algo **foi persistido**. Se o dado ainda está dentro de uma transação não commitada, nada "foi persistido" ainda — disparar o evento precocemente cria race conditions entre o evento e o dado no banco.
+  - 📌 Aplica-se a: qualquer `eventEmitter.emit()`, `this.eventEmitter.emit()`, `EventBus.publish()` ou mecanismo equivalente chamado dentro de um bloco `$transaction`.
+  - 📅 Aprendido em: 02/04/2026 — revisão de arquitetura do redesenho do fluxo de cobrança (Issue #147): domain event `billing.created` proposto dentro de `$transaction` de recebimento
+
+---
+
 ## Frontend
 
 ### Filtros e Pesquisa
@@ -515,6 +544,38 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: se ao olhar para a lista de itens todos os badges têm a mesma cor, a constante está errada. Cada estado/tipo de um enum deve ser identificável pela cor sem precisar ler o texto do badge.
   - 📌 Aplica-se a: métodos de pagamento, tipos de serviço, categorias de produto, origens de lead, tipos de contrato — qualquer enum com ≥3 valores que apareça em listagem.
   - 📅 Aprendido em: 30/03/2026 — revisão de `PAYMENT_METHOD_COLOR` com todos os valores mapeados para azul
+
+---
+
+- [ ] **Labels PT-BR de enums na UI NUNCA devem ser os valores raw do enum — todo enum com renderização visual exige mapeamento centralizado**
+  - 🔴 Anti-padrão: renderizar diretamente o valor do enum como texto do badge ou label na interface (ex.: `{item.sourceType}` → exibe `"APPOINTMENT"`, `"PRESALE"`, `"MANUAL"` para o usuário); ou definir o mapeamento de label diretamente inline no componente:
+    ```tsx
+    // ERRADO — valor raw do enum exibido
+    <Badge>{billing.sourceType}</Badge>
+
+    // ERRADO — mapeamento inline, não centralizado
+    const label = billing.sourceType === 'APPOINTMENT' ? 'Agendamento' :
+                  billing.sourceType === 'PRESALE' ? 'Pré-venda' : 'Manual';
+    ```
+  - ✅ Correto: criar um arquivo de mapeamento centralizado (padrão `*-labels.ts` no módulo, ou adicionar ao arquivo do módulo em `lib/`) e importar em todos os componentes:
+    ```tsx
+    // lib/billing-labels.ts (ou em lib/status-colors.ts se genérico)
+    export const BILLING_SOURCE_LABELS: Record<BillingSourceType, string> = {
+      APPOINTMENT: 'Agendamento',
+      PRESALE: 'Pré-venda',
+      PRODUCT_SALE: 'Venda de Produto',
+      PACKAGE_SALE: 'Venda de Pacote',
+      MANUAL: 'Manual',
+    };
+
+    // No componente:
+    import { BILLING_SOURCE_LABELS } from '@/lib/billing-labels';
+    <Badge>{BILLING_SOURCE_LABELS[billing.sourceType]}</Badge>
+    ```
+  - 📌 Regra geral: o valor do enum (ex.: `APPOINTMENT`, `COMPLETED`, `PACKAGE_SALE`) é um identificador técnico para o código e o banco — nunca texto para o usuário. A camada de apresentação sempre usa um mapeamento PT-BR centralizado. Para adicionar um novo valor ao enum, basta adicionar a entrada correspondente no arquivo de labels.
+  - 📌 Aplica-se a: todo enum que aparece em badge, tabela, filtro de pills, select/combobox ou qualquer elemento de UI — independentemente de ser status, tipo, origem, categoria ou fluxo.
+  - 📌 Verificação obrigatória: ao criar ou alterar qualquer enum no schema/backend, verificar imediatamente se há um arquivo `*-labels.ts` ou entrada em `status-colors.ts` correspondente no frontend. Se não existir, criar antes de implementar os componentes.
+  - 📅 Aprendido em: 02/04/2026 — revisão de arquitetura do redesenho do fluxo de cobrança (Issue #147): `BillingSourceType` enum identificado sem mapeamento PT-BR no frontend
 
 ### Formulários e Validação
 
@@ -899,3 +960,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 31/03/2026 | — | 2 padrões adicionados pelo treinador-agent: (1) nunca usar caracteres unicode como ícones (`🏷 ✓ ✕ ×`) — sempre usar equivalentes Lucide React com classes Tailwind para controle de tamanho e cor; (2) banners informativos verdes devem usar `bg-green-100 text-green-700` conforme `ui-standards.md` seção 6 — nunca inventar variações de tom (emerald, teal, green-50) fora do padrão documentado |
 | 01/04/2026 | — | 1 padrão adicionado pelo treinador-agent: migration não commitada — `.gitignore` contém `apps/api/prisma/migrations/` e ignora novos arquivos de migration; sempre usar `git add -f` para forçar rastreamento da migration.sql no mesmo PR das mudanças de código; checklist obrigatório: `prisma generate` + `prisma migrate dev` + `git add -f` + commit da migration junto com o código |
 | 02/04/2026 | PR #144 | 🔁 Reincidência do anti-padrão `<select>` nativo para campos de seleção (já documentado em 25/03/2026) — `<select>` nativo usado para forma de pagamento em formulário de venda mesmo após proibição catalogada. Regra de componentes adicionada: opções fixas ≤6 → pills; opções fixas >6 → `<Select>` shadcn/ui; opções dinâmicas da API → `<ComboboxSearch>`. Nenhum `<select>` nativo é aceitável no design system Aesthera. |
+| 02/04/2026 | Issue #147 | 2 padrões adicionados pelo treinador-agent (revisão de arquitetura do redesenho do fluxo de cobrança): (1) domain events NUNCA devem ser emitidos dentro de `prisma.$transaction()` — guardar o ID criado, deixar o commit ocorrer, emitir o evento APÓS; (2) labels PT-BR de enums na UI devem ser definidas em arquivo centralizado `*-labels.ts` — nunca exibir o valor raw do enum (ex: `APPOINTMENT`, `PRESALE`) como texto para o usuário; verificação obrigatória ao criar/alterar qualquer enum. |

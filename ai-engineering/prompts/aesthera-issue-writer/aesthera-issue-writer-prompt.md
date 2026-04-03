@@ -452,6 +452,32 @@ Esta é a seção mais importante para proteger o sistema contra alucinações. 
 - Schema migrations que não foram pedidas
 - Alterações em testes de módulos não relacionados
 
+### Regra de Reprodução Obrigatória da spec_final
+
+Quando o input for uma `spec_final.md` gerada pelo `aesthera-consolidador`:
+
+- **Reproduzir verbatim** todo conteúdo da seção "⛔ Limites de Escopo" da spec_final na seção "Fora do Escopo (NÃO fazer)" da issue.
+- Não resumir, não parafrasear, não omitir itens — o implementador vê exatamente o que o consolidador decidiu que não deve ser feito.
+- Se a spec_final tiver uma subseção "⚠️ Remoção de Comportamento Automático", ela deve aparecer na issue também, com destaque especial.
+
+### Regra de Migração de Testes (feature remove comportamento automático)
+
+Quando a issue desativar um comportamento automático existente (ex.: billing criado automaticamente ao completar agendamento, ledger entry criada automaticamente, qualquer event handler que será removido ou desativado):
+
+**Incluir obrigatoriamente na seção "O que fazer" ou "Fora do Escopo":**
+
+```markdown
+### ⚠️ Migração de Testes — comportamento automático desativado
+
+- O método `{SomeService.metodoAntigo()}` / event handler `on('{evento}', handler)` será desativado.
+- Os testes que cobrem esse método **não devem ser excluídos** — devem ser migrados para cobrir o novo fluxo manual.
+- Identificar os arquivos de teste afetados:
+  - `{modulo}.service.spec.ts` — migrar testes T{01}–T{N} para testar o novo método `{metodoNovo}()`
+  - Adicionar testes para os novos cenários manuais (ex.: T{N+1}: criação manual por staff, T{N+2}: criação com sourceType=PRESALE)
+```
+
+> ⚠️ Nunca gere uma issue que instrua o implementador a **deletar** testes de um comportamento removido — sempre "migrar para cobrir o novo fluxo".
+
 ### Regra de Preservação de Padrões UI (especial — sempre aplicar)
 
 Toda issue que toca uma tela existente **deve** listar explicitamente na seção "Fora do Escopo" os padrões que já estão corretos e não podem ser alterados. Exemplos obrigatórios a verificar e proteger:
@@ -581,6 +607,8 @@ Antes de finalizar qualquer issue, verificar:
 - [ ] **A seção "Fora do Escopo" está completa e específica — não genérica?** (ex: nomeou o arquivo e o elemento específico que não deve ser alterado)
 - [ ] **O input contém sugestões de treinamento de agente?** Se sim → gerar issue separada com prefixo `[TREINAMENTO-AGENTES]` para cada sugestão identificada. ← (Issues de Treinamento)
 - [ ] **Se a issue envolve telas com filtros ou campos de busca: os padrões obrigatórios foram verificados e incluídos?** (ComboboxSearch para entidades; pills para status/tipo; legenda de filtros ativos; botão "Restaurar padrão"; presets de período em telas financeiras + URL sync) ← (Padrões de Filtros — Obrigatório)
+- [ ] **Se o input é uma `spec_final.md` do consolidador: a seção "⛔ Limites de Escopo" foi reproduzida verbatim na seção "Fora do Escopo (NÃO fazer)" da issue?** ← (Regra de Reprodução Obrigatória)
+- [ ] **A feature desativa um comportamento automático existente?** Se sim → a seção "Fora do Escopo" inclui a instrução de migração de testes (nunca excluir testes do comportamento antigo)? ← (Regra de Migração de Testes)
 
 Se qualquer verificação falhar → **apontar para o usuário antes de gerar a issue**.
 

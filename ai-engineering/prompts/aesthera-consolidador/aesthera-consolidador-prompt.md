@@ -150,9 +150,36 @@ Salvar em `outputs/consolidador/{nome-do-modulo}-spec-final.md` e atualizar o PL
 
 ---
 
+## ⛔ Limites de Escopo (obrigatório)
+
+> Esta seção é **obrigatória** em toda `spec_final.md`. Ela protege o implementador de tomar decisões erradas sobre o que pode e o que não pode ser alterado.
+
+Liste explicitamente, com linguagem direta e acionável:
+
+1. **Módulos fora do escopo** — mesmo que pareçam relacionados à feature
+2. **Comportamentos automáticos que estão sendo REMOVIDOS** — identificar o método/event que gerava o comportamento antigo e nomear explicitamente que ele deve ser desativado, não deletado, e que seus testes devem ser migrados (não excluídos)
+3. **Endpoints, APIs ou contratos já existentes** que não devem ser refatorados — nem que pareça "uma melhoria"
+4. **Migrações de banco pedidas** vs **não pedidas** — se a spec não pede uma migration, nomear explicitamente que o implementador não deve criá-la por conta própria
+5. **Telas ou componentes "zona estável"** — componentes que já estão funcionando corretamente e não podem ser alterados acidentalmente (ex.: `ReceiveManualModal`, barra de filtros existente, etc.)
+
+### Padrão especial: remoção de comportamento automático
+
+Quando a spec remover um comportamento que atualmente é disparado automaticamente (ex.: billing criado automaticamente ao completar agendamento), a seção deve incluir obrigatoriamente:
+
+```markdown
+### ⚠️ Remoção de Comportamento Automático: {método/trigger}
+
+- O método `{SomeService.algoAutomatico()}` ou event handler `{on('evento', handler)}` que atualmente dispara o comportamento deve ser **desativado** — não deletado do código-fonte.
+- Os testes que cobrem o método antigo devem ser **migrados** para testar o novo fluxo manual, nunca excluídos.
+- Identificar todos os pontos do código que chamam ou dependem do comportamento antigo e listar aqui.
+```
+
+---
+
 ## Notas para o Issue-Writer
 
 - {instruções específicas ou alertas para quem vai criar a issue}
+- Se a spec contém remoção de comportamento automático: indicar explicitamente ao issue-writer que a seção "Fora do Escopo" da issue deve reproduzir os limites desta seção ⛔ verbatim.
 ```
 
 ---
@@ -164,6 +191,7 @@ Salvar em `outputs/consolidador/{nome-do-modulo}-spec-final.md` e atualizar o PL
 - **Nunca** expandir o escopo além do que foi discutido pelos revisores
 - **Sempre** documentar cada decisão de consolidação — a spec final deve ser auditável
 - **Sempre** indicar claramente para o issue-writer o que foi alterado e por quê
+- **Sempre** incluir a seção "⛔ Limites de Escopo" — mesmo que a feature pareça simples. Uma seção vazia é um sinal de que a análise foi incompleta.
 
 ---
 
