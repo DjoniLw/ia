@@ -539,6 +539,54 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: nunca usar `toISOString()` para extrair a parte de data em contextos com fuso horário local — o resultado depende do UTC offset do cliente
   - 📅 Aprendido em: 24/03/2026 — revisão de envio de datas de agendamentos com fuso horário
 
+- [ ] **🔁 REINCIDÊNCIA (PR #144, 02/04/2026) — `<select>` nativo para forma de pagamento em formulários de venda é bloqueante — nunca substituir `<ComboboxSearch>` ou pills por `<select>` nativo**
+  - ⚠️ Este padrão foi documentado em 25/03/2026 (filtros) e **reincidiu no PR #144** — o `<select>` nativo foi usado para o campo "forma de pagamento" em formulário de venda mesmo após a proibição estar catalogada nos learnings.
+  - 🔴 Anti-padrão: usar `<select><option>...</option></select>` nativo para campos de seleção de forma de pagamento — mesmo com ≤ 6 opções fixas, o elemento nativo quebra a consistência visual do design system Aesthera:
+    ```tsx
+    // ERRADO — select nativo
+    <select onChange={e => setMethod(e.target.value)}>
+      <option value="credit_card">Cartão de Crédito</option>
+      <option value="pix">PIX</option>
+      <option value="cash">Dinheiro</option>
+    </select>
+    ```
+  - ✅ Correto: a escolha do componente segue a regra de opções:
+    - **Opções fixas ≤ 6** → **pills selecionáveis** (`rounded-full border px-3 py-1 text-xs font-medium`), mesmo padrão dos filtros de status
+    - **Opções fixas > 6** → **`<Select>` do shadcn/ui** (`@/components/ui/select`)
+    - **Opções dinâmicas da API** → **`<ComboboxSearch>`** (`@/components/ui/combobox-search.tsx`)
+    ```tsx
+    // CORRETO — pills para forma de pagamento (opções fixas ≤ 6)
+    {PAYMENT_METHODS.map(method => (
+      <button
+        key={method.value}
+        type="button"
+        onClick={() => setMethod(method.value)}
+        className={cn(
+          'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+          selected === method.value
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-input bg-background hover:bg-accent'
+        )}
+      >
+        {method.label}
+      </button>
+    ))}
+
+    // CORRETO — <Select> shadcn/ui para dropdown estilizado (opções fixas > 6)
+    import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    <Select value={method} onValueChange={setMethod}>
+      <SelectTrigger><SelectValue placeholder="Selecionar forma de pagamento" /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+        <SelectItem value="pix">PIX</SelectItem>
+      </SelectContent>
+    </Select>
+    ```
+  - 📌 Regra geral: **nenhum `<select>` nativo é aceitável no design system Aesthera** — em nenhum contexto, seja para opções fixas ou dinâmicas. O scan dos learnings deve ocorrer ANTES de implementar qualquer campo de seleção.
+  - 📌 Aplica-se a: forma de pagamento, tipo de serviço, categoria de produto, status, qualquer campo com opções enumeradas em formulários de venda ou modais.
+  - 📌 Ponto de verificação obrigatório: ao implementar qualquer campo de seleção em formulário, perguntar antes de escrever código: "Este campo usa `<select>` nativo?" — se sim, parar e usar a alternativa correta acima.
+  - 📅 Aprendido em: 02/04/2026 — anti-padrão de `<select>` nativo para forma de pagamento reintroduzido no PR #144 (Fluxo de Pagamento, Pacotes e Promoções) após documentação em 25/03/2026
+
 ### Componentes e Estado
 
 - [ ] **🔁 REINCIDÊNCIA (PR #144, 30/03/2026) — Nunca criar modais manualmente com `fixed inset-0 z-50` — sempre usar o componente `<Dialog>` do shadcn/ui**
@@ -850,3 +898,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 30/03/2026 | PR #136 | 2 padrões adicionados pelo treinador-agent (revisão de assinatura remota por link — UX/componentes): (1) controles booleanos devem sempre usar `<Switch>` do shadcn/ui — `<button>` nativo como toggle quebra acessibilidade e consistência visual; (2) feedback de sucesso (toast, badge, estado visual) só pode ser exibido após confirmação da API em `onSuccess` — nunca antes ou sem chamada de API |
 | 31/03/2026 | — | 2 padrões adicionados pelo treinador-agent: (1) nunca usar caracteres unicode como ícones (`🏷 ✓ ✕ ×`) — sempre usar equivalentes Lucide React com classes Tailwind para controle de tamanho e cor; (2) banners informativos verdes devem usar `bg-green-100 text-green-700` conforme `ui-standards.md` seção 6 — nunca inventar variações de tom (emerald, teal, green-50) fora do padrão documentado |
 | 01/04/2026 | — | 1 padrão adicionado pelo treinador-agent: migration não commitada — `.gitignore` contém `apps/api/prisma/migrations/` e ignora novos arquivos de migration; sempre usar `git add -f` para forçar rastreamento da migration.sql no mesmo PR das mudanças de código; checklist obrigatório: `prisma generate` + `prisma migrate dev` + `git add -f` + commit da migration junto com o código |
+| 02/04/2026 | PR #144 | 🔁 Reincidência do anti-padrão `<select>` nativo para campos de seleção (já documentado em 25/03/2026) — `<select>` nativo usado para forma de pagamento em formulário de venda mesmo após proibição catalogada. Regra de componentes adicionada: opções fixas ≤6 → pills; opções fixas >6 → `<Select>` shadcn/ui; opções dinâmicas da API → `<ComboboxSearch>`. Nenhum `<select>` nativo é aceitável no design system Aesthera. |
