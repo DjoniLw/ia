@@ -135,6 +135,7 @@ function BillingPageContent() {
   const [customerSearch, setCustomerSearch] = usePersistedFilter('aesthera-filter-billing-customer', searchParams.get('customer'), '')
   const [customerSearchDebounced, setCustomerSearchDebounced] = useState(customerSearch)
   const [showNewBillingModal, setShowNewBillingModal] = useState(false)
+  const [showManualBillingModal, setShowManualBillingModal] = useState(false)
 
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 
@@ -201,10 +202,16 @@ function BillingPageContent() {
             Cobranças de serviços, pré-vendas e registros avulsos
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowNewBillingModal(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Pré-venda
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setShowManualBillingModal(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Cobrança
+          </Button>
+          <Button size="sm" onClick={() => setShowNewBillingModal(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Pré-venda
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -378,6 +385,20 @@ function BillingPageContent() {
             <SellServiceForm
               onSuccess={() => setShowNewBillingModal(false)}
               onCancel={() => setShowNewBillingModal(false)}
+            />
+          </div>
+        </Dialog>
+      )}
+
+      {/* Modal de nova cobrança manual */}
+      {showManualBillingModal && (
+        <Dialog open onClose={() => setShowManualBillingModal(false)}>
+          <DialogTitle>Nova Cobrança</DialogTitle>
+          <div className="mt-4">
+            <SellServiceForm
+              mode="MANUAL"
+              onSuccess={() => setShowManualBillingModal(false)}
+              onCancel={() => setShowManualBillingModal(false)}
             />
           </div>
         </Dialog>

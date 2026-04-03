@@ -1,9 +1,10 @@
 'use client'
 
 /**
- * Formulário de pré-venda de serviço (PRESALE).
- * Gera uma cobrança com sourceType=PRESALE vinculada a um serviço e cliente.
- * Ao ser paga, gera automaticamente um WalletEntry SERVICE_PRESALE.
+ * Formulário de criação de cobrança de serviço.
+ * Suporta dois modos:
+ * - PRESALE (padrão): pré-venda vinculada a um serviço; ao ser paga gera WalletEntry SERVICE_PRESALE.
+ * - MANUAL: cobrança avulsa sem vínculo obrigatório a serviço ou agendamento.
  */
 
 import { useState } from 'react'
@@ -32,6 +33,7 @@ function parseCurrencyInput(value: string): number {
 // ──── Props ────────────────────────────────────────────────────────────────────
 
 interface SellServiceFormProps {
+  mode?: 'PRESALE' | 'MANUAL'
   defaultCustomerId?: string
   defaultCustomerName?: string
   onSuccess?: () => void
@@ -41,11 +43,13 @@ interface SellServiceFormProps {
 // ──── Component ────────────────────────────────────────────────────────────────
 
 export function SellServiceForm({
+  mode = 'PRESALE',
   defaultCustomerId,
   defaultCustomerName,
   onSuccess,
   onCancel,
 }: SellServiceFormProps) {
+  const isManual = mode === 'MANUAL'
   const [customerSearch, setCustomerSearch] = useState(defaultCustomerName ?? '')
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(
     defaultCustomerId && defaultCustomerName
@@ -55,6 +59,7 @@ export function SellServiceForm({
   const [selectedService, setSelectedService] = useState<{ id: string; name: string; price: number } | null>(null)
   const [amountStr, setAmountStr] = useState('')
   const [notes, setNotes] = useState('')
+  const [dueDate, setDueDate] = useState('')
   const [serviceSearch, setServiceSearch] = useState('')
 
   const { data: customersData } = useCustomers(
@@ -96,7 +101,7 @@ export function SellServiceForm({
       toast.error('Selecione um cliente')
       return
     }
-    if (!selectedService) {
+    if (!isManual && !selectedService) {
       toast.error('Selecione um serviço')
       return
     }
@@ -110,15 +115,20 @@ export function SellServiceForm({
     try {
       await createBilling.mutateAsync({
         customerId: selectedCustomer.id,
-        sourceType: 'PRESALE',
+        sourceType: mode,
         amount,
-        serviceId: selectedService.id,
+        serviceId: selectedService?.id,
         notes: notes.trim() || undefined,
+        dueDate: dueDate || undefined,
       })
-      toast.success('Pré-venda registrada com sucesso! Cobrança gerada.')
+      if (isManual) {
+        toast.success('Cobrança registrada com sucesso!')
+      } else {
+        toast.success('Pré-venda registrada com sucesso! Cobrança gerada.')
+      }
       onSuccess?.()
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro ao registrar pré-venda'
+      const message = err instanceof Error ? err.message : isManual ? 'Erro ao registrar cobrança' : 'Erro ao registrar pré-venda'
       toast.error(message)
     }
   }
@@ -152,7 +162,7 @@ export function SellServiceForm({
 
       {/* Serviço */}
       <div className="space-y-1.5">
-        <Label htmlFor="service">Serviço</Label>
+        <Label htmlFor="service">{isManual ? 'Serviço (opcional)' : 'Serviço'}</Label>
         <ComboboxSearch
           items={serviceItems}
           value={selectedService ? { value: selectedService.id, label: `${selectedService.name} · ${formatCurrency(selectedService.price)}` } : null}
@@ -184,12 +194,25 @@ export function SellServiceForm({
         )}
       </div>
 
+      {/* Vencimento — apenas no modo MANUAL */}
+      {isManual && (
+        <div className="space-y-1.5">
+          <Label htmlFor="dueDate">Vencimento (opcional)</Label>
+          <Input
+            id="dueDate"
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+          />
+        </div>
+      )}
+
       {/* Observações */}
       <div className="space-y-1.5">
         <Label htmlFor="notes">Observações (opcional)</Label>
         <Input
           id="notes"
-          placeholder="Ex: pacote especial, promoção…"
+          placeholder={isManual ? 'Ex: manutenção, revisão…' : 'Ex: pacote especial, promoção…'}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
@@ -205,7 +228,7 @@ export function SellServiceForm({
           {createBilling.isPending ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : null}
-          Registrar Pré-venda
+          {isManual ? 'Registrar Cobrança' : 'Registrar Pré-venda'}
         </Button>
       </div>
     </form>
