@@ -15,6 +15,8 @@ export const ListBillingQuery = z.object({
     v ? v.split(',').filter((s): s is typeof VALID_SOURCE_TYPES[number] => (VALID_SOURCE_TYPES as readonly string[]).includes(s)) : undefined
   ),
   hasCashReceived: z.string().optional().transform((v) => v === 'true' ? true : undefined),
+  serviceId: z.string().uuid().optional(),
+  professionalId: z.string().uuid().optional(),
   dueDateFrom: z.string().optional(),
   dueDateTo: z.string().optional(),
   createdAtFrom: z.string().optional(),

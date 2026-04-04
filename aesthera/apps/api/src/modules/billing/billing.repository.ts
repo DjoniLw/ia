@@ -70,6 +70,24 @@ export class BillingRepository {
       where.createdAt = range
     }
 
+    // Filtro por serviço: cobre PRESALE (billing.serviceId) e APPOINTMENT (appointment.serviceId)
+    // Filtro por atendente: cobre APPOINTMENT (appointment.professionalId)
+    const extraConditions: Record<string, unknown>[] = []
+    if (q.serviceId) {
+      extraConditions.push({
+        OR: [
+          { serviceId: q.serviceId },
+          { appointment: { serviceId: q.serviceId } },
+        ],
+      })
+    }
+    if (q.professionalId) {
+      extraConditions.push({ appointment: { professionalId: q.professionalId } })
+    }
+    if (extraConditions.length > 0) {
+      where.AND = extraConditions as never
+    }
+
     const skip = (q.page - 1) * q.limit
 
     // Filtro espelhado para linhas de recibo — restringe às cobranças do where atual

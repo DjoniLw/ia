@@ -11,6 +11,7 @@ import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, useReopenBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { useServiceVouchers } from '@/lib/hooks/use-wallet'
+import { useServices, useProfessionals } from '@/lib/hooks/use-resources'
 import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
@@ -502,6 +503,8 @@ function BillingPageContent() {
     () => (searchParams.get('sourceType') ?? '').split(',').filter((s): s is BillingSourceType => !!s) as BillingSourceType[]
   )
   const [hasCashReceived, setHasCashReceived] = useState(searchParams.get('hasCashReceived') === 'true')
+  const [serviceId, setServiceId] = useState(searchParams.get('serviceId') ?? '')
+  const [professionalId, setProfessionalId] = useState(searchParams.get('professionalId') ?? '')
   const [customerSearch, setCustomerSearch] = usePersistedFilter('aesthera-filter-billing-customer', searchParams.get('customer'), '')
   const [customerSearchDebounced, setCustomerSearchDebounced] = useState(customerSearch)
   const [dateFrom, setDateFrom] = usePersistedFilter('aesthera-filter-billing-dateFrom', searchParams.get('dateFrom'), defaultDateFrom())
@@ -510,6 +513,11 @@ function BillingPageContent() {
   const [showManualBillingModal, setShowManualBillingModal] = useState(false)
 
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
+
+  const { data: servicesData } = useServices({ active: 'true', limit: '200' })
+  const { data: professionalsData } = useProfessionals({ active: 'true', limit: '100' })
+  const allServices = servicesData?.items ?? []
+  const allProfessionals = professionalsData?.items ?? []
 
   // ── Toggle helpers ──────────────────────────────────────────────────────────
   function toggleStatus(value: BillingStatus) {
@@ -539,20 +547,24 @@ function BillingPageContent() {
     if (statusFilters.length) p.set('status', statusFilters.join(',')); else p.delete('status')
     if (sourceTypeFilters.length) p.set('sourceType', sourceTypeFilters.join(',')); else p.delete('sourceType')
     if (hasCashReceived) p.set('hasCashReceived', 'true'); else p.delete('hasCashReceived')
+    if (serviceId) p.set('serviceId', serviceId); else p.delete('serviceId')
+    if (professionalId) p.set('professionalId', professionalId); else p.delete('professionalId')
     if (customerSearch) p.set('customer', customerSearch); else p.delete('customer')
     if (dateFrom) p.set('dateFrom', dateFrom); else p.delete('dateFrom')
     if (dateTo) p.set('dateTo', dateTo); else p.delete('dateTo')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, statusFilters, sourceTypeFilters, hasCashReceived, customerSearch, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router, statusFilters, sourceTypeFilters, hasCashReceived, serviceId, professionalId, customerSearch, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const defaultFrom = defaultDateFrom()
   const defaultTo = isoDateOnly(new Date())
-  const isDefaultFilters = statusFilters.length === 0 && sourceTypeFilters.length === 0 && !hasCashReceived && customerSearch === '' && dateFrom === defaultFrom && dateTo === defaultTo
+  const isDefaultFilters = statusFilters.length === 0 && sourceTypeFilters.length === 0 && !hasCashReceived && !serviceId && !professionalId && customerSearch === '' && dateFrom === defaultFrom && dateTo === defaultTo
 
   function resetFilters() {
     setStatusFilters([])
     setSourceTypeFilters([])
     setHasCashReceived(false)
+    setServiceId('')
+    setProfessionalId('')
     setCustomerSearch('')
     setCustomerSearchDebounced('')
     setDateFrom(defaultFrom)
@@ -579,6 +591,14 @@ function BillingPageContent() {
       parts.push(`origem: ${sourceTypeFilters.map((t) => BILLING_SOURCE_TYPE_LABEL[t] ?? t).join(', ')}`)
     }
     if (hasCashReceived) parts.push('com recebimento em caixa')
+    if (serviceId) {
+      const svc = allServices.find((s) => s.id === serviceId)
+      parts.push(`serviço: ${svc?.name ?? serviceId}`)
+    }
+    if (professionalId) {
+      const prof = allProfessionals.find((p) => p.id === professionalId)
+      parts.push(`atendente: ${prof?.name ?? professionalId}`)
+    }
     if (customerSearchDebounced) parts.push(`cliente: ${customerSearchDebounced}`)
     if (dateFrom) parts.push(`de ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR')}`)
     if (dateTo) parts.push(`até ${new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR')}`)
@@ -589,6 +609,8 @@ function BillingPageContent() {
     ...(statusFilters.length && { status: statusFilters.join(',') }),
     ...(sourceTypeFilters.length && { sourceType: sourceTypeFilters.join(',') }),
     ...(hasCashReceived && { hasCashReceived: 'true' }),
+    ...(serviceId && { serviceId }),
+    ...(professionalId && { professionalId }),
     ...(customerSearchDebounced && { customerName: customerSearchDebounced }),
     ...(dateFrom && { createdAtFrom: dateFrom }),
     ...(dateTo && { createdAtTo: dateTo }),
@@ -715,6 +737,31 @@ function BillingPageContent() {
               className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary w-48"
             />
           </div>
+        </div>
+
+        {/* Linha 3: Serviço e Atendente */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide w-14 shrink-0">Detalhe</span>
+          <select
+            value={serviceId}
+            onChange={(e) => { setServiceId(e.target.value); resetPage() }}
+            className="h-8 rounded-full border border-input bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">Todos os serviços</option>
+            {allServices.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          <select
+            value={professionalId}
+            onChange={(e) => { setProfessionalId(e.target.value); resetPage() }}
+            className="h-8 rounded-full border border-input bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">Todos os atendentes</option>
+            {allProfessionals.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
 
         {/* Filtros de data */}
