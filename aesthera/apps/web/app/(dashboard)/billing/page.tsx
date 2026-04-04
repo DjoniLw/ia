@@ -744,20 +744,9 @@ function BillingPageContent() {
           >
             Com recebimento em caixa
           </button>
-          {/* Busca por cliente — mesma linha */}
-          <div className="relative ml-auto">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Buscar por cliente…"
-              value={customerSearch}
-              onChange={(e) => setCustomerSearch(e.target.value)}
-              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary w-48"
-            />
-          </div>
         </div>
 
-        {/* Linha 3: Serviço e Atendente */}
+        {/* Linha 3: Serviço, Atendente e Busca por Cliente */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide w-14 shrink-0">Detalhe</span>
           <ComboboxSearch
@@ -776,6 +765,16 @@ function BillingPageContent() {
             placeholder="Todos os atendentes"
             className="w-48"
           />
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Buscar por cliente…"
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              className="h-8 rounded-full border border-input bg-card pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary w-48"
+            />
+          </div>
         </div>
 
         {/* Filtros de data */}

@@ -228,7 +228,7 @@ export class BillingService {
             (line.paymentMethod === 'wallet_credit' || line.paymentMethod === 'wallet_voucher') &&
             line.walletEntryId
           ) {
-            await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${line.walletEntryId}::uuid FOR UPDATE`
+            await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${line.walletEntryId} FOR UPDATE`
             const walletEntry = await tx.walletEntry.findFirst({ where: { id: line.walletEntryId, clinicId } })
             if (walletEntry) {
               const restoredBalance = walletEntry.balance + line.amount
@@ -260,7 +260,7 @@ export class BillingService {
           where: { clinicId, type: 'USE' as never, reference: id },
         })
         for (const useTxn of useTxns) {
-          await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${useTxn.walletEntryId}::uuid FOR UPDATE`
+          await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${useTxn.walletEntryId} FOR UPDATE`
           const entry = await tx.walletEntry.findFirst({ where: { id: useTxn.walletEntryId, clinicId } })
           if (entry) {
             await tx.walletEntry.update({
@@ -311,7 +311,7 @@ export class BillingService {
         // Anular TODOS os entries ACTIVE (pode haver duplicatas de reaberturas anteriores)
         const activeEntries = presaleEntries.filter((e) => e.status === 'ACTIVE')
         for (const servicePresaleEntry of activeEntries) {
-          await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${servicePresaleEntry.id}::uuid FOR UPDATE`
+          await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${servicePresaleEntry.id} FOR UPDATE`
           await tx.walletEntry.update({
             where: { id: servicePresaleEntry.id },
             data: { balance: 0, status: 'USED' as never, updatedAt: new Date() },
@@ -385,7 +385,7 @@ export class BillingService {
       // SEC05 — Transação com SELECT FOR UPDATE via $transaction
       const result = await prisma.$transaction(async (tx) => {
         // SELECT FOR UPDATE real — bloqueia a linha no Postgres para evitar race condition
-        await tx.$queryRaw`SELECT id FROM billing WHERE id = ${id}::uuid AND clinic_id = ${clinicId}::uuid FOR UPDATE`
+        await tx.$queryRaw`SELECT id FROM billing WHERE id = ${id} AND clinic_id = ${clinicId} FOR UPDATE`
 
         const lockedBilling = await tx.billing.findFirst({
           where: { id, clinicId }, // SEC04
@@ -506,7 +506,7 @@ export class BillingService {
 
     // SEC05 — SELECT FOR UPDATE: garante atomicidade e evita race condition (TOCTOU / double-payment)
     await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM billing WHERE id = ${id}::uuid AND clinic_id = ${clinicId}::uuid FOR UPDATE`
+      await tx.$queryRaw`SELECT id FROM billing WHERE id = ${id} AND clinic_id = ${clinicId} FOR UPDATE`
       const lockedBilling = await tx.billing.findFirst({ where: { id, clinicId } })
       if (!lockedBilling || !['pending', 'overdue'].includes(lockedBilling.status)) {
         throw new AppError('Cobrança inválida para recebimento', 400, 'INVALID_STATUS')
