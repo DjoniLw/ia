@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { ChevronDown, ChevronUp, CreditCard, ExternalLink, Info, Plus, Search, Tag, Wallet } from 'lucide-react'
+import { ExternalLink, Info, Plus, Search, Tag, Wallet, CreditCard } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -228,19 +228,16 @@ function CancelBillingButton({ id, status }: { id: string; status: BillingStatus
 function PaymentMethodPills({ billing }: { billing: Billing }) {
   const lines = billing.manualReceipt?.lines ?? []
   if (lines.length === 0) return null
+  // Deduplica métodos (ex: 2 linhas cash → exibe "Dinheiro" uma vez)
+  const unique = [...new Map(lines.map(l => [l.paymentMethod, l])).values()]
   return (
     <div className="flex flex-wrap gap-0.5 mt-1">
-      {lines.map((line) => (
+      {unique.map((line) => (
         <span
-          key={line.id}
-          className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${PAYMENT_METHOD_COLOR[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
+          key={line.paymentMethod}
+          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_COLOR[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
         >
-          {line.paymentMethod === 'wallet_voucher' || line.paymentMethod === 'wallet_credit'
-            ? <Wallet className="h-2 w-2" />
-            : <CreditCard className="h-2 w-2" />
-          }
           {PAYMENT_METHOD_LABEL[line.paymentMethod] ?? line.paymentMethod}
-          <span className="opacity-80">{formatCurrency(line.amount)}</span>
         </span>
       ))}
     </div>
