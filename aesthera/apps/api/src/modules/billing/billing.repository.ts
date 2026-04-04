@@ -58,7 +58,12 @@ export class BillingRepository {
     }
 
     const skip = (q.page - 1) * q.limit
-    const [items, total, aggregate] = await Promise.all([
+
+    // Filtro espelhado para linhas de recibo — restringe às cobranças do where atual
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lineWhere = { clinicId, manualReceipt: { billing: where as any } }
+
+    const [items, total, aggregate, cashAggregate, breakdown] = await Promise.all([
       prisma.billing.findMany({
         where,
         include: billingInclude,
@@ -68,8 +73,32 @@ export class BillingRepository {
       }),
       prisma.billing.count({ where }),
       prisma.billing.aggregate({ where, _sum: { amount: true } }),
+      // Recebido Caixa: exclui wallet_credit e wallet_voucher
+      prisma.manualReceiptLine.aggregate({
+        where: { ...lineWhere, paymentMethod: { notIn: ['wallet_credit', 'wallet_voucher'] } },
+        _sum: { amount: true },
+      }),
+      // Breakdown por forma de pagamento
+      prisma.manualReceiptLine.groupBy({
+        by: ['paymentMethod'],
+        where: lineWhere,
+        _sum: { amount: true },
+        orderBy: [{ _sum: { amount: 'desc' } }],
+      }),
     ])
-    return { items, total, page: q.page, limit: q.limit, totalAmount: aggregate._sum.amount ?? 0 }
+
+    return {
+      items,
+      total,
+      page: q.page,
+      limit: q.limit,
+      totalAmount: aggregate._sum.amount ?? 0,
+      totalCashReceived: cashAggregate._sum.amount ?? 0,
+      paymentMethodBreakdown: breakdown.map((r) => ({
+        paymentMethod: r.paymentMethod,
+        total: r._sum.amount ?? 0,
+      })),
+    }
   }
 
   async findById(clinicId: string, id: string) {

@@ -55,6 +55,24 @@ const PAYMENT_METHOD_COLOR: Record<string, string> = {
   wallet_voucher: 'bg-orange-200 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200',
 }
 
+// ──── Cash helpers ───────────────────────────────────────────────────────────────
+
+const WALLET_METHODS = new Set(['wallet_credit', 'wallet_voucher'])
+
+function cashReceivedForBilling(b: Billing): number {
+  return (b.manualReceipt?.lines ?? []).reduce(
+    (sum, l) => sum + (WALLET_METHODS.has(l.paymentMethod) ? 0 : l.amount),
+    0,
+  )
+}
+
+function effectiveStatus(b: Billing): BillingStatus {
+  if (b.status === 'pending' && b.dueDate && new Date(b.dueDate + 'T23:59:59') < new Date()) {
+    return 'overdue'
+  }
+  return b.status
+}
+
 // ──── Billing Detail Modal ─────────────────────────────────────────────────────
 
 function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: () => void }) {
@@ -536,6 +554,7 @@ function BillingPageContent() {
               <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Serviço</th>
               <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Agendamento</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Valor</th>
+              <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Recebido Caixa</th>
               <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Vencimento</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
               <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Ações</th>
@@ -544,14 +563,14 @@ function BillingPageContent() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                <td colSpan={8} className="py-8 text-center text-muted-foreground">
                   Carregando…
                 </td>
               </tr>
             )}
             {!isLoading && data?.items.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                <td colSpan={8} className="py-8 text-center text-muted-foreground">
                   Nenhuma cobrança encontrada.
                 </td>
               </tr>
@@ -583,12 +602,27 @@ function BillingPageContent() {
                   )}
                   <PaymentMethodPills billing={b} />
                 </td>
+                <td className="hidden md:table-cell px-2 py-3 font-medium">
+                  {(() => {
+                    const cash = cashReceivedForBilling(b)
+                    return cash > 0 ? (
+                      <span className="text-green-700 dark:text-green-400">{formatCurrency(cash)}</span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )
+                  })()}
+                </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(b.dueDate)}</td>
                 <td className="px-2 py-3">
                   <div className="flex flex-col gap-1">
-                    <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${BILLING_STATUS_COLOR[b.status] ?? 'bg-muted text-muted-foreground'}`}>
-                      {BILLING_STATUS_LABEL[b.status] ?? b.status}
-                    </span>
+                    {(() => {
+                      const es = effectiveStatus(b)
+                      return (
+                        <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${BILLING_STATUS_COLOR[es] ?? 'bg-muted text-muted-foreground'}`}>
+                          {BILLING_STATUS_LABEL[es] ?? es}
+                        </span>
+                      )
+                    })()}
                     {b.sourceType && (
                       <span className={`inline-block w-fit rounded-full px-2 py-0.5 text-xs font-medium ${BILLING_SOURCE_TYPE_COLOR[b.sourceType] ?? 'bg-muted text-muted-foreground'}`}>
                         {BILLING_SOURCE_TYPE_LABEL[b.sourceType] ?? b.sourceType}
@@ -655,33 +689,56 @@ function BillingPageContent() {
 
       {/* Summary */}
       {data && data.items.length > 0 && (
-        <div className="flex flex-wrap gap-6 rounded-lg border bg-card px-6 py-4 text-sm">
-          <div>
-            <p className="text-muted-foreground">Total cobranças</p>
-            <p className="text-lg font-semibold">{data.total}</p>
+        <div className="space-y-3 rounded-lg border bg-card px-6 py-4 text-sm">
+          {/* Linha 1 — totais gerais */}
+          <div className="flex flex-wrap gap-6">
+            <div>
+              <p className="text-muted-foreground">Total cobranças</p>
+              <p className="text-lg font-semibold">{data.total}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Valor total (filtro)</p>
+              <p className="text-lg font-semibold">{formatCurrency(data.totalAmount ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Recebido Caixa (filtro)</p>
+              <p className="text-lg font-semibold text-green-600">{formatCurrency(data.totalCashReceived ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Recebido Caixa (página)</p>
+              <p className="text-lg font-semibold text-green-700">
+                {formatCurrency(data.items.reduce((s, b) => s + cashReceivedForBilling(b), 0))}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Pendente (página)</p>
+              <p className="text-lg font-semibold text-yellow-600">
+                {formatCurrency(
+                  data.items
+                    .filter((b) => b.status === 'pending' || b.status === 'overdue')
+                    .reduce((s, b) => s + b.amount, 0),
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-muted-foreground">Valor total (filtro)</p>
-            <p className="text-lg font-semibold">
-              {formatCurrency(data.totalAmount ?? 0)}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Pago (página)</p>
-            <p className="text-lg font-semibold text-green-600">
-              {formatCurrency(data.items.filter((b) => b.status === 'paid').reduce((s, b) => s + b.amount, 0))}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Pendente (página)</p>
-            <p className="text-lg font-semibold text-yellow-600">
-              {formatCurrency(
-                data.items
-                  .filter((b) => b.status === 'pending' || b.status === 'overdue')
-                  .reduce((s, b) => s + b.amount, 0),
-              )}
-            </p>
-          </div>
+
+          {/* Linha 2 — breakdown por forma de pagamento */}
+          {data.paymentMethodBreakdown && data.paymentMethodBreakdown.length > 0 && (
+            <div className="border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Recebido por forma de pagamento (filtro)</p>
+              <div className="flex flex-wrap gap-2">
+                {data.paymentMethodBreakdown.map((row) => (
+                  <span
+                    key={row.paymentMethod}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${PAYMENT_METHOD_COLOR[row.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
+                  >
+                    {PAYMENT_METHOD_LABEL[row.paymentMethod] ?? row.paymentMethod}
+                    <span className="font-semibold">{formatCurrency(row.total)}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

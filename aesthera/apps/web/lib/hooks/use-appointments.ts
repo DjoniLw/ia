@@ -149,6 +149,8 @@ interface Paginated<T> {
   page: number
   limit: number
   totalAmount?: number
+  totalCashReceived?: number
+  paymentMethodBreakdown?: Array<{ paymentMethod: string; total: number }>
 }
 
 // ──── Appointments ────────────────────────────────────────────────────────────
