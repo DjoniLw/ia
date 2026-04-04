@@ -157,6 +157,7 @@ Aplicar as mudanças respeitando a estrutura. Validar com o checklist do Passo 4
 - **Sempre** use o menor conjunto de ferramentas necessário (princípio do menor privilégio)
 - **Sempre** atualize o `ai-engineering/projects/{projeto}/PLAN.md` após qualquer mudança relevante no projeto
 - **Somente** o `treinador-agent` pode criar, treinar ou modificar agentes neste repositório
+- **Somente** o `aesthera-implementador` pode escrever ou modificar código do sistema (arquivos em `aesthera/`); nenhum outro agente tem essa permissão — demais agentes **devem gerar documentos de orientação** explicando o que precisa ser feito para o implementador
 - **Somente** o `test-guardian` pode criar ou modificar arquivos de teste (`*.test.ts`, `*.spec.ts`); todos os outros agentes devem **sugerir testes** mas nunca tocar nesses arquivos diretamente
 
 ---

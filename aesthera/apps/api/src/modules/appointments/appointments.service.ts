@@ -12,7 +12,7 @@ import type {
 import { AppointmentsRepository } from './appointments.repository'
 import { PackagesRepository } from '../packages/packages.repository'
 import { BillingService } from '../billing/billing.service'
-import { PromotionsRepository } from '../promotions/promotions.repository'
+import { BillingRepository } from '../billing/billing.repository'
 
 // HH:MM → minutes from midnight
 function timeToMinutes(t: string): number {
@@ -39,8 +39,8 @@ function hashToInt32(s: string): number {
 export class AppointmentsService {
   private repo = new AppointmentsRepository()
   private pkgRepo = new PackagesRepository()
-  private billingService = new BillingService()
-  private promotionsRepo = new PromotionsRepository()
+  private billingSvc = new BillingService()
+  private billingRepo = new BillingRepository()
 
   // ── CRUD ──────────────────────────────────────────────────────────────────────
 
@@ -185,33 +185,6 @@ export class AppointmentsService {
           )
         }
 
-        // Trava o desconto no agendamento para promoções específicas de serviço
-        const promos = await this.promotionsRepo.findActiveForService(clinicId, primaryServiceId)
-        const specificPromo = promos.find((p) => p.applicableServiceIds.length > 0) ?? null
-        if (specificPromo) {
-          const discount =
-            specificPromo.discountType === 'PERCENTAGE'
-              ? Math.floor((totalPrice * specificPromo.discountValue) / 100)
-              : Math.min(specificPromo.discountValue, totalPrice)
-          const dueDate = new Date(scheduledDate)
-          dueDate.setUTCDate(dueDate.getUTCDate() + 3)
-          await tx.billing.create({
-            data: {
-              clinicId,
-              customerId: appointment.customerId,
-              appointmentId: appointment.id,
-              amount: totalPrice - discount,
-              originalAmount: totalPrice,
-              lockedPromotionCode: specificPromo.code,
-              status: 'pending',
-              sourceType: 'APPOINTMENT',
-              paymentToken: crypto.randomUUID(),
-              paymentMethods: [],
-              dueDate,
-            },
-          })
-        }
-
         return this.repo.findById(clinicId, appointment.id)
       }
 
@@ -288,34 +261,6 @@ export class AppointmentsService {
           appointment.id,
           [serviceId],
         )
-      }
-
-      // Trava o desconto no agendamento para promoções específicas de serviço
-      const promos = await this.promotionsRepo.findActiveForService(clinicId, serviceId)
-      const specificPromo = promos.find((p) => p.applicableServiceIds.length > 0) ?? null
-      if (specificPromo) {
-        const svcPrice = dto.price ?? service.price
-        const discount =
-          specificPromo.discountType === 'PERCENTAGE'
-            ? Math.floor((svcPrice * specificPromo.discountValue) / 100)
-            : Math.min(specificPromo.discountValue, svcPrice)
-        const dueDate = new Date(scheduledDate)
-        dueDate.setUTCDate(dueDate.getUTCDate() + 3)
-        await tx.billing.create({
-          data: {
-            clinicId,
-            customerId: appointment.customerId,
-            appointmentId: appointment.id,
-            amount: svcPrice - discount,
-            originalAmount: svcPrice,
-            lockedPromotionCode: specificPromo.code,
-            status: 'pending',
-            sourceType: 'APPOINTMENT',
-            paymentToken: crypto.randomUUID(),
-            paymentMethods: [],
-            dueDate,
-          },
-        })
       }
 
       return appointment
@@ -452,32 +397,70 @@ export class AppointmentsService {
       completedAt: new Date(),
     })
 
-    // Check if this appointment has a reserved (but not yet used) package session
+    // RN-PA02 — PackageSession: resgata sessão, sem billing, nenhum modal
     const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)
     if (linkedSession) {
-      // Redeem the session — no billing is created since the package was pre-paid
       await this.pkgRepo.redeemSession(linkedSession.id, id)
-      return completed
+      return { appointment: completed, billing: null, serviceVouchers: [] }
     }
 
-    // Se já foi criado um billing pending no momento do agendamento (promoção travada),
-    // não cria um novo — o recebimento ocorre normalmente pelo modal existente
-    const existingBilling = await prisma.billing.findUnique({ where: { appointmentId: id } })
-    if (existingBilling && existingBilling.status === 'pending') {
-      return completed
+    // Helper: busca vouchers SERVICE_PRESALE ativos para os serviços do agendamento
+    const serviceItems = (completed as { serviceItems?: Array<{ serviceId: string }> }).serviceItems
+    const serviceIds: string[] = serviceItems && serviceItems.length > 0
+      ? serviceItems.map((item) => item.serviceId)
+      : (completed.serviceId ? [completed.serviceId] : [])
+
+    const findServiceVouchers = async () => {
+      if (serviceIds.length === 0) return []
+      return prisma.walletEntry.findMany({
+        where: {
+          clinicId,
+          customerId: completed.customerId,
+          originType: 'SERVICE_PRESALE',
+          status: 'ACTIVE',
+          OR: [{ expirationDate: null }, { expirationDate: { gte: new Date() } }],
+          serviceId: { in: serviceIds },
+        },
+        select: { id: true, serviceId: true, balance: true, expirationDate: true, code: true },
+      })
     }
 
-    // If multi-service appointment, compute total price from service items
-    const serviceItems = completed.serviceItems
-    const billingPrice =
-      serviceItems && serviceItems.length > 0
-        ? serviceItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0)
-        : completed.price
+    // RN-PA03 — Billing já existe (promoção travada ou criado anteriormente)
+    const existingByAppt = await prisma.billing.findUnique({
+      where: { appointmentId: id },
+    })
 
-    // Auto-create billing (idempotent)
-    await this.billingService.createForAppointment({ ...completed, price: billingPrice })
+    if (existingByAppt) {
+      const fullExisting = await this.billingRepo.findById(clinicId, existingByAppt.id)
+      if (!fullExisting) {
+        throw new NotFoundError('Billing')
+      }
+      if (fullExisting.status === 'paid') {
+        // Já pago — retorna sem abrir modal
+        return { appointment: completed, billing: fullExisting, serviceVouchers: [] }
+      }
+      // Billing pendente/overdue — usar existente, buscar vouchers normalmente
+      const serviceVouchers = await findServiceVouchers()
+      return { appointment: completed, billing: fullExisting, serviceVouchers }
+    }
 
-    return completed
+    // RN-PA01 — Caso geral: criar billing automaticamente
+    const newBilling = await this.billingSvc.createManual(
+      {
+        customerId: completed.customerId,
+        sourceType: 'APPOINTMENT',
+        amount: completed.price,
+        appointmentId: id,
+        serviceId: completed.serviceId ?? undefined,
+      },
+      clinicId,
+    )
+    // Buscar com includes completos (appointment.service para o ReceiveManualModal)
+    const fullBilling = await this.billingRepo.findById(clinicId, newBilling.id)
+    if (!fullBilling) throw new NotFoundError('Billing')
+
+    const serviceVouchers = await findServiceVouchers()
+    return { appointment: completed, billing: fullBilling, serviceVouchers }
   }
 
   async cancel(clinicId: string, id: string, dto: CancelAppointmentDto) {
@@ -807,13 +790,13 @@ export class AppointmentsService {
     scheduledAt: Date,
     durationMinutes: number,
     dateStr: string,
-    _excludeId?: string,
+    excludeId?: string,
   ) {
     const slotStart = dateToMinutes(scheduledAt)
     const slotEnd = slotStart + durationMinutes
 
     const [appointments, blockedSlots] = await Promise.all([
-      this.repo.getConflictingAppointments(clinicId, professionalId, dateStr),
+      this.repo.getConflictingAppointments(clinicId, professionalId, dateStr, excludeId),
       this.repo.getBlockedSlotsForDate(clinicId, professionalId, dateStr),
     ])
 

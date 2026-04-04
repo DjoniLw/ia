@@ -113,6 +113,8 @@ enum BillingSourceType {
   PACKAGE_SALE
   PRODUCT_SALE
   MANUAL
+  PRESALE
+  WALLET_PURCHASE
 }
 
 enum AccountsPayableStatus {
@@ -123,6 +125,7 @@ enum AccountsPayableStatus {
 }
 
 enum WalletEntryStatus {
+  PENDING
   ACTIVE
   USED
   EXPIRED
@@ -135,6 +138,7 @@ enum WalletOriginType {
   CASHBACK_PROMOTION
   PACKAGE_PURCHASE
   VOUCHER_SPLIT
+  SERVICE_PRESALE
 }
 
 enum WalletTransactionType {
@@ -142,6 +146,7 @@ enum WalletTransactionType {
   USE
   SPLIT
   ADJUST
+  REFUND
 }
 
 enum NotificationType {
@@ -220,6 +225,8 @@ model Clinic {
   smtpPass      String?   @map("smtp_pass")        // armazenado criptografado (AES-256-GCM)
   smtpFrom      String?   @map("smtp_from")        // ex: "Clínica Bella <contato@clinicabella.com.br>"
   smtpSecure    Boolean   @default(true) @map("smtp_secure") // true = TLS/SSL (porta 465), false = STARTTLS (587)
+  // Configuração de cobrança
+  chargeVoucherDifference Boolean @default(false) @map("charge_voucher_difference")
   // Configuração WhatsApp por clínica (instância da Evolution API)
   whatsappInstance String?  @map("whatsapp_instance")       // ex: "clinica-bella-01"
   deletedAt     DateTime?                         @map("deleted_at")
@@ -256,6 +263,7 @@ model Clinic {
   auditLogs        AuditLog[]
   accountsPayable  AccountsPayable[]
   manualReceipts   ManualReceipt[]
+  billingEvents    BillingEvent[]
   customerFiles    CustomerFile[]
   bodyMeasurementFields  BodyMeasurementField[]
   bodyMeasurementRecords BodyMeasurementRecord[]
@@ -489,6 +497,8 @@ model Service {
   supplies      ServiceSupply[]
   appointmentItems AppointmentServiceItem[]
   packageItems     ServicePackageItem[]
+  billing          Billing[]
+  walletEntries    WalletEntry[]
 
   @@index([clinicId])
   @@map("services")
@@ -621,20 +631,48 @@ model Billing {
   createdAt           DateTime          @default(now())      @map("created_at")
   updatedAt           DateTime          @updatedAt           @map("updated_at")
 
+  serviceId      String?           @map("service_id")
+
   clinic           Clinic             @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   customer         Customer           @relation(fields: [customerId], references: [id], onDelete: Restrict)
   appointment      Appointment?       @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  service          Service?           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   payments         Payment[]
   ledgerEntries    LedgerEntry[]      // credit on paid, debit on refund
   notificationLogs NotificationLog[]
   customerPackage  CustomerPackage?
   manualReceipt    ManualReceipt?
+  billingEvents    BillingEvent[]
 
   @@index([clinicId])
   @@index([clinicId, customerId])
   @@index([clinicId, status])
   @@index([clinicId, sourceType, createdAt])
+  @@index([clinicId, serviceId])
   @@map("billing")
+}
+
+// ─── Payment ─────────────────────────────────────────────────────────────────
+
+// ─── Billing Event ────────────────────────────────────────────────────────────
+// Append-only audit trail de mudanças no ciclo de vida de uma cobrança.
+
+model BillingEvent {
+  id         String   @id @default(uuid())
+  clinicId   String                        @map("clinic_id")
+  billingId  String                        @map("billing_id")
+  event      String   // created | paid | cancelled | reopened | overdue
+  fromStatus String?                       @map("from_status")
+  toStatus   String?                       @map("to_status")
+  notes      String?
+  createdAt  DateTime @default(now())      @map("created_at")
+
+  clinic  Clinic  @relation(fields: [clinicId],  references: [id], onDelete: Cascade)
+  billing Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, billingId])
+  @@index([clinicId, createdAt])
+  @@map("billing_events")
 }
 
 // ─── Payment ─────────────────────────────────────────────────────────────────
@@ -938,8 +976,11 @@ model WalletEntry {
   createdAt        DateTime          @default(now())       @map("created_at")
   updatedAt        DateTime          @updatedAt            @map("updated_at")
 
+  serviceId        String?           @map("service_id")
+
   clinic              Clinic              @relation(fields: [clinicId], references: [id], onDelete: Restrict)
   customer            Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  service             Service?            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   transactions        WalletTransaction[]
   manualReceiptLines  ManualReceiptLine[]
 
@@ -947,6 +988,7 @@ model WalletEntry {
   @@index([clinicId, customerId])
   @@index([clinicId, status])
   @@index([clinicId, createdAt])
+  @@index([clinicId, customerId, serviceId, status])
   @@map("wallet_entries")
 }
 

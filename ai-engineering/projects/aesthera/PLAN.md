@@ -260,44 +260,111 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 > Spec do PO: `outputs/po/redesenho-fluxo-cobranca-servicos-doc.md`
 > **Spec final consolidada:** `outputs/consolidador/redesenho-fluxo-cobranca-servicos-spec-final.md`
-> Status: ✅ Spec consolidada — pronta para Issue Writer
+> Status: ✅ Implementada — PR #148
 
 ### Objetivo
 Desacoplar billing do agendamento e suportar 3 cenários de cobrança: pós-serviço (manual), pré-venda de serviço (com voucher) e cobrança manual avulsa.
 
 ### Backend
-- [ ] Migration: `serviceId` nullable em `Billing` + `@@index([clinicId, serviceId])`
-- [ ] Migration: `serviceId` nullable em `WalletEntry` + `@@index([clinicId, customerId, serviceId, status])`
-- [ ] Migration: `chargeVoucherDifference` em `Clinic`
-- [ ] Migration: enum `PRESALE` em `BillingSourceType`
-- [ ] Migration: enum `SERVICE_PRESALE` em `WalletOriginType`
-- [ ] `BillingService.createManual()` com roleGuard([admin, staff]) e validações SEC01-SEC06
-- [ ] Remover criação automática de billing em `appointment.completed`
-- [ ] Endpoint `POST /billing` manual (staff/admin) com DTO restrito
-- [ ] Endpoint `GET /wallet/service-vouchers/:customerId` (módulo wallet, não billing)
-- [ ] `AppointmentService.complete()` retorno normalizado `{ appointment, serviceVouchers[] }`
-- [ ] `WalletService.use()` valida `serviceId` + busca segura por `{ id, clinicId }`
-- [ ] `receivePayment` em `prisma.$transaction()` + billing complementar (appointmentId=null)
-- [ ] Domain event `billing.created` após commit da transação
-- [ ] `PATCH /clinics/me` aceitar `chargeVoucherDifference`
-- [ ] Atualizar `domain-event-handlers.ts` linha 18
+- [x] Migration: `serviceId` nullable em `Billing` + `@@index([clinicId, serviceId])`
+- [x] Migration: `serviceId` nullable em `WalletEntry` + `@@index([clinicId, customerId, serviceId, status])`
+- [x] Migration: `chargeVoucherDifference` em `Clinic`
+- [x] Migration: enum `PRESALE` em `BillingSourceType`
+- [x] Migration: enum `SERVICE_PRESALE` em `WalletOriginType`
+- [x] `BillingService.createManual()` com roleGuard([admin, staff]) e validações SEC01-SEC06
+- [x] Remover criação automática de billing em `appointment.completed`
+- [x] Endpoint `POST /billing` manual (staff/admin) com DTO restrito
+- [x] Endpoint `GET /wallet/service-vouchers/:customerId` (módulo wallet, não billing)
+- [x] `AppointmentService.complete()` retorno normalizado `{ appointment, serviceVouchers[] }`
+- [x] `WalletService.use()` valida `serviceId` + busca segura por `{ id, clinicId }`
+- [x] `receivePayment` em `prisma.$transaction()` + billing complementar (appointmentId=null)
+- [x] Domain event `billing.created` após commit da transação
+- [x] `PATCH /clinics/me` aceitar `chargeVoucherDifference`
+- [x] Atualizar `domain-event-handlers.ts` linha 18
 
 ### Frontend
-- [ ] `CompleteAppointmentModal` (loading/erro/sem voucher/com voucher + hierarquia de botões)
-- [ ] `SellServiceForm` com campos corretos, validações e toasts PT-BR
-- [ ] Botão "Vender Serviço" na ficha do cliente
-- [ ] Botão "Nova Cobrança" na tela `/billing`
-- [ ] `/billing`: filtro pills por `sourceType` + badges + legenda filtros + empty state
-- [ ] `lib/status-colors.ts`: `BILLING_SOURCE_TYPE_LABEL` + `BILLING_SOURCE_TYPE_COLOR`
-- [ ] `ReceiveManualModal`: prop `preSelectedVoucherId` + Alert RN13
-- [ ] `useAppointmentTransition.complete`: abrir modal apenas em sucesso
-- [ ] `wallet-labels.ts`: SERVICE_PRESALE
-- [ ] Ficha do cliente: badge "Vale disponível" aba Carteira e Histórico
-- [ ] `/settings`: toggle `chargeVoucherDifference`
+- [x] `CompleteAppointmentModal` (loading/erro/sem voucher/com voucher + hierarquia de botões)
+- [x] `SellServiceForm` com campos corretos, validações e toasts PT-BR
+- [x] Botão "Vender Serviço" na ficha do cliente
+- [x] Botão "Nova Cobrança" na tela `/billing`
+- [x] `/billing`: filtro pills por `sourceType` + badges + legenda filtros + empty state
+- [x] `lib/status-colors.ts`: `BILLING_SOURCE_TYPE_LABEL` + `BILLING_SOURCE_TYPE_COLOR`
+- [x] `ReceiveManualModal`: prop `preSelectedVoucherId` + Alert RN13
+- [x] `useAppointmentTransition.complete`: abrir modal apenas em sucesso
+- [x] `wallet-labels.ts`: SERVICE_PRESALE
+- [x] Ficha do cliente: botão "Vender Serviço" aba Carteira
+- [x] `/settings`: toggle `chargeVoucherDifference`
 
 ### Documentação
-- [ ] `system-architect-knowledge.md`: revogar regra de billing automático em complete()
+- [x] `system-architect-knowledge.md`: revogar regra de billing automático em complete()
 - [ ] `screen-mapping.md`: atualizar após implementação
+
+---
+
+## Fase 12 — Redesenho do Fluxo Pós-Atendimento e Correção Financeira da Pré-Venda
+
+> Spec do PO: `outputs/po/aesthera-po-redesenho-fluxo-pos-atendimento-2026-04-03.md`
+> Status: ✅ Implementada — commit `f26a47e` na branch `feat/billing-service-redesign-issue-147`
+
+### Objetivo
+Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` expunha decisão de cobrança ao operador — vetor de erro humano; (2) Dupla contagem no Ledger ao usar voucher `SERVICE_PRESALE`.
+
+### Backend
+- [x] `appointments.service.ts::complete()` restaura criação automática de billing (RN-PA01)
+- [x] `complete()` retorna `{ appointment, billing: Billing | null, serviceVouchers }` (RN-PA01–04)
+- [x] `complete()` — path packageSession: sem billing, retorna `billing: null` (RN-PA02)
+- [x] `complete()` — path billing `paid` existente: reutiliza, sem criar novo (RN-PA03)
+- [x] `complete()` — path billing `pending/overdue` existente: reutiliza + busca vouchers (RN-PA03)
+- [x] `complete()` — path geral: `billingSvc.createManual()` + busca vouchers (RN-PA01)
+- [x] `manual-receipts.service.ts::receive()` — skip LedgerEntry para linha `SERVICE_PRESALE` (RN-FIN01)
+- [x] `billing.service.ts::receivePayment()` — skip LedgerEntry para voucher `SERVICE_PRESALE` (RN-FIN01)
+
+### Frontend
+- [x] `use-appointments.ts` — tipo `CompleteResult` exportado + invalidação de `['wallet']` no onSuccess
+- [x] `appointments/page.tsx::SlotActions` reescrito: sem `CompleteAppointmentModal`, abre `ReceiveManualModal` diretamente com voucher pré-selecionado (RN-PA04)
+- [x] `CompleteAppointmentModal.tsx` removido
+
+### Testes
+- [x] `appointments.service.test.ts` — T-CP01–CP05: billing auto, packageSession, billing paid, billing pending, vouchers (5/5 ✅)
+- [x] `manual-receipts.service.test.ts` — T-FIN01–FIN03: skip SERVICE_PRESALE, manter OVERPAYMENT, misto (3/3 ✅)
+- [ ] T16/T17/T19 em `appointments.service.test.ts` — premissa invertida pela spec, delegado ao `test-guardian`
+
+---
+
+## Fase 13 — Correções de UX e Regras de Negócio da Pré-Venda
+
+> Commit: `d2a3d53` na branch `feat/billing-service-redesign-issue-147`
+
+### Backend
+- [x] `wallet.service.ts::use()` — bypass da checagem de saldo para `SERVICE_PRESALE`: o serviço já foi pago, preço não importa
+- [x] `billing.service.ts` — descrição da transação do vale inclui nome do serviço (ex.: `Vale de procedimento criado — Drenagem (pré-venda)`)
+- [x] `manual-receipts.service.ts` — mesma correção de descrição
+
+### Frontend
+- [x] `components/ui/info-banner.tsx` — componente reutilizável `InfoBanner` (variantes: info/success/warning/error)
+- [x] `receive-manual-modal.tsx` — substituído banner inline por `InfoBanner`; `walletOriginType` adicionado ao `PaymentLineState`; valor auto-preenchido e campo desabilitado para `SERVICE_PRESALE`; promoções ocultadas quando pré-venda selecionada
+- [x] `billing/page.tsx` — `BillingActions` busca vouchers `SERVICE_PRESALE` disponíveis e passa como `preSelectedVoucherId` ao abrir `ReceiveManualModal`
+- [x] `carteira/page.tsx` — view por-cliente exibe seção "Aguardando pagamento" com pré-vendas pendentes (sem contar no saldo)
+
+---
+
+## Fase 14 — Melhorias de UX na Tela de Cobranças e Ficha do Cliente
+
+> Commit: em progresso — branch `feat/billing-service-redesign-issue-147`
+
+### Backend
+- [x] `billing.dto.ts` — adicionados `createdAtFrom` e `createdAtTo` ao `ListBillingQuery` (filtros de data por criação)
+- [x] `billing.repository.ts::findAll()` — filtro de `createdAt` aplicado quando os parâmetros são fornecidos
+- [x] `billing.repository.ts::billingInclude` — adicionado `manualReceipt { lines { paymentMethod, amount, walletEntryId, walletEntry } }` para retornar dados de pagamento nas listagens
+
+### Frontend
+- [x] `use-appointments.ts::Billing` — interface extendida com campo `manualReceipt` (linhas de pagamento com `paymentMethod`, `amount`, `walletEntry`)
+- [x] `billing/page.tsx` — adicionados filtros de data (Criado em: presets Hoje/7 dias/30 dias/3 meses/6 meses + inputs manual) com padrão dos últimos 6 meses
+- [x] `billing/page.tsx` — totalizador "Valor total (filtro)" usa `data.totalAmount` do backend (aggregate real, não soma da página)
+- [x] `billing/page.tsx` — `PaymentMethodPills` exibe pills de forma de pagamento (Dinheiro/PIX/Cartão/Vale/Crédito) nas linhas da tabela para cobranças pagas
+- [x] `billing/page.tsx` — `BillingDetailModal` com detalhe completo de cobranças pagas/canceladas (dados da cobrança, promoção aplicada, breakdown de pagamentos com formas e valores); acessível via botão "Ver detalhe" nas linhas pagas/canceladas
+- [x] `receive-manual-modal.tsx` — redesenho da UX de promoções: melhor desconto é auto-aplicado (específica > universal); removidos múltiplos banners confusos; adicionado botão "Selecionar outro desconto" que expande picker com todos os descontos disponíveis (mostra código, tipo e valor); corrigido bug onde trocar promoção deixava a anterior aparecendo como sugestão em loop
+- [x] `customers/page.tsx::CustomerWalletTab` — seção "Aguardando pagamento" com pré-vendas pendentes (`sourceType: PRESALE, status: pending`) visível na aba Carteira da Ficha do Cliente; mesmo padrão visual amber já presente em `carteira/page.tsx`
 
 ---
 
@@ -322,6 +389,30 @@ Desacoplar billing do agendamento e suportar 3 cenários de cobrança: pós-serv
 ---
 
 ## Histórico de Atualizações
+
+### [2026-04-04] — hotfix: migration idempotente para `wallet_transaction_type.REFUND`
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/migrations/20260404000003_ensure_wallet_refund_txn_type/migration.sql` *(novo)*
+- **O que foi feito:** Identificado que a migration `20260404000002_wallet_refund_txn_type` usa `ALTER TYPE ... ADD VALUE 'REFUND'` **sem** `IF NOT EXISTS`. Na transição `db push → migrate deploy`, o mecanismo de auto-resolve em `main.ts` pode marcar essa migration como "applied" sem executar o SQL, deixando `REFUND` ausente do enum PostgreSQL `wallet_transaction_type`. Resultado: qualquer chamada a `walletTransaction.create({ type: 'REFUND' })` no fluxo de reabertura de cobranças falha com `PrismaClientKnownRequestError P2023` → HTTP 400. Criada nova migration idempotente `20260404000003` com `ADD VALUE IF NOT EXISTS 'REFUND'` que garante a presença do valor independente do histórico de migração anterior.
+- **Impacto:** Corrige o erro 400 ao reabrir cobranças `PRESALE` com vale de serviço ainda ativo (`status=ACTIVE`). Migration é no-op quando `REFUND` já existe.
+
+### [2026-04-03] — Code Review PR #148
+- **Arquivo gerado:** `outputs/code-review/pr/revisao_pr148_2026-04-03.md`
+- **O que foi feito:** Revisão do PR #148 (feat: redesenho fluxo cobrança de serviços — issue #147). Orquestração: security-auditor, ux-reviewer, test-guardian.
+- **Resultado:** REPROVADO — 8 bloqueantes, 9 sugestões. Principais bloqueantes: fluxo Cash/PIX/Card sem `$transaction` (corrupção de dados financeiros), T05/T19 com assertivas condicionais que podem ser silenciosamente puladas, T06 ausente (billing complementar RN14/RN15 sem testes), badges PACKAGE_SALE/PRODUCT_SALE exibindo enum inglês na UI.
+
+### [2026-04-03] — treinamento: aesthera-implementador — 2 novos anti-padrões (PR #148)
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+- **O que foi feito:** Dois anti-padrões registrados via treinador-agent com origem no code review do PR #148: (1) Múltiplos branches de pagamento com atomicidade inconsistente — quando um método tem ≥2 caminhos (voucher/cash/card), todos devem estar dentro da mesma `$transaction`; misturar `this.prisma.X` fora da transação com branches dentro dela é silenciosamente perigoso; (2) Assertivas condicionais com `if (instance)` + `?.mock.results[0]?.value` criam testes que passam verde sem executar o `expect()` — padrão correto é `vi.hoisted()` para capturar referências de mock; nenhum `expect()` deve ser envolvido em `if`.
+- **Impacto:** Prevenção de regressões financeiras por falha de atomicidade em pagamentos e de testes falso-positivos que mascaram bugs de lógica.
+
+### [2026-04-03] — agente: criação do code-reviewer (orquestrador de PR reviews)
+- **Arquivo(s) afetado(s):**
+  - `.github/agents/code-reviewer.agent.md`
+  - `ai-engineering/prompts/code-reviewer/code-reviewer-prompt.md`
+- **O que foi feito:** Criado novo agente `code-reviewer` — revisor de PRs com papel duplo: (1) revisor especialista em integridade do sistema (anti-padrões, violações de padrão, PLAN.md, copilot-instructions) e (2) orquestrador que aciona `ux-reviewer`, `security-auditor`, `aesthera-system-architect` e `test-guardian` conforme o tipo de mudança no PR. Consolida os resultados filtrando apenas o que precisa ser corrigido. Gera relatório em `outputs/code-review/pr/revisao_pr{N}_{data}.md`.
+- **Impacto:** Pipeline de qualidade de código com revisão automatizada e especializada para todos os PRs do projeto.
 
 ### [2026-03-31] — treinamento: aesthera-implementador — Scan pré-código obrigatório + reincidência modal PR #144
 - **Arquivo(s) afetado(s):**

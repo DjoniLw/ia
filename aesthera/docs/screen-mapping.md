@@ -50,7 +50,7 @@ Todo agente que atuar em criação, alteração ou remoção de telas **deve**:
 | [Vendas](#vendas-sales) | `/sales` | Consulta | ✅ Nova Venda (modal) |
 | [Carteira](#carteira-carteira) | `/carteira` | Consulta | ✅ Criar Crédito + Ajuste de Saldo |
 | [Agendamento](#agendamento-appointments) | `/appointments` | Ação | ✅ Novo Agendamento + Painel de Detalhes |
-| [Cobranças](#cobrancas-billing) | `/billing` | Ação | 🔍 Não — usa modais globais |
+| [Cobranças](#cobrancas-billing) | `/billing` | Ação | ✅ Nova Pré-venda + Nova Cobrança + Detalhe + Reabrir + Cancelar |
 | [Configurações](#configuracoes-settings) | `/settings` | Configuração | ✅ Por aba |
 | [Perfil](#perfil-settingsprofile) | `/settings/profile` | Configuração | ✅ Dados do usuário logado |
 | [Início / Dashboard](#inicio-dashboard-dashboard) | `/dashboard` | Visual | 🔍 Não — somente leitura |
@@ -304,9 +304,19 @@ Ações disponíveis: confirmar, cancelar, registrar pagamento, receber manualme
 ### Cobranças `/billing`
 
 **Tipo:** Ação  
-**Descrição:** Listagem de cobranças geradas automaticamente por agendamentos. Filtro por nome de cliente e status. Sem formulário embutido.
+**Descrição:** Listagem paginada de cobranças de serviços, pré-vendas e registros avulsos. Filtros multiselect por status, origem, serviço, atendente, cliente e período. Totalizador de recebimentos e breakdown por forma de pagamento. URL-sync de filtros.  
+**Última atualização:** 04/04/2026 — PR #148
 
-**Ações por linha:** abrir link de pagamento externo (quando disponível), receber manualmente (modal global), cancelar cobrança (com confirmação).
+**Modais e ações embutidos:**
+
+| Modal / Ação | Trigger | Descrição |
+|---|---|---|
+| **Nova Pré-venda de Serviço** | Botão primário no cabeçalho | Cria cobrança PRESALE vinculada a cliente e serviço; ao ser paga gera vale SERVICE_PRESALE na carteira |
+| **Nova Cobrança** | Botão outline no cabeçalho | Cria cobrança avulsa MANUAL sem vínculo obrigatório a serviço |
+| **Registrar Recebimento** | Botão por linha (cobranças pendentes/vencidas) | Abre `ReceiveManualModal` com suporte a múltiplas formas de pagamento e vouchers |
+| **Ver detalhe** | Botão por linha (cobranças pagas/canceladas) | Abre `BillingDetailModal` com histórico de eventos e linhas de recebimento |
+| **Reabrir** | Botão por linha (cobranças pagas/canceladas) | Dialog de confirmação; reverte pagamento, restaura carteira/vale; exibe aviso quando há vale de pré-venda |
+| **Cancelar** | Botão por linha (cobranças pendentes/vencidas) | Dialog de confirmação com alerta de irreversibilidade |
 
 ---
 

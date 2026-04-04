@@ -20,6 +20,9 @@ export class ClinicsRepository {
         timezone: data.timezone,
         address: data.address as object | undefined,
         settings: data.settings as object | undefined,
+        ...(data.chargeVoucherDifference !== undefined
+          ? { chargeVoucherDifference: data.chargeVoucherDifference }
+          : {}),
         updatedAt: new Date(),
       },
     })

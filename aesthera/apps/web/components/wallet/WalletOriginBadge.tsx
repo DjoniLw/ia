@@ -14,6 +14,7 @@ const ORIGIN_COLORS: Record<WalletOriginType, string> = {
   CASHBACK_PROMOTION: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-200',
   PACKAGE_PURCHASE:   'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200',
   VOUCHER_SPLIT:      'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-200',
+  SERVICE_PRESALE:    'bg-teal-100 text-teal-700 dark:bg-teal-900/50 dark:text-teal-200',
 }
 
 function getEnrichedLabel(originType: string, originReference?: string | null): string {

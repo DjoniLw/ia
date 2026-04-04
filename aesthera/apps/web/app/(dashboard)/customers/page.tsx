@@ -1,8 +1,9 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
+import { AlertCircle, Ban, Bot, ChevronDown, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -53,19 +54,24 @@ import { useRole } from '@/lib/hooks/use-role'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
-import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
+import { useCustomerWallet, type WalletEntry, useCreateWalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
+import { useBilling, useOneBilling, useCancelBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
+import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
+import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
 import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
+import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import {
   WALLET_ENTRY_TYPE_LABELS,
   WALLET_ENTRY_TYPE_COLORS,
   WALLET_ENTRY_STATUS_CONFIG,
   WALLET_TRANSACTION_LABELS,
   WALLET_PACKAGE_SESSION_STATUS,
+  WALLET_ORIGIN_LABELS,
 } from '@/lib/wallet-labels'
-import type { WalletEntryStatus } from '@/lib/wallet-labels'
+import type { WalletEntryStatus, WalletEntryType, WalletOriginType } from '@/lib/wallet-labels'
 
 // ──── Schema ───────────────────────────────────────────────────────────────────
 
@@ -718,9 +724,244 @@ function CustomerPackageItem({ pkg }: { pkg: CustomerPackage }) {
   )
 }
 
-function CustomerWalletTab({ customerId }: { customerId: string }) {
+function CustomerWalletCreateModal({
+  customerId,
+  onClose,
+  onPayNow,
+}: {
+  customerId: string
+  onClose: () => void
+  onPayNow: (billingId: string) => void
+}) {
+  const [type, setType] = useState<WalletEntryType>('VOUCHER')
+  const [value, setValue] = useState('')
+  const [originType, setOriginType] = useState<WalletOriginType>('GIFT')
+  const [expirationDate, setExpirationDate] = useState('')
+  const [notes, setNotes] = useState('')
+  const [createdResult, setCreatedResult] = useState<{
+    entryCode: string
+    entryType: WalletEntryType
+    billingId: string
+    billingAmount: number
+  } | null>(null)
+  const create = useCreateWalletEntry()
+
+  // Tipos disponíveis para criação manual (excluir PACKAGE e SERVICE_PRESALE)
+  const allowedTypes: WalletEntryType[] = ['CREDIT', 'VOUCHER', 'CASHBACK']
+  const manualOriginTypes: WalletOriginType[] = ['GIFT', 'REFUND', 'CASHBACK_PROMOTION']
+
+  function handleClose() {
+    setCreatedResult(null)
+    onClose()
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const cents = Math.round(parseFloat(value.replace(',', '.')) * 100)
+    if (!cents) return
+    try {
+      const result = await create.mutateAsync({
+        customerId,
+        type,
+        value: cents,
+        originType,
+        expirationDate: expirationDate || undefined,
+        notes: notes || undefined,
+      })
+      setCreatedResult({
+        entryCode: result.entry.code,
+        entryType: result.entry.type,
+        billingId: result.billing.id,
+        billingAmount: result.billing.amount,
+      })
+    } catch {
+      toast.error('Erro ao criar crédito/vale na carteira')
+    }
+  }
+
+  const formatCurrency = (cents: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
+
+  return (
+    <Dialog open onClose={handleClose}>
+      <DialogTitle>Criar Crédito / Vale</DialogTitle>
+
+      {createdResult ? (
+        <div className="space-y-4 mt-4">
+          <div className="flex items-center gap-3 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+            <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600 dark:text-green-400" />
+            <div>
+              <p className="font-medium text-green-800 dark:text-green-200">
+                {WALLET_ENTRY_TYPE_LABELS[createdResult.entryType]} {createdResult.entryCode} criado!
+              </p>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                Aguardando pagamento para ativar o vale.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
+            <p className="font-medium">Cobrança de {formatCurrency(createdResult.billingAmount)} gerada</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+              O vale ficará disponível para uso somente após o pagamento ser registrado.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={handleClose}>
+              Fazer depois
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                onPayNow(createdResult.billingId)
+                handleClose()
+              }}
+            >
+              Registrar Pagamento
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Tipo</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as WalletEntryType)}
+              className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {allowedTypes.map((t) => (
+                <option key={t} value={t}>
+                  {WALLET_ENTRY_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Valor (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="0,00"
+              className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              required
+            />
+          </div>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">Origem</label>
+          <select
+            value={originType}
+            onChange={(e) => setOriginType(e.target.value as WalletOriginType)}
+            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            {manualOriginTypes.map((o) => (
+              <option key={o} value={o}>
+                {WALLET_ORIGIN_LABELS[o].label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
+            Validade (opcional)
+          </label>
+          <input
+            type="date"
+            value={expirationDate}
+            onChange={(e) => setExpirationDate(e.target.value)}
+            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
+            Observações (opcional)
+          </label>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notas sobre este voucher"
+            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={handleClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={create.isPending}>
+            {create.isPending ? 'Criando…' : 'Criar'}
+          </Button>
+        </div>
+      </form>
+      )}
+    </Dialog>
+  )
+}
+
+function MarkAsUndueBillingModal({ billingId, onClose }: { billingId: string; onClose: () => void }) {
+  const [reason, setReason] = useState('')
+  const cancel = useCancelBilling(billingId)
+
+  async function handleConfirm() {
+    if (!reason.trim()) return
+    try {
+      await cancel.mutateAsync(reason.trim())
+      toast.success('Cobrança registrada como indevida')
+      onClose()
+    } catch {
+      toast.error('Erro ao registrar cobrança como indevida')
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose}>
+      <DialogTitle>Registrar como Indevida / Cortesia</DialogTitle>
+      <div className="space-y-4 mt-4">
+        <p className="text-sm text-muted-foreground">
+          Informe o motivo para registrar esta cobrança como indevida (cortesia, erro de lançamento, etc.).
+          A ação cancelará a cobrança e o motivo ficará salvo no histórico.
+        </p>
+        <div>
+          <Label className="mb-1.5 block text-sm font-medium">Motivo *</Label>
+          <Input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Ex.: Procedimento de cortesia, erro de lançamento..."
+            autoFocus
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="destructive"
+            onClick={handleConfirm}
+            disabled={!reason.trim() || cancel.isPending}
+          >
+            {cancel.isPending ? 'Registrando…' : 'Confirmar Indevida'}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
+function CustomerPayNowWrapper({ billingId, onClose }: { billingId: string; onClose: () => void }) {
+  const { data: billing, isLoading } = useOneBilling(billingId)
+  if (isLoading || !billing) return null
+  return <ReceiveManualModal billing={billing} open onClose={onClose} />
+}
+
+function CustomerWalletTab({ customerId, customerName }: { customerId: string; customerName?: string }) {
   const role = useRole()
   const [walletSubTab, setWalletSubTab] = useState<'carteira' | 'pacotes'>('carteira')
+  const [showSellService, setShowSellService] = useState(false)
+  const [showCreateWallet, setShowCreateWallet] = useState(false)
+  const [payNowBillingId, setPayNowBillingId] = useState<string | null>(null)
+  const [undueModalBillingId, setUndueModalBillingId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<WalletEntryStatus>('ACTIVE')
   const [page, setPage] = useState(1)
 
@@ -738,12 +979,20 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
   const items = entries.data?.items ?? []
   const total = entries.data?.total ?? 0
   const limit = entries.data?.limit ?? 10
+
+  // Todas as cobranças em aberto (pending + overdue) — inclui agendamentos, pré-vendas, avulsas
+  const { data: pendingBillings } = useBilling(
+    isAllowed ? { customerId, status: 'pending,overdue', limit: '50' } : undefined,
+    { enabled: isAllowed },
+  )
+  const openBillings = pendingBillings?.items ?? []
   const totalPages = Math.ceil(total / limit)
 
   return (
     <div className="space-y-4 text-sm">
-      {/* Sub-tabs: Carteira e Pacotes */}
-      <div className="flex rounded-lg border overflow-hidden">
+      {/* Cabeçalho: sub-tabs + botão vender serviço */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-1 rounded-lg border overflow-hidden">
         <button
           type="button"
           onClick={() => setWalletSubTab('carteira')}
@@ -770,7 +1019,59 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
           <Package className="h-3 w-3" />
           Pacotes
         </button>
+        </div>
+        {role !== 'professional' && (
+          <div className="flex gap-1 shrink-0">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              onClick={() => setShowCreateWallet(true)}
+            >
+              <Plus className="mr-1 h-3 w-3" />
+              Crédito / Vale
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              onClick={() => setShowSellService(true)}
+            >
+              <Plus className="mr-1 h-3 w-3" />
+              Vender Serviço
+            </Button>
+          </div>
+        )}
       </div>
+
+      {/* Modal de pré-venda de serviço */}
+      {showSellService && (
+        <Dialog open onClose={() => setShowSellService(false)}>
+          <DialogTitle>Pré-venda de Serviço</DialogTitle>
+          <div className="mt-4">
+            <SellServiceForm
+              defaultCustomerId={customerId}
+              defaultCustomerName={customerName}
+              onSuccess={() => setShowSellService(false)}
+              onCancel={() => setShowSellService(false)}
+            />
+          </div>
+        </Dialog>
+      )}
+
+      {/* Modal de criar crédito / vale na carteira */}
+      {showCreateWallet && (
+        <CustomerWalletCreateModal
+          customerId={customerId}
+          onClose={() => setShowCreateWallet(false)}
+          onPayNow={(billingId) => setPayNowBillingId(billingId)}
+        />
+      )}
+      {payNowBillingId && (
+        <CustomerPayNowWrapper billingId={payNowBillingId} onClose={() => setPayNowBillingId(null)} />
+      )}
 
       {/* ── Sub-tab: Carteira ─────────────────────────────────────── */}
       {walletSubTab === 'carteira' && (
@@ -788,6 +1089,74 @@ function CustomerWalletTab({ customerId }: { customerId: string }) {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Cobranças em aberto — todas pendentes/vencidas */}
+            {openBillings.length > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/10 p-3 space-y-2">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+                  ⏳ Cobranças em aberto ({openBillings.length})
+                </p>
+                {openBillings.map((b: ApiBilling) => {
+                  const isOverdue = b.status === 'overdue' || (b.status === 'pending' && !!b.dueDate && new Date(b.dueDate) < new Date())
+                  return (
+                    <div
+                      key={b.id}
+                      className={[
+                        'flex items-start justify-between gap-2 rounded-md border px-3 py-2 text-xs',
+                        isOverdue
+                          ? 'bg-red-50 dark:bg-red-950/10 border-red-300 dark:border-red-700'
+                          : 'bg-white dark:bg-card border-border',
+                      ].join(' ')}
+                    >
+                      <div className="flex flex-col gap-0.5 min-w-0 pt-0.5">
+                        <span className="font-medium text-foreground truncate">
+                          {b.appointment?.service?.name ?? b.service?.name ?? 'Cobrança avulsa'}
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {b.dueDate && (
+                            <span className="text-muted-foreground">
+                              Vence: {new Date(b.dueDate).toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                          {isOverdue && (
+                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                              Vencida
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <span className="font-semibold text-foreground">{formatCurrency(b.amount)}</span>
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => setPayNowBillingId(b.id)}
+                          >
+                            Receber
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[10px] text-muted-foreground hover:text-destructive"
+                            onClick={() => setUndueModalBillingId(b.id)}
+                          >
+                            <Ban className="mr-0.5 h-3 w-3" />
+                            Indevida
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {undueModalBillingId && (
+              <MarkAsUndueBillingModal billingId={undueModalBillingId} onClose={() => setUndueModalBillingId(null)} />
+            )}
+
             {/* Saldo */}
             <div className="rounded-lg border bg-muted/20 px-4 py-3 flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Saldo disponível</span>
@@ -1612,6 +1981,20 @@ const TYPE_COLOR: Record<string, string> = {
 
 function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onEdit: () => void; onClose: () => void }) {
   const [detailTab, setDetailTab] = useState<DetailTab>('profile')
+  const qc = useQueryClient()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setIsRefreshing(true)
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['customer-history', customer.id] }),
+      qc.invalidateQueries({ queryKey: ['clinical-records', customer.id] }),
+      qc.invalidateQueries({ queryKey: ['customer-contracts', customer.id] }),
+      qc.invalidateQueries({ queryKey: ['wallet'] }),
+      qc.invalidateQueries({ queryKey: ['billing'] }),
+    ])
+    setIsRefreshing(false)
+  }
 
   // ── clinical / prontuário ──────────────────────────────────────────────
   const clinicalRecords = useClinicalRecords(customer.id)
@@ -1833,6 +2216,16 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           <p className="text-lg font-semibold">{customer.name}</p>
           <p className="text-muted-foreground">{customer.email ?? '—'}</p>
         </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="ml-auto flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-60"
+          title="Atualizar ficha do cliente"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Atualizar
+        </button>
       </div>
 
       {/* Detail tabs */}
@@ -1921,7 +2314,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
                     <span>{new Date(appt.scheduledAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                     {appt.professional && <span>· {appt.professional.name}</span>}
-                    {appt.billing && <span>· R$ {Number(appt.billing.amount).toFixed(2)}</span>}
+                    {appt.billing && <span>· {formatCurrency(appt.billing.amount)}</span>}
                   </div>
                 </div>
               ))}
@@ -1935,7 +2328,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
                     <span>{new Date(sale.soldAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                    <span>· R$ {Number(sale.totalPrice).toFixed(2)}</span>
+                    <span>· {formatCurrency(sale.totalPrice)}</span>
                   </div>
                 </div>
               ))}
@@ -1946,7 +2339,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* ── Carteira ─────────────────────────────────────────────────── */}
       {detailTab === 'wallet' && (
-        <CustomerWalletTab customerId={customer.id} />
+        <CustomerWalletTab customerId={customer.id} customerName={customer.name} />
       )}
 
       {/* ── Prontuário (anamnese + exames + observações…) ─────────────── */}

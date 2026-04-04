@@ -4,7 +4,7 @@ import { api } from '@/lib/api'
 // ──── Types ───────────────────────────────────────────────────────────────────
 
 export type WalletEntryType = 'VOUCHER' | 'CREDIT' | 'CASHBACK' | 'PACKAGE'
-export type WalletEntryStatus = 'ACTIVE' | 'USED' | 'EXPIRED'
+export type WalletEntryStatus = 'PENDING' | 'ACTIVE' | 'USED' | 'EXPIRED'
 export type WalletOriginType =
   | 'OVERPAYMENT'
   | 'GIFT'
@@ -12,7 +12,8 @@ export type WalletOriginType =
   | 'CASHBACK_PROMOTION'
   | 'PACKAGE_PURCHASE'
   | 'VOUCHER_SPLIT'
-export type WalletTransactionType = 'CREATE' | 'USE' | 'SPLIT' | 'ADJUST'
+  | 'SERVICE_PRESALE'
+export type WalletTransactionType = 'CREATE' | 'USE' | 'SPLIT' | 'ADJUST' | 'REFUND'
 
 export interface WalletTransaction {
   id: string
@@ -38,6 +39,7 @@ export interface WalletEntry {
   balance: number
   code: string
   customerId: string
+  serviceId: string | null
   originType: WalletOriginType
   originReference: string | null
   notes: string | null
@@ -47,6 +49,7 @@ export interface WalletEntry {
   updatedAt: string
   customer: WalletCustomer
   transactions: WalletTransaction[]
+  billingPaymentLines?: Array<{ paymentMethod: string; amount: number }>
 }
 
 interface Paginated<T> {
@@ -104,8 +107,11 @@ export function useCreateWalletEntry() {
       originReference?: string
       expirationDate?: string
       notes?: string
-    }) => api.post('/wallet', data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['wallet'] }),
+    }) => api.post('/wallet', data).then((r) => r.data as { entry: WalletEntry; billing: { id: string; amount: number; status: string; dueDate: string; sourceType: string } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['wallet'] })
+      qc.invalidateQueries({ queryKey: ['billing'] })
+    },
   })
 }
 
@@ -166,5 +172,27 @@ export function useReceivePayment(billingId: string) {
       qc.invalidateQueries({ queryKey: ['billing'] })
       qc.invalidateQueries({ queryKey: ['wallet'] })
     },
+  })
+}
+
+export interface ServiceVoucher {
+  id: string
+  serviceId: string | null
+  balance: number
+  expirationDate: string | null
+  code: string
+  service: { id: string; name: string } | null
+}
+
+export function useServiceVouchers(customerId: string, serviceId?: string, enabled = true) {
+  return useQuery<ServiceVoucher[]>({
+    queryKey: ['wallet', 'service-vouchers', customerId, serviceId],
+    queryFn: () =>
+      api
+        .get(`/wallet/service-vouchers/${customerId}`, {
+          params: serviceId ? { serviceId } : undefined,
+        })
+        .then((r) => r.data),
+    enabled: enabled && !!customerId,
   })
 }

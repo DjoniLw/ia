@@ -168,8 +168,14 @@ export class ManualReceiptsService {
       }
 
       // 5. Create ledger credit entries (one per payment line, up to txEffectiveAmount)
+      // RN-FIN01: voucher SERVICE_PRESALE não gera entrada no caixa — dinheiro já foi
+      // contabilizado quando a pré-venda foi paga. Pular o ledger nesse caso.
       let allocatedToLedger = 0
       for (const line of dto.lines) {
+        if (line.paymentMethod === 'wallet_voucher' && 'walletEntryId' in line && line.walletEntryId) {
+          const entry = await tx.walletEntry.findUnique({ where: { id: line.walletEntryId } })
+          if (entry?.originType === 'SERVICE_PRESALE') continue
+        }
         const ledgerAmount = Math.min(line.amount, txEffectiveAmount - allocatedToLedger)
         if (ledgerAmount <= 0) break
         allocatedToLedger += ledgerAmount
@@ -208,6 +214,7 @@ export class ManualReceiptsService {
               originType: 'OVERPAYMENT',
               originReference: billingId,
               notes: `Excedente de recebimento — Cobrança ${billingId.slice(0, 8)}`,
+              transactionDescription: `Troco gerado no recebimento da cobrança ${billingId.slice(0, 8)}`,
             },
             tx,
           )
@@ -215,7 +222,51 @@ export class ManualReceiptsService {
         // cash_change: no action needed — note was added in buildNotes()
       }
 
-      return { receipt, walletEntry }
+      // 7. RN11 — Se cobrança de pré-venda (PRESALE): criar WalletEntry SERVICE_PRESALE
+      // Gera o "vale de procedimento" que o cliente usa ao concluir o agendamento.
+      let serviceVoucherEntry: { code: string; balance: number } | null = null
+      if (billing.sourceType === 'PRESALE' && billing.serviceId && billing.customerId) {
+        serviceVoucherEntry = await wallet.createInternal(
+          {
+            clinicId,
+            customerId: billing.customerId,
+            type: 'VOUCHER',
+            value: txEffectiveAmount,
+            originType: 'SERVICE_PRESALE',
+            originReference: billingId,
+            notes: `Vale de procedimento gerado por pré-venda — cobrança ${billingId}`,
+            transactionDescription: `Vale de procedimento criado — ${billing.service?.name ?? 'serviço'} (pré-venda)`,
+            serviceId: billing.serviceId,
+          },
+          tx,
+        )
+      }
+
+      // 8. RN-WP01 — Se cobrança é WALLET_PURCHASE: ativar o wallet entry PENDING vinculado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((billing.sourceType as any) === 'WALLET_PURCHASE') {
+        const pendingEntry = await tx.walletEntry.findFirst({
+          where: { clinicId, originReference: billingId, status: 'PENDING' as never },
+        })
+        if (pendingEntry) {
+          await tx.walletEntry.update({
+            where: { id: pendingEntry.id },
+            data: { status: 'ACTIVE' as never, updatedAt: new Date() },
+          })
+          await tx.walletTransaction.create({
+            data: {
+              clinicId,
+              walletEntryId: pendingEntry.id,
+              type: 'ADJUST' as never,
+              value: 0,
+              reference: billingId,
+              description: 'Vale ativado após pagamento da cobrança',
+            },
+          })
+        }
+      }
+
+      return { receipt, walletEntry, serviceVoucherEntry }
     })
   }
 

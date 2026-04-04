@@ -7,6 +7,16 @@ import { WalletService } from './wallet.service'
 export async function walletRoutes(app: FastifyInstance) {
   const svc = new WalletService()
 
+  app.get(
+    '/wallet/service-vouchers/:customerId',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { customerId } = req.params as { customerId: string }
+      const { serviceId } = req.query as { serviceId?: string }
+      return reply.send(await svc.findActiveServiceVouchers(req.clinicId, customerId, serviceId))
+    },
+  )
+
   app.get('/wallet', { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] }, async (req, reply) => {
     const q = ListWalletQuery.parse(req.query)
     return reply.send(await svc.list(req.clinicId, q))
