@@ -49,11 +49,13 @@ export const SESSION_LABEL: Record<string, string> = {
 }
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash:     'Dinheiro',
-  pix:      'PIX',
-  card:     'Cartão',
-  transfer: 'Transferência',
-  boleto:   'Boleto',
+  cash:           'Dinheiro',
+  pix:            'PIX',
+  card:           'Cartão',
+  transfer:       'Transferência',
+  boleto:         'Boleto',
+  wallet_credit:  'Crédito em carteira',
+  wallet_voucher: 'Vale',
 }
 
 export const PAYMENT_METHOD_BADGE_COLORS: Record<string, string> = {

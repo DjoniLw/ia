@@ -25,6 +25,7 @@ export const WALLET_TRANSACTION_LABELS: Record<WalletTransactionType, string> = 
   ADJUST: 'Ajuste manual',
   USE:    'Utilização',
   SPLIT:  'Divisão de saldo',
+  REFUND: 'Estorno',
 }
 
 export const WALLET_ENTRY_TYPE_LABELS: Record<WalletEntryType, string> = {

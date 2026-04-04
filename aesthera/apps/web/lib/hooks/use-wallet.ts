@@ -13,7 +13,7 @@ export type WalletOriginType =
   | 'PACKAGE_PURCHASE'
   | 'VOUCHER_SPLIT'
   | 'SERVICE_PRESALE'
-export type WalletTransactionType = 'CREATE' | 'USE' | 'SPLIT' | 'ADJUST'
+export type WalletTransactionType = 'CREATE' | 'USE' | 'SPLIT' | 'ADJUST' | 'REFUND'
 
 export interface WalletTransaction {
   id: string
@@ -48,6 +48,7 @@ export interface WalletEntry {
   updatedAt: string
   customer: WalletCustomer
   transactions: WalletTransaction[]
+  billingPaymentLines?: Array<{ paymentMethod: string; amount: number }>
 }
 
 interface Paginated<T> {

@@ -214,7 +214,7 @@ export class BillingService {
     let previousLines: Array<{ method: string; amount: number }> = []
 
     await prisma.$transaction(async (tx) => {
-      // 1. Reverter ManualReceipt e restaurar carteira
+      // ── Caso A: pago via ManualReceipt (fluxo normal de caixa) ──────────────
       const manualReceipt = await tx.manualReceipt.findUnique({
         where: { billingId: id },
         include: { lines: true },
@@ -228,7 +228,6 @@ export class BillingService {
             (line.paymentMethod === 'wallet_credit' || line.paymentMethod === 'wallet_voucher') &&
             line.walletEntryId
           ) {
-            // Bloqueia a linha para evitar race condition
             await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${line.walletEntryId}::uuid FOR UPDATE`
             const walletEntry = await tx.walletEntry.findFirst({ where: { id: line.walletEntryId, clinicId } })
             if (walletEntry) {
@@ -251,14 +250,75 @@ export class BillingService {
           }
         }
 
-        // Deleta o recibo (linhas em cascade)
         await tx.manualReceipt.delete({ where: { id: manualReceipt.id } })
       }
 
-      // 2. Reverter entradas de ledger para esta cobrança
+      // ── Caso B: pago via receivePayment (voucher direto) ────────────────────
+      // Identifica WalletTransactions de USE referenciando esta cobrança (sem ManualReceipt)
+      if (!manualReceipt) {
+        const useTxns = await tx.walletTransaction.findMany({
+          where: { clinicId, type: 'USE', reference: id },
+        })
+        for (const useTxn of useTxns) {
+          await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${useTxn.walletEntryId}::uuid FOR UPDATE`
+          const entry = await tx.walletEntry.findFirst({ where: { id: useTxn.walletEntryId, clinicId } })
+          if (entry) {
+            await tx.walletEntry.update({
+              where: { id: useTxn.walletEntryId },
+              data: { balance: entry.balance + useTxn.value, status: 'ACTIVE', updatedAt: new Date() },
+            })
+            await tx.walletTransaction.create({
+              data: {
+                clinicId,
+                walletEntryId: useTxn.walletEntryId,
+                type: 'REFUND',
+                value: useTxn.value,
+                reference: id,
+                description: `Cobrança reaberta — saldo restaurado (${id.slice(0, 8)})`,
+              },
+            })
+            previousLines.push({ method: 'wallet_voucher', amount: useTxn.value })
+          }
+        }
+      }
+
+      // ── Caso C: cobrança PRESALE paga → gerou WalletEntry SERVICE_PRESALE ───
+      // Se esse entry já foi UTILIZADO no agendamento, bloquear reabertura.
+      if (billing.sourceType === 'PRESALE') {
+        const servicePresaleEntry = await tx.walletEntry.findFirst({
+          where: { clinicId, originReference: id, originType: 'SERVICE_PRESALE' },
+        })
+        if (servicePresaleEntry) {
+          if (servicePresaleEntry.status === 'USED') {
+            throw new AppError(
+              'Não é possível reabrir: o vale de pré-venda gerado por esta cobrança já foi utilizado em um atendimento.',
+              409,
+              'PRESALE_VOUCHER_ALREADY_USED',
+            )
+          }
+          // Ainda ACTIVE → anular o vale
+          await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${servicePresaleEntry.id}::uuid FOR UPDATE`
+          await tx.walletEntry.update({
+            where: { id: servicePresaleEntry.id },
+            data: { balance: 0, status: 'USED', updatedAt: new Date() },
+          })
+          await tx.walletTransaction.create({
+            data: {
+              clinicId,
+              walletEntryId: servicePresaleEntry.id,
+              type: 'REFUND',
+              value: servicePresaleEntry.balance,
+              reference: id,
+              description: `Vale anulado — cobrança de pré-venda reaberta (${id.slice(0, 8)})`,
+            },
+          })
+        }
+      }
+
+      // ── Reverter ledger ─────────────────────────────────────────────────────
       await tx.ledgerEntry.deleteMany({ where: { billingId: id, clinicId } })
 
-      // 3. Atualizar status para pending
+      // ── Atualizar status para pending ───────────────────────────────────────
       await tx.billing.updateMany({
         where: { id, clinicId },
         data: {
@@ -270,7 +330,7 @@ export class BillingService {
         },
       })
 
-      // 4. Registrar evento com dados anteriores para pré-preenchimento
+      // ── Registrar evento ────────────────────────────────────────────────────
       const reason = notes?.trim() ?? `Reaberta a partir do status: ${previousStatus === 'paid' ? 'Pago' : 'Cancelado'}`
       await tx.billingEvent.create({
         data: {

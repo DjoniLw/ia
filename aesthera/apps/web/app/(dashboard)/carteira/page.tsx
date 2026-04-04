@@ -13,9 +13,11 @@ import {
   WALLET_TRANSACTION_LABELS,
   WALLET_ORIGIN_LABELS,
 } from '@/lib/wallet-labels'
+import { PAYMENT_METHOD_LABELS } from '@/lib/status-colors'
 import {
   useWallet,
   useWalletOverview,
+  useWalletEntry,
   useCreateWalletEntry,
   useAdjustWalletEntry,
   type WalletEntry,
@@ -194,7 +196,13 @@ function CustomerSearchInput({
 function TransactionHistory({ entry }: { entry: WalletEntry }) {
   const [expanded, setExpanded] = useState(false)
 
+  // Busca o detalhe enriquecido apenas ao expandir (incluindo billingPaymentLines para SERVICE_PRESALE)
+  const { data: detail } = useWalletEntry(expanded ? entry.id : '')
+
   if (!entry.transactions.length) return null
+
+  const paymentLines = detail?.billingPaymentLines
+  const transactions = detail?.transactions ?? entry.transactions
 
   return (
     <div className="mt-3">
@@ -207,35 +215,59 @@ function TransactionHistory({ entry }: { entry: WalletEntry }) {
         Histórico ({entry.transactions.length})
       </button>
       {expanded && (
-        <div className="mt-2 space-y-1">
-          {entry.transactions.map((t) => (
-            <div
-              key={t.id}
-              className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-1.5 text-xs"
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground">
-                  {WALLET_TRANSACTION_LABELS[t.type as keyof typeof WALLET_TRANSACTION_LABELS] ?? 'Desconhecido'}
-                </span>
-                {t.description && (
-                  <span className="text-muted-foreground">{t.description}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <span
-                  className={
-                    t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0)
-                      ? 'text-red-600'
-                      : 'text-green-600'
-                  }
-                >
-                  {t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0) ? '-' : '+'}
-                  {formatCurrency(Math.abs(t.value))}
-                </span>
-                <span className="text-muted-foreground">{formatDate(t.createdAt)}</span>
+        <div className="mt-2 space-y-2">
+          {/* Formas de pagamento da cobrança de pré-venda */}
+          {paymentLines && paymentLines.length > 0 && (
+            <div className="rounded-md border border-violet-200 bg-violet-50/60 px-3 py-2 dark:border-violet-800/50 dark:bg-violet-950/20">
+              <p className="mb-1.5 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                Como foi pago
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {paymentLines.map((line, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-900/50 dark:text-violet-200"
+                  >
+                    {PAYMENT_METHOD_LABELS[line.paymentMethod] ?? line.paymentMethod}
+                    <span className="opacity-70">·</span>
+                    {formatCurrency(line.amount)}
+                  </span>
+                ))}
               </div>
             </div>
-          ))}
+          )}
+
+          {/* Transações */}
+          <div className="space-y-1">
+            {transactions.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-1.5 text-xs"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-foreground">
+                    {WALLET_TRANSACTION_LABELS[t.type as keyof typeof WALLET_TRANSACTION_LABELS] ?? 'Desconhecido'}
+                  </span>
+                  {t.description && (
+                    <span className="text-muted-foreground">{t.description}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span
+                    className={
+                      t.type === 'USE' || t.type === 'REFUND' || (t.type === 'ADJUST' && t.value < 0)
+                        ? t.type === 'REFUND' ? 'text-amber-600' : 'text-red-600'
+                        : 'text-green-600'
+                    }
+                  >
+                    {t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0) ? '-' : t.type === 'REFUND' ? '↩ ' : '+'}
+                    {formatCurrency(Math.abs(t.value))}
+                  </span>
+                  <span className="text-muted-foreground">{formatDate(t.createdAt)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

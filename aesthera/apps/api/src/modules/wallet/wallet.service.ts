@@ -40,7 +40,20 @@ export class WalletService {
   async get(clinicId: string, id: string) {
     const entry = await this.repo.findById(clinicId, id)
     if (!entry) throw new NotFoundError('WalletEntry')
-    return entry
+
+    // Enriquece vale SERVICE_PRESALE com as formas de pagamento da cobrança origem
+    let billingPaymentLines: Array<{ paymentMethod: string; amount: number }> | undefined
+    if (entry.originType === 'SERVICE_PRESALE' && entry.originReference) {
+      const receipt = await prisma.manualReceipt.findUnique({
+        where: { billingId: entry.originReference },
+        include: { lines: { select: { paymentMethod: true, amount: true } } },
+      })
+      if (receipt) {
+        billingPaymentLines = receipt.lines.map((l) => ({ paymentMethod: l.paymentMethod, amount: l.amount }))
+      }
+    }
+
+    return { ...entry, billingPaymentLines }
   }
 
   /**
