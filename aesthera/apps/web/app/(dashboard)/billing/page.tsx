@@ -360,7 +360,7 @@ function CancelBillingButton({ id, status }: { id: string; status: BillingStatus
 
   async function handleCancel() {
     try {
-      await cancel.mutateAsync()
+      await cancel.mutateAsync(undefined)
       toast.success('Cobrança cancelada')
       setConfirming(false)
     } catch {
