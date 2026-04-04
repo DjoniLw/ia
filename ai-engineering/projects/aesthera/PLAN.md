@@ -301,6 +301,36 @@ Desacoplar billing do agendamento e suportar 3 cenários de cobrança: pós-serv
 
 ---
 
+## Fase 12 — Redesenho do Fluxo Pós-Atendimento e Correção Financeira da Pré-Venda
+
+> Spec do PO: `outputs/po/aesthera-po-redesenho-fluxo-pos-atendimento-2026-04-03.md`
+> Status: ✅ Implementada — commit `f26a47e` na branch `feat/billing-service-redesign-issue-147`
+
+### Objetivo
+Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` expunha decisão de cobrança ao operador — vetor de erro humano; (2) Dupla contagem no Ledger ao usar voucher `SERVICE_PRESALE`.
+
+### Backend
+- [x] `appointments.service.ts::complete()` restaura criação automática de billing (RN-PA01)
+- [x] `complete()` retorna `{ appointment, billing: Billing | null, serviceVouchers }` (RN-PA01–04)
+- [x] `complete()` — path packageSession: sem billing, retorna `billing: null` (RN-PA02)
+- [x] `complete()` — path billing `paid` existente: reutiliza, sem criar novo (RN-PA03)
+- [x] `complete()` — path billing `pending/overdue` existente: reutiliza + busca vouchers (RN-PA03)
+- [x] `complete()` — path geral: `billingSvc.createManual()` + busca vouchers (RN-PA01)
+- [x] `manual-receipts.service.ts::receive()` — skip LedgerEntry para linha `SERVICE_PRESALE` (RN-FIN01)
+- [x] `billing.service.ts::receivePayment()` — skip LedgerEntry para voucher `SERVICE_PRESALE` (RN-FIN01)
+
+### Frontend
+- [x] `use-appointments.ts` — tipo `CompleteResult` exportado + invalidação de `['wallet']` no onSuccess
+- [x] `appointments/page.tsx::SlotActions` reescrito: sem `CompleteAppointmentModal`, abre `ReceiveManualModal` diretamente com voucher pré-selecionado (RN-PA04)
+- [x] `CompleteAppointmentModal.tsx` removido
+
+### Testes
+- [x] `appointments.service.test.ts` — T-CP01–CP05: billing auto, packageSession, billing paid, billing pending, vouchers (5/5 ✅)
+- [x] `manual-receipts.service.test.ts` — T-FIN01–FIN03: skip SERVICE_PRESALE, manter OVERPAYMENT, misto (3/3 ✅)
+- [ ] T16/T17/T19 em `appointments.service.test.ts` — premissa invertida pela spec, delegado ao `test-guardian`
+
+---
+
 ## Resumo das Fases
 
 | Fase | O que você vê no final | Status |

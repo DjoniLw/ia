@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, CheckCircle, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
+import { Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
+import { InfoBanner } from '@/components/ui/info-banner'
 import { toast } from 'sonner'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -45,11 +46,13 @@ interface PaymentLineState {
   method: ManualReceiptPaymentMethod
   amountStr: string
   walletEntryId: string
+  walletOriginType?: string | null
 }
 
 interface PaymentLineRowProps {
   line: PaymentLineState
   customerId: string
+  billingAmount: number
   canRemove: boolean
   onUpdate: (updated: Partial<PaymentLineState>) => void
   onRemove: () => void
@@ -58,6 +61,7 @@ interface PaymentLineRowProps {
 function PaymentLineRow({
   line,
   customerId,
+  billingAmount,
   canRemove,
   onUpdate,
   onRemove,
@@ -65,6 +69,22 @@ function PaymentLineRow({
   const isWallet = line.method === 'wallet_credit' || line.method === 'wallet_voucher'
   const { data: walletData } = useActiveVouchers(customerId, isWallet)
   const activeEntries: WalletEntry[] = walletData?.items ?? []
+  const isServicePresale = line.walletOriginType === 'SERVICE_PRESALE'
+
+  function handleWalletEntryChange(selectedId: string) {
+    const selected = activeEntries.find((e) => e.id === selectedId)
+    const originType = selected?.originType ?? null
+    if (originType === 'SERVICE_PRESALE') {
+      // Pré-venda de serviço: preenche automaticamente com o valor da cobrança
+      const autoStr = (billingAmount / 100).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+      onUpdate({ walletEntryId: selectedId, walletOriginType: originType, amountStr: autoStr })
+    } else {
+      onUpdate({ walletEntryId: selectedId, walletOriginType: originType })
+    }
+  }
 
   return (
     <div className="flex items-start gap-2">
@@ -73,7 +93,7 @@ function PaymentLineRow({
           <select
             value={line.method}
             onChange={(e) =>
-              onUpdate({ method: e.target.value as ManualReceiptPaymentMethod, walletEntryId: '' })
+              onUpdate({ method: e.target.value as ManualReceiptPaymentMethod, walletEntryId: '', walletOriginType: null })
             }
             className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
           >
@@ -89,6 +109,8 @@ function PaymentLineRow({
             onChange={(e) => onUpdate({ amountStr: e.target.value })}
             placeholder="0,00"
             className="h-9 w-32 text-sm"
+            disabled={isServicePresale}
+            title={isServicePresale ? 'Valor definido automaticamente pela pré-venda do serviço' : undefined}
           />
         </div>
 
@@ -101,13 +123,14 @@ function PaymentLineRow({
             ) : (
               <select
                 value={line.walletEntryId}
-                onChange={(e) => onUpdate({ walletEntryId: e.target.value })}
+                onChange={(e) => handleWalletEntryChange(e.target.value)}
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
               >
                 <option value="">Selecione um item da carteira…</option>
                 {activeEntries.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.code} — {formatCurrency(e.balance)}
+                    {e.originType === 'SERVICE_PRESALE' ? ' (pré-venda de serviço)' : ''}
                   </option>
                 ))}
               </select>
@@ -214,7 +237,8 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
       const amountStr = billing.amount > 0
         ? (billing.amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         : ''
-      return [{ id: lineIdCounter++, method: 'wallet_voucher', amountStr, walletEntryId: preSelectedVoucherId }]
+      // walletOriginType será atualizado quando o componente montar e carregar os vouchers do cliente
+      return [{ id: lineIdCounter++, method: 'wallet_voucher', amountStr, walletEntryId: preSelectedVoucherId, walletOriginType: 'SERVICE_PRESALE' }]
     }
     return [{ id: lineIdCounter++, method: 'cash', amountStr: '', walletEntryId: '' }]
   })
@@ -222,11 +246,24 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
   const [overpaymentHandling, setOverpaymentHandling] =
     useState<OverpaymentHandlingType>('cash_change')
 
+  const hasServicePresale = lines.some(
+    (l) => l.method === 'wallet_voucher' && l.walletOriginType === 'SERVICE_PRESALE',
+  )
+
   // Coupon state
   const [couponInput, setCouponInput] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null)
   const [autoApplied, setAutoApplied] = useState(false)
   const validatePromotion = useValidatePromotion()
+
+  // Item 7: quando pré-venda de serviço está selecionada, limpar promoções aplicadas
+  useEffect(() => {
+    if (hasServicePresale && appliedCoupon) {
+      setAppliedCoupon(null)
+      setCouponInput('')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasServicePresale])
 
   // Detect if billing already has a promotion locked at booking time
   const hasLockedPromo = !!billing.lockedPromotionCode && !!billing.originalAmount
@@ -250,8 +287,8 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
   const isSpecificPromotion = !!specificPromotion
 
   useEffect(() => {
-    // Nunca auto-aplicar quando a cobrança já tem promoção travada no agendamento
-    if (!suggestedPromotion || !isSpecificPromotion || appliedCoupon || autoApplied || !open || hasLockedPromo) return
+    // Nunca auto-aplicar quando a cobrança já tem promoção travada ou pré-venda de serviço selecionada
+    if (!suggestedPromotion || !isSpecificPromotion || appliedCoupon || autoApplied || !open || hasLockedPromo || hasServicePresale) return
     setAutoApplied(true)
     validatePromotion.mutateAsync({
       code: suggestedPromotion.code,
@@ -380,19 +417,14 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
         </div>
       </div>
 
-      {/* Aviso de voucher pré-selecionado (via CompleteAppointmentModal) */}
+      {/* Aviso de voucher pré-selecionado */}
       {preSelectedVoucherId && (
-        <div className="mb-4 rounded-lg border border-teal-200 bg-teal-50 dark:border-teal-800 dark:bg-teal-950/30 p-3 flex items-start gap-2">
-          <CheckCircle className="h-4 w-4 text-teal-600 dark:text-teal-400 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-teal-800 dark:text-teal-200">
-              Vale de pré-venda selecionado
-            </p>
-            <p className="text-xs text-teal-700 dark:text-teal-300 mt-0.5">
-              O vale será utilizado como forma de pagamento. Se o saldo for inferior ao valor da cobrança, selecione uma forma de pagamento complementar abaixo.
-            </p>
-          </div>
-        </div>
+        <InfoBanner
+          variant="success"
+          title="Vale de pré-venda selecionado"
+          description="O vale cobre o valor integral do serviço independente do preço da cobrança. Nenhum desconto de promoção se aplica."
+          className="mb-4"
+        />
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -405,6 +437,7 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
                 key={line.id}
                 line={line}
                 customerId={billing.customer.id}
+                billingAmount={billing.amount}
                 canRemove={lines.length > 1}
                 onUpdate={(upd) => updateLine(line.id, upd)}
                 onRemove={() => removeLine(line.id)}
@@ -489,8 +522,8 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
           />
         )}
 
-        {/* Coupon / Promotion Code — ocultado quando billing já tem promoção travada no agendamento */}
-        {!hasLockedPromo && (
+        {/* Coupon / Promotion Code — ocultado quando billing já tem promoção travada OU pré-venda selecionada */}
+        {!hasLockedPromo && !hasServicePresale && (
         <div>
           {/* Promoção específica: aplicada automaticamente, com botão remover */}
           {appliedCoupon && suggestedPromotion?.code === appliedCoupon.code && isSpecificPromotion && (

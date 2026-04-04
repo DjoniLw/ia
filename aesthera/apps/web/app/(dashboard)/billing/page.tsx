@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
+import { useServiceVouchers } from '@/lib/hooks/use-wallet'
 import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
@@ -82,6 +83,17 @@ function BillingActions({ billing }: { billing: Billing }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [modalKey, setModalKey] = useState(0)
 
+  // Busca vouchers SERVICE_PRESALE disponíveis para o serviço da cobrança (item 4)
+  const serviceId = billing.appointment?.service?.id ?? billing.service?.id ?? undefined
+  const { data: serviceVouchers } = useServiceVouchers(
+    billing.customer.id,
+    serviceId,
+    !!serviceId && (billing.status === 'pending' || billing.status === 'overdue'),
+  )
+  const bestVoucher = serviceVouchers
+    ?.slice()
+    .sort((a, b) => b.balance - a.balance)[0] ?? null
+
   if (billing.status !== 'pending' && billing.status !== 'overdue') {
     return null
   }
@@ -105,6 +117,7 @@ function BillingActions({ billing }: { billing: Billing }) {
         billing={billing}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
+        preSelectedVoucherId={bestVoucher?.id ?? undefined}
       />
     </>
   )

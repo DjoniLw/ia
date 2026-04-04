@@ -22,6 +22,7 @@ import {
   type WalletEntryType,
   type WalletOriginType,
 } from '@/lib/hooks/use-wallet'
+import { useBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { useCustomers } from '@/lib/hooks/use-resources'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
@@ -619,6 +620,13 @@ function CarteiraPageContent() {
     viewMode === 'by-customer' && !!selectedCustomer,
   )
 
+  // Pré-vendas pendentes de pagamento (item 1) — visíveis apenas na view por-cliente
+  const { data: pendingPresalesData } = useBilling(
+    { customerId: selectedCustomer?.id ?? '', sourceType: 'PRESALE', status: 'pending', limit: '50' },
+    { enabled: viewMode === 'by-customer' && !!selectedCustomer },
+  )
+  const pendingPresales: Billing[] = pendingPresalesData?.items ?? []
+
   const isLoading = viewMode === 'overview' ? overviewLoading : byCustomerLoading
   const rawItems = viewMode === 'overview' ? (overviewData?.items ?? []) : (byCustomerData?.items ?? [])
   const total = viewMode === 'overview' ? (overviewData?.total ?? 0) : (byCustomerData?.total ?? 0)
@@ -872,6 +880,50 @@ function CarteiraPageContent() {
         </div>
       ) : (
         <>
+          {/* Pré-vendas pendentes de pagamento (item 1) */}
+          {pendingPresales.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                  Aguardando pagamento
+                </span>
+                <span>{pendingPresales.length} pré-venda{pendingPresales.length !== 1 ? 's' : ''}</span>
+              </h3>
+              {pendingPresales.map((b) => {
+                const serviceName = b.appointment?.service?.name ?? b.service?.name ?? 'Serviço não especificado'
+                return (
+                  <div key={b.id} className="rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-800/50 dark:bg-amber-950/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                            Pendente
+                          </span>
+                          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/50 dark:text-violet-200">
+                            Pré-venda
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm font-semibold text-foreground">{serviceName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Cobrança criada em {formatDate(b.createdAt)} · Vence em {formatDate(b.dueDate)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                          O vale será gerado após o pagamento desta cobrança.
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Valor</p>
+                        <p className="text-lg font-bold text-amber-700 dark:text-amber-400">
+                          {formatCurrency(b.amount)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">não conta no saldo</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           <div className="space-y-3">
             {displayItems.map((entry) => (
               <div key={entry.id} className="rounded-xl border bg-card p-4 shadow-sm">

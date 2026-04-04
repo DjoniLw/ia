@@ -393,7 +393,7 @@ export class BillingService {
         originType: 'SERVICE_PRESALE',
         originReference: billing.id,
         notes: `Vale de procedimento gerado por pré-venda — cobrança ${billing.id}`,
-        transactionDescription: `Vale de procedimento criado — pré-venda ${billing.id}`,
+        transactionDescription: `Vale de procedimento criado — ${billing.service?.name ?? billing.serviceId ?? 'serviço'} (pré-venda)`,
         serviceId: billing.serviceId,
       })
     }

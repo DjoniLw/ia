@@ -1106,6 +1106,36 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Aplica-se a: testes que verificam chamadas a serviços mockados, repositórios, clientes HTTP, processadores de fila — qualquer mock de classe onde a instância é acessada via `mock.results`.
   - 📅 Aprendido em: 03/04/2026 — code review PR #148 identificou `if (instance)` em torno de `expect()` usando `?.mock.results[0]?.value`, criando asserções silenciosas que passariam verde mesmo sem execução
 
+- [ ] **Spec que inverte comportamento coberto por testes quebrará os testes por design — delegar ao `test-guardian`, nunca usar workarounds na implementação**
+  - 🔴 Anti-padrão: quando uma spec/issue deliberadamente inverte ou substitui um comportamento que já estava coberto por testes, o implementador tenta preservar as premissas antigas com adaptações no código (condicionais extras, flags de compatibilidade, lógica duplicada) para fazer o teste antigo passar junto com o novo comportamento — isso mascara a regressão intencional e gera código de duas cabeças:
+    ```ts
+    // ERRADO — workaround para não quebrar teste antigo enquanto implementa spec nova
+    async createBilling(dto: CreateBillingDto) {
+      if (dto.legacy) {
+        // lógica antiga para o teste passar
+        return this.legacyFlow(dto);
+      }
+      // novo fluxo da spec
+      return this.newFlow(dto);
+    }
+    ```
+  - ✅ Correto: implementar exatamente o que a spec define, sem branches de compatibilidade. Se testes existentes quebrarem, classificar como **Tipo 2 — Regressão por design** e reportar ao usuário antes de abrir o PR:
+    ```
+    ⚠️ Testes existentes quebraram porque a spec inverte deliberadamente o comportamento anterior:
+    - billing.service.test.ts: "deve criar cobrança vinculada ao agendamento" — FALHOU
+      Tipo: Regressão por design (spec #147 remove vínculo direto Billing→Appointment)
+
+    Não alterei os testes. Delegando ao test-guardian para reescrever com as novas premissas.
+    ```
+  - 📌 Distinção crítica em relação ao item anterior (Tipo 1/Tipo 2):
+    - **Tipo 1 — Estrutural**: regra de negócio não mudou, apenas a assinatura/contrato mudou → test-guardian adapta o teste
+    - **Tipo 2 — Regra de negócio violada involuntariamente**: implementação errou → corrigir o código
+    - **Tipo 3 — Regressão por design (este item)**: a spec intencionalmente inverte o comportamento → test-guardian reescreve o teste com as NOVAS premissas da spec; nenhum código de workaround é adicionado
+  - 📌 Como identificar: se a issue/spec descreve explicitamente que um comportamento anterior deve ser substituído (ex.: "cobrança deixa de ser gerada automaticamente pelo agendamento e passa a ser criada manualmente"), qualquer teste que valide o comportamento antigo é candidato a regressão por design.
+  - 📌 Regra geral: o implementador não tem autoridade para decidir que um teste antigo "já não faz sentido" e removê-lo ou adaptá-lo sozinho. Essa decisão pertence ao `test-guardian` (que valida se a regressão é realmente intencional) em conjunto com o PO (que documenta a mudança de regra). O implementador apenas entrega o código com a spec nova e reporta as quebras.
+  - 📌 Aplica-se a: qualquer spec que contenha linguagem como "em vez de", "substitui", "remove o vínculo", "deixa de ser automático", "passa a ser manual", "não deve mais" — sinais de que o novo comportamento é incompatível com premissas existentes.
+  - 📅 Aprendido em: 04/04/2026 — revisão de fluxo pós-atendimento (spec redesenho billing #147): spec inverte geração automática de cobranças, quebrando testes por design
+
 ### Arquitetura e Padrões do Projeto
 
 - [ ] **Task de formatação/máscara = alterar somente o campo alvo, nada mais**
@@ -1148,3 +1178,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 02/04/2026 | Issue #147 | 2 padrões adicionados pelo treinador-agent (revisão de arquitetura do redesenho do fluxo de cobrança): (1) domain events NUNCA devem ser emitidos dentro de `prisma.$transaction()` — guardar o ID criado, deixar o commit ocorrer, emitir o evento APÓS; (2) labels PT-BR de enums na UI devem ser definidas em arquivo centralizado `*-labels.ts` — nunca exibir o valor raw do enum (ex: `APPOINTMENT`, `PRESALE`) como texto para o usuário; verificação obrigatória ao criar/alterar qualquer enum. |
 | 03/04/2026 | PR #148 | 2 padrões adicionados pelo treinador-agent: (1) múltiplos branches de pagamento (voucher/cash/card) devem ter TODOS o mesmo nível de atomicidade — se qualquer branch precisa de `$transaction`, todos precisam; misturar `this.prisma.X` fora de `$transaction` com branches dentro é atomicidade incompleta; (2) assertivas condicionais com `if (instance)` + `?.mock.results[0]?.value` criam testes falso-positivos que passam verde sem executar a asserção — usar sempre `vi.hoisted()` para capturar referências de mock; nenhum `expect()` deve ser envolvido em `if`. |
 | 03/04/2026 | — | 1 padrão adicionado pelo treinador-agent: parâmetros de exclusão (`excludeId`, `excludeAppointmentId`, `excludeReceiptId`) com prefixo `_` em métodos de verificação de conflito nunca chegam ao `WHERE` da query — o prefixo `_` indica ignorância intencional; resultado é falso-positivo em toda operação de edição, bloqueando atualizações legítimas de registros existentes; solução: remover o `_` e propagar o parâmetro explicitamente ao repositório com cláusula `id: { not: excludeId }`. |
+| 04/04/2026 | — | 1 padrão adicionado pelo treinador-agent: spec que inverte deliberadamente comportamento coberto por testes gera regressão por design (Tipo 3) — implementador não adapta nem remove testes, implementa exatamente a spec nova, classifica as quebras como "Regressão por design" e delega ao `test-guardian` para reescrever com as novas premissas; nenhum workaround de compatibilidade é adicionado ao código de produção. |

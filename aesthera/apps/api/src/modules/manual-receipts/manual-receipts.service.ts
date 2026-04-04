@@ -234,7 +234,7 @@ export class ManualReceiptsService {
             originType: 'SERVICE_PRESALE',
             originReference: billingId,
             notes: `Vale de procedimento gerado por pré-venda — cobrança ${billingId}`,
-            transactionDescription: `Vale de procedimento criado — pré-venda ${billingId}`,
+            transactionDescription: `Vale de procedimento criado — ${billing.service?.name ?? 'serviço'} (pré-venda)`,
             serviceId: billing.serviceId,
           },
           tx,

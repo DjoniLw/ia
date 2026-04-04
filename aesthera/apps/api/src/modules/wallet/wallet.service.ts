@@ -255,11 +255,16 @@ export class WalletService {
         }
       }
 
-      if (entry.balance < amount) {
+      // SERVICE_PRESALE: o serviço já foi pago na pré-venda; não importa o valor da cobrança.
+      // Consumir o saldo disponível integralmente e marcar a cobrança como paga.
+      const isServicePresale = (entry as { originType?: string }).originType === 'SERVICE_PRESALE'
+      if (!isServicePresale && entry.balance < amount) {
         throw new AppError('Saldo insuficiente no voucher', 400, 'INSUFFICIENT_BALANCE')
       }
 
-      const leftover = entry.balance - amount
+      // Para SERVICE_PRESALE, usar o saldo real do voucher (não o valor da cobrança)
+      const usedAmount = isServicePresale ? entry.balance : amount
+      const leftover = entry.balance - usedAmount
 
       // Mark current entry as USED (full balance consumed)
       const updatedEntry = await this.repo.updateBalance(entry.id, 0, 'USED', tx)
@@ -269,7 +274,7 @@ export class WalletService {
           clinicId,
           walletEntryId: entry.id,
           type: 'USE',
-          value: amount,
+          value: usedAmount,
           reference: billingId,
           description: `Usado em cobrança ${billingId}`,
         },
