@@ -73,6 +73,48 @@ function effectiveStatus(b: Billing): BillingStatus {
   return b.status
 }
 
+function billingDescription(b: Billing): React.ReactNode {
+  const serviceName = b.appointment?.service?.name ?? b.service?.name
+  const professionalName = b.appointment?.professional?.name
+  const scheduledAt = b.appointment?.scheduledAt
+
+  switch (b.sourceType) {
+    case 'APPOINTMENT': {
+      return (
+        <span>
+          Agendamento{scheduledAt ? ` em ${formatDate(scheduledAt)}` : ''}
+          {serviceName && <span className="font-medium"> · {serviceName}</span>}
+          {professionalName && <span className="block text-[11px]">por {professionalName}</span>}
+        </span>
+      )
+    }
+    case 'PRESALE': {
+      return (
+        <span>
+          Pré-venda de serviço
+          {serviceName && <span className="font-medium"> — {serviceName}</span>}
+        </span>
+      )
+    }
+    case 'MANUAL': {
+      return <span>Cobrança avulsa</span>
+    }
+    case 'PACKAGE_SALE': {
+      return <span>Venda de pacote</span>
+    }
+    case 'PRODUCT_SALE': {
+      return (
+        <span>
+          Venda de produto
+          {serviceName && <span className="font-medium"> — {serviceName}</span>}
+        </span>
+      )
+    }
+    default:
+      return <span>—</span>
+  }
+}
+
 // ──── Billing Detail Modal ─────────────────────────────────────────────────────
 
 function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: () => void }) {
@@ -92,9 +134,9 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
               {BILLING_STATUS_LABEL[billing.status] ?? billing.status}
             </span>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Serviço</p>
-            <p className="font-medium">{billing.appointment?.service?.name ?? billing.service?.name ?? '—'}</p>
+          <div className="col-span-2">
+            <p className="text-xs text-muted-foreground">Detalhe</p>
+            <p className="font-medium text-sm">{billingDescription(billing)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Origem</p>
@@ -136,18 +178,7 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
               <p className="text-destructive">{formatDate(billing.cancelledAt)}</p>
             </div>
           )}
-          {billing.appointment?.scheduledAt && (
-            <div>
-              <p className="text-xs text-muted-foreground">Agendamento</p>
-              <p>{formatDate(billing.appointment.scheduledAt)}</p>
-            </div>
-          )}
-          {billing.appointment?.professional?.name && (
-            <div>
-              <p className="text-xs text-muted-foreground">Profissional</p>
-              <p>{billing.appointment.professional.name}</p>
-            </div>
-          )}
+
         </div>
 
         {/* Detalhe do recebimento */}
@@ -551,8 +582,7 @@ function BillingPageContent() {
           <thead>
             <tr className="border-b bg-muted/30">
               <th className="py-3 pl-4 pr-2 text-left text-xs font-medium text-muted-foreground">Cliente</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Serviço</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Agendamento</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Detalhe</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Valor</th>
               <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Recebido Caixa</th>
               <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-muted-foreground">Vencimento</th>
@@ -563,14 +593,14 @@ function BillingPageContent() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                <td colSpan={7} className="py-8 text-center text-muted-foreground">
                   Carregando…
                 </td>
               </tr>
             )}
             {!isLoading && data?.items.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                <td colSpan={7} className="py-8 text-center text-muted-foreground">
                   Nenhuma cobrança encontrada.
                 </td>
               </tr>
@@ -578,14 +608,8 @@ function BillingPageContent() {
             {data?.items.map((b) => (
               <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="py-3 pl-4 pr-2 font-medium">{b.customer.name}</td>
-                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">
-                  {b.appointment?.service?.name ?? '—'}
-                  <span className="block text-[11px]">
-                    por {b.appointment?.professional?.name ?? '—'}
-                  </span>
-                </td>
-                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">
-                  {formatDate(b.appointment?.scheduledAt ?? null)}
+                <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground text-xs">
+                  {billingDescription(b)}
                 </td>
                 <td className="px-2 py-3 font-medium">
                   {b.lockedPromotionCode && b.originalAmount ? (

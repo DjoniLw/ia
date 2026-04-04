@@ -95,7 +95,7 @@ export interface BillingAppointment {
 
 export type BillingStatus = 'pending' | 'paid' | 'overdue' | 'cancelled'
 
-export type BillingSourceType = 'APPOINTMENT' | 'PRESALE' | 'MANUAL'
+export type BillingSourceType = 'APPOINTMENT' | 'PRESALE' | 'MANUAL' | 'PACKAGE_SALE' | 'PRODUCT_SALE'
 
 export interface Billing {
   id: string

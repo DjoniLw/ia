@@ -194,18 +194,16 @@ export function SellServiceForm({
         )}
       </div>
 
-      {/* Vencimento — apenas no modo MANUAL */}
-      {isManual && (
-        <div className="space-y-1.5">
-          <Label htmlFor="dueDate">Vencimento (opcional)</Label>
-          <Input
-            id="dueDate"
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-          />
-        </div>
-      )}
+      {/* Vencimento */}
+      <div className="space-y-1.5">
+        <Label htmlFor="dueDate">Vencimento (opcional)</Label>
+        <Input
+          id="dueDate"
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+        />
+      </div>
 
       {/* Observações */}
       <div className="space-y-1.5">
