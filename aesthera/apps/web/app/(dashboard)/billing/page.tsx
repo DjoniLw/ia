@@ -47,12 +47,12 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
 }
 
 const PAYMENT_METHOD_COLOR: Record<string, string> = {
-  cash: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-  pix: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
-  card: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
-  transfer: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  wallet_credit: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  wallet_voucher: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+  cash: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  pix: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
+  card: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+  transfer: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  wallet_credit: 'bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
+  wallet_voucher: 'bg-orange-200 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200',
 }
 
 // ──── Billing Detail Modal ─────────────────────────────────────────────────────

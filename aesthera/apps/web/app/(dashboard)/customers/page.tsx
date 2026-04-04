@@ -830,29 +830,26 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
           <div className="space-y-4">
             {/* Aguardando pagamento — pré-vendas pendentes */}
             {pendingPresales.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3 space-y-2">
-                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/10 p-3 space-y-2">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
                   ⏳ Aguardando pagamento ({pendingPresales.length})
                 </p>
                 {pendingPresales.map((b: ApiBilling) => (
                   <div
                     key={b.id}
-                    className="flex items-center justify-between gap-2 rounded-md bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-xs"
+                    className="flex items-center justify-between gap-2 rounded-md bg-white dark:bg-card border border-border px-3 py-2 text-xs"
                   >
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <span className="font-medium text-foreground truncate">
                         {b.appointment?.service?.name ?? b.service?.name ?? 'Serviço'}
                       </span>
                       {b.dueDate && (
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           Vencimento: {new Date(b.dueDate).toLocaleDateString('pt-BR')}
                         </span>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${BILLING_STATUS_COLOR[b.status] ?? 'bg-muted text-muted-foreground'}`}>
-                        {BILLING_STATUS_LABEL[b.status] ?? b.status}
-                      </span>
                       <span className="font-semibold text-foreground">{formatCurrency(b.amount)}</span>
                     </div>
                   </div>
