@@ -156,6 +156,7 @@ export function SellServiceForm({
             }}
             onSearch={setCustomerSearch}
             placeholder="Buscar cliente…"
+            variant="form"
           />
         )}
       </div>
@@ -169,6 +170,7 @@ export function SellServiceForm({
           onChange={handleServiceSelect}
           onSearch={setServiceSearch}
           placeholder="Buscar serviço…"
+          variant="form"
         />
         {catalogPrice !== undefined && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">

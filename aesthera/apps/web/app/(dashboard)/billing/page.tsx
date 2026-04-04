@@ -12,7 +12,8 @@ import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, useReopenBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { useServiceVouchers } from '@/lib/hooks/use-wallet'
 import { useServices, useProfessionals } from '@/lib/hooks/use-resources'
-import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
+import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_BADGE_COLORS } from '@/lib/status-colors'
+import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
@@ -36,24 +37,6 @@ function defaultDateFrom() {
   const d = new Date()
   d.setMonth(d.getMonth() - 6)
   return isoDateOnly(d)
-}
-
-const PAYMENT_METHOD_LABEL: Record<string, string> = {
-  cash: 'Dinheiro',
-  pix: 'Pix',
-  card: 'Cartão',
-  transfer: 'Transferência',
-  wallet_credit: 'Crédito',
-  wallet_voucher: 'Vale Serviço',
-}
-
-const PAYMENT_METHOD_COLOR: Record<string, string> = {
-  cash: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  pix: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
-  card: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  transfer: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  wallet_credit: 'bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
-  wallet_voucher: 'bg-orange-200 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200',
 }
 
 // ──── Billing event labels ───────────────────────────────────────────────────────
@@ -229,12 +212,12 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
                 <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Formas de pagamento</p>
                 {billing.manualReceipt.lines.map((line) => (
                   <div key={line.id} className="flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_COLOR[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}>
                       {line.paymentMethod === 'wallet_voucher' || line.paymentMethod === 'wallet_credit'
                         ? <Wallet className="h-2.5 w-2.5" />
                         : <CreditCard className="h-2.5 w-2.5" />
                       }
-                      {PAYMENT_METHOD_LABEL[line.paymentMethod] ?? line.paymentMethod}
+                      {PAYMENT_METHOD_LABELS[line.paymentMethod] ?? line.paymentMethod}
                       {line.walletEntry?.code && (
                         <span className="opacity-70">· {line.walletEntry.code}</span>
                       )}
@@ -342,7 +325,7 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
                   <ul className="text-xs space-y-0.5 text-amber-800 dark:text-amber-300">
                     {walletLines.map((l) => (
                       <li key={l.id}>
-                        &bull; {PAYMENT_METHOD_LABEL[l.paymentMethod] ?? l.paymentMethod}
+                        &bull; {PAYMENT_METHOD_LABELS[l.paymentMethod] ?? l.paymentMethod}
                         {l.walletEntry?.code && <span className="opacity-80"> ({l.walletEntry.code})</span>}
                         {' '}&mdash; {formatCurrency(l.amount)} <span className="font-semibold">será restaurado à carteira do cliente</span>
                       </li>
@@ -431,9 +414,9 @@ function PaymentMethodPills({ billing }: { billing: Billing }) {
       {unique.map((line) => (
         <span
           key={line.paymentMethod}
-          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_COLOR[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
+          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
         >
-          {PAYMENT_METHOD_LABEL[line.paymentMethod] ?? line.paymentMethod}
+          {PAYMENT_METHOD_LABELS[line.paymentMethod] ?? line.paymentMethod}
         </span>
       ))}
     </div>
@@ -533,10 +516,26 @@ function BillingPageContent() {
 
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 
-  const { data: servicesData } = useServices({ active: 'true', limit: '200' })
-  const { data: professionalsData } = useProfessionals({ active: 'true', limit: '100' })
+  const [serviceSearch, setServiceSearch] = useState('')
+  const [professionalSearch, setProfessionalSearch] = useState('')
+  const { data: servicesData } = useServices(
+    serviceSearch.trim().length >= 1
+      ? { name: serviceSearch.trim(), active: 'true', limit: '30' }
+      : { active: 'true', limit: '30' },
+  )
+  const { data: professionalsData } = useProfessionals(
+    professionalSearch.trim().length >= 1
+      ? { name: professionalSearch.trim(), active: 'true', limit: '30' }
+      : { active: 'true', limit: '30' },
+  )
   const allServices = servicesData?.items ?? []
   const allProfessionals = professionalsData?.items ?? []
+
+  const serviceItems: ComboboxItem[] = allServices.map((s) => ({ value: s.id, label: s.name }))
+  const professionalItems: ComboboxItem[] = allProfessionals.map((p) => ({ value: p.id, label: p.name }))
+
+  const selectedServiceItem = serviceId ? (allServices.find((s) => s.id === serviceId) ? { value: serviceId, label: allServices.find((s) => s.id === serviceId)!.name } : null) : null
+  const selectedProfessionalItem = professionalId ? (allProfessionals.find((p) => p.id === professionalId) ? { value: professionalId, label: allProfessionals.find((p) => p.id === professionalId)!.name } : null) : null
 
   // ── Toggle helpers ──────────────────────────────────────────────────────────
   function toggleStatus(value: BillingStatus) {
@@ -739,7 +738,7 @@ function BillingPageContent() {
             className={[
               'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
               hasCashReceived
-                ? 'border-green-600 bg-green-600 text-white'
+                ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-input bg-card text-muted-foreground hover:bg-accent',
             ].join(' ')}
           >
@@ -761,26 +760,22 @@ function BillingPageContent() {
         {/* Linha 3: Serviço e Atendente */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide w-14 shrink-0">Detalhe</span>
-          <select
-            value={serviceId}
-            onChange={(e) => { setServiceId(e.target.value); resetPage() }}
-            className="h-8 rounded-full border border-input bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="">Todos os serviços</option>
-            {allServices.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-          <select
-            value={professionalId}
-            onChange={(e) => { setProfessionalId(e.target.value); resetPage() }}
-            className="h-8 rounded-full border border-input bg-card px-3 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="">Todos os atendentes</option>
-            {allProfessionals.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+          <ComboboxSearch
+            value={selectedServiceItem}
+            onChange={(item) => { setServiceId(item?.value ?? ''); resetPage() }}
+            onSearch={setServiceSearch}
+            items={serviceItems}
+            placeholder="Todos os serviços"
+            className="w-48"
+          />
+          <ComboboxSearch
+            value={selectedProfessionalItem}
+            onChange={(item) => { setProfessionalId(item?.value ?? ''); resetPage() }}
+            onSearch={setProfessionalSearch}
+            items={professionalItems}
+            placeholder="Todos os atendentes"
+            className="w-48"
+          />
         </div>
 
         {/* Filtros de data */}
@@ -948,6 +943,61 @@ function BillingPageContent() {
         </table>
       </div>
 
+      {/* Summary — posicionado antes da paginação para visibilidade imediata */}
+      {data && data.items.length > 0 && (
+        <div className="space-y-3 rounded-lg border bg-card px-6 py-4 text-sm">
+          {/* Linha 1 — totais gerais */}
+          <div className="flex flex-wrap gap-6">
+            <div>
+              <p className="text-muted-foreground">Total cobranças</p>
+              <p className="text-lg font-semibold">{data.total}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Valor total (filtro)</p>
+              <p className="text-lg font-semibold">{formatCurrency(data.totalAmount ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Total recebido no período</p>
+              <p className="text-lg font-semibold text-green-600">{formatCurrency(data.totalCashReceived ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Recebido nesta página</p>
+              <p className="text-lg font-semibold text-green-700">
+                {formatCurrency(data.items.reduce((s, b) => s + cashReceivedForBilling(b), 0))}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Pendente (página)</p>
+              <p className="text-lg font-semibold text-yellow-600">
+                {formatCurrency(
+                  data.items
+                    .filter((b) => b.status === 'pending' || b.status === 'overdue')
+                    .reduce((s, b) => s + b.amount, 0),
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Linha 2 — breakdown por forma de pagamento */}
+          {data.paymentMethodBreakdown && data.paymentMethodBreakdown.length > 0 && (
+            <div className="border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Recebido por forma de pagamento (filtro)</p>
+              <div className="flex flex-wrap gap-2">
+                {data.paymentMethodBreakdown.map((row) => (
+                  <span
+                    key={row.paymentMethod}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[row.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
+                  >
+                    {PAYMENT_METHOD_LABELS[row.paymentMethod] ?? row.paymentMethod}
+                    <span className="font-semibold">{formatCurrency(row.total)}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <DataPagination
         page={page}
         pageSize={pageSize}
@@ -981,61 +1031,6 @@ function BillingPageContent() {
             />
           </div>
         </Dialog>
-      )}
-
-      {/* Summary */}
-      {data && data.items.length > 0 && (
-        <div className="space-y-3 rounded-lg border bg-card px-6 py-4 text-sm">
-          {/* Linha 1 — totais gerais */}
-          <div className="flex flex-wrap gap-6">
-            <div>
-              <p className="text-muted-foreground">Total cobranças</p>
-              <p className="text-lg font-semibold">{data.total}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Valor total (filtro)</p>
-              <p className="text-lg font-semibold">{formatCurrency(data.totalAmount ?? 0)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Recebido Caixa (filtro)</p>
-              <p className="text-lg font-semibold text-green-600">{formatCurrency(data.totalCashReceived ?? 0)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Recebido Caixa (página)</p>
-              <p className="text-lg font-semibold text-green-700">
-                {formatCurrency(data.items.reduce((s, b) => s + cashReceivedForBilling(b), 0))}
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Pendente (página)</p>
-              <p className="text-lg font-semibold text-yellow-600">
-                {formatCurrency(
-                  data.items
-                    .filter((b) => b.status === 'pending' || b.status === 'overdue')
-                    .reduce((s, b) => s + b.amount, 0),
-                )}
-              </p>
-            </div>
-          </div>
-
-          {/* Linha 2 — breakdown por forma de pagamento */}
-          {data.paymentMethodBreakdown && data.paymentMethodBreakdown.length > 0 && (
-            <div className="border-t pt-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Recebido por forma de pagamento (filtro)</p>
-              <div className="flex flex-wrap gap-2">
-                {data.paymentMethodBreakdown.map((row) => (
-                  <span
-                    key={row.paymentMethod}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${PAYMENT_METHOD_COLOR[row.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
-                  >
-                    {PAYMENT_METHOD_LABEL[row.paymentMethod] ?? row.paymentMethod}
-                    <span className="font-semibold">{formatCurrency(row.total)}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       )}
     </div>
   )

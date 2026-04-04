@@ -50,17 +50,19 @@ export const SESSION_LABEL: Record<string, string> = {
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash:           'Dinheiro',
-  pix:            'PIX',
+  pix:            'Pix',
   card:           'Cartão',
   transfer:       'Transferência',
   boleto:         'Boleto',
-  wallet_credit:  'Crédito em carteira',
-  wallet_voucher: 'Vale',
+  wallet_credit:  'Crédito',
+  wallet_voucher: 'Vale Serviço',
 }
 
 export const PAYMENT_METHOD_BADGE_COLORS: Record<string, string> = {
-  cash:     'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  pix:      'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  card:     'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  transfer: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  cash:           'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  pix:            'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
+  card:           'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+  transfer:       'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  wallet_credit:  'bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
+  wallet_voucher: 'bg-orange-200 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200',
 }

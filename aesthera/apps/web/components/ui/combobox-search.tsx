@@ -19,6 +19,9 @@ interface ComboboxSearchProps {
   debounceMs?: number
   isLoading?: boolean
   className?: string
+  /** 'filter' (padrão): h-8 rounded-full — para barras de filtro
+   *  'form': h-9 rounded-md — para campos dentro de formulários/modais */
+  variant?: 'filter' | 'form'
 }
 
 /**
@@ -44,6 +47,7 @@ export function ComboboxSearch({
   debounceMs = 250,
   isLoading = false,
   className,
+  variant = 'filter',
 }: ComboboxSearchProps) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -85,7 +89,12 @@ export function ComboboxSearch({
 
   return (
     <div className={cn('relative', className)}>
-      <div className="flex h-8 items-center gap-2 rounded-full border border-input bg-card px-3">
+      <div className={cn(
+        'flex items-center gap-2 border border-input bg-card px-3',
+        variant === 'form'
+          ? 'h-9 rounded-md'
+          : 'h-8 rounded-full',
+      )}>
         <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <input
           ref={inputRef}
@@ -114,7 +123,11 @@ export function ComboboxSearch({
           {isLoading ? (
             <p className="p-3 text-xs text-muted-foreground">Buscando...</p>
           ) : items.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">Nenhum resultado encontrado</p>
+            <p className="p-3 text-xs text-muted-foreground">
+              {query.trim().length === 0
+                ? 'Digite para buscar…'
+                : 'Nenhum resultado encontrado'}
+            </p>
           ) : (
             items.map((item) => (
               <button
