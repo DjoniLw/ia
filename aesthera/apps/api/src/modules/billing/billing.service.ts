@@ -205,8 +205,8 @@ export class BillingService {
 
   async reopen(clinicId: string, id: string, notes?: string) {
     const billing = await this.get(clinicId, id)
-    if (!['paid', 'cancelled'].includes(billing.status)) {
-      throw new AppError('Somente cobranças pagas ou canceladas podem ser reabertas', 400, 'INVALID_STATUS')
+    if (!['paid', 'cancelled', 'overdue'].includes(billing.status)) {
+      throw new AppError('Somente cobranças pagas, canceladas ou em atraso podem ser reabertas', 400, 'INVALID_STATUS')
     }
     const previousStatus = billing.status
 
@@ -234,13 +234,13 @@ export class BillingService {
               const restoredBalance = walletEntry.balance + line.amount
               await tx.walletEntry.update({
                 where: { id: line.walletEntryId },
-                data: { balance: restoredBalance, status: 'ACTIVE', updatedAt: new Date() },
+                data: { balance: restoredBalance, status: 'ACTIVE' as never, updatedAt: new Date() },
               })
               await tx.walletTransaction.create({
                 data: {
                   clinicId,
                   walletEntryId: line.walletEntryId,
-                  type: 'REFUND',
+                  type: 'REFUND' as never,
                   value: line.amount,
                   reference: id,
                   description: `Cobrança reaberta — saldo restaurado (${id.slice(0, 8)})`,
@@ -257,7 +257,7 @@ export class BillingService {
       // Identifica WalletTransactions de USE referenciando esta cobrança (sem ManualReceipt)
       if (!manualReceipt) {
         const useTxns = await tx.walletTransaction.findMany({
-          where: { clinicId, type: 'USE', reference: id },
+          where: { clinicId, type: 'USE' as never, reference: id },
         })
         for (const useTxn of useTxns) {
           await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${useTxn.walletEntryId}::uuid FOR UPDATE`
@@ -265,13 +265,13 @@ export class BillingService {
           if (entry) {
             await tx.walletEntry.update({
               where: { id: useTxn.walletEntryId },
-              data: { balance: entry.balance + useTxn.value, status: 'ACTIVE', updatedAt: new Date() },
+              data: { balance: entry.balance + useTxn.value, status: 'ACTIVE' as never, updatedAt: new Date() },
             })
             await tx.walletTransaction.create({
               data: {
                 clinicId,
                 walletEntryId: useTxn.walletEntryId,
-                type: 'REFUND',
+                type: 'REFUND' as never,
                 value: useTxn.value,
                 reference: id,
                 description: `Cobrança reaberta — saldo restaurado (${id.slice(0, 8)})`,
@@ -286,39 +286,41 @@ export class BillingService {
       // Bloquear APENAS se o vale foi realmente utilizado em um atendimento (USE transaction).
       // Se status=USED mas sem USE transaction = foi anulado por reabertura anterior → ignorar.
       if (billing.sourceType === 'PRESALE') {
-        // Verifica se existe entry USED com transação de uso real (consumo em atendimento)
-        const usedInAppointment = await tx.walletEntry.findFirst({
-          where: {
-            clinicId,
-            originReference: id,
-            originType: 'SERVICE_PRESALE',
-            status: 'USED',
-            transactions: { some: { type: 'USE' } },
-          },
+        // Busca todos os entries SERVICE_PRESALE vinculados a esta cobrança
+        const presaleEntries = await tx.walletEntry.findMany({
+          where: { clinicId, originReference: id, originType: 'SERVICE_PRESALE' as never },
         })
-        if (usedInAppointment) {
-          throw new AppError(
-            'Não é possível reabrir: o vale de pré-venda gerado por esta cobrança já foi utilizado em um atendimento.',
-            409,
-            'PRESALE_VOUCHER_ALREADY_USED',
-          )
+
+        // Para cada entry USED, verifica se houve uso real (USE transaction) em atendimento
+        // Dois queries separados evitam filtro aninhado .some() que causa erro Prisma em $transaction
+        for (const entry of presaleEntries) {
+          if (entry.status === 'USED') {
+            const hasUseTransaction = await tx.walletTransaction.findFirst({
+              where: { walletEntryId: entry.id, type: 'USE' as never, clinicId },
+            })
+            if (hasUseTransaction) {
+              throw new AppError(
+                'Não é possível reabrir: o vale de pré-venda gerado por esta cobrança já foi utilizado em um atendimento.',
+                409,
+                'PRESALE_VOUCHER_ALREADY_USED',
+              )
+            }
+          }
         }
 
         // Anular TODOS os entries ACTIVE (pode haver duplicatas de reaberturas anteriores)
-        const activeEntries = await tx.walletEntry.findMany({
-          where: { clinicId, originReference: id, originType: 'SERVICE_PRESALE', status: 'ACTIVE' },
-        })
+        const activeEntries = presaleEntries.filter((e) => e.status === 'ACTIVE')
         for (const servicePresaleEntry of activeEntries) {
           await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${servicePresaleEntry.id}::uuid FOR UPDATE`
           await tx.walletEntry.update({
             where: { id: servicePresaleEntry.id },
-            data: { balance: 0, status: 'USED', updatedAt: new Date() },
+            data: { balance: 0, status: 'USED' as never, updatedAt: new Date() },
           })
           await tx.walletTransaction.create({
             data: {
               clinicId,
               walletEntryId: servicePresaleEntry.id,
-              type: 'REFUND',
+              type: 'REFUND' as never,
               value: servicePresaleEntry.balance,
               reference: id,
               description: `Vale anulado — cobrança de pré-venda reaberta (${id.slice(0, 8)})`,
@@ -343,7 +345,8 @@ export class BillingService {
       })
 
       // ── Registrar evento ────────────────────────────────────────────────────
-      const reason = notes?.trim() ?? `Reaberta a partir do status: ${previousStatus === 'paid' ? 'Pago' : 'Cancelado'}`
+      const statusLabel: Record<string, string> = { paid: 'Pago', cancelled: 'Cancelado', overdue: 'Em atraso' }
+      const reason = notes?.trim() ?? `Reaberta a partir do status: ${statusLabel[previousStatus] ?? previousStatus}`
       await tx.billingEvent.create({
         data: {
           clinicId,

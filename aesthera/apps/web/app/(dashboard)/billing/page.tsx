@@ -290,6 +290,9 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
   )
   const hasWalletPayment = walletLines.length > 0
 
+  // Cobrança PRESALE paga gera um vale SERVICE_PRESALE na carteira do cliente
+  const isPresale = billing.sourceType === 'PRESALE' && billing.status === 'paid'
+
   async function handleReopen() {
     try {
       await reopen.mutateAsync(undefined)
@@ -316,6 +319,21 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
         <Dialog open onClose={() => setConfirming(false)}>
           <DialogTitle>Reabrir Cobrança</DialogTitle>
           <div className="space-y-4 mt-4">
+            {isPresale && (
+              <div className="flex gap-2 rounded-lg border border-violet-400 bg-violet-50 dark:bg-violet-900/30 dark:border-violet-700 p-3">
+                <AlertTriangle className="h-4 w-4 text-violet-700 dark:text-violet-400 shrink-0 mt-0.5" />
+                <div className="text-sm text-violet-900 dark:text-violet-200 space-y-1">
+                  <p className="font-semibold">Vale de pré-venda será anulado</p>
+                  <p className="text-xs text-violet-800 dark:text-violet-300">
+                    {billing.service?.name
+                      ? <>O vale de <strong>{billing.service.name}</strong> gerado por este pagamento</>
+                      : 'O vale gerado por este pagamento'}{' '}
+                    será cancelado e a cobrança voltará para{' '}
+                    <strong>Pendente de pagamento</strong>.
+                  </p>
+                </div>
+              </div>
+            )}
             {hasWalletPayment && (
               <div className="flex gap-2 rounded-lg border border-amber-400 bg-amber-100 dark:bg-amber-900/40 dark:border-amber-700 p-3">
                 <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -336,6 +354,7 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
             <p className="text-sm text-muted-foreground">
               Deseja reabrir esta cobrança, alterando o status para Pendente?
               {hasWalletPayment && ' O recebimento anterior será cancelado e os saldos de carteira devolvidos.'}
+              {isPresale && !hasWalletPayment && ' O vale de pré-venda vinculado será anulado.'}
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setConfirming(false)}>Voltar</Button>
