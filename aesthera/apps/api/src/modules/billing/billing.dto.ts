@@ -1,11 +1,20 @@
 import { z } from 'zod'
 
+const VALID_STATUSES = ['pending', 'paid', 'overdue', 'cancelled'] as const
+const VALID_SOURCE_TYPES = ['APPOINTMENT', 'PACKAGE_SALE', 'PRODUCT_SALE', 'MANUAL', 'PRESALE'] as const
+
 export const ListBillingQuery = z.object({
   customerId: z.string().uuid().optional(),
   appointmentId: z.string().uuid().optional(),
   customerName: z.string().trim().min(1).optional(),
-  status: z.enum(['pending', 'paid', 'overdue', 'cancelled']).optional(),
-  sourceType: z.enum(['APPOINTMENT', 'PACKAGE_SALE', 'PRODUCT_SALE', 'MANUAL', 'PRESALE']).optional(),
+  // Suporta valor único (ex: "paid") ou lista separada por vírgula (ex: "paid,cancelled")
+  status: z.string().optional().transform((v) =>
+    v ? v.split(',').filter((s): s is typeof VALID_STATUSES[number] => (VALID_STATUSES as readonly string[]).includes(s)) : undefined
+  ),
+  sourceType: z.string().optional().transform((v) =>
+    v ? v.split(',').filter((s): s is typeof VALID_SOURCE_TYPES[number] => (VALID_SOURCE_TYPES as readonly string[]).includes(s)) : undefined
+  ),
+  hasCashReceived: z.string().optional().transform((v) => v === 'true' ? true : undefined),
   dueDateFrom: z.string().optional(),
   dueDateTo: z.string().optional(),
   createdAtFrom: z.string().optional(),

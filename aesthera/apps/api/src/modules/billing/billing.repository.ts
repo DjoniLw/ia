@@ -41,8 +41,17 @@ export class BillingRepository {
     const where: Record<string, unknown> = { clinicId }
     if (q.customerId) where.customerId = q.customerId
     if (q.appointmentId) where.appointmentId = q.appointmentId
-    if (q.status) where.status = q.status
-    if (q.sourceType) where.sourceType = q.sourceType
+    if (q.status?.length) {
+      where.status = q.status.length === 1 ? q.status[0] : { in: q.status }
+    }
+    if (q.sourceType?.length) {
+      where.sourceType = q.sourceType.length === 1 ? q.sourceType[0] : { in: q.sourceType }
+    }
+    if (q.hasCashReceived) {
+      where.manualReceipt = {
+        lines: { some: { paymentMethod: { notIn: ['wallet_credit', 'wallet_voucher'] } } },
+      }
+    }
     if (q.customerName) {
       where.customer = { name: { contains: q.customerName, mode: 'insensitive' } }
     }

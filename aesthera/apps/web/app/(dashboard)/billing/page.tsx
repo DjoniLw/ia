@@ -442,8 +442,14 @@ function BillingPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const [statusFilter, setStatusFilter] = usePersistedFilter<BillingStatus | ''>('aesthera-filter-billing-status', (searchParams.get('status') as BillingStatus | null), '')
-  const [sourceTypeFilter, setSourceTypeFilter] = usePersistedFilter<BillingSourceType | ''>('aesthera-filter-billing-sourcetype', (searchParams.get('sourceType') as BillingSourceType | null), '')
+  // ── Filtros multiselect ─────────────────────────────────────────────────────
+  const [statusFilters, setStatusFilters] = useState<BillingStatus[]>(
+    () => (searchParams.get('status') ?? '').split(',').filter((s): s is BillingStatus => !!s) as BillingStatus[]
+  )
+  const [sourceTypeFilters, setSourceTypeFilters] = useState<BillingSourceType[]>(
+    () => (searchParams.get('sourceType') ?? '').split(',').filter((s): s is BillingSourceType => !!s) as BillingSourceType[]
+  )
+  const [hasCashReceived, setHasCashReceived] = useState(searchParams.get('hasCashReceived') === 'true')
   const [customerSearch, setCustomerSearch] = usePersistedFilter('aesthera-filter-billing-customer', searchParams.get('customer'), '')
   const [customerSearchDebounced, setCustomerSearchDebounced] = useState(customerSearch)
   const [dateFrom, setDateFrom] = usePersistedFilter('aesthera-filter-billing-dateFrom', searchParams.get('dateFrom'), defaultDateFrom())
@@ -453,29 +459,48 @@ function BillingPageContent() {
 
   const { page, pageSize, setPage, setPageSize, resetPage, paginationParams } = usePaginatedQuery({ defaultPageSize: 20 })
 
+  // ── Toggle helpers ──────────────────────────────────────────────────────────
+  function toggleStatus(value: BillingStatus) {
+    setStatusFilters((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
+    )
+    resetPage()
+  }
+  function clearStatuses() { setStatusFilters([]); resetPage() }
+
+  function toggleSourceType(value: BillingSourceType) {
+    setSourceTypeFilters((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
+    )
+    resetPage()
+  }
+  function clearSourceTypes() { setSourceTypeFilters([]); resetPage() }
+
   useEffect(() => {
     const timer = setTimeout(() => { setCustomerSearchDebounced(customerSearch); resetPage() }, 250)
     return () => clearTimeout(timer)
   }, [customerSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // URL sync — page/pageSize gerenciados pelo usePaginatedQuery; aqui só os filtros
+  // URL sync
   useEffect(() => {
     const p = new URLSearchParams(searchParams.toString())
-    if (statusFilter) p.set('status', statusFilter); else p.delete('status')
-    if (sourceTypeFilter) p.set('sourceType', sourceTypeFilter); else p.delete('sourceType')
+    if (statusFilters.length) p.set('status', statusFilters.join(',')); else p.delete('status')
+    if (sourceTypeFilters.length) p.set('sourceType', sourceTypeFilters.join(',')); else p.delete('sourceType')
+    if (hasCashReceived) p.set('hasCashReceived', 'true'); else p.delete('hasCashReceived')
     if (customerSearch) p.set('customer', customerSearch); else p.delete('customer')
     if (dateFrom) p.set('dateFrom', dateFrom); else p.delete('dateFrom')
     if (dateTo) p.set('dateTo', dateTo); else p.delete('dateTo')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, statusFilter, sourceTypeFilter, customerSearch, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router, statusFilters, sourceTypeFilters, hasCashReceived, customerSearch, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const defaultFrom = defaultDateFrom()
   const defaultTo = isoDateOnly(new Date())
-  const isDefaultFilters = statusFilter === '' && sourceTypeFilter === '' && customerSearch === '' && dateFrom === defaultFrom && dateTo === defaultTo
+  const isDefaultFilters = statusFilters.length === 0 && sourceTypeFilters.length === 0 && !hasCashReceived && customerSearch === '' && dateFrom === defaultFrom && dateTo === defaultTo
 
   function resetFilters() {
-    setStatusFilter('')
-    setSourceTypeFilter('')
+    setStatusFilters([])
+    setSourceTypeFilters([])
+    setHasCashReceived(false)
     setCustomerSearch('')
     setCustomerSearchDebounced('')
     setDateFrom(defaultFrom)
@@ -493,12 +518,15 @@ function BillingPageContent() {
 
   function buildFilterLabel(): string {
     const parts: string[] = []
-    const statusLabel: Record<string, string> = {
-      '': 'todos os status',
-      ...BILLING_STATUS_LABEL,
+    if (statusFilters.length === 0) {
+      parts.push('todos os status')
+    } else {
+      parts.push(statusFilters.map((s) => BILLING_STATUS_LABEL[s] ?? s).join(', '))
     }
-    parts.push(statusLabel[statusFilter] ?? statusFilter)
-    if (sourceTypeFilter) parts.push(`origem: ${BILLING_SOURCE_TYPE_LABEL[sourceTypeFilter] ?? sourceTypeFilter}`)
+    if (sourceTypeFilters.length) {
+      parts.push(`origem: ${sourceTypeFilters.map((t) => BILLING_SOURCE_TYPE_LABEL[t] ?? t).join(', ')}`)
+    }
+    if (hasCashReceived) parts.push('com recebimento em caixa')
     if (customerSearchDebounced) parts.push(`cliente: ${customerSearchDebounced}`)
     if (dateFrom) parts.push(`de ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR')}`)
     if (dateTo) parts.push(`até ${new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR')}`)
@@ -506,8 +534,9 @@ function BillingPageContent() {
   }
 
   const params: Record<string, string> = {
-    ...(statusFilter && { status: statusFilter }),
-    ...(sourceTypeFilter && { sourceType: sourceTypeFilter }),
+    ...(statusFilters.length && { status: statusFilters.join(',') }),
+    ...(sourceTypeFilters.length && { sourceType: sourceTypeFilters.join(',') }),
+    ...(hasCashReceived && { hasCashReceived: 'true' }),
     ...(customerSearchDebounced && { customerName: customerSearchDebounced }),
     ...(dateFrom && { createdAtFrom: dateFrom }),
     ...(dateTo && { createdAtTo: dateTo }),
@@ -515,12 +544,17 @@ function BillingPageContent() {
   }
   const { data, isLoading } = useBilling(Object.keys(params).length ? params : undefined)
 
-  const statuses: Array<{ value: BillingStatus | ''; label: string }> = [
-    { value: '', label: 'Todos' },
+  const statuses: Array<{ value: BillingStatus; label: string }> = [
     { value: 'pending', label: 'Pendente' },
     { value: 'paid', label: 'Pago' },
     { value: 'overdue', label: 'Vencido' },
     { value: 'cancelled', label: 'Cancelado' },
+  ]
+
+  const sourceTypes: Array<{ value: BillingSourceType; label: string }> = [
+    { value: 'APPOINTMENT', label: 'Agendamento' },
+    { value: 'PRESALE', label: 'Pré-venda' },
+    { value: 'MANUAL', label: 'Avulso' },
   ]
 
   return (
@@ -545,16 +579,28 @@ function BillingPageContent() {
       </div>
 
       {/* Filters */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex gap-1">
+      <div className="space-y-2">
+        {/* Linha 1: Status */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide w-14 shrink-0">Status</span>
+          <button
+            onClick={clearStatuses}
+            className={[
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              statusFilters.length === 0
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-input bg-card text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            Todos
+          </button>
           {statuses.map((s) => (
             <button
               key={s.value}
-              onClick={() => { setStatusFilter(s.value); resetPage() }}
+              onClick={() => toggleStatus(s.value)}
               className={[
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                statusFilter === s.value
+                statusFilters.includes(s.value)
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-input bg-card text-muted-foreground hover:bg-accent',
               ].join(' ')}
@@ -562,26 +608,52 @@ function BillingPageContent() {
               {s.label}
             </button>
           ))}
-          </div>
+        </div>
 
-          {/* sourceType filter */}
-          <div className="flex gap-1">
-            {(['', 'APPOINTMENT', 'PRESALE', 'MANUAL'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => { setSourceTypeFilter(t); resetPage() }}
-                className={[
-                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  sourceTypeFilter === t
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-input bg-card text-muted-foreground hover:bg-accent',
-                ].join(' ')}
-              >
-                {t === '' ? 'Todas origens' : BILLING_SOURCE_TYPE_LABEL[t]}
-              </button>
-            ))}
-          </div>
-          <div className="relative">
+        {/* Linha 2: Origem */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide w-14 shrink-0">Origem</span>
+          <button
+            onClick={clearSourceTypes}
+            className={[
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              sourceTypeFilters.length === 0
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'border-input bg-card text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            Todas
+          </button>
+          {sourceTypes.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => toggleSourceType(t.value)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                sourceTypeFilters.includes(t.value)
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:bg-accent',
+              ].join(' ')}
+            >
+              {t.label}
+            </button>
+          ))}
+          {/* Separador visual */}
+          <div className="w-px h-5 bg-border mx-1" />
+          {/* Filtro extra: Recebido Caixa */}
+          <button
+            onClick={() => { setHasCashReceived((v) => !v); resetPage() }}
+            className={[
+              'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+              hasCashReceived
+                ? 'border-green-600 bg-green-600 text-white'
+                : 'border-input bg-card text-muted-foreground hover:bg-accent',
+            ].join(' ')}
+          >
+            Com recebimento em caixa
+          </button>
+          {/* Busca por cliente — mesma linha */}
+          <div className="relative ml-auto">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
