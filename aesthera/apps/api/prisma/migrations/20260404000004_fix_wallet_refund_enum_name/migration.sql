@@ -1,0 +1,14 @@
+-- Fix: use the correct PostgreSQL enum type name "WalletTransactionType" (PascalCase).
+--
+-- Migrations 000002 and 000003 incorrectly referenced "wallet_transaction_type"
+-- (snake_case). Prisma creates enum types using the schema name as-is, so the
+-- real PostgreSQL type name is "WalletTransactionType" (matching all other enums
+-- such as "BillingSourceType" and "WalletOriginType").
+--
+-- Because those migrations failed with "type does not exist" (code 42703), the
+-- main.ts auto-resolve mechanism marked them as applied WITHOUT running the SQL,
+-- leaving "REFUND" absent from the enum and causing runtime error 22P02 on
+-- walletTransaction.create({ type: 'REFUND' }).
+--
+-- This migration uses the correct name and is idempotent (IF NOT EXISTS).
+ALTER TYPE "WalletTransactionType" ADD VALUE IF NOT EXISTS 'REFUND';

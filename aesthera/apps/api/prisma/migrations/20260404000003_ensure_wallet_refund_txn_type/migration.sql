@@ -8,4 +8,5 @@
 -- with a Prisma P2023 error (→ HTTP 400 for the caller).
 --
 -- This migration is fully idempotent: it is a no-op when REFUND already exists.
-ALTER TYPE "wallet_transaction_type" ADD VALUE IF NOT EXISTS 'REFUND';
+-- NOTE: This migration was created with the wrong type name. Superseded by 000004.
+ALTER TYPE "WalletTransactionType" ADD VALUE IF NOT EXISTS 'REFUND';
