@@ -13,6 +13,23 @@ const billingInclude = {
     },
   },
   service: { select: { id: true, name: true } },
+  manualReceipt: {
+    select: {
+      id: true,
+      totalPaid: true,
+      receivedAt: true,
+      notes: true,
+      lines: {
+        select: {
+          id: true,
+          paymentMethod: true,
+          amount: true,
+          walletEntryId: true,
+          walletEntry: { select: { id: true, code: true, originType: true } },
+        },
+      },
+    },
+  },
 } as const
 
 export class BillingRepository {
@@ -31,6 +48,13 @@ export class BillingRepository {
       if (q.dueDateFrom) range.gte = new Date(q.dueDateFrom)
       if (q.dueDateTo) range.lte = new Date(q.dueDateTo)
       where.dueDate = range
+    }
+
+    if (q.createdAtFrom || q.createdAtTo) {
+      const range: Record<string, Date> = {}
+      if (q.createdAtFrom) range.gte = new Date(q.createdAtFrom)
+      if (q.createdAtTo) range.lte = new Date(new Date(q.createdAtTo).setHours(23, 59, 59, 999))
+      where.createdAt = range
     }
 
     const skip = (q.page - 1) * q.limit

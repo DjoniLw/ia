@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { ExternalLink, Info, Plus, Search, Tag } from 'lucide-react'
+import { ChevronDown, ChevronUp, CreditCard, ExternalLink, Info, Plus, Search, Tag, Wallet } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,152 @@ function formatCurrency(cents: number) {
 function formatDate(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+function isoDateOnly(d: Date) {
+  return d.toISOString().slice(0, 10)
+}
+
+function defaultDateFrom() {
+  const d = new Date()
+  d.setMonth(d.getMonth() - 6)
+  return isoDateOnly(d)
+}
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  cash: 'Dinheiro',
+  pix: 'Pix',
+  card: 'Cartão',
+  transfer: 'Transferência',
+  wallet_credit: 'Crédito',
+  wallet_voucher: 'Vale Serviço',
+}
+
+const PAYMENT_METHOD_COLOR: Record<string, string> = {
+  cash: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  pix: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
+  card: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+  transfer: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  wallet_credit: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  wallet_voucher: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+}
+
+// ──── Billing Detail Modal ─────────────────────────────────────────────────────
+
+function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: () => void }) {
+  return (
+    <Dialog open onClose={onClose}>
+      <DialogTitle>Detalhe da Cobrança</DialogTitle>
+      <div className="mt-4 space-y-4">
+        {/* Dados principais */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-muted-foreground">Cliente</p>
+            <p className="font-medium">{billing.customer.name}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Status</p>
+            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${BILLING_STATUS_COLOR[billing.status] ?? 'bg-muted text-muted-foreground'}`}>
+              {BILLING_STATUS_LABEL[billing.status] ?? billing.status}
+            </span>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Serviço</p>
+            <p className="font-medium">{billing.appointment?.service?.name ?? billing.service?.name ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Origem</p>
+            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${BILLING_SOURCE_TYPE_COLOR[billing.sourceType] ?? 'bg-muted text-muted-foreground'}`}>
+              {BILLING_SOURCE_TYPE_LABEL[billing.sourceType] ?? billing.sourceType}
+            </span>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Valor cobrado</p>
+            <p className="font-semibold text-lg">{formatCurrency(billing.amount)}</p>
+          </div>
+          {billing.originalAmount && billing.lockedPromotionCode && (
+            <div>
+              <p className="text-xs text-muted-foreground">Promoção aplicada</p>
+              <p className="text-green-700 dark:text-green-400 flex items-center gap-1">
+                <Tag className="h-3 w-3" />
+                {billing.lockedPromotionCode}
+                <span className="line-through text-muted-foreground ml-1 text-xs">{formatCurrency(billing.originalAmount)}</span>
+              </p>
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-muted-foreground">Criado em</p>
+            <p>{formatDate(billing.createdAt)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Vencimento</p>
+            <p>{formatDate(billing.dueDate)}</p>
+          </div>
+          {billing.paidAt && (
+            <div>
+              <p className="text-xs text-muted-foreground">Pago em</p>
+              <p className="text-green-600 font-medium">{formatDate(billing.paidAt)}</p>
+            </div>
+          )}
+          {billing.cancelledAt && (
+            <div>
+              <p className="text-xs text-muted-foreground">Cancelado em</p>
+              <p className="text-destructive">{formatDate(billing.cancelledAt)}</p>
+            </div>
+          )}
+          {billing.appointment?.scheduledAt && (
+            <div>
+              <p className="text-xs text-muted-foreground">Agendamento</p>
+              <p>{formatDate(billing.appointment.scheduledAt)}</p>
+            </div>
+          )}
+          {billing.appointment?.professional?.name && (
+            <div>
+              <p className="text-xs text-muted-foreground">Profissional</p>
+              <p>{billing.appointment.professional.name}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Detalhe do recebimento */}
+        {billing.manualReceipt && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+            <p className="text-xs font-semibold text-foreground">Recebimento</p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Recebido em {formatDate(billing.manualReceipt.receivedAt)}</span>
+              <span className="font-medium text-foreground">{formatCurrency(billing.manualReceipt.totalPaid)}</span>
+            </div>
+            {billing.manualReceipt.lines.length > 0 && (
+              <div className="space-y-1 mt-2">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">Formas de pagamento</p>
+                {billing.manualReceipt.lines.map((line) => (
+                  <div key={line.id} className="flex items-center justify-between">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_COLOR[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}>
+                      {line.paymentMethod === 'wallet_voucher' || line.paymentMethod === 'wallet_credit'
+                        ? <Wallet className="h-2.5 w-2.5" />
+                        : <CreditCard className="h-2.5 w-2.5" />
+                      }
+                      {PAYMENT_METHOD_LABEL[line.paymentMethod] ?? line.paymentMethod}
+                      {line.walletEntry?.code && (
+                        <span className="opacity-70">· {line.walletEntry.code}</span>
+                      )}
+                    </span>
+                    <span className="text-xs font-medium">{formatCurrency(line.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {billing.manualReceipt.notes && (
+              <p className="text-xs text-muted-foreground border-t pt-2">{billing.manualReceipt.notes}</p>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="mt-4 flex justify-end">
+        <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+      </div>
+    </Dialog>
+  )
 }
 
 // ──── Cancel Button ────────────────────────────────────────────────────────────
@@ -77,11 +223,36 @@ function CancelBillingButton({ id, status }: { id: string; status: BillingStatus
   )
 }
 
+// ──── Payment Method Pills ─────────────────────────────────────────────────────
+
+function PaymentMethodPills({ billing }: { billing: Billing }) {
+  const lines = billing.manualReceipt?.lines ?? []
+  if (lines.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-0.5 mt-1">
+      {lines.map((line) => (
+        <span
+          key={line.id}
+          className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${PAYMENT_METHOD_COLOR[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
+        >
+          {line.paymentMethod === 'wallet_voucher' || line.paymentMethod === 'wallet_credit'
+            ? <Wallet className="h-2 w-2" />
+            : <CreditCard className="h-2 w-2" />
+          }
+          {PAYMENT_METHOD_LABEL[line.paymentMethod] ?? line.paymentMethod}
+          <span className="opacity-80">{formatCurrency(line.amount)}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 // ──── Billing Row Actions ──────────────────────────────────────────────────────
 
 function BillingActions({ billing }: { billing: Billing }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [modalKey, setModalKey] = useState(0)
+  const [detailOpen, setDetailOpen] = useState(false)
 
   // Busca vouchers SERVICE_PRESALE disponíveis para o serviço da cobrança (item 4)
   const serviceId = billing.appointment?.service?.id ?? billing.service?.id ?? undefined
@@ -94,8 +265,22 @@ function BillingActions({ billing }: { billing: Billing }) {
     ?.slice()
     .sort((a, b) => b.balance - a.balance)[0] ?? null
 
-  if (billing.status !== 'pending' && billing.status !== 'overdue') {
-    return null
+  if (billing.status === 'paid' || billing.status === 'cancelled') {
+    return (
+      <>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground"
+          onClick={() => setDetailOpen(true)}
+        >
+          Ver detalhe
+        </Button>
+        {detailOpen && (
+          <BillingDetailModal billing={billing} onClose={() => setDetailOpen(false)} />
+        )}
+      </>
+    )
   }
 
   return (
@@ -133,6 +318,8 @@ function BillingPageContent() {
   const [sourceTypeFilter, setSourceTypeFilter] = usePersistedFilter<BillingSourceType | ''>('aesthera-filter-billing-sourcetype', (searchParams.get('sourceType') as BillingSourceType | null), '')
   const [customerSearch, setCustomerSearch] = usePersistedFilter('aesthera-filter-billing-customer', searchParams.get('customer'), '')
   const [customerSearchDebounced, setCustomerSearchDebounced] = useState(customerSearch)
+  const [dateFrom, setDateFrom] = usePersistedFilter('aesthera-filter-billing-dateFrom', searchParams.get('dateFrom'), defaultDateFrom())
+  const [dateTo, setDateTo] = usePersistedFilter('aesthera-filter-billing-dateTo', searchParams.get('dateTo'), isoDateOnly(new Date()))
   const [showNewBillingModal, setShowNewBillingModal] = useState(false)
   const [showManualBillingModal, setShowManualBillingModal] = useState(false)
 
@@ -149,16 +336,30 @@ function BillingPageContent() {
     if (statusFilter) p.set('status', statusFilter); else p.delete('status')
     if (sourceTypeFilter) p.set('sourceType', sourceTypeFilter); else p.delete('sourceType')
     if (customerSearch) p.set('customer', customerSearch); else p.delete('customer')
+    if (dateFrom) p.set('dateFrom', dateFrom); else p.delete('dateFrom')
+    if (dateTo) p.set('dateTo', dateTo); else p.delete('dateTo')
     router.replace(`?${p.toString()}`, { scroll: false })
-  }, [router, statusFilter, sourceTypeFilter, customerSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router, statusFilter, sourceTypeFilter, customerSearch, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isDefaultFilters = statusFilter === '' && sourceTypeFilter === '' && customerSearch === ''
+  const defaultFrom = defaultDateFrom()
+  const defaultTo = isoDateOnly(new Date())
+  const isDefaultFilters = statusFilter === '' && sourceTypeFilter === '' && customerSearch === '' && dateFrom === defaultFrom && dateTo === defaultTo
 
   function resetFilters() {
     setStatusFilter('')
     setSourceTypeFilter('')
     setCustomerSearch('')
     setCustomerSearchDebounced('')
+    setDateFrom(defaultFrom)
+    setDateTo(defaultTo)
+    resetPage()
+  }
+
+  function setDatePreset(months: number) {
+    const from = new Date()
+    from.setMonth(from.getMonth() - months)
+    setDateFrom(isoDateOnly(from))
+    setDateTo(defaultTo)
     resetPage()
   }
 
@@ -171,6 +372,8 @@ function BillingPageContent() {
     parts.push(statusLabel[statusFilter] ?? statusFilter)
     if (sourceTypeFilter) parts.push(`origem: ${BILLING_SOURCE_TYPE_LABEL[sourceTypeFilter] ?? sourceTypeFilter}`)
     if (customerSearchDebounced) parts.push(`cliente: ${customerSearchDebounced}`)
+    if (dateFrom) parts.push(`de ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR')}`)
+    if (dateTo) parts.push(`até ${new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR')}`)
     return parts.join(' · ')
   }
 
@@ -178,6 +381,8 @@ function BillingPageContent() {
     ...(statusFilter && { status: statusFilter }),
     ...(sourceTypeFilter && { sourceType: sourceTypeFilter }),
     ...(customerSearchDebounced && { customerName: customerSearchDebounced }),
+    ...(dateFrom && { createdAtFrom: dateFrom }),
+    ...(dateTo && { createdAtTo: dateTo }),
     ...paginationParams,
   }
   const { data, isLoading } = useBilling(Object.keys(params).length ? params : undefined)
@@ -260,6 +465,55 @@ function BillingPageContent() {
           </div>
         </div>
 
+        {/* Filtros de data */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Criado em:</span>
+          <div className="flex gap-1">
+            {[
+              { label: 'Hoje', months: 0 },
+              { label: '7 dias', months: null, days: 7 },
+              { label: '30 dias', months: 1 },
+              { label: '3 meses', months: 3 },
+              { label: '6 meses', months: 6 },
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => {
+                  const from = new Date()
+                  if (preset.months === 0) {
+                    setDateFrom(isoDateOnly(from))
+                  } else if ('days' in preset && preset.days) {
+                    from.setDate(from.getDate() - preset.days)
+                    setDateFrom(isoDateOnly(from))
+                  } else if (preset.months) {
+                    from.setMonth(from.getMonth() - preset.months)
+                    setDateFrom(isoDateOnly(from))
+                  }
+                  setDateTo(isoDateOnly(new Date()))
+                  resetPage()
+                }}
+                className="rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors border-input bg-card text-muted-foreground hover:bg-accent"
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => { setDateFrom(e.target.value); resetPage() }}
+            className="h-7 rounded border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <span className="text-xs text-muted-foreground">até</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => { setDateTo(e.target.value); resetPage() }}
+            className="h-7 rounded border border-input bg-card px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
         {/* Legenda descritiva */}
         <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
           <Info className="h-3.5 w-3.5 shrink-0" />
@@ -330,6 +584,7 @@ function BillingPageContent() {
                   ) : (
                     formatCurrency(b.amount)
                   )}
+                  <PaymentMethodPills billing={b} />
                 </td>
                 <td className="hidden sm:table-cell px-2 py-3 text-muted-foreground">{formatDate(b.dueDate)}</td>
                 <td className="px-2 py-3">
@@ -403,25 +658,25 @@ function BillingPageContent() {
 
       {/* Summary */}
       {data && data.items.length > 0 && (
-        <div className="flex gap-6 rounded-lg border bg-card px-6 py-4 text-sm">
+        <div className="flex flex-wrap gap-6 rounded-lg border bg-card px-6 py-4 text-sm">
           <div>
             <p className="text-muted-foreground">Total cobranças</p>
             <p className="text-lg font-semibold">{data.total}</p>
           </div>
           <div>
-            <p className="text-muted-foreground">Valor total (página)</p>
+            <p className="text-muted-foreground">Valor total (filtro)</p>
             <p className="text-lg font-semibold">
-              {formatCurrency(data.items.reduce((s, b) => s + b.amount, 0))}
+              {formatCurrency(data.totalAmount ?? 0)}
             </p>
           </div>
           <div>
-            <p className="text-muted-foreground">Pagos</p>
+            <p className="text-muted-foreground">Pago (página)</p>
             <p className="text-lg font-semibold text-green-600">
               {formatCurrency(data.items.filter((b) => b.status === 'paid').reduce((s, b) => s + b.amount, 0))}
             </p>
           </div>
           <div>
-            <p className="text-muted-foreground">Pendentes</p>
+            <p className="text-muted-foreground">Pendente (página)</p>
             <p className="text-lg font-semibold text-yellow-600">
               {formatCurrency(
                 data.items

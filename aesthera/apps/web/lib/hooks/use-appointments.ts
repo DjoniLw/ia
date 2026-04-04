@@ -115,6 +115,19 @@ export interface Billing {
   service?: { id: string; name: string } | null
   customer: AppointmentCustomer
   appointment: BillingAppointment | null
+  manualReceipt?: {
+    id: string
+    totalPaid: number
+    receivedAt: string
+    notes?: string | null
+    lines: Array<{
+      id: string
+      paymentMethod: string
+      amount: number
+      walletEntryId?: string | null
+      walletEntry?: { id: string; code: string; originType: string } | null
+    }>
+  } | null
 }
 
 export interface CompleteResult {

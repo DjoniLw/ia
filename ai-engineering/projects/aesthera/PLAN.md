@@ -331,6 +331,43 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 
 ---
 
+## Fase 13 — Correções de UX e Regras de Negócio da Pré-Venda
+
+> Commit: `d2a3d53` na branch `feat/billing-service-redesign-issue-147`
+
+### Backend
+- [x] `wallet.service.ts::use()` — bypass da checagem de saldo para `SERVICE_PRESALE`: o serviço já foi pago, preço não importa
+- [x] `billing.service.ts` — descrição da transação do vale inclui nome do serviço (ex.: `Vale de procedimento criado — Drenagem (pré-venda)`)
+- [x] `manual-receipts.service.ts` — mesma correção de descrição
+
+### Frontend
+- [x] `components/ui/info-banner.tsx` — componente reutilizável `InfoBanner` (variantes: info/success/warning/error)
+- [x] `receive-manual-modal.tsx` — substituído banner inline por `InfoBanner`; `walletOriginType` adicionado ao `PaymentLineState`; valor auto-preenchido e campo desabilitado para `SERVICE_PRESALE`; promoções ocultadas quando pré-venda selecionada
+- [x] `billing/page.tsx` — `BillingActions` busca vouchers `SERVICE_PRESALE` disponíveis e passa como `preSelectedVoucherId` ao abrir `ReceiveManualModal`
+- [x] `carteira/page.tsx` — view por-cliente exibe seção "Aguardando pagamento" com pré-vendas pendentes (sem contar no saldo)
+
+---
+
+## Fase 14 — Melhorias de UX na Tela de Cobranças e Ficha do Cliente
+
+> Commit: em progresso — branch `feat/billing-service-redesign-issue-147`
+
+### Backend
+- [x] `billing.dto.ts` — adicionados `createdAtFrom` e `createdAtTo` ao `ListBillingQuery` (filtros de data por criação)
+- [x] `billing.repository.ts::findAll()` — filtro de `createdAt` aplicado quando os parâmetros são fornecidos
+- [x] `billing.repository.ts::billingInclude` — adicionado `manualReceipt { lines { paymentMethod, amount, walletEntryId, walletEntry } }` para retornar dados de pagamento nas listagens
+
+### Frontend
+- [x] `use-appointments.ts::Billing` — interface extendida com campo `manualReceipt` (linhas de pagamento com `paymentMethod`, `amount`, `walletEntry`)
+- [x] `billing/page.tsx` — adicionados filtros de data (Criado em: presets Hoje/7 dias/30 dias/3 meses/6 meses + inputs manual) com padrão dos últimos 6 meses
+- [x] `billing/page.tsx` — totalizador "Valor total (filtro)" usa `data.totalAmount` do backend (aggregate real, não soma da página)
+- [x] `billing/page.tsx` — `PaymentMethodPills` exibe pills de forma de pagamento (Dinheiro/PIX/Cartão/Vale/Crédito) nas linhas da tabela para cobranças pagas
+- [x] `billing/page.tsx` — `BillingDetailModal` com detalhe completo de cobranças pagas/canceladas (dados da cobrança, promoção aplicada, breakdown de pagamentos com formas e valores); acessível via botão "Ver detalhe" nas linhas pagas/canceladas
+- [x] `receive-manual-modal.tsx` — redesenho da UX de promoções: melhor desconto é auto-aplicado (específica > universal); removidos múltiplos banners confusos; adicionado botão "Selecionar outro desconto" que expande picker com todos os descontos disponíveis (mostra código, tipo e valor); corrigido bug onde trocar promoção deixava a anterior aparecendo como sugestão em loop
+- [x] `customers/page.tsx::CustomerWalletTab` — seção "Aguardando pagamento" com pré-vendas pendentes (`sourceType: PRESALE, status: pending`) visível na aba Carteira da Ficha do Cliente; mesmo padrão visual amber já presente em `carteira/page.tsx`
+
+---
+
 ## Resumo das Fases
 
 | Fase | O que você vê no final | Status |

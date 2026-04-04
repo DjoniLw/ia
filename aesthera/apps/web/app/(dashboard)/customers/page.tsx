@@ -55,6 +55,8 @@ import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
+import { useBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
+import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
@@ -740,6 +742,13 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
   const items = entries.data?.items ?? []
   const total = entries.data?.total ?? 0
   const limit = entries.data?.limit ?? 10
+
+  // Pré-vendas pendentes aguardando pagamento
+  const { data: pendingBillings } = useBilling(
+    isAllowed ? { customerId, sourceType: 'PRESALE', status: 'pending' } : undefined,
+    { enabled: isAllowed },
+  )
+  const pendingPresales = pendingBillings?.items ?? []
   const totalPages = Math.ceil(total / limit)
 
   return (
@@ -819,6 +828,38 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Aguardando pagamento — pré-vendas pendentes */}
+            {pendingPresales.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 p-3 space-y-2">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                  ⏳ Aguardando pagamento ({pendingPresales.length})
+                </p>
+                {pendingPresales.map((b: ApiBilling) => (
+                  <div
+                    key={b.id}
+                    className="flex items-center justify-between gap-2 rounded-md bg-amber-100 dark:bg-amber-950/40 px-3 py-2 text-xs"
+                  >
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="font-medium text-foreground truncate">
+                        {b.appointment?.service?.name ?? b.service?.name ?? 'Serviço'}
+                      </span>
+                      {b.dueDate && (
+                        <span className="text-[10px] text-muted-foreground">
+                          Vencimento: {new Date(b.dueDate).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${BILLING_STATUS_COLOR[b.status] ?? 'bg-muted text-muted-foreground'}`}>
+                        {BILLING_STATUS_LABEL[b.status] ?? b.status}
+                      </span>
+                      <span className="font-semibold text-foreground">{formatCurrency(b.amount)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Saldo */}
             <div className="rounded-lg border bg-muted/20 px-4 py-3 flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground">Saldo disponível</span>
