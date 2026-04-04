@@ -161,12 +161,20 @@ export class BillingService {
     return billing
   }
 
+  private async recordEvent(billingId: string, clinicId: string, event: string, fromStatus: string, toStatus: string, notes?: string) {
+    await prisma.billingEvent.create({
+      data: { billingId, clinicId, event, fromStatus, toStatus, notes },
+    })
+  }
+
   async cancel(clinicId: string, id: string, _dto: CancelBillingDto) {
     const billing = await this.get(clinicId, id)
     if (!['pending', 'overdue'].includes(billing.status)) {
       throw new AppError('Only pending or overdue billing can be cancelled', 400, 'INVALID_STATUS')
     }
-    return this.repo.updateStatus(clinicId, id, 'cancelled', { cancelledAt: new Date() })
+    const updated = await this.repo.updateStatus(clinicId, id, 'cancelled', { cancelledAt: new Date() })
+    await this.recordEvent(id, clinicId, 'cancelled', billing.status, 'cancelled')
+    return updated
   }
 
   async markPaid(clinicId: string, id: string) {
@@ -179,6 +187,7 @@ export class BillingService {
       )
     }
     const updated = await this.repo.updateStatus(clinicId, id, 'paid', { paidAt: new Date() })
+    await this.recordEvent(id, clinicId, 'paid', billing.status, 'paid')
 
     // Create a ledger credit entry for the manual payment
     await ledger.createCreditEntry({
@@ -191,6 +200,23 @@ export class BillingService {
       metadata: { source: 'manual_mark_paid' },
     })
 
+    return updated
+  }
+
+  async reopen(clinicId: string, id: string, notes?: string) {
+    const billing = await this.get(clinicId, id)
+    if (!['paid', 'cancelled'].includes(billing.status)) {
+      throw new AppError('Somente cobranças pagas ou canceladas podem ser reabertas', 400, 'INVALID_STATUS')
+    }
+    const previousStatus = billing.status
+    // Limpa datas de finalização e volta para pending
+    const updated = await this.repo.updateStatus(clinicId, id, 'pending', {
+      paidAt: null as unknown as Date,
+      cancelledAt: null as unknown as Date,
+      overdueAt: null as unknown as Date,
+    })
+    const eventNotes = notes?.trim() || `Reaberta a partir do status: ${previousStatus === 'paid' ? 'Pago' : 'Cancelado'}`
+    await this.recordEvent(id, clinicId, 'reopened', previousStatus, 'pending', eventNotes)
     return updated
   }
 

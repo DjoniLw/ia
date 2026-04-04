@@ -260,6 +260,7 @@ model Clinic {
   auditLogs        AuditLog[]
   accountsPayable  AccountsPayable[]
   manualReceipts   ManualReceipt[]
+  billingEvents    BillingEvent[]
   customerFiles    CustomerFile[]
   bodyMeasurementFields  BodyMeasurementField[]
   bodyMeasurementRecords BodyMeasurementRecord[]
@@ -638,6 +639,7 @@ model Billing {
   notificationLogs NotificationLog[]
   customerPackage  CustomerPackage?
   manualReceipt    ManualReceipt?
+  billingEvents    BillingEvent[]
 
   @@index([clinicId])
   @@index([clinicId, customerId])
@@ -645,6 +647,29 @@ model Billing {
   @@index([clinicId, sourceType, createdAt])
   @@index([clinicId, serviceId])
   @@map("billing")
+}
+
+// ─── Payment ─────────────────────────────────────────────────────────────────
+
+// ─── Billing Event ────────────────────────────────────────────────────────────
+// Append-only audit trail de mudanças no ciclo de vida de uma cobrança.
+
+model BillingEvent {
+  id         String   @id @default(uuid())
+  clinicId   String                        @map("clinic_id")
+  billingId  String                        @map("billing_id")
+  event      String   // created | paid | cancelled | reopened | overdue
+  fromStatus String?                       @map("from_status")
+  toStatus   String?                       @map("to_status")
+  notes      String?
+  createdAt  DateTime @default(now())      @map("created_at")
+
+  clinic  Clinic  @relation(fields: [clinicId],  references: [id], onDelete: Cascade)
+  billing Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, billingId])
+  @@index([clinicId, createdAt])
+  @@map("billing_events")
 }
 
 // ─── Payment ─────────────────────────────────────────────────────────────────

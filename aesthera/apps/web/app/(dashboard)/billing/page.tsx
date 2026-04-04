@@ -9,7 +9,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
-import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, type Billing } from '@/lib/hooks/use-appointments'
+import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, useReopenBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { useServiceVouchers } from '@/lib/hooks/use-wallet'
 import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
@@ -53,6 +53,16 @@ const PAYMENT_METHOD_COLOR: Record<string, string> = {
   transfer: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
   wallet_credit: 'bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
   wallet_voucher: 'bg-orange-200 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200',
+}
+
+// ──── Billing event labels ───────────────────────────────────────────────────────
+
+const BILLING_EVENT_LABEL: Record<string, string> = {
+  created: 'Criado',
+  paid: 'Pago',
+  cancelled: 'Cancelado',
+  reopened: 'Reaberto',
+  overdue: 'Vencido',
 }
 
 // ──── Cash helpers ───────────────────────────────────────────────────────────────
@@ -214,11 +224,80 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
             )}
           </div>
         )}
+
+        {/* Histórico de eventos */}
+        {billing.billingEvents && billing.billingEvents.length > 0 && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+            <p className="text-xs font-semibold text-foreground">Histórico</p>
+            <div className="space-y-1">
+              {billing.billingEvents.map((ev) => (
+                <div key={ev.id} className="flex items-start justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 mt-0.5 shrink-0" />
+                    <span className="font-medium">{BILLING_EVENT_LABEL[ev.event] ?? ev.event}</span>
+                    {ev.notes && (
+                      <span className="text-muted-foreground">— {ev.notes}</span>
+                    )}
+                  </div>
+                  <span className="text-muted-foreground shrink-0">{formatDate(ev.createdAt)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <div className="mt-4 flex justify-end">
         <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
       </div>
     </Dialog>
+  )
+}
+
+// ──── Reopen Button ────────────────────────────────────────────────────────────
+
+function ReopenBillingButton({ id }: { id: string }) {
+  const reopen = useReopenBilling(id)
+  const [confirming, setConfirming] = useState(false)
+
+  async function handleReopen() {
+    try {
+      await reopen.mutateAsync(undefined)
+      toast.success('Cobrança reaberta')
+      setConfirming(false)
+    } catch {
+      toast.error('Erro ao reabrir cobrança')
+    }
+  }
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-400"
+        onClick={() => setConfirming(true)}
+        disabled={reopen.isPending}
+      >
+        Reabrir
+      </Button>
+
+      {confirming && (
+        <Dialog open onClose={() => setConfirming(false)}>
+          <DialogTitle>Reabrir Cobrança</DialogTitle>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Deseja reabrir esta cobrança, alterando o status para Pendente?
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirming(false)}>Voltar</Button>
+              <Button onClick={handleReopen} disabled={reopen.isPending}>
+                {reopen.isPending ? 'Reabrindo…' : 'Confirmar reabertura'}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+    </>
   )
 }
 
@@ -314,14 +393,17 @@ function BillingActions({ billing }: { billing: Billing }) {
   if (billing.status === 'paid' || billing.status === 'cancelled') {
     return (
       <>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() => setDetailOpen(true)}
-        >
-          Ver detalhe
-        </Button>
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={() => setDetailOpen(true)}
+          >
+            Ver detalhe
+          </Button>
+          <ReopenBillingButton id={billing.id} />
+        </div>
         {detailOpen && (
           <BillingDetailModal billing={billing} onClose={() => setDetailOpen(false)} />
         )}

@@ -30,6 +30,10 @@ const billingInclude = {
       },
     },
   },
+  billingEvents: {
+    select: { id: true, event: true, fromStatus: true, toStatus: true, notes: true, createdAt: true },
+    orderBy: { createdAt: 'asc' as const },
+  },
 } as const
 
 export class BillingRepository {

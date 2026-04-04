@@ -115,6 +115,14 @@ export interface Billing {
   service?: { id: string; name: string } | null
   customer: AppointmentCustomer
   appointment: BillingAppointment | null
+  billingEvents?: Array<{
+    id: string
+    event: string
+    fromStatus: string | null
+    toStatus: string | null
+    notes: string | null
+    createdAt: string
+  }>
   manualReceipt?: {
     id: string
     totalPaid: number
@@ -322,6 +330,14 @@ export function useCancelBilling(id: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api.post(`/billing/${id}/cancel`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
+  })
+}
+
+export function useReopenBilling(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (notes?: string) => api.post(`/billing/${id}/reopen`, { notes }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
   })
 }

@@ -64,6 +64,16 @@ export async function billingRoutes(app: FastifyInstance) {
     },
   )
 
+  app.post(
+    '/billing/:id/reopen',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const { notes } = (req.body ?? {}) as { notes?: string }
+      return reply.send(await svc.reopen(req.clinicId, id, notes))
+    },
+  )
+
   // Internal cron endpoint (protected — production would be a cronjob, not HTTP)
   app.post(
     '/billing/cron/overdue',
