@@ -214,6 +214,7 @@ export class ManualReceiptsService {
               originType: 'OVERPAYMENT',
               originReference: billingId,
               notes: `Excedente de recebimento — Cobrança ${billingId.slice(0, 8)}`,
+              transactionDescription: `Troco gerado no recebimento da cobrança ${billingId.slice(0, 8)}`,
             },
             tx,
           )

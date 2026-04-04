@@ -35,8 +35,7 @@ const PAYMENT_METHODS: Array<{ value: ManualReceiptPaymentMethod; label: string 
   { value: 'pix', label: 'PIX' },
   { value: 'card', label: 'Cartão' },
   { value: 'transfer', label: 'Transferência' },
-  { value: 'wallet_credit', label: 'Crédito na Carteira' },
-  { value: 'wallet_voucher', label: 'Vale' },
+  { value: 'wallet_credit', label: 'Carteira do Cliente' },
 ]
 
 // ──── Payment Line ────────────────────────────────────────────────────────────
@@ -54,6 +53,7 @@ interface PaymentLineRowProps {
   customerId: string
   billingAmount: number
   billingServiceId?: string | null
+  billingSourceType?: string | null
   canRemove: boolean
   onUpdate: (updated: Partial<PaymentLineState>) => void
   onRemove: () => void
@@ -64,6 +64,7 @@ function PaymentLineRow({
   customerId,
   billingAmount,
   billingServiceId,
+  billingSourceType,
   canRemove,
   onUpdate,
   onRemove,
@@ -73,27 +74,31 @@ function PaymentLineRow({
   const allEntries: WalletEntry[] = walletData?.items ?? []
 
   // SERVICE_PRESALE vouchers: só mostrar quando o serviço bate com o da cobrança
+  // E nunca mostrar para cobranças PRESALE (pré-venda não paga pré-venda)
   const activeEntries = allEntries.filter((e) => {
     if (e.originType === 'SERVICE_PRESALE') {
-      if (!billingServiceId) return false            // cobrança sem serviço: ocultar
+      if (billingSourceType === 'PRESALE') return false  // RN-PV01
+      if (!billingServiceId) return false
       return e.serviceId === billingServiceId
     }
-    return true  // vouchers/créditos genéricos: sempre exibir
+    return true
   })
   const isServicePresale = line.walletOriginType === 'SERVICE_PRESALE'
 
   function handleWalletEntryChange(selectedId: string) {
     const selected = activeEntries.find((e) => e.id === selectedId)
     const originType = selected?.originType ?? null
+    // Determinar o método real com base no tipo do item de carteira
+    const realMethod: ManualReceiptPaymentMethod = selected?.type === 'CREDIT' ? 'wallet_credit' : 'wallet_voucher'
     if (originType === 'SERVICE_PRESALE') {
       // Pré-venda de serviço: preenche automaticamente com o valor da cobrança
       const autoStr = (billingAmount / 100).toLocaleString('pt-BR', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })
-      onUpdate({ walletEntryId: selectedId, walletOriginType: originType, amountStr: autoStr })
+      onUpdate({ walletEntryId: selectedId, walletOriginType: originType, amountStr: autoStr, method: realMethod })
     } else {
-      onUpdate({ walletEntryId: selectedId, walletOriginType: originType })
+      onUpdate({ walletEntryId: selectedId, walletOriginType: originType, method: realMethod })
     }
   }
 
@@ -102,7 +107,7 @@ function PaymentLineRow({
       <div className="flex-1 space-y-2">
         <div className="flex gap-2">
           <select
-            value={line.method}
+            value={isWallet ? 'wallet_credit' : line.method}
             onChange={(e) =>
               onUpdate({ method: e.target.value as ManualReceiptPaymentMethod, walletEntryId: '', walletOriginType: null })
             }
@@ -138,12 +143,14 @@ function PaymentLineRow({
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
               >
                 <option value="">Selecione um item da carteira…</option>
-                {activeEntries.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.code} — {formatCurrency(e.balance)}
-                    {e.originType === 'SERVICE_PRESALE' ? ' (pré-venda de serviço)' : ''}
-                  </option>
-                ))}
+                {activeEntries.map((e) => {
+                  const typeLabel = e.type === 'CREDIT' ? 'Crédito' : e.type === 'CASHBACK' ? 'Cashback' : e.originType === 'SERVICE_PRESALE' ? 'Vale de serviço' : 'Vale'
+                  return (
+                    <option key={e.id} value={e.id}>
+                      {typeLabel} · {e.code} — {formatCurrency(e.balance)}
+                    </option>
+                  )
+                })}
               </select>
             )}
           </div>
@@ -193,13 +200,13 @@ function OverpaymentSection({ excedente, selected, onChange }: OverpaymentSectio
   ]
 
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-100 dark:border-amber-900/50 dark:bg-amber-950/20 p-4 space-y-3">
+    <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-amber-900 dark:text-amber-400">
+        <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
           ⚠️ Excedente de {formatCurrency(excedente)}
         </span>
       </div>
-      <p className="text-xs text-amber-800 dark:text-amber-500">O que fazer com o excedente?</p>
+      <p className="text-xs text-amber-800 dark:text-amber-200">O que fazer com o excedente?</p>
       <div className="space-y-2">
         {options.map((opt) => (
           <label
@@ -470,6 +477,7 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
                 customerId={billing.customer.id}
                 billingAmount={billing.amount}
                 billingServiceId={billing.appointment?.service?.id ?? billing.service?.id ?? null}
+                billingSourceType={billing.sourceType ?? null}
                 canRemove={lines.length > 1}
                 onUpdate={(upd) => updateLine(line.id, upd)}
                 onRemove={() => removeLine(line.id)}

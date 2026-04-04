@@ -53,7 +53,7 @@ import { useRole } from '@/lib/hooks/use-role'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
-import { useCustomerWallet, type WalletEntry } from '@/lib/hooks/use-wallet'
+import { useCustomerWallet, type WalletEntry, useCreateWalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
 import { useBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
 import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
@@ -67,8 +67,9 @@ import {
   WALLET_ENTRY_STATUS_CONFIG,
   WALLET_TRANSACTION_LABELS,
   WALLET_PACKAGE_SESSION_STATUS,
+  WALLET_ORIGIN_LABELS,
 } from '@/lib/wallet-labels'
-import type { WalletEntryStatus } from '@/lib/wallet-labels'
+import type { WalletEntryStatus, WalletEntryType, WalletOriginType } from '@/lib/wallet-labels'
 
 // ──── Schema ───────────────────────────────────────────────────────────────────
 
@@ -721,10 +722,125 @@ function CustomerPackageItem({ pkg }: { pkg: CustomerPackage }) {
   )
 }
 
+function CustomerWalletCreateModal({ customerId, onClose }: { customerId: string; onClose: () => void }) {
+  const [type, setType] = useState<WalletEntryType>('VOUCHER')
+  const [value, setValue] = useState('')
+  const [originType, setOriginType] = useState<WalletOriginType>('GIFT')
+  const [expirationDate, setExpirationDate] = useState('')
+  const [notes, setNotes] = useState('')
+  const create = useCreateWalletEntry()
+
+  // Tipos disponíveis para criação manual (excluir PACKAGE e SERVICE_PRESALE)
+  const allowedTypes: WalletEntryType[] = ['CREDIT', 'VOUCHER', 'CASHBACK']
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const cents = Math.round(parseFloat(value.replace(',', '.')) * 100)
+    if (!cents) return
+    try {
+      const result = await create.mutateAsync({
+        customerId,
+        type,
+        value: cents,
+        originType,
+        expirationDate: expirationDate || undefined,
+        notes: notes || undefined,
+      })
+      toast.success(`${WALLET_ENTRY_TYPE_LABELS[type]} ${result.code} criado com sucesso!`)
+      onClose()
+    } catch {
+      toast.error('Erro ao criar crédito/vale na carteira')
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose}>
+      <DialogTitle>Criar Crédito / Vale</DialogTitle>
+      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Tipo</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as WalletEntryType)}
+              className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              {allowedTypes.map((t) => (
+                <option key={t} value={t}>
+                  {WALLET_ENTRY_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Valor (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="0,00"
+              className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              required
+            />
+          </div>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">Origem</label>
+          <select
+            value={originType}
+            onChange={(e) => setOriginType(e.target.value as WalletOriginType)}
+            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            {(Object.keys(WALLET_ORIGIN_LABELS) as WalletOriginType[]).map((o) => (
+              <option key={o} value={o}>
+                {WALLET_ORIGIN_LABELS[o].label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
+            Validade (opcional)
+          </label>
+          <input
+            type="date"
+            value={expirationDate}
+            onChange={(e) => setExpirationDate(e.target.value)}
+            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
+            Observações (opcional)
+          </label>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notas sobre este voucher"
+            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={create.isPending}>
+            {create.isPending ? 'Criando…' : 'Criar'}
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
 function CustomerWalletTab({ customerId, customerName }: { customerId: string; customerName?: string }) {
   const role = useRole()
   const [walletSubTab, setWalletSubTab] = useState<'carteira' | 'pacotes'>('carteira')
   const [showSellService, setShowSellService] = useState(false)
+  const [showCreateWallet, setShowCreateWallet] = useState(false)
   const [statusFilter, setStatusFilter] = useState<WalletEntryStatus>('ACTIVE')
   const [page, setPage] = useState(1)
 
@@ -784,16 +900,28 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
         </button>
         </div>
         {role !== 'professional' && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="shrink-0 text-xs"
-            onClick={() => setShowSellService(true)}
-          >
-            <Plus className="mr-1 h-3 w-3" />
-            Vender Serviço
-          </Button>
+          <div className="flex gap-1 shrink-0">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              onClick={() => setShowCreateWallet(true)}
+            >
+              <Plus className="mr-1 h-3 w-3" />
+              Crédito / Vale
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              onClick={() => setShowSellService(true)}
+            >
+              <Plus className="mr-1 h-3 w-3" />
+              Vender Serviço
+            </Button>
+          </div>
         )}
       </div>
 
@@ -810,6 +938,14 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
             />
           </div>
         </Dialog>
+      )}
+
+      {/* Modal de criar crédito / vale na carteira */}
+      {showCreateWallet && (
+        <CustomerWalletCreateModal
+          customerId={customerId}
+          onClose={() => setShowCreateWallet(false)}
+        />
       )}
 
       {/* ── Sub-tab: Carteira ─────────────────────────────────────── */}

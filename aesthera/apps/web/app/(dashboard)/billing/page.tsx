@@ -303,11 +303,11 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
           <DialogTitle>Reabrir Cobrança</DialogTitle>
           <div className="space-y-4 mt-4">
             {isPresale && (
-              <div className="flex gap-2 rounded-lg border border-violet-400 bg-violet-50 dark:bg-violet-900/30 dark:border-violet-700 p-3">
-                <AlertTriangle className="h-4 w-4 text-violet-700 dark:text-violet-400 shrink-0 mt-0.5" />
-                <div className="text-sm text-violet-900 dark:text-violet-200 space-y-1">
+              <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/30 dark:border-amber-700 p-3">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900 dark:text-amber-100 space-y-1">
                   <p className="font-semibold">Vale de pré-venda será anulado</p>
-                  <p className="text-xs text-violet-800 dark:text-violet-300">
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
                     {billing.service?.name
                       ? <>O vale de <strong>{billing.service.name}</strong> gerado por este pagamento</>
                       : 'O vale gerado por este pagamento'}{' '}
@@ -498,15 +498,31 @@ function BillingPageContent() {
   const searchParams = useSearchParams()
 
   // ── Filtros multiselect ─────────────────────────────────────────────────────
-  const [statusFilters, setStatusFilters] = useState<BillingStatus[]>(
-    () => (searchParams.get('status') ?? '').split(',').filter((s): s is BillingStatus => !!s) as BillingStatus[]
+  const [statusFilters, setStatusFilters] = usePersistedFilter<BillingStatus[]>(
+    'aesthera-filter-billing-status',
+    (() => { const v = (searchParams.get('status') ?? '').split(',').filter(Boolean) as BillingStatus[]; return v.length ? v : null })(),
+    [],
   )
-  const [sourceTypeFilters, setSourceTypeFilters] = useState<BillingSourceType[]>(
-    () => (searchParams.get('sourceType') ?? '').split(',').filter((s): s is BillingSourceType => !!s) as BillingSourceType[]
+  const [sourceTypeFilters, setSourceTypeFilters] = usePersistedFilter<BillingSourceType[]>(
+    'aesthera-filter-billing-sourceType',
+    (() => { const v = (searchParams.get('sourceType') ?? '').split(',').filter(Boolean) as BillingSourceType[]; return v.length ? v : null })(),
+    [],
   )
-  const [hasCashReceived, setHasCashReceived] = useState(searchParams.get('hasCashReceived') === 'true')
-  const [serviceId, setServiceId] = useState(searchParams.get('serviceId') ?? '')
-  const [professionalId, setProfessionalId] = useState(searchParams.get('professionalId') ?? '')
+  const [hasCashReceived, setHasCashReceived] = usePersistedFilter<boolean>(
+    'aesthera-filter-billing-hasCashReceived',
+    searchParams.get('hasCashReceived') === 'true' ? true : searchParams.get('hasCashReceived') === 'false' ? false : null,
+    false,
+  )
+  const [serviceId, setServiceId] = usePersistedFilter<string>(
+    'aesthera-filter-billing-serviceId',
+    searchParams.get('serviceId'),
+    '',
+  )
+  const [professionalId, setProfessionalId] = usePersistedFilter<string>(
+    'aesthera-filter-billing-professionalId',
+    searchParams.get('professionalId'),
+    '',
+  )
   const [customerSearch, setCustomerSearch] = usePersistedFilter('aesthera-filter-billing-customer', searchParams.get('customer'), '')
   const [customerSearchDebounced, setCustomerSearchDebounced] = useState(customerSearch)
   const [dateFrom, setDateFrom] = usePersistedFilter('aesthera-filter-billing-dateFrom', searchParams.get('dateFrom'), defaultDateFrom())
@@ -539,17 +555,13 @@ function BillingPageContent() {
 
   // ── Toggle helpers ──────────────────────────────────────────────────────────
   function toggleStatus(value: BillingStatus) {
-    setStatusFilters((prev) =>
-      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
-    )
+    setStatusFilters(statusFilters.includes(value) ? statusFilters.filter((s) => s !== value) : [...statusFilters, value])
     resetPage()
   }
   function clearStatuses() { setStatusFilters([]); resetPage() }
 
   function toggleSourceType(value: BillingSourceType) {
-    setSourceTypeFilters((prev) =>
-      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
-    )
+    setSourceTypeFilters(sourceTypeFilters.includes(value) ? sourceTypeFilters.filter((s) => s !== value) : [...sourceTypeFilters, value])
     resetPage()
   }
   function clearSourceTypes() { setSourceTypeFilters([]); resetPage() }
@@ -734,7 +746,7 @@ function BillingPageContent() {
           <div className="w-px h-5 bg-border mx-1" />
           {/* Filtro extra: Recebido Caixa */}
           <button
-            onClick={() => { setHasCashReceived((v) => !v); resetPage() }}
+            onClick={() => { setHasCashReceived(!hasCashReceived); resetPage() }}
             className={[
               'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
               hasCashReceived

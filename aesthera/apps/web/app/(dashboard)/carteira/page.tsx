@@ -26,6 +26,7 @@ import {
 } from '@/lib/hooks/use-wallet'
 import { useBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { useCustomers } from '@/lib/hooks/use-resources'
+import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
@@ -353,6 +354,7 @@ function AdjustModal({
 
 function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [customerId, setCustomerId] = useState('')
+  const [customerSearch, setCustomerSearch] = useState('')
   const [type, setType] = useState<WalletEntryType>('VOUCHER')
   const [value, setValue] = useState('')
   const [originType, setOriginType] = useState<WalletOriginType>('GIFT')
@@ -360,7 +362,16 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
   const [notes, setNotes] = useState('')
 
   const create = useCreateWalletEntry()
-  const { data: customersData } = useCustomers({ limit: '200' })
+  const { data: customersData } = useCustomers(
+    customerSearch.trim().length >= 1
+      ? { name: customerSearch.trim(), limit: '30' }
+      : { limit: '30' },
+  )
+  const customerItems: ComboboxItem[] = (customersData?.items ?? []).map((c) => ({ value: c.id, label: c.name }))
+  const selectedCustomer = customerItems.find((c) => c.value === customerId) ?? null
+
+  // Tipos disponíveis para criação manual — excluir PACKAGE e SERVICE_PRESALE
+  const allowedTypes: WalletEntryType[] = ['CREDIT', 'VOUCHER', 'CASHBACK']
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -388,19 +399,13 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">Cliente</label>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            required
-          >
-            <option value="">Selecione um cliente</option>
-            {customersData?.items?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <ComboboxSearch
+            items={customerItems}
+            value={selectedCustomer}
+            onChange={(item) => setCustomerId(item?.value ?? '')}
+            onSearch={setCustomerSearch}
+            placeholder="Buscar cliente…"
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -410,7 +415,7 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               onChange={(e) => setType(e.target.value as WalletEntryType)}
               className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              {(Object.keys(WALLET_ENTRY_TYPE_LABELS) as WalletEntryType[]).map((t) => (
+              {allowedTypes.map((t) => (
                 <option key={t} value={t}>
                   {WALLET_ENTRY_TYPE_LABELS[t]}
                 </option>

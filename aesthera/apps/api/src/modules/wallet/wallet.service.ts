@@ -14,6 +14,18 @@ function generateCode(): string {
   return code
 }
 
+function buildWalletCreateDescription(originType: string, originReference?: string): string {
+  const ref = originReference ? ` (${originReference.slice(0, 8)})` : ''
+  switch (originType) {
+    case 'OVERPAYMENT':     return `Troco de recebimento em excesso${ref}`
+    case 'SERVICE_PRESALE': return `Vale de procedimento gerado por pré-venda${ref}`
+    case 'VOUCHER_SPLIT':   return `Saldo remanescente de voucher${ref}`
+    case 'CASHBACK':        return `Cashback gerado${ref}`
+    case 'MANUAL':          return `Crédito adicionado manualmente${ref}`
+    default:                return `Crédito gerado — origem: ${originType}${ref}`
+  }
+}
+
 export class WalletService {
   private repo = new WalletRepository()
 
@@ -183,7 +195,7 @@ export class WalletService {
           type: data.transactionType ?? 'CREATE',
           value: data.value,
           reference: data.originReference,
-          description: data.transactionDescription ?? `Carteira criada — origem: ${data.originType}`,
+          description: data.transactionDescription ?? buildWalletCreateDescription(data.originType, data.originReference),
         },
         client,
       )
@@ -255,11 +267,26 @@ export class WalletService {
       }
 
       // RN10 — Se voucher tem serviceId, validar que billing tem o mesmo serviceId
-      if ((entry as { serviceId?: string | null }).serviceId) {
+      // RN-PV01 — Vale SERVICE_PRESALE não pode ser usado para pagar uma cobrança PRESALE
+      //            (pré-venda não pode ser paga com outra pré-venda)
+      if ((entry as { originType?: string }).originType === 'SERVICE_PRESALE' || (entry as { serviceId?: string | null }).serviceId) {
         // SEC04 — Buscar billing por { id, clinicId }
         const billing = await tx.billing.findFirst({ where: { id: billingId, clinicId } })
         if (!billing) throw new NotFoundError('Billing')
-        if (billing.serviceId !== (entry as { serviceId?: string | null }).serviceId) {
+
+        // RN-PV01: bloquear uso de SERVICE_PRESALE para pagar cobrança PRESALE
+        if (
+          (entry as { originType?: string }).originType === 'SERVICE_PRESALE' &&
+          billing.sourceType === 'PRESALE'
+        ) {
+          throw new AppError(
+            'Vale de pré-venda de serviço não pode ser utilizado para pagar outra pré-venda',
+            400,
+            'PRESALE_VOUCHER_CANNOT_PAY_PRESALE',
+          )
+        }
+
+        if ((entry as { serviceId?: string | null }).serviceId && billing.serviceId !== (entry as { serviceId?: string | null }).serviceId) {
           throw new AppError(
             'Este vale não pode ser utilizado para este serviço',
             400,
