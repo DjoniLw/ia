@@ -283,20 +283,32 @@ export class BillingService {
       }
 
       // ── Caso C: cobrança PRESALE paga → gerou WalletEntry SERVICE_PRESALE ───
-      // Se esse entry já foi UTILIZADO no agendamento, bloquear reabertura.
+      // Bloquear APENAS se o vale foi realmente utilizado em um atendimento (USE transaction).
+      // Se status=USED mas sem USE transaction = foi anulado por reabertura anterior → ignorar.
       if (billing.sourceType === 'PRESALE') {
-        const servicePresaleEntry = await tx.walletEntry.findFirst({
-          where: { clinicId, originReference: id, originType: 'SERVICE_PRESALE' },
+        // Verifica se existe entry USED com transação de uso real (consumo em atendimento)
+        const usedInAppointment = await tx.walletEntry.findFirst({
+          where: {
+            clinicId,
+            originReference: id,
+            originType: 'SERVICE_PRESALE',
+            status: 'USED',
+            transactions: { some: { type: 'USE' } },
+          },
         })
-        if (servicePresaleEntry) {
-          if (servicePresaleEntry.status === 'USED') {
-            throw new AppError(
-              'Não é possível reabrir: o vale de pré-venda gerado por esta cobrança já foi utilizado em um atendimento.',
-              409,
-              'PRESALE_VOUCHER_ALREADY_USED',
-            )
-          }
-          // Ainda ACTIVE → anular o vale
+        if (usedInAppointment) {
+          throw new AppError(
+            'Não é possível reabrir: o vale de pré-venda gerado por esta cobrança já foi utilizado em um atendimento.',
+            409,
+            'PRESALE_VOUCHER_ALREADY_USED',
+          )
+        }
+
+        // Anular TODOS os entries ACTIVE (pode haver duplicatas de reaberturas anteriores)
+        const activeEntries = await tx.walletEntry.findMany({
+          where: { clinicId, originReference: id, originType: 'SERVICE_PRESALE', status: 'ACTIVE' },
+        })
+        for (const servicePresaleEntry of activeEntries) {
           await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${servicePresaleEntry.id}::uuid FOR UPDATE`
           await tx.walletEntry.update({
             where: { id: servicePresaleEntry.id },

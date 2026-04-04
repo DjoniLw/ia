@@ -39,6 +39,7 @@ export interface WalletEntry {
   balance: number
   code: string
   customerId: string
+  serviceId: string | null
   originType: WalletOriginType
   originReference: string | null
   notes: string | null

@@ -317,16 +317,16 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
           <DialogTitle>Reabrir Cobrança</DialogTitle>
           <div className="space-y-4 mt-4">
             {hasWalletPayment && (
-              <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-sm text-amber-800 dark:text-amber-400 space-y-1">
-                  <p className="font-medium">Esta cobrança possui pagamento via carteira</p>
-                  <ul className="text-xs space-y-0.5">
+              <div className="flex gap-2 rounded-lg border border-amber-400 bg-amber-100 dark:bg-amber-900/40 dark:border-amber-700 p-3">
+                <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900 dark:text-amber-200 space-y-1">
+                  <p className="font-semibold">Esta cobrança possui pagamento via carteira</p>
+                  <ul className="text-xs space-y-0.5 text-amber-800 dark:text-amber-300">
                     {walletLines.map((l) => (
                       <li key={l.id}>
-                        • {PAYMENT_METHOD_LABEL[l.paymentMethod] ?? l.paymentMethod}
-                        {l.walletEntry?.code && <span className="opacity-70"> ({l.walletEntry.code})</span>}
-                        {' '}— {formatCurrency(l.amount)} <span className="font-medium">será restaurado à carteira do cliente</span>
+                        &bull; {PAYMENT_METHOD_LABEL[l.paymentMethod] ?? l.paymentMethod}
+                        {l.walletEntry?.code && <span className="opacity-80"> ({l.walletEntry.code})</span>}
+                        {' '}&mdash; {formatCurrency(l.amount)} <span className="font-semibold">será restaurado à carteira do cliente</span>
                       </li>
                     ))}
                   </ul>
@@ -385,7 +385,7 @@ function CancelBillingButton({ id, status }: { id: string; status: BillingStatus
           <DialogTitle>Cancelar Cobrança</DialogTitle>
           <div className="space-y-4 mt-4">
             <p className="text-sm text-muted-foreground">
-              Tem certeza que deseja cancelar esta cobrança? Esta ação não pode ser desfeita.
+              Tem certeza que deseja cancelar esta cobrança? Cobranças canceladas podem ser reabertas posteriormente.
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setConfirming(false)}>Voltar</Button>

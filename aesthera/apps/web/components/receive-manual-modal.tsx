@@ -53,6 +53,7 @@ interface PaymentLineRowProps {
   line: PaymentLineState
   customerId: string
   billingAmount: number
+  billingServiceId?: string | null
   canRemove: boolean
   onUpdate: (updated: Partial<PaymentLineState>) => void
   onRemove: () => void
@@ -62,13 +63,23 @@ function PaymentLineRow({
   line,
   customerId,
   billingAmount,
+  billingServiceId,
   canRemove,
   onUpdate,
   onRemove,
 }: PaymentLineRowProps) {
   const isWallet = line.method === 'wallet_credit' || line.method === 'wallet_voucher'
   const { data: walletData } = useActiveVouchers(customerId, isWallet)
-  const activeEntries: WalletEntry[] = walletData?.items ?? []
+  const allEntries: WalletEntry[] = walletData?.items ?? []
+
+  // SERVICE_PRESALE vouchers: só mostrar quando o serviço bate com o da cobrança
+  const activeEntries = allEntries.filter((e) => {
+    if (e.originType === 'SERVICE_PRESALE') {
+      if (!billingServiceId) return false            // cobrança sem serviço: ocultar
+      return e.serviceId === billingServiceId
+    }
+    return true  // vouchers/créditos genéricos: sempre exibir
+  })
   const isServicePresale = line.walletOriginType === 'SERVICE_PRESALE'
 
   function handleWalletEntryChange(selectedId: string) {
@@ -458,6 +469,7 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
                 line={line}
                 customerId={billing.customer.id}
                 billingAmount={billing.amount}
+                billingServiceId={billing.appointment?.service?.id ?? billing.service?.id ?? null}
                 canRemove={lines.length > 1}
                 onUpdate={(upd) => updateLine(line.id, upd)}
                 onRemove={() => removeLine(line.id)}
