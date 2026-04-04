@@ -209,15 +209,82 @@ export class BillingService {
       throw new AppError('Somente cobranças pagas ou canceladas podem ser reabertas', 400, 'INVALID_STATUS')
     }
     const previousStatus = billing.status
-    // Limpa datas de finalização e volta para pending
-    const updated = await this.repo.updateStatus(clinicId, id, 'pending', {
-      paidAt: null as unknown as Date,
-      cancelledAt: null as unknown as Date,
-      overdueAt: null as unknown as Date,
+
+    // Captura linhas anteriores para pré-preenchimento no frontend
+    let previousLines: Array<{ method: string; amount: number }> = []
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Reverter ManualReceipt e restaurar carteira
+      const manualReceipt = await tx.manualReceipt.findUnique({
+        where: { billingId: id },
+        include: { lines: true },
+      })
+
+      if (manualReceipt) {
+        previousLines = manualReceipt.lines.map((l) => ({ method: l.paymentMethod, amount: l.amount }))
+
+        for (const line of manualReceipt.lines) {
+          if (
+            (line.paymentMethod === 'wallet_credit' || line.paymentMethod === 'wallet_voucher') &&
+            line.walletEntryId
+          ) {
+            // Bloqueia a linha para evitar race condition
+            await tx.$queryRaw`SELECT id FROM wallet_entries WHERE id = ${line.walletEntryId}::uuid FOR UPDATE`
+            const walletEntry = await tx.walletEntry.findFirst({ where: { id: line.walletEntryId, clinicId } })
+            if (walletEntry) {
+              const restoredBalance = walletEntry.balance + line.amount
+              await tx.walletEntry.update({
+                where: { id: line.walletEntryId },
+                data: { balance: restoredBalance, status: 'ACTIVE', updatedAt: new Date() },
+              })
+              await tx.walletTransaction.create({
+                data: {
+                  clinicId,
+                  walletEntryId: line.walletEntryId,
+                  type: 'REFUND',
+                  value: line.amount,
+                  reference: id,
+                  description: `Cobrança reaberta — saldo restaurado (${id.slice(0, 8)})`,
+                },
+              })
+            }
+          }
+        }
+
+        // Deleta o recibo (linhas em cascade)
+        await tx.manualReceipt.delete({ where: { id: manualReceipt.id } })
+      }
+
+      // 2. Reverter entradas de ledger para esta cobrança
+      await tx.ledgerEntry.deleteMany({ where: { billingId: id, clinicId } })
+
+      // 3. Atualizar status para pending
+      await tx.billing.updateMany({
+        where: { id, clinicId },
+        data: {
+          status: 'pending',
+          paidAt: null as unknown as Date,
+          cancelledAt: null as unknown as Date,
+          overdueAt: null as unknown as Date,
+          updatedAt: new Date(),
+        },
+      })
+
+      // 4. Registrar evento com dados anteriores para pré-preenchimento
+      const reason = notes?.trim() ?? `Reaberta a partir do status: ${previousStatus === 'paid' ? 'Pago' : 'Cancelado'}`
+      await tx.billingEvent.create({
+        data: {
+          clinicId,
+          billingId: id,
+          event: 'reopened',
+          fromStatus: previousStatus,
+          toStatus: 'pending',
+          notes: JSON.stringify({ reason, previousLines }),
+        },
+      })
     })
-    const eventNotes = notes?.trim() || `Reaberta a partir do status: ${previousStatus === 'paid' ? 'Pago' : 'Cancelado'}`
-    await this.recordEvent(id, clinicId, 'reopened', previousStatus, 'pending', eventNotes)
-    return updated
+
+    return this.repo.findById(clinicId, id)
   }
 
   /**

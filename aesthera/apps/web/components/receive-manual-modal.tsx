@@ -226,18 +226,28 @@ interface ReceiveManualModalProps {
   open: boolean
   onClose: () => void
   preSelectedVoucherId?: string
+  previousLines?: Array<{ method: string; amount: number }>
 }
 
 let lineIdCounter = 1
 
-export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherId }: ReceiveManualModalProps) {
+export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherId, previousLines }: ReceiveManualModalProps) {
   const [lines, setLines] = useState<PaymentLineState[]>(() => {
+    // Prioridade 1: pré-preenchimento por pagamento anterior (cobrança reaberta)
+    if (previousLines?.length) {
+      return previousLines.map((pl) => ({
+        id: lineIdCounter++,
+        method: pl.method as ManualReceiptPaymentMethod,
+        amountStr: (pl.amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        walletEntryId: '',
+        walletOriginType: null,
+      }))
+    }
+    // Prioridade 2: voucher pré-selecionado (pré-venda de serviço)
     if (preSelectedVoucherId) {
-      // Pré-preencher o valor do voucher com o total da cobrança
       const amountStr = billing.amount > 0
         ? (billing.amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         : ''
-      // walletOriginType será atualizado quando o componente montar e carregar os vouchers do cliente
       return [{ id: lineIdCounter++, method: 'wallet_voucher', amountStr, walletEntryId: preSelectedVoucherId, walletOriginType: 'SERVICE_PRESALE' }]
     }
     return [{ id: lineIdCounter++, method: 'cash', amountStr: '', walletEntryId: '' }]
@@ -418,7 +428,7 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
       </div>
 
       {/* Aviso de voucher pré-selecionado */}
-      {preSelectedVoucherId && (
+      {preSelectedVoucherId && !previousLines?.length && (
         <InfoBanner
           variant="success"
           title="Vale de pré-venda selecionado"
@@ -426,6 +436,16 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
           className="mb-4"
         />
       )}
+
+      {/* Aviso de cobrança reaberta com pré-preenchimento */}
+      {previousLines?.length ? (
+        <InfoBanner
+          variant="warning"
+          title="Cobrança reaberta — pagamento anterior restaurado"
+          description="As formas de pagamento anteriores foram pré-preenchidas. Verifique os valores e confirme o recebimento."
+          className="mb-4"
+        />
+      ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Payment lines */}

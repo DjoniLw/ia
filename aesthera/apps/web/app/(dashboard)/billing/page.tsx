@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { ExternalLink, Info, Plus, Search, Tag, Wallet, CreditCard } from 'lucide-react'
+import { ExternalLink, Info, Plus, Search, Tag, Wallet, CreditCard, AlertTriangle } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -63,6 +63,30 @@ const BILLING_EVENT_LABEL: Record<string, string> = {
   cancelled: 'Cancelado',
   reopened: 'Reaberto',
   overdue: 'Vencido',
+}
+
+// Extrai texto legível de notas que podem ser JSON (ex: {reason, previousLines})
+function parseEventNotes(notes: string | null): string | null {
+  if (!notes) return null
+  try {
+    const parsed = JSON.parse(notes)
+    return (parsed as { reason?: string }).reason ?? notes
+  } catch {
+    return notes
+  }
+}
+
+// Extrai linhas de pagamento anteriores de um evento 'reopened'
+function extractPreviousLines(events?: Billing['billingEvents']): Array<{ method: string; amount: number }> | null {
+  if (!events) return null
+  const reopened = [...events].reverse().find((e) => e.event === 'reopened')
+  if (!reopened?.notes) return null
+  try {
+    const parsed = JSON.parse(reopened.notes) as { previousLines?: Array<{ method: string; amount: number }> }
+    return parsed.previousLines?.length ? parsed.previousLines : null
+  } catch {
+    return null
+  }
 }
 
 // ──── Cash helpers ───────────────────────────────────────────────────────────────
@@ -236,7 +260,7 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
                     <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 mt-0.5 shrink-0" />
                     <span className="font-medium">{BILLING_EVENT_LABEL[ev.event] ?? ev.event}</span>
                     {ev.notes && (
-                      <span className="text-muted-foreground">— {ev.notes}</span>
+                      <span className="text-muted-foreground">— {parseEventNotes(ev.notes)}</span>
                     )}
                   </div>
                   <span className="text-muted-foreground shrink-0">{formatDate(ev.createdAt)}</span>
@@ -255,9 +279,15 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
 
 // ──── Reopen Button ────────────────────────────────────────────────────────────
 
-function ReopenBillingButton({ id }: { id: string }) {
-  const reopen = useReopenBilling(id)
+function ReopenBillingButton({ billing }: { billing: Billing }) {
+  const reopen = useReopenBilling(billing.id)
   const [confirming, setConfirming] = useState(false)
+
+  // Linhas wallet que serão revertidas
+  const walletLines = (billing.manualReceipt?.lines ?? []).filter(
+    (l) => l.paymentMethod === 'wallet_credit' || l.paymentMethod === 'wallet_voucher'
+  )
+  const hasWalletPayment = walletLines.length > 0
 
   async function handleReopen() {
     try {
@@ -285,8 +315,26 @@ function ReopenBillingButton({ id }: { id: string }) {
         <Dialog open onClose={() => setConfirming(false)}>
           <DialogTitle>Reabrir Cobrança</DialogTitle>
           <div className="space-y-4 mt-4">
+            {hasWalletPayment && (
+              <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-800 dark:text-amber-400 space-y-1">
+                  <p className="font-medium">Esta cobrança possui pagamento via carteira</p>
+                  <ul className="text-xs space-y-0.5">
+                    {walletLines.map((l) => (
+                      <li key={l.id}>
+                        • {PAYMENT_METHOD_LABEL[l.paymentMethod] ?? l.paymentMethod}
+                        {l.walletEntry?.code && <span className="opacity-70"> ({l.walletEntry.code})</span>}
+                        {' '}— {formatCurrency(l.amount)} <span className="font-medium">será restaurado à carteira do cliente</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
               Deseja reabrir esta cobrança, alterando o status para Pendente?
+              {hasWalletPayment && ' O recebimento anterior será cancelado e os saldos de carteira devolvidos.'}
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setConfirming(false)}>Voltar</Button>
@@ -402,7 +450,7 @@ function BillingActions({ billing }: { billing: Billing }) {
           >
             Ver detalhe
           </Button>
-          <ReopenBillingButton id={billing.id} />
+          <ReopenBillingButton billing={billing} />
         </div>
         {detailOpen && (
           <BillingDetailModal billing={billing} onClose={() => setDetailOpen(false)} />
@@ -410,6 +458,9 @@ function BillingActions({ billing }: { billing: Billing }) {
       </>
     )
   }
+
+  // Linhas de pagamento anteriores (se a cobrança foi reaberta)
+  const previousLines = extractPreviousLines(billing.billingEvents)
 
   return (
     <>
@@ -431,6 +482,7 @@ function BillingActions({ billing }: { billing: Billing }) {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         preSelectedVoucherId={bestVoucher?.id ?? undefined}
+        previousLines={previousLines ?? undefined}
       />
     </>
   )
