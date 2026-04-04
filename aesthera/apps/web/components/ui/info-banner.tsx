@@ -4,8 +4,9 @@ type InfoBannerVariant = 'info' | 'success' | 'warning' | 'error'
 
 interface InfoBannerProps {
   variant?: InfoBannerVariant
-  title: string
+  title?: string
   description?: string
+  children?: React.ReactNode
   className?: string
 }
 
@@ -49,17 +50,22 @@ const VARIANT_CONFIG: Record<
   },
 }
 
-export function InfoBanner({ variant = 'info', title, description, className = '' }: InfoBannerProps) {
+export function InfoBanner({ variant = 'info', title, description, children, className = '' }: InfoBannerProps) {
   const cfg = VARIANT_CONFIG[variant]
   const { Icon } = cfg
 
   return (
     <div className={`rounded-lg border p-3 flex items-start gap-2.5 ${cfg.container} ${className}`}>
       <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${cfg.icon}`} />
-      <div>
-        <p className={`text-sm font-semibold leading-snug ${cfg.title}`}>{title}</p>
+      <div className="space-y-1">
+        {title && (
+          <p className={`text-sm font-semibold leading-snug ${cfg.title}`}>{title}</p>
+        )}
         {description && (
-          <p className={`mt-0.5 text-xs leading-relaxed ${cfg.description}`}>{description}</p>
+          <p className={`text-xs leading-relaxed ${cfg.description}`}>{description}</p>
+        )}
+        {children && (
+          <div className={`text-xs leading-relaxed ${cfg.description}`}>{children}</div>
         )}
       </div>
     </div>

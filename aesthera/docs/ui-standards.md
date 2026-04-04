@@ -419,6 +419,74 @@ const { data } = usePackages({
 
 ---
 
+## 9. Callout Boxes (Caixas de Aviso / Alerta / Informação)
+
+> **Regra absoluta:** nunca criar caixas de aviso inline com classes Tailwind.
+> Sempre usar o componente `<InfoBanner>` de `@/components/ui/info-banner.tsx`.
+
+### 9.1 Variantes disponíveis
+
+| Variante | Quando usar | Ícone |
+|----------|------------|-------|
+| `info` | Informação neutra, dica, contexto adicional | `Info` (azul) |
+| `warning` | Atenção, consequência potencial, dado sensível | `AlertTriangle` (âmbar) |
+| `error` | Bloqueio, falha, ação impossível | `XCircle` (vermelho) |
+| `success` | Confirmação, estado positivo contextual | `CheckCircle` (verde/teal) |
+
+### 9.2 Uso básico (título + descrição)
+
+```tsx
+import { InfoBanner } from '@/components/ui/info-banner'
+
+<InfoBanner
+  variant="warning"
+  title="Esta ação não pode ser desfeita"
+  description="O registro será removido permanentemente do sistema."
+/>
+
+<InfoBanner
+  variant="info"
+  title="Desconto aplicado automaticamente"
+  description="O preço foi ajustado com base na promoção ativa para este cliente."
+/>
+```
+
+### 9.3 Uso com conteúdo rico (children)
+
+```tsx
+<InfoBanner variant="warning" title="Créditos serão devolvidos à carteira">
+  <ul className="mt-1 space-y-0.5">
+    {items.map((item) => (
+      <li key={item.id}>• {item.label} — {formatCurrency(item.value)}</li>
+    ))}
+  </ul>
+</InfoBanner>
+```
+
+### 9.4 Anti-padrões proibidos
+
+```tsx
+// ❌ PROIBIDO — nunca criar caixa amber inline manualmente
+<div className="flex gap-2 rounded-lg border border-amber-400 bg-amber-100 p-3">
+  <AlertTriangle className="h-4 w-4 text-amber-700" />
+  <p className="text-amber-800">Atenção: ...</p>
+</div>
+
+// ❌ PROIBIDO — nunca criar caixa azul inline
+<div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs">
+  <Info className="h-3 w-3 text-blue-600" />
+  <span>Informação: ...</span>
+</div>
+
+// ✅ CORRETO
+<InfoBanner variant="warning" title="Atenção: ..." />
+<InfoBanner variant="info" title="Informação: ..." />
+```
+
+> **Por que inline fica ruim:** sem o componente, o implementador escolhe tons errados da paleta — ex.: `bg-amber-100 text-amber-800` (baixo contraste) ou `dark:text-amber-400` sobre `dark:bg-amber-900/40` (contraste ainda pior no dark mode). O `<InfoBanner>` já tem as combinações corretas com contraste WCAG validado.
+
+---
+
 ## 8. Implementation Checklist
 
 Before marking any task as done, verify:

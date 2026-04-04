@@ -268,6 +268,19 @@ Antes de concluir qualquer tarefa ou criar qualquer commit, execute a verificaç
 - [ ] Formulários: `disabled={isPending || !isValid}` — nunca `&& isDirty` em cadastro novo?
 - [ ] Todo texto visível em PT-BR — nenhum termo em inglês na interface?
 
+### Componentes obrigatórios — nunca reimplementar inline
+
+| Necessidade | Componente correto | Local |
+|-------------|-------------------|-------|
+| Caixa de aviso / alerta / info / erro contextual | `<InfoBanner variant="...">` | `@/components/ui/info-banner.tsx` |
+| Busca de entidade da API (cliente, serviço, profissional...) | `<ComboboxSearch>` | `@/components/ui/combobox-search.tsx` |
+| Filtro de status com ≤ 6 opções fixas | Pills `h-8 rounded-full border` | Ver `ui-standards.md` seção 7.2 |
+| Paginação de listagem | `<DataPagination>` + `usePaginatedQuery` | `@/components/ui/data-pagination.tsx` |
+| Modal / overlay | `<Dialog>` do shadcn/ui | `@/components/ui/dialog.tsx` |
+| Toggle booleano (ativo/inativo) | `<Switch>` do shadcn/ui | `@/components/ui/switch.tsx` |
+
+> ⚠️ Usar classes Tailwind inline ou elementos nativos para recriar qualquer um dos componentes acima é **BLOQUEANTE** em code review.
+
 ### Regra de não-omissão
 
 - Se um item se aplica ao código → seguir. Não há exceção.
