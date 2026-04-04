@@ -83,6 +83,7 @@ export class WalletRepository {
       notes?: string
       expirationDate?: Date
       serviceId?: string
+      status?: string
     },
     tx?: Tx,
   ) {
@@ -99,7 +100,7 @@ export class WalletRepository {
         originReference: data.originReference,
         notes: data.notes,
         expirationDate: data.expirationDate,
-        status: 'ACTIVE',
+        status: (data.status ?? 'ACTIVE') as never,
         ...(data.serviceId ? { serviceId: data.serviceId } : {}),
       },
       include: walletEntryInclude,

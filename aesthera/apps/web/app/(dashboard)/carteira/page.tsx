@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense, useRef } from 'react'
 import { toast } from 'sonner'
-import { Info, LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { Info, LayoutList, Plus, Search, Users, Wallet, ChevronDown, ChevronUp, Loader2, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
@@ -24,7 +24,8 @@ import {
   type WalletEntryType,
   type WalletOriginType,
 } from '@/lib/hooks/use-wallet'
-import { useBilling, type Billing } from '@/lib/hooks/use-appointments'
+import { useBilling, useOneBilling, type Billing } from '@/lib/hooks/use-appointments'
+import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { useCustomers } from '@/lib/hooks/use-resources'
 import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -84,6 +85,7 @@ function buildFilterLabel(
 
   const statusLabel: Record<string, string> = {
     '': 'todos os status',
+    PENDING: 'aguardando pagamento',
     ACTIVE: 'apenas ativas',
     USED: 'utilizadas',
     EXPIRED: 'expiradas',
@@ -352,7 +354,17 @@ function AdjustModal({
 
 // ──── Create Modal ────────────────────────────────────────────────────────────
 
-function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+const MANUAL_ORIGIN_TYPES: WalletOriginType[] = ['GIFT', 'REFUND', 'CASHBACK_PROMOTION']
+
+function CreateModal({
+  open,
+  onClose,
+  onPayNow,
+}: {
+  open: boolean
+  onClose: () => void
+  onPayNow: (billingId: string) => void
+}) {
   const [customerId, setCustomerId] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [type, setType] = useState<WalletEntryType>('VOUCHER')
@@ -360,6 +372,12 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
   const [originType, setOriginType] = useState<WalletOriginType>('GIFT')
   const [expirationDate, setExpirationDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [createdResult, setCreatedResult] = useState<{
+    entryCode: string
+    entryType: WalletEntryType
+    billingId: string
+    billingAmount: number
+  } | null>(null)
 
   const create = useCreateWalletEntry()
   const { data: customersData } = useCustomers(
@@ -372,6 +390,18 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
 
   // Tipos disponíveis para criação manual — excluir PACKAGE e SERVICE_PRESALE
   const allowedTypes: WalletEntryType[] = ['CREDIT', 'VOUCHER', 'CASHBACK']
+
+  function handleClose() {
+    setCreatedResult(null)
+    setCustomerId('')
+    setCustomerSearch('')
+    setType('VOUCHER')
+    setValue('')
+    setOriginType('GIFT')
+    setExpirationDate('')
+    setNotes('')
+    onClose()
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -386,107 +416,223 @@ function CreateModal({ open, onClose }: { open: boolean; onClose: () => void }) 
         expirationDate: expirationDate || undefined,
         notes: notes || undefined,
       })
-      toast.success(`${WALLET_ENTRY_TYPE_LABELS[type]} ${result.code} criado com sucesso!`)
-      onClose()
+      setCreatedResult({
+        entryCode: result.entry.code,
+        entryType: result.entry.type,
+        billingId: result.billing.id,
+        billingAmount: result.billing.amount,
+      })
     } catch {
       toast.error('Erro ao criar voucher')
     }
   }
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={handleClose}>
       <DialogTitle>Criar Voucher / Crédito</DialogTitle>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Cliente</label>
-          <ComboboxSearch
-            items={customerItems}
-            value={selectedCustomer}
-            onChange={(item) => setCustomerId(item?.value ?? '')}
-            onSearch={setCustomerSearch}
-            placeholder="Buscar cliente…"
-          />
+
+      {createdResult ? (
+        /* ── Passo 2: confirmação + oferta de pagamento ─────────────── */
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+            <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600 dark:text-green-400" />
+            <div>
+              <p className="font-medium text-green-800 dark:text-green-200">
+                {WALLET_ENTRY_TYPE_LABELS[createdResult.entryType]} {createdResult.entryCode} criado!
+              </p>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                Aguardando pagamento para ativar o vale.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
+            <p className="font-medium">Cobrança de {formatCurrency(createdResult.billingAmount)} gerada</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+              O vale ficará disponível para uso somente após o pagamento ser registrado.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={handleClose}>
+              Fazer depois
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                onPayNow(createdResult.billingId)
+                handleClose()
+              }}
+            >
+              Registrar Pagamento
+            </Button>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+      ) : (
+        /* ── Passo 1: formulário de criação ─────────────────────────── */
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Tipo</label>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Cliente</label>
+            <ComboboxSearch
+              items={customerItems}
+              value={selectedCustomer}
+              onChange={(item) => setCustomerId(item?.value ?? '')}
+              onSearch={setCustomerSearch}
+              placeholder="Buscar cliente…"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Tipo</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as WalletEntryType)}
+                className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {allowedTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {WALLET_ENTRY_TYPE_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-foreground">Valor (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder="0,00"
+                className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                required
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">Origem</label>
             <select
-              value={type}
-              onChange={(e) => setType(e.target.value as WalletEntryType)}
+              value={originType}
+              onChange={(e) => setOriginType(e.target.value as WalletOriginType)}
               className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              {allowedTypes.map((t) => (
-                <option key={t} value={t}>
-                  {WALLET_ENTRY_TYPE_LABELS[t]}
+              {MANUAL_ORIGIN_TYPES.map((o) => (
+                <option key={o} value={o}>
+                  {WALLET_ORIGIN_LABELS[o].label}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-foreground">Valor (R$)</label>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Validade (opcional)
+            </label>
             <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="0,00"
+              type="date"
+              value={expirationDate}
+              onChange={(e) => setExpirationDate(e.target.value)}
               className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              required
             />
           </div>
-        </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Origem</label>
-          <select
-            value={originType}
-            onChange={(e) => setOriginType(e.target.value as WalletOriginType)}
-            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            {(Object.keys(WALLET_ORIGIN_LABELS) as WalletOriginType[]).map((o) => (
-              <option key={o} value={o}>
-                {WALLET_ORIGIN_LABELS[o].label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">
-            Validade (opcional)
-          </label>
-          <input
-            type="date"
-            value={expirationDate}
-            onChange={(e) => setExpirationDate(e.target.value)}
-            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">
-            Observações (opcional)
-          </label>
-          <input
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notas sobre este voucher"
-            className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={create.isPending}>
-            {create.isPending ? 'Criando…' : 'Criar Voucher'}
-          </Button>
-        </div>
-      </form>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-foreground">
+              Observações (opcional)
+            </label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notas sobre este voucher"
+              className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={handleClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={create.isPending}>
+              {create.isPending ? 'Criando…' : 'Criar Voucher'}
+            </Button>
+          </div>
+        </form>
+      )}
     </Dialog>
   )
 }
 
 // ──── Overview Table ──────────────────────────────────────────────────────────
+
+function OverviewTableRow({
+  entry,
+  onAdjust,
+}: {
+  entry: WalletEntry
+  onAdjust: (entry: WalletEntry) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <>
+      <tr
+        className="border-b last:border-0 hover:bg-accent/30 transition-colors cursor-pointer"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <td className="px-4 py-2.5">
+          <span className="font-medium text-foreground">{entry.customer.name}</span>
+          <span className="ml-2 font-mono text-xs text-muted-foreground">{entry.code}</span>
+        </td>
+        <td className="px-4 py-2.5">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WALLET_ENTRY_TYPE_COLORS[entry.type]}`}>
+            {WALLET_ENTRY_TYPE_LABELS[entry.type]}
+          </span>
+        </td>
+        <td className="px-4 py-2.5 font-semibold text-green-600">
+          {formatCurrency(entry.balance)}
+        </td>
+        <td className="px-4 py-2.5">
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WALLET_ENTRY_STATUS_CONFIG[entry.status].className}`}>
+            {WALLET_ENTRY_STATUS_CONFIG[entry.status].label}
+          </span>
+        </td>
+        <td className="px-4 py-2.5 text-muted-foreground">
+          {formatDate(entry.expirationDate)}
+        </td>
+        <td className="px-4 py-2.5">
+          <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            {entry.status === 'ACTIVE' && (
+              <button
+                type="button"
+                onClick={() => onAdjust(entry)}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Ajustar
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="border-b last:border-0 bg-muted/20">
+          <td colSpan={6} className="px-4 pb-3 pt-0">
+            <div className="mt-1">
+              <WalletOriginBadge originType={entry.originType} originReference={entry.originReference} />
+            </div>
+            {entry.notes && (
+              <p className="mt-1 text-xs text-muted-foreground italic">{entry.notes}</p>
+            )}
+            <TransactionHistory entry={entry} />
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
 
 function OverviewTable({
   items,
@@ -520,39 +666,7 @@ function OverviewTable({
         </thead>
         <tbody>
           {items.map((entry) => (
-            <tr key={entry.id} className="border-b last:border-0 hover:bg-accent/30 transition-colors">
-              <td className="px-4 py-2.5">
-                <span className="font-medium text-foreground">{entry.customer.name}</span>
-                <span className="ml-2 font-mono text-xs text-muted-foreground">{entry.code}</span>
-              </td>
-              <td className="px-4 py-2.5">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WALLET_ENTRY_TYPE_COLORS[entry.type]}`}>
-                  {WALLET_ENTRY_TYPE_LABELS[entry.type]}
-                </span>
-              </td>
-              <td className="px-4 py-2.5 font-semibold text-green-600">
-                {formatCurrency(entry.balance)}
-              </td>
-              <td className="px-4 py-2.5">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WALLET_ENTRY_STATUS_CONFIG[entry.status].className}`}>
-                  {WALLET_ENTRY_STATUS_CONFIG[entry.status].label}
-                </span>
-              </td>
-              <td className="px-4 py-2.5 text-muted-foreground">
-                {formatDate(entry.expirationDate)}
-              </td>
-              <td className="px-4 py-2.5">
-                {entry.status === 'ACTIVE' && (
-                  <button
-                    type="button"
-                    onClick={() => onAdjust(entry)}
-                    className="text-xs font-medium text-primary hover:underline"
-                  >
-                    Ajustar
-                  </button>
-                )}
-              </td>
-            </tr>
+            <OverviewTableRow key={entry.id} entry={entry} onAdjust={onAdjust} />
           ))}
         </tbody>
       </table>
@@ -573,6 +687,7 @@ function CarteiraPageContent() {
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [adjustEntry, setAdjustEntry] = useState<WalletEntry | null>(null)
+  const [payNowBillingId, setPayNowBillingId] = useState<string | null>(null)
   const [createdAtFrom, setCreatedAtFrom] = useState(searchParams.get('createdAtFrom') ?? defaultCreatedAtFrom())
   const [createdAtTo, setCreatedAtTo] = useState(searchParams.get('createdAtTo') ?? '')
 
@@ -677,6 +792,7 @@ function CarteiraPageContent() {
 
   const statusOptions = [
     { value: '', label: 'Todos' },
+    { value: 'PENDING', label: 'Aguardando' },
     { value: 'ACTIVE', label: 'Ativos' },
     { value: 'USED', label: 'Utilizados' },
     { value: 'EXPIRED', label: 'Expirados' },
@@ -1032,7 +1148,11 @@ function CarteiraPageContent() {
       )}
 
       {/* Modals */}
-      <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onPayNow={(billingId) => setPayNowBillingId(billingId)}
+      />
       {adjustEntry && (
         <AdjustModal
           entry={adjustEntry}
@@ -1040,8 +1160,21 @@ function CarteiraPageContent() {
           onClose={() => setAdjustEntry(null)}
         />
       )}
+      {payNowBillingId && (
+        <PayNowWrapper billingId={payNowBillingId} onClose={() => setPayNowBillingId(null)} />
+      )}
     </div>
   )
+}
+
+// ──── PayNow Wrapper ──────────────────────────────────────────────────────────
+
+function PayNowWrapper({ billingId, onClose }: { billingId: string; onClose: () => void }) {
+  const { data: billing, isLoading } = useOneBilling(billingId)
+
+  if (isLoading || !billing) return null
+
+  return <ReceiveManualModal billing={billing} open onClose={onClose} />
 }
 
 export default function CarteiraPage() {

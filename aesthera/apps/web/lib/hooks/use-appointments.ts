@@ -95,7 +95,7 @@ export interface BillingAppointment {
 
 export type BillingStatus = 'pending' | 'paid' | 'overdue' | 'cancelled'
 
-export type BillingSourceType = 'APPOINTMENT' | 'PRESALE' | 'MANUAL' | 'PACKAGE_SALE' | 'PRODUCT_SALE'
+export type BillingSourceType = 'APPOINTMENT' | 'PRESALE' | 'MANUAL' | 'PACKAGE_SALE' | 'PRODUCT_SALE' | 'WALLET_PURCHASE'
 
 export interface Billing {
   id: string
@@ -323,6 +323,14 @@ export function useBilling(params?: Record<string, string>, options?: { enabled?
     queryKey: ['billing', params],
     queryFn: () => api.get('/billing', { params }).then((r) => r.data),
     ...options,
+  })
+}
+
+export function useOneBilling(id: string | null) {
+  return useQuery<Billing>({
+    queryKey: ['billing', id],
+    queryFn: () => api.get(`/billing/${id}`).then((r) => r.data),
+    enabled: !!id,
   })
 }
 

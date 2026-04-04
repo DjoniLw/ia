@@ -4,6 +4,7 @@ import type { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery } from
 import { WalletRepository } from './wallet.repository'
 import type { Tx } from './wallet.repository'
 import { logger } from '../../shared/logger/logger'
+import { randomUUID } from 'crypto'
 
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -17,12 +18,16 @@ function generateCode(): string {
 function buildWalletCreateDescription(originType: string, originReference?: string): string {
   const ref = originReference ? ` (${originReference.slice(0, 8)})` : ''
   switch (originType) {
-    case 'OVERPAYMENT':     return `Troco de recebimento em excesso${ref}`
-    case 'SERVICE_PRESALE': return `Vale de procedimento gerado por pré-venda${ref}`
-    case 'VOUCHER_SPLIT':   return `Saldo remanescente de voucher${ref}`
-    case 'CASHBACK':        return `Cashback gerado${ref}`
-    case 'MANUAL':          return `Crédito adicionado manualmente${ref}`
-    default:                return `Crédito gerado — origem: ${originType}${ref}`
+    case 'OVERPAYMENT':          return `Troco de recebimento em excesso${ref}`
+    case 'SERVICE_PRESALE':      return `Vale de procedimento gerado por pré-venda${ref}`
+    case 'VOUCHER_SPLIT':        return `Saldo remanescente de voucher${ref}`
+    case 'CASHBACK':             return `Cashback gerado${ref}`
+    case 'MANUAL':               return `Crédito adicionado manualmente${ref}`
+    case 'GIFT':                 return `Presente / Brinde concedido${ref}`
+    case 'REFUND':               return `Estorno creditado${ref}`
+    case 'CASHBACK_PROMOTION':   return `Cashback de promoção${ref}`
+    case 'PACKAGE_PURCHASE':     return `Crédito de compra de pacote${ref}`
+    default:                     return `Crédito gerado${ref}`
   }
 }
 
@@ -117,6 +122,26 @@ export class WalletService {
     const expiration = dto.expirationDate ? new Date(dto.expirationDate) : undefined
 
     return prisma.$transaction(async (tx) => {
+      // Gerar cobrança que precisa ser paga para o vale ficar ativo
+      const paymentToken = randomUUID().replace(/-/g, '')
+      const dueDate = new Date()
+      dueDate.setUTCDate(dueDate.getUTCDate() + 3)
+
+      const billing = await tx.billing.create({
+        data: {
+          clinicId,
+          customerId: dto.customerId,
+          sourceType: 'WALLET_PURCHASE' as never,
+          amount: dto.value,
+          status: 'pending',
+          paymentMethods: ['pix', 'cash', 'card', 'transfer'],
+          paymentToken,
+          dueDate,
+          notes: dto.notes ? `Venda de ${dto.type === 'CREDIT' ? 'crédito' : 'voucher'}: ${dto.notes}` : `Venda de ${dto.type === 'CREDIT' ? 'crédito' : 'voucher'}`,
+        },
+        select: { id: true, amount: true, status: true, dueDate: true, sourceType: true },
+      })
+
       const entry = await this.repo.create(
         {
           clinicId,
@@ -126,9 +151,10 @@ export class WalletService {
           balance: dto.value,
           code,
           originType: dto.originType,
-          originReference: dto.originReference,
+          originReference: billing.id,   // link para ativar quando billing for pago
           notes: dto.notes,
           expirationDate: expiration,
+          status: 'PENDING',             // ativo apenas após pagamento da cobrança
         },
         tx,
       )
@@ -139,13 +165,13 @@ export class WalletService {
           walletEntryId: entry.id,
           type: 'CREATE',
           value: dto.value,
-          reference: dto.originReference,
-          description: `Carteira criada — origem: ${dto.originType}`,
+          reference: billing.id,
+          description: buildWalletCreateDescription(dto.originType, billing.id) + ' — aguardando pagamento',
         },
         tx,
       )
 
-      return entry
+      return { entry, billing }
     })
   }
 

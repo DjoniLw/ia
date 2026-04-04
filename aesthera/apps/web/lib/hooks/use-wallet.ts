@@ -4,7 +4,7 @@ import { api } from '@/lib/api'
 // ──── Types ───────────────────────────────────────────────────────────────────
 
 export type WalletEntryType = 'VOUCHER' | 'CREDIT' | 'CASHBACK' | 'PACKAGE'
-export type WalletEntryStatus = 'ACTIVE' | 'USED' | 'EXPIRED'
+export type WalletEntryStatus = 'PENDING' | 'ACTIVE' | 'USED' | 'EXPIRED'
 export type WalletOriginType =
   | 'OVERPAYMENT'
   | 'GIFT'
@@ -107,8 +107,11 @@ export function useCreateWalletEntry() {
       originReference?: string
       expirationDate?: string
       notes?: string
-    }) => api.post('/wallet', data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['wallet'] }),
+    }) => api.post('/wallet', data).then((r) => r.data as { entry: WalletEntry; billing: { id: string; amount: number; status: string; dueDate: string; sourceType: string } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['wallet'] })
+      qc.invalidateQueries({ queryKey: ['billing'] })
+    },
   })
 }
 

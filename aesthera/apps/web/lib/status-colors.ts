@@ -5,19 +5,21 @@ export const PROMOTION_STATUS_COLOR: Record<string, string> = {
 }
 
 export const BILLING_SOURCE_TYPE_LABEL: Record<string, string> = {
-  APPOINTMENT:  'Agendamento',
-  PRESALE:      'Pré-venda',
-  MANUAL:       'Avulso',
-  PACKAGE_SALE: 'Venda de pacote',
-  PRODUCT_SALE: 'Venda de produto',
+  APPOINTMENT:     'Agendamento',
+  PRESALE:         'Pré-venda',
+  MANUAL:          'Avulso',
+  PACKAGE_SALE:    'Venda de pacote',
+  PRODUCT_SALE:    'Venda de produto',
+  WALLET_PURCHASE: 'Venda de vale',
 }
 
 export const BILLING_SOURCE_TYPE_COLOR: Record<string, string> = {
-  APPOINTMENT:  'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  PRESALE:      'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  MANUAL:       'bg-muted text-muted-foreground',
-  PACKAGE_SALE: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-  PRODUCT_SALE: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200',
+  APPOINTMENT:     'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  PRESALE:         'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+  MANUAL:          'bg-muted text-muted-foreground',
+  PACKAGE_SALE:    'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  PRODUCT_SALE:    'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200',
+  WALLET_PURCHASE: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
 }
 
 export const BILLING_STATUS_LABEL: Record<string, string> = {

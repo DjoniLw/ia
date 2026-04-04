@@ -242,6 +242,30 @@ export class ManualReceiptsService {
         )
       }
 
+      // 8. RN-WP01 — Se cobrança é WALLET_PURCHASE: ativar o wallet entry PENDING vinculado
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((billing.sourceType as any) === 'WALLET_PURCHASE') {
+        const pendingEntry = await tx.walletEntry.findFirst({
+          where: { clinicId, originReference: billingId, status: 'PENDING' as never },
+        })
+        if (pendingEntry) {
+          await tx.walletEntry.update({
+            where: { id: pendingEntry.id },
+            data: { status: 'ACTIVE' as never, updatedAt: new Date() },
+          })
+          await tx.walletTransaction.create({
+            data: {
+              clinicId,
+              walletEntryId: pendingEntry.id,
+              type: 'ADJUST' as never,
+              value: 0,
+              reference: billingId,
+              description: 'Vale ativado após pagamento da cobrança',
+            },
+          })
+        }
+      }
+
       return { receipt, walletEntry, serviceVoucherEntry }
     })
   }

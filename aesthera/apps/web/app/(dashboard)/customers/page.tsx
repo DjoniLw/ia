@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
+import { AlertCircle, Bot, ChevronDown, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -55,12 +55,13 @@ import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { useCustomerWallet, type WalletEntry, useCreateWalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
-import { useBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
+import { useBilling, useOneBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
 import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
 import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
+import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import {
   WALLET_ENTRY_TYPE_LABELS,
   WALLET_ENTRY_TYPE_COLORS,
@@ -722,16 +723,36 @@ function CustomerPackageItem({ pkg }: { pkg: CustomerPackage }) {
   )
 }
 
-function CustomerWalletCreateModal({ customerId, onClose }: { customerId: string; onClose: () => void }) {
+function CustomerWalletCreateModal({
+  customerId,
+  onClose,
+  onPayNow,
+}: {
+  customerId: string
+  onClose: () => void
+  onPayNow: (billingId: string) => void
+}) {
   const [type, setType] = useState<WalletEntryType>('VOUCHER')
   const [value, setValue] = useState('')
   const [originType, setOriginType] = useState<WalletOriginType>('GIFT')
   const [expirationDate, setExpirationDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [createdResult, setCreatedResult] = useState<{
+    entryCode: string
+    entryType: WalletEntryType
+    billingId: string
+    billingAmount: number
+  } | null>(null)
   const create = useCreateWalletEntry()
 
   // Tipos disponíveis para criação manual (excluir PACKAGE e SERVICE_PRESALE)
   const allowedTypes: WalletEntryType[] = ['CREDIT', 'VOUCHER', 'CASHBACK']
+  const manualOriginTypes: WalletOriginType[] = ['GIFT', 'REFUND', 'CASHBACK_PROMOTION']
+
+  function handleClose() {
+    setCreatedResult(null)
+    onClose()
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -746,17 +767,60 @@ function CustomerWalletCreateModal({ customerId, onClose }: { customerId: string
         expirationDate: expirationDate || undefined,
         notes: notes || undefined,
       })
-      toast.success(`${WALLET_ENTRY_TYPE_LABELS[type]} ${result.code} criado com sucesso!`)
-      onClose()
+      setCreatedResult({
+        entryCode: result.entry.code,
+        entryType: result.entry.type,
+        billingId: result.billing.id,
+        billingAmount: result.billing.amount,
+      })
     } catch {
       toast.error('Erro ao criar crédito/vale na carteira')
     }
   }
 
+  const formatCurrency = (cents: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100)
+
   return (
-    <Dialog open onClose={onClose}>
+    <Dialog open onClose={handleClose}>
       <DialogTitle>Criar Crédito / Vale</DialogTitle>
-      <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+
+      {createdResult ? (
+        <div className="space-y-4 mt-4">
+          <div className="flex items-center gap-3 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+            <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600 dark:text-green-400" />
+            <div>
+              <p className="font-medium text-green-800 dark:text-green-200">
+                {WALLET_ENTRY_TYPE_LABELS[createdResult.entryType]} {createdResult.entryCode} criado!
+              </p>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                Aguardando pagamento para ativar o vale.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
+            <p className="font-medium">Cobrança de {formatCurrency(createdResult.billingAmount)} gerada</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+              O vale ficará disponível para uso somente após o pagamento ser registrado.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={handleClose}>
+              Fazer depois
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                onPayNow(createdResult.billingId)
+                handleClose()
+              }}
+            >
+              Registrar Pagamento
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-foreground">Tipo</label>
@@ -793,7 +857,7 @@ function CustomerWalletCreateModal({ customerId, onClose }: { customerId: string
             onChange={(e) => setOriginType(e.target.value as WalletOriginType)}
             className="w-full rounded-lg border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            {(Object.keys(WALLET_ORIGIN_LABELS) as WalletOriginType[]).map((o) => (
+            {manualOriginTypes.map((o) => (
               <option key={o} value={o}>
                 {WALLET_ORIGIN_LABELS[o].label}
               </option>
@@ -824,7 +888,7 @@ function CustomerWalletCreateModal({ customerId, onClose }: { customerId: string
           />
         </div>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={handleClose}>
             Cancelar
           </Button>
           <Button type="submit" disabled={create.isPending}>
@@ -832,8 +896,15 @@ function CustomerWalletCreateModal({ customerId, onClose }: { customerId: string
           </Button>
         </div>
       </form>
+      )}
     </Dialog>
   )
+}
+
+function CustomerPayNowWrapper({ billingId, onClose }: { billingId: string; onClose: () => void }) {
+  const { data: billing, isLoading } = useOneBilling(billingId)
+  if (isLoading || !billing) return null
+  return <ReceiveManualModal billing={billing} open onClose={onClose} />
 }
 
 function CustomerWalletTab({ customerId, customerName }: { customerId: string; customerName?: string }) {
@@ -841,6 +912,7 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
   const [walletSubTab, setWalletSubTab] = useState<'carteira' | 'pacotes'>('carteira')
   const [showSellService, setShowSellService] = useState(false)
   const [showCreateWallet, setShowCreateWallet] = useState(false)
+  const [payNowBillingId, setPayNowBillingId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<WalletEntryStatus>('ACTIVE')
   const [page, setPage] = useState(1)
 
@@ -945,7 +1017,11 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
         <CustomerWalletCreateModal
           customerId={customerId}
           onClose={() => setShowCreateWallet(false)}
+          onPayNow={(billingId) => setPayNowBillingId(billingId)}
         />
+      )}
+      {payNowBillingId && (
+        <CustomerPayNowWrapper billingId={payNowBillingId} onClose={() => setPayNowBillingId(null)} />
       )}
 
       {/* ── Sub-tab: Carteira ─────────────────────────────────────── */}

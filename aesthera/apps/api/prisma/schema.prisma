@@ -114,6 +114,7 @@ enum BillingSourceType {
   PRODUCT_SALE
   MANUAL
   PRESALE
+  WALLET_PURCHASE
 }
 
 enum AccountsPayableStatus {
@@ -124,6 +125,7 @@ enum AccountsPayableStatus {
 }
 
 enum WalletEntryStatus {
+  PENDING
   ACTIVE
   USED
   EXPIRED

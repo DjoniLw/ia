@@ -42,7 +42,8 @@ export const WALLET_ENTRY_TYPE_COLORS: Record<WalletEntryType, string> = {
   PACKAGE:  'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200',
 }
 
-export const WALLET_ENTRY_STATUS_CONFIG: Record<WalletEntryStatus, { label: string; variant: 'success' | 'muted' | 'destructive'; className: string }> = {
+export const WALLET_ENTRY_STATUS_CONFIG: Record<WalletEntryStatus, { label: string; variant: 'success' | 'muted' | 'destructive' | 'warning'; className: string }> = {
+  PENDING: { label: 'Aguardando pagamento', variant: 'warning',     className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200' },
   ACTIVE:  { label: 'Ativo',     variant: 'success',     className: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200' },
   USED:    { label: 'Utilizado', variant: 'muted',       className: 'bg-muted text-muted-foreground' },
   EXPIRED: { label: 'Expirado',  variant: 'destructive', className: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200' },

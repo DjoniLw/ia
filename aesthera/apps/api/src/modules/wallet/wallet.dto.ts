@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const WalletEntryTypeEnum = z.enum(['VOUCHER', 'CREDIT', 'CASHBACK', 'PACKAGE'])
-export const WalletEntryStatusEnum = z.enum(['ACTIVE', 'USED', 'EXPIRED'])
+export const WalletEntryStatusEnum = z.enum(['PENDING', 'ACTIVE', 'USED', 'EXPIRED'])
 export const WalletOriginTypeEnum = z.enum([
   'OVERPAYMENT',
   'GIFT',
@@ -9,6 +9,7 @@ export const WalletOriginTypeEnum = z.enum([
   'CASHBACK_PROMOTION',
   'PACKAGE_PURCHASE',
   'VOUCHER_SPLIT',
+  'SERVICE_PRESALE',
 ])
 
 export const ListWalletQuery = z.object({
@@ -22,11 +23,18 @@ export const ListWalletQuery = z.object({
 })
 export type ListWalletQuery = z.infer<typeof ListWalletQuery>
 
+// Origin types disponíveis para criação manual (excluindo os gerados pelo sistema)
+export const ManualOriginTypeEnum = z.enum([
+  'GIFT',
+  'REFUND',
+  'CASHBACK_PROMOTION',
+])
+
 export const CreateWalletEntryDto = z.object({
   customerId: z.string().uuid(),
-  type: WalletEntryTypeEnum.default('VOUCHER'),
+  type: WalletEntryTypeEnum.exclude(['PACKAGE']).default('VOUCHER'),
   value: z.number().int().positive(),
-  originType: WalletOriginTypeEnum.default('GIFT'),
+  originType: ManualOriginTypeEnum.default('GIFT'),
   originReference: z.string().optional(),
   expirationDate: z.string().optional(), // ISO date string
   notes: z.string().optional(),
