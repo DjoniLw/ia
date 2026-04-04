@@ -167,13 +167,13 @@ export class BillingService {
     })
   }
 
-  async cancel(clinicId: string, id: string, _dto: CancelBillingDto) {
+  async cancel(clinicId: string, id: string, dto: CancelBillingDto) {
     const billing = await this.get(clinicId, id)
     if (!['pending', 'overdue'].includes(billing.status)) {
       throw new AppError('Only pending or overdue billing can be cancelled', 400, 'INVALID_STATUS')
     }
     const updated = await this.repo.updateStatus(clinicId, id, 'cancelled', { cancelledAt: new Date() })
-    await this.recordEvent(id, clinicId, 'cancelled', billing.status, 'cancelled')
+    await this.recordEvent(id, clinicId, 'cancelled', billing.status, 'cancelled', dto.reason ?? undefined)
     return updated
   }
 

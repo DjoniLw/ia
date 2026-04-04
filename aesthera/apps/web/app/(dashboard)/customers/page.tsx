@@ -1,8 +1,9 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Bot, ChevronDown, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
+import { AlertCircle, Ban, Bot, ChevronDown, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -55,7 +56,7 @@ import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
 import { DataPagination } from '@/components/ui/data-pagination'
 import { useCustomerWallet, type WalletEntry, useCreateWalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
-import { useBilling, useOneBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
+import { useBilling, useOneBilling, useCancelBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
 import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
@@ -901,6 +902,53 @@ function CustomerWalletCreateModal({
   )
 }
 
+function MarkAsUndueBillingModal({ billingId, onClose }: { billingId: string; onClose: () => void }) {
+  const [reason, setReason] = useState('')
+  const cancel = useCancelBilling(billingId)
+
+  async function handleConfirm() {
+    if (!reason.trim()) return
+    try {
+      await cancel.mutateAsync(reason.trim())
+      toast.success('Cobrança registrada como indevida')
+      onClose()
+    } catch {
+      toast.error('Erro ao registrar cobrança como indevida')
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose}>
+      <DialogTitle>Registrar como Indevida / Cortesia</DialogTitle>
+      <div className="space-y-4 mt-4">
+        <p className="text-sm text-muted-foreground">
+          Informe o motivo para registrar esta cobrança como indevida (cortesia, erro de lançamento, etc.).
+          A ação cancelará a cobrança e o motivo ficará salvo no histórico.
+        </p>
+        <div>
+          <Label className="mb-1.5 block text-sm font-medium">Motivo *</Label>
+          <Input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Ex.: Procedimento de cortesia, erro de lançamento..."
+            autoFocus
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="destructive"
+            onClick={handleConfirm}
+            disabled={!reason.trim() || cancel.isPending}
+          >
+            {cancel.isPending ? 'Registrando…' : 'Confirmar Indevida'}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  )
+}
+
 function CustomerPayNowWrapper({ billingId, onClose }: { billingId: string; onClose: () => void }) {
   const { data: billing, isLoading } = useOneBilling(billingId)
   if (isLoading || !billing) return null
@@ -913,6 +961,7 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
   const [showSellService, setShowSellService] = useState(false)
   const [showCreateWallet, setShowCreateWallet] = useState(false)
   const [payNowBillingId, setPayNowBillingId] = useState<string | null>(null)
+  const [undueModalBillingId, setUndueModalBillingId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<WalletEntryStatus>('ACTIVE')
   const [page, setPage] = useState(1)
 
@@ -931,12 +980,12 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
   const total = entries.data?.total ?? 0
   const limit = entries.data?.limit ?? 10
 
-  // Pré-vendas pendentes aguardando pagamento
+  // Todas as cobranças em aberto (pending + overdue) — inclui agendamentos, pré-vendas, avulsas
   const { data: pendingBillings } = useBilling(
-    isAllowed ? { customerId, sourceType: 'PRESALE', status: 'pending' } : undefined,
+    isAllowed ? { customerId, status: 'pending,overdue', limit: '50' } : undefined,
     { enabled: isAllowed },
   )
-  const pendingPresales = pendingBillings?.items ?? []
+  const openBillings = pendingBillings?.items ?? []
   const totalPages = Math.ceil(total / limit)
 
   return (
@@ -1040,33 +1089,72 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Aguardando pagamento — pré-vendas pendentes */}
-            {pendingPresales.length > 0 && (
+            {/* Cobranças em aberto — todas pendentes/vencidas */}
+            {openBillings.length > 0 && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/10 p-3 space-y-2">
                 <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
-                  ⏳ Aguardando pagamento ({pendingPresales.length})
+                  ⏳ Cobranças em aberto ({openBillings.length})
                 </p>
-                {pendingPresales.map((b: ApiBilling) => (
-                  <div
-                    key={b.id}
-                    className="flex items-center justify-between gap-2 rounded-md bg-white dark:bg-card border border-border px-3 py-2 text-xs"
-                  >
-                    <div className="flex flex-col gap-0.5 min-w-0">
-                      <span className="font-medium text-foreground truncate">
-                        {b.appointment?.service?.name ?? b.service?.name ?? 'Serviço'}
-                      </span>
-                      {b.dueDate && (
-                        <span className="text-xs text-muted-foreground">
-                          Vencimento: {new Date(b.dueDate).toLocaleDateString('pt-BR')}
+                {openBillings.map((b: ApiBilling) => {
+                  const isOverdue = b.status === 'overdue' || (b.status === 'pending' && !!b.dueDate && new Date(b.dueDate) < new Date())
+                  return (
+                    <div
+                      key={b.id}
+                      className={[
+                        'flex items-start justify-between gap-2 rounded-md border px-3 py-2 text-xs',
+                        isOverdue
+                          ? 'bg-red-50 dark:bg-red-950/10 border-red-300 dark:border-red-700'
+                          : 'bg-white dark:bg-card border-border',
+                      ].join(' ')}
+                    >
+                      <div className="flex flex-col gap-0.5 min-w-0 pt-0.5">
+                        <span className="font-medium text-foreground truncate">
+                          {b.appointment?.service?.name ?? b.service?.name ?? 'Cobrança avulsa'}
                         </span>
-                      )}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {b.dueDate && (
+                            <span className="text-muted-foreground">
+                              Vence: {new Date(b.dueDate).toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                          {isOverdue && (
+                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                              Vencida
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <span className="font-semibold text-foreground">{formatCurrency(b.amount)}</span>
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => setPayNowBillingId(b.id)}
+                          >
+                            Receber
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[10px] text-muted-foreground hover:text-destructive"
+                            onClick={() => setUndueModalBillingId(b.id)}
+                          >
+                            <Ban className="mr-0.5 h-3 w-3" />
+                            Indevida
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-0.5 shrink-0">
-                      <span className="font-semibold text-foreground">{formatCurrency(b.amount)}</span>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
+            )}
+            {undueModalBillingId && (
+              <MarkAsUndueBillingModal billingId={undueModalBillingId} onClose={() => setUndueModalBillingId(null)} />
             )}
 
             {/* Saldo */}
@@ -1893,6 +1981,20 @@ const TYPE_COLOR: Record<string, string> = {
 
 function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onEdit: () => void; onClose: () => void }) {
   const [detailTab, setDetailTab] = useState<DetailTab>('profile')
+  const qc = useQueryClient()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  async function handleRefresh() {
+    setIsRefreshing(true)
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['customer-history', customer.id] }),
+      qc.invalidateQueries({ queryKey: ['clinical-records', customer.id] }),
+      qc.invalidateQueries({ queryKey: ['customer-contracts', customer.id] }),
+      qc.invalidateQueries({ queryKey: ['wallet'] }),
+      qc.invalidateQueries({ queryKey: ['billing'] }),
+    ])
+    setIsRefreshing(false)
+  }
 
   // ── clinical / prontuário ──────────────────────────────────────────────
   const clinicalRecords = useClinicalRecords(customer.id)
@@ -2114,6 +2216,16 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           <p className="text-lg font-semibold">{customer.name}</p>
           <p className="text-muted-foreground">{customer.email ?? '—'}</p>
         </div>
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="ml-auto flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 disabled:opacity-60"
+          title="Atualizar ficha do cliente"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+          Atualizar
+        </button>
       </div>
 
       {/* Detail tabs */}
@@ -2202,7 +2314,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
                     <span>{new Date(appt.scheduledAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                     {appt.professional && <span>· {appt.professional.name}</span>}
-                    {appt.billing && <span>· R$ {Number(appt.billing.amount).toFixed(2)}</span>}
+                    {appt.billing && <span>· {formatCurrency(appt.billing.amount)}</span>}
                   </div>
                 </div>
               ))}
@@ -2216,7 +2328,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   </div>
                   <div className="flex items-center gap-3 text-[10px] text-muted-foreground/70">
                     <span>{new Date(sale.soldAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                    <span>· R$ {Number(sale.totalPrice).toFixed(2)}</span>
+                    <span>· {formatCurrency(sale.totalPrice)}</span>
                   </div>
                 </div>
               ))}

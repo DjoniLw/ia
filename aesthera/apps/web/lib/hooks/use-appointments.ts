@@ -337,8 +337,12 @@ export function useOneBilling(id: string | null) {
 export function useCancelBilling(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api.post(`/billing/${id}/cancel`).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
+    mutationFn: (reason?: string) =>
+      api.post(`/billing/${id}/cancel`, reason ? { reason } : {}).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing'] })
+      qc.invalidateQueries({ queryKey: ['wallet'] })
+    },
   })
 }
 

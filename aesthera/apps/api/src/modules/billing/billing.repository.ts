@@ -42,7 +42,20 @@ export class BillingRepository {
     if (q.customerId) where.customerId = q.customerId
     if (q.appointmentId) where.appointmentId = q.appointmentId
     if (q.status?.length) {
-      where.status = q.status.length === 1 ? q.status[0] : { in: q.status }
+      const hasOverdue = q.status.includes('overdue')
+      const hasPending = q.status.includes('pending')
+      if (hasOverdue && !hasPending) {
+        // RN-OV01: filtro "Vencido" inclui DB status='overdue' E pending com dueDate < hoje
+        const now = new Date()
+        const overdueOr: Record<string, unknown>[] = [
+          { status: 'overdue' },
+          { status: 'pending', dueDate: { lt: now } },
+        ]
+        const others = q.status.filter((s) => s !== 'overdue').map((s) => ({ status: s }))
+        where.OR = [...overdueOr, ...others] as never
+      } else {
+        where.status = q.status.length === 1 ? q.status[0] : { in: q.status }
+      }
     }
     if (q.sourceType?.length) {
       where.sourceType = q.sourceType.length === 1 ? q.sourceType[0] : { in: q.sourceType }
