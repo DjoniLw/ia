@@ -1,0 +1,11 @@
+-- Safety-net idempotent migration.
+--
+-- Context: migration 20260404000002 adds REFUND to the wallet_transaction_type
+-- enum WITHOUT "IF NOT EXISTS". In the db-push → migrate-deploy transition the
+-- main.ts auto-resolve logic can mark that migration as applied without ever
+-- running the ALTER TYPE statement, leaving the production DB without the REFUND
+-- value and causing any wallet-transaction creation with type='REFUND' to fail
+-- with a Prisma P2023 error (→ HTTP 400 for the caller).
+--
+-- This migration is fully idempotent: it is a no-op when REFUND already exists.
+ALTER TYPE "wallet_transaction_type" ADD VALUE IF NOT EXISTS 'REFUND';

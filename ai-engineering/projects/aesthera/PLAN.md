@@ -390,6 +390,12 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 
 ## Histórico de Atualizações
 
+### [2026-04-04] — hotfix: migration idempotente para `wallet_transaction_type.REFUND`
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/migrations/20260404000003_ensure_wallet_refund_txn_type/migration.sql` *(novo)*
+- **O que foi feito:** Identificado que a migration `20260404000002_wallet_refund_txn_type` usa `ALTER TYPE ... ADD VALUE 'REFUND'` **sem** `IF NOT EXISTS`. Na transição `db push → migrate deploy`, o mecanismo de auto-resolve em `main.ts` pode marcar essa migration como "applied" sem executar o SQL, deixando `REFUND` ausente do enum PostgreSQL `wallet_transaction_type`. Resultado: qualquer chamada a `walletTransaction.create({ type: 'REFUND' })` no fluxo de reabertura de cobranças falha com `PrismaClientKnownRequestError P2023` → HTTP 400. Criada nova migration idempotente `20260404000003` com `ADD VALUE IF NOT EXISTS 'REFUND'` que garante a presença do valor independente do histórico de migração anterior.
+- **Impacto:** Corrige o erro 400 ao reabrir cobranças `PRESALE` com vale de serviço ainda ativo (`status=ACTIVE`). Migration é no-op quando `REFUND` já existe.
+
 ### [2026-04-03] — Code Review PR #148
 - **Arquivo gerado:** `outputs/code-review/pr/revisao_pr148_2026-04-03.md`
 - **O que foi feito:** Revisão do PR #148 (feat: redesenho fluxo cobrança de serviços — issue #147). Orquestração: security-auditor, ux-reviewer, test-guardian.
