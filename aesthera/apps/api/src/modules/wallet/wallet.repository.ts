@@ -6,7 +6,7 @@ export type Tx = Prisma.TransactionClient
 
 const walletEntryInclude = {
   customer: { select: { id: true, name: true, email: true, phone: true } },
-  transactions: { orderBy: { createdAt: 'desc' as const }, take: 50 },
+  transactions: { orderBy: { createdAt: 'asc' as const }, take: 50 },
 } as const
 
 export class WalletRepository {
@@ -18,7 +18,12 @@ export class WalletRepository {
     if (q.createdAtFrom || q.createdAtTo) {
       const createdAt: Record<string, Date> = {}
       if (q.createdAtFrom) createdAt.gte = new Date(`${q.createdAtFrom}T03:00:00.000Z`)
-      if (q.createdAtTo)   createdAt.lte = new Date(`${q.createdAtTo}T02:59:59.999Z`)
+      if (q.createdAtTo) {
+        // BRT = UTC-3: fim do dia <data> em BRT = <data+1>T02:59:59.999Z
+        const endDay = new Date(`${q.createdAtTo}T03:00:00.000Z`)
+        endDay.setUTCDate(endDay.getUTCDate() + 1)
+        createdAt.lte = new Date(endDay.getTime() - 1)
+      }
       where.createdAt = createdAt
     }
 

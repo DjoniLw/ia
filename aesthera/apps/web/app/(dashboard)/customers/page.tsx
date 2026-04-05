@@ -577,6 +577,14 @@ function formatDate(iso: string | null | undefined) {
   return new Date(iso).toLocaleDateString('pt-BR')
 }
 
+function formatDateTime(iso: string | null | undefined) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
 function WalletTransactionList({ entry }: { entry: WalletEntry }) {
   const [expanded, setExpanded] = useState(false)
   if (!entry.transactions.length) return null
@@ -605,7 +613,7 @@ function WalletTransactionList({ entry }: { entry: WalletEntry }) {
                   {t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0) ? '-' : '+'}
                   {formatCurrency(Math.abs(t.value))}
                 </span>
-                <span className="text-muted-foreground">{formatDate(t.createdAt)}</span>
+                <span className="text-muted-foreground">{formatDateTime(t.createdAt)}</span>
               </div>
             </div>
           ))}
@@ -791,17 +799,17 @@ function CustomerWalletCreateModal({
           <div className="flex items-center gap-3 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
             <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600 dark:text-green-400" />
             <div>
-              <p className="font-medium text-green-800 dark:text-green-200">
+              <p className="font-medium text-foreground">
                 {WALLET_ENTRY_TYPE_LABELS[createdResult.entryType]} {createdResult.entryCode} criado!
               </p>
-              <p className="text-sm text-green-700 dark:text-green-300">
+              <p className="text-sm text-muted-foreground">
                 Aguardando pagamento para ativar o vale.
               </p>
             </div>
           </div>
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
-            <p className="font-medium">Cobrança de {formatCurrency(createdResult.billingAmount)} gerada</p>
-            <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-800/40 dark:bg-amber-900/20">
+            <p className="font-medium text-foreground">Cobrança de {formatCurrency(createdResult.billingAmount)} gerada</p>
+            <p className="mt-0.5 text-muted-foreground">
               O vale ficará disponível para uso somente após o pagamento ser registrado.
             </p>
           </div>

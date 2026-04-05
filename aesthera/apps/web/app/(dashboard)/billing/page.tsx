@@ -275,6 +275,8 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
 
   // Cobrança PRESALE paga gera um vale SERVICE_PRESALE na carteira do cliente
   const isPresale = billing.sourceType === 'PRESALE' && billing.status === 'paid'
+  // Cobrança WALLET_PURCHASE: o vale vinculado voltará para PENDING ao reabrir
+  const isWalletPurchase = billing.sourceType === 'WALLET_PURCHASE'
 
   async function handleReopen() {
     try {
@@ -317,6 +319,18 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
                 </div>
               </div>
             )}
+            {isWalletPurchase && (
+              <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/30 dark:border-amber-700 p-3">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900 dark:text-amber-100 space-y-1">
+                  <p className="font-semibold">Esta cobrança é de uma venda de vale</p>
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
+                    Ao reabrir, o vale vinculado voltará ao status{' '}
+                    <strong>Pendente de pagamento</strong>, aguardando um novo recebimento para ser ativado.
+                  </p>
+                </div>
+              </div>
+            )}
             {hasWalletPayment && (
               <div className="flex gap-2 rounded-lg border border-amber-400 bg-amber-100 dark:bg-amber-900/40 dark:border-amber-700 p-3">
                 <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -338,6 +352,7 @@ function ReopenBillingButton({ billing }: { billing: Billing }) {
               Deseja reabrir esta cobrança, alterando o status para Pendente?
               {hasWalletPayment && ' O recebimento anterior será cancelado e os saldos de carteira devolvidos.'}
               {isPresale && !hasWalletPayment && ' O vale de pré-venda vinculado será anulado.'}
+              {isWalletPurchase && ' O vale de crédito vinculado voltará para Pendente de pagamento.'}
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setConfirming(false)}>Voltar</Button>

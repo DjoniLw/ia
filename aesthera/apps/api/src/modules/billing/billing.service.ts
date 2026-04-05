@@ -174,6 +174,15 @@ export class BillingService {
     }
     const updated = await this.repo.updateStatus(clinicId, id, 'cancelled', { cancelledAt: new Date() })
     await this.recordEvent(id, clinicId, 'cancelled', billing.status, 'cancelled', dto.reason ?? undefined)
+
+    // RN-WC01: se cobrança WALLET_PURCHASE é cancelada, encerrar o walletEntry PENDING vinculado
+    if ((billing.sourceType as string) === 'WALLET_PURCHASE') {
+      await prisma.walletEntry.updateMany({
+        where: { clinicId, originReference: id, status: 'PENDING' as never },
+        data: { status: 'EXPIRED' as never, updatedAt: new Date() },
+      })
+    }
+
     return updated
   }
 
@@ -331,6 +340,29 @@ export class BillingService {
 
       // ── Reverter ledger ─────────────────────────────────────────────────────
       await tx.ledgerEntry.deleteMany({ where: { billingId: id, clinicId } })
+
+      // ── Caso D: cobrança WALLET_PURCHASE → reverter walletEntry para PENDING ──
+      if ((billing.sourceType as string) === 'WALLET_PURCHASE') {
+        const walletEntry = await tx.walletEntry.findFirst({
+          where: { clinicId, originReference: id, status: { not: 'PENDING' as never } },
+        })
+        if (walletEntry) {
+          await tx.walletEntry.update({
+            where: { id: walletEntry.id },
+            data: { status: 'PENDING' as never, updatedAt: new Date() },
+          })
+          await tx.walletTransaction.create({
+            data: {
+              clinicId,
+              walletEntryId: walletEntry.id,
+              type: 'ADJUST' as never,
+              value: 0,
+              reference: id,
+              description: `Vale devolvido para pendente — cobrança reaberta (${id.slice(0, 8)})`,
+            },
+          })
+        }
+      }
 
       // ── Atualizar status para pending ───────────────────────────────────────
       await tx.billing.updateMany({
