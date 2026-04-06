@@ -85,7 +85,7 @@ PromotionStatus:    active | inactive | expired
 | `customers` | `Customer` | `phone` = E.164 para WhatsApp. `document` = CPF. Soft-delete. |
 | `blocked_slots` | `BlockedSlot` | Recorrência: `none/daily/weekly`. `dayOfWeek` usado quando `recurrence=weekly`. |
 | `appointments` | `Appointment` | `price` copiado do serviço no momento do agendamento. `reminderJobId` = BullMQ job. |
-| `billing` | `Billing` | `appointmentId` UNIQUE (1:1). Auto-criado por evento `appointment.completed`. `paymentToken` público. |
+| `billing` | `Billing` | `appointmentId` UNIQUE (1:1). **Não** é mais criado automaticamente por `appointment.completed` — staff confirma via `CompleteAppointmentModal`. `paymentToken` público. |
 | `payments` | `Payment` | `gatewayPaymentId` UNIQUE. `gatewayEventId` = idempotência em webhooks. |
 | `ledger_entries` | `LedgerEntry` | Append-only. Sem `updatedAt`. Nunca atualizar/deletar. |
 | `notification_logs` | `NotificationLog` | Log de envios WhatsApp/email. `retryCount`. |
@@ -158,9 +158,17 @@ appointment criado
   → WhatsApp: confirmação enviada
 
 appointment.completed (domain event)
-  → billing criado automaticamente (amount = price do appointment)
-  → payment link gerado
-  → WhatsApp + email: link enviado ao cliente
+  → billing NÃO é criado automaticamente (regra revogada em PR #148)
+  → AppointmentsService.complete() retorna { appointment, serviceVouchers: WalletEntry[] }
+  → frontend abre CompleteAppointmentModal para que o staff confirme:
+    - "Gerar Cobrança" → POST /billing { sourceType: 'APPOINTMENT', appointmentId, serviceId, amount }
+    - "Usar Vale" → billing + wallet.use(voucherId)
+    - "Pular" → nenhuma cobrança criada
+
+billing criado via POST /billing (3 sourceTypes):
+  APPOINTMENT → pós-serviço, staff confirma após conclusão
+  PRESALE     → pré-venda, gera WalletEntry SERVICE_PRESALE ao ser pago
+  MANUAL      → cobrança avulsa, sem vínculo obrigatório
 
 webhook gateway (Stripe / MercadoPago)
   → payment.succeeded

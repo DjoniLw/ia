@@ -108,6 +108,7 @@ export class AppointmentsRepository {
     clinicId: string,
     professionalId: string,
     date: string, // YYYY-MM-DD
+    excludeId?: string, // excludes a specific appointment (e.g. the one being rescheduled)
   ) {
     const start = new Date(`${date}T00:00:00.000Z`)
     const end = new Date(`${date}T23:59:59.999Z`)
@@ -117,6 +118,7 @@ export class AppointmentsRepository {
         professionalId,
         scheduledAt: { gte: start, lte: end },
         status: { in: ['draft', 'confirmed', 'in_progress'] },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
       },
       select: { scheduledAt: true, durationMinutes: true },
     })

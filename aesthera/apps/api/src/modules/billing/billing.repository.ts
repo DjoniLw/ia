@@ -12,6 +12,28 @@ const billingInclude = {
       professional: { select: { id: true, name: true } },
     },
   },
+  service: { select: { id: true, name: true } },
+  manualReceipt: {
+    select: {
+      id: true,
+      totalPaid: true,
+      receivedAt: true,
+      notes: true,
+      lines: {
+        select: {
+          id: true,
+          paymentMethod: true,
+          amount: true,
+          walletEntryId: true,
+          walletEntry: { select: { id: true, code: true, originType: true } },
+        },
+      },
+    },
+  },
+  billingEvents: {
+    select: { id: true, event: true, fromStatus: true, toStatus: true, notes: true, createdAt: true },
+    orderBy: { createdAt: 'asc' as const },
+  },
 } as const
 
 export class BillingRepository {
@@ -19,7 +41,30 @@ export class BillingRepository {
     const where: Record<string, unknown> = { clinicId }
     if (q.customerId) where.customerId = q.customerId
     if (q.appointmentId) where.appointmentId = q.appointmentId
-    if (q.status) where.status = q.status
+    if (q.status?.length) {
+      const hasOverdue = q.status.includes('overdue')
+      const hasPending = q.status.includes('pending')
+      if (hasOverdue && !hasPending) {
+        // RN-OV01: filtro "Vencido" inclui DB status='overdue' E pending com dueDate < hoje
+        const now = new Date()
+        const overdueOr: Record<string, unknown>[] = [
+          { status: 'overdue' },
+          { status: 'pending', dueDate: { lt: now } },
+        ]
+        const others = q.status.filter((s) => s !== 'overdue').map((s) => ({ status: s }))
+        where.OR = [...overdueOr, ...others] as never
+      } else {
+        where.status = q.status.length === 1 ? q.status[0] : { in: q.status }
+      }
+    }
+    if (q.sourceType?.length) {
+      where.sourceType = q.sourceType.length === 1 ? q.sourceType[0] : { in: q.sourceType }
+    }
+    if (q.hasCashReceived) {
+      where.manualReceipt = {
+        lines: { some: { paymentMethod: { notIn: ['wallet_credit', 'wallet_voucher'] } } },
+      }
+    }
     if (q.customerName) {
       where.customer = { name: { contains: q.customerName, mode: 'insensitive' } }
     }
@@ -31,8 +76,38 @@ export class BillingRepository {
       where.dueDate = range
     }
 
+    if (q.createdAtFrom || q.createdAtTo) {
+      const range: Record<string, Date> = {}
+      if (q.createdAtFrom) range.gte = new Date(q.createdAtFrom)
+      if (q.createdAtTo) range.lte = new Date(new Date(q.createdAtTo).setHours(23, 59, 59, 999))
+      where.createdAt = range
+    }
+
+    // Filtro por serviço: cobre PRESALE (billing.serviceId) e APPOINTMENT (appointment.serviceId)
+    // Filtro por atendente: cobre APPOINTMENT (appointment.professionalId)
+    const extraConditions: Record<string, unknown>[] = []
+    if (q.serviceId) {
+      extraConditions.push({
+        OR: [
+          { serviceId: q.serviceId },
+          { appointment: { serviceId: q.serviceId } },
+        ],
+      })
+    }
+    if (q.professionalId) {
+      extraConditions.push({ appointment: { professionalId: q.professionalId } })
+    }
+    if (extraConditions.length > 0) {
+      where.AND = extraConditions as never
+    }
+
     const skip = (q.page - 1) * q.limit
-    const [items, total, aggregate] = await Promise.all([
+
+    // Filtro espelhado para linhas de recibo — restringe às cobranças do where atual
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lineWhere = { clinicId, manualReceipt: { billing: where as any } }
+
+    const [items, total, aggregate, cashAggregate, breakdown] = await Promise.all([
       prisma.billing.findMany({
         where,
         include: billingInclude,
@@ -42,8 +117,32 @@ export class BillingRepository {
       }),
       prisma.billing.count({ where }),
       prisma.billing.aggregate({ where, _sum: { amount: true } }),
+      // Recebido Caixa: exclui wallet_credit e wallet_voucher
+      prisma.manualReceiptLine.aggregate({
+        where: { ...lineWhere, paymentMethod: { notIn: ['wallet_credit', 'wallet_voucher'] } },
+        _sum: { amount: true },
+      }),
+      // Breakdown por forma de pagamento
+      prisma.manualReceiptLine.groupBy({
+        by: ['paymentMethod'],
+        where: lineWhere,
+        _sum: { amount: true },
+        orderBy: [{ _sum: { amount: 'desc' } }],
+      }),
     ])
-    return { items, total, page: q.page, limit: q.limit, totalAmount: aggregate._sum.amount ?? 0 }
+
+    return {
+      items,
+      total,
+      page: q.page,
+      limit: q.limit,
+      totalAmount: aggregate._sum.amount ?? 0,
+      totalCashReceived: cashAggregate._sum.amount ?? 0,
+      paymentMethodBreakdown: breakdown.map((r) => ({
+        paymentMethod: r.paymentMethod,
+        total: r._sum.amount ?? 0,
+      })),
+    }
   }
 
   async findById(clinicId: string, id: string) {
@@ -54,16 +153,16 @@ export class BillingRepository {
   }
 
   async updateStatus(
-    _clinicId: string,
+    clinicId: string,
     id: string,
     status: string,
     extra?: Partial<{ paidAt: Date; overdueAt: Date; cancelledAt: Date }>,
   ) {
-    return prisma.billing.update({
-      where: { id },
+    await prisma.billing.updateMany({
+      where: { id, clinicId },
       data: { status: status as never, ...extra, updatedAt: new Date() },
-      include: billingInclude,
     })
+    return prisma.billing.findFirst({ where: { id, clinicId }, include: billingInclude })
   }
 
   // Cron: mark pending past due_date as overdue

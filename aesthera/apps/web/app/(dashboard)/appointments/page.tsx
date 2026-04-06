@@ -9,7 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   type AppointmentStatus,
+  type Billing,
   type CalendarSlot,
+  type CompleteResult,
   useAppointmentTransition,
   useAvailableProfessionals,
   useAvailableRooms,
@@ -17,10 +19,12 @@ import {
   useCalendar,
   useCreateAppointment,
 } from '@/lib/hooks/use-appointments'
+import type { ServiceVoucher } from '@/lib/hooks/use-wallet'
 import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
 import { useCustomers, useGetCustomer, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
 import { useActivePromotionsForService } from '@/lib/hooks/use-promotions'
 import { formatCpf, formatPhone } from '@/lib/masks'
+import { ReceiveManualModal } from '@/components/receive-manual-modal'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1137,6 +1141,9 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
   const status = slot.status!
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [viewingCustomerId, setViewingCustomerId] = useState<string | null>(null)
+  const [showReceiveModal, setShowReceiveModal] = useState(false)
+  const [pendingReceiptBilling, setPendingReceiptBilling] = useState<Billing | null>(null)
+  const [preSelectedVoucher, setPreSelectedVoucher] = useState<ServiceVoucher | null>(null)
 
   const profName = (slot as CalendarSlot & { _profName?: string })._profName ?? slot.professional?.name
 
@@ -1144,7 +1151,23 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
     try {
       if (action === 'confirm') await transitions.confirm.mutateAsync()
       else if (action === 'start') await transitions.start.mutateAsync()
-      else if (action === 'complete') await transitions.complete.mutateAsync()
+      else if (action === 'complete') {
+        const result = await transitions.complete.mutateAsync() as CompleteResult
+        if (!result.billing) {
+          // Pacote utilizado — sem cobrança a registrar
+          toast.success('Atendimento concluído. Sessão do pacote utilizada.')
+          onClose()
+          return
+        }
+        // Pré-selecionar o voucher de maior saldo, se houver
+        const bestVoucher = result.serviceVouchers
+          .slice()
+          .sort((a, b) => b.balance - a.balance)[0] ?? null
+        setPendingReceiptBilling(result.billing)
+        setPreSelectedVoucher(bestVoucher)
+        setShowReceiveModal(true)
+        return
+      }
       else if (action === 'cancel') await transitions.cancel.mutateAsync(undefined)
       else if (action === 'noShow') await transitions.noShow.mutateAsync()
       toast.success('Agendamento atualizado')
@@ -1239,6 +1262,22 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
       {/* Customer quick view */}
       {viewingCustomerId && (
         <CustomerQuickView customerId={viewingCustomerId} onClose={() => setViewingCustomerId(null)} />
+      )}
+
+      {/* ReceiveManualModal — abre automaticamente após concluir atendimento */}
+      {showReceiveModal && pendingReceiptBilling && (
+        <ReceiveManualModal
+          billing={pendingReceiptBilling}
+          open={showReceiveModal}
+          onClose={() => {
+            setShowReceiveModal(false)
+            setPendingReceiptBilling(null)
+            setPreSelectedVoucher(null)
+            toast.success('Atendimento concluído')
+            onClose()
+          }}
+          preSelectedVoucherId={preSelectedVoucher?.id}
+        />
       )}
     </div>
   )

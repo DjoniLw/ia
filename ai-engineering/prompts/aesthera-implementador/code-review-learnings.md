@@ -286,6 +286,156 @@ Se a resposta for não → revise antes de prosseguir.
 
 ---
 
+- [ ] **Consultas de vouchers/cupons ativos devem filtrar por `expirationDate` — buscar só por `status: 'ACTIVE'` retorna itens vencidos**
+  - 🔴 Anti-padrão: buscar vouchers válidos filtrando apenas `status: 'ACTIVE'` sem considerar a data de expiração — vouchers com `expirationDate` no passado continuam com `status: 'ACTIVE'` no banco se não houver job de expiração automática. Resultado: a UI exibe o voucher como disponível, o usuário seleciona, e o backend rejeita no momento do uso:
+    ```ts
+    // ERRADO — voucher vencido aparece na lista
+    const vouchers = await prisma.voucher.findMany({
+      where: { clinicId, status: 'ACTIVE' },
+    });
+    ```
+  - ✅ Correto: sempre combinar o filtro de `status` com a verificação de `expirationDate`:
+    ```ts
+    // CORRETO — exclui vouchers vencidos
+    const vouchers = await prisma.voucher.findMany({
+      where: {
+        clinicId,
+        status: 'ACTIVE',
+        OR: [
+          { expirationDate: null },                       // sem data de expiração = nunca vence
+          { expirationDate: { gte: new Date() } },        // data de expiração no futuro
+        ],
+      },
+    });
+    ```
+  - 📌 Regra geral: qualquer entidade com campo de validade temporal (`expirationDate`, `validUntil`, `expiresAt`) **nunca** deve ser consultada apenas por `status`. O status persistido pode estar desatualizado — a data é a fonte de verdade da validade atual. Sempre usar `OR: [{ dateField: null }, { dateField: { gte: new Date() } }]`.
+  - 📌 Aplica-se a: vouchers, cupons de desconto, tokens de convite, links de assinatura remota, sessões de pré-venda, pacotes com validade.
+  - 📅 Aprendido em: 03/04/2026 — code review identificou que vouchers vencidos apareciam na UI de resgate por falta de filtro de expirationDate
+
+---
+
+- [ ] **`SELECT FOR UPDATE` em comentário sem `$queryRaw` não gera lock real — Prisma não adiciona `FOR UPDATE` implicitamente em `$transaction`**
+  - 🔴 Anti-padrão: comentar no código que está usando "SELECT FOR UPDATE" para proteger contra race condition, mas implementar via Prisma Client normal dentro de `$transaction` — o Prisma **não** adiciona `FOR UPDATE` automaticamente, mesmo dentro de `$transaction`. A `$transaction` garante consistência de leitura (snapshot), não lock de linha:
+    ```ts
+    // ERRADO — sem lock real, apenas comentário enganoso
+    await prisma.$transaction(async (tx) => {
+      // SELECT FOR UPDATE para evitar double-spend
+      const voucher = await tx.voucher.findFirst({ where: { id } }); // ← NÃO tem FOR UPDATE
+      if (voucher.usedCount >= voucher.maxUses) throw new BadRequestException('...');
+      await tx.voucher.update({ where: { id }, data: { usedCount: { increment: 1 } } });
+    });
+    ```
+  - ✅ Correto: para lock real de linha em PostgreSQL, usar `$queryRaw` com a cláusula `FOR UPDATE` explícita dentro da transação:
+    ```ts
+    // CORRETO — lock real via $queryRaw
+    await prisma.$transaction(async (tx) => {
+      const [voucher] = await tx.$queryRaw<Voucher[]>`
+        SELECT * FROM "Voucher" WHERE id = ${id} FOR UPDATE
+      `;
+      if (!voucher || voucher.usedCount >= voucher.maxUses) {
+        throw new BadRequestException('Voucher esgotado ou inválido');
+      }
+      await tx.voucher.update({
+        where: { id },
+        data: { usedCount: { increment: 1 } },
+      });
+    });
+    ```
+  - 📌 Alternativa sem `$queryRaw`: usar `UPDATE ... WHERE usedCount < maxUses` e checar `count` retornado — se `count === 0`, houve race condition e o update foi recusado. Essa abordagem é safer e não depende de `$queryRaw`:
+    ```ts
+    const result = await tx.voucher.updateMany({
+      where: { id, usedCount: { lt: maxUses } }, // condição atômica no banco
+      data: { usedCount: { increment: 1 } },
+    });
+    if (result.count === 0) throw new BadRequestException('Voucher esgotado');
+    ```
+  - 📌 Regra geral: nunca confiar em comentários como "SELECT FOR UPDATE" sem verificar se o código realmente gera a cláusula SQL. Dentro de `$transaction` do Prisma, o único jeito de obter `FOR UPDATE` é via `$queryRaw` ou `$executeRaw`. Para uso em produção, a alternativa com `updateMany` + verificação de `count` é preferível por ser type-safe.
+  - 📌 Aplica-se a: qualquer cenário de concorrência com recursos limitados — vouchers com `maxUses`, vagas em sala, saldo de pacote, estoque de produto.
+  - 📅 Aprendido em: 03/04/2026 — code review identificou `SELECT FOR UPDATE` em comentário sem implementação real via `$queryRaw` em handler de resgate de voucher
+
+---
+
+- [ ] **Múltiplos branches de pagamento devem estar TODOS dentro da mesma `$transaction` — atomicidade inconsistente entre caminhos é silenciosamente perigosa**
+  - 🔴 Anti-padrão: quando um método tem ≥2 caminhos de pagamento (ex.: voucher, cash, cartão), apenas um dos branches é envolvido em `$transaction` — os demais executam operações de banco fora da transação, quebrando a atomicidade garantida só para um subconjunto dos casos:
+    ```ts
+    // ERRADO — cash e card estão fora da transação
+    if (method === 'voucher') {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.create({ ... });
+        await tx.voucher.update({ ... }); // consumo do voucher na tx
+      });
+    } else {
+      // cash/card: sem $transaction — falha parcial não é revertida
+      await this.prisma.payment.create({ data: paymentData });
+      await this.prisma.billing.update({ where: { id }, data: { status: 'PAID' } });
+    }
+    ```
+  - ✅ Correto: qualquer método com múltiplos caminhos que tocam o banco deve envolver **todos** os branches na mesma `$transaction`:
+    ```ts
+    // CORRETO — todos os caminhos com o mesmo nível de atomicidade
+    await this.prisma.$transaction(async (tx) => {
+      if (method === 'voucher') {
+        await tx.payment.create({ ... });
+        await tx.voucher.update({ ... });
+      } else if (method === 'cash') {
+        await tx.payment.create({ ... });
+      } else {
+        await tx.payment.create({ ... });
+        await tx.cardTransaction.create({ ... });
+      }
+      // operações comuns a todos os caminhos — dentro da mesma tx
+      await tx.billing.update({ where: { id }, data: { status: 'PAID' } });
+    });
+    ```
+  - 📌 Regra geral: o nível de atomicidade de um método é determinado pelo seu pior caso — se **qualquer** branch precisa de `$transaction`, **todos** os branches precisam. Nunca misturar operações com e sem `$transaction` dentro do mesmo método.
+  - 📌 Sinal de alerta: presença de `if (method === ...)` com um branch dentro de `$transaction` e outro usando `this.prisma.X` diretamente. Se `this.prisma.X` aparece fora de `$transaction` no mesmo método, a atomicidade está incompleta.
+  - 📌 Aplica-se a: métodos de pagamento com múltiplas formas (voucher/cash/card/PIX), métodos de cancelamento com múltiplos caminhos de estorno, qualquer service method com branches `if/else` que tocam o banco em múltiplos pontos.
+  - 📅 Aprendido em: 03/04/2026 — code review PR #148 identificou branches de pagamento (voucher/cash/card) com atomicidade inconsistente: apenas o branch de voucher estava dentro de `$transaction`
+
+---
+
+- [ ] **Parâmetros de exclusão declarados com `_` em métodos de verificação de conflito nunca chegam ao `WHERE` da query — operações de edição sempre retornam falso-positivo (BLOQUEANTE)**
+  - 🔴 Anti-padrão: declarar parâmetros de exclusão (`excludeId`, `excludeAppointmentId`, `excludeReceiptId`) com prefixo `_` em métodos como `checkConflict`, `verifyAvailability` ou similares — o prefixo `_` indica que o parâmetro foi recebido na assinatura mas **nunca repassado** à query do repositório. Resultado: ao editar um registro existente, a verificação de conflito encontra o próprio registro e bloqueia a atualização legítima:
+    ```typescript
+    // ❌ Errado — _excludeId declarado mas ignorado
+    async checkConflict(
+      professionalId: string,
+      startAt: Date,
+      endAt: Date,
+      _excludeId?: string, // nunca repassado à query
+    ): Promise<boolean> {
+      return this.repo.findConflict(professionalId, startAt, endAt);
+      // excludeId nunca chegou ao WHERE da query — edição sempre conflita consigo mesma
+    }
+    ```
+  - ✅ Correto: remover o prefixo `_` e propagar o parâmetro explicitamente ao repositório. No repositório, usar a cláusula `NOT` no `where`:
+    ```typescript
+    // ✅ Correto — excludeId repassado ao repositório
+    async checkConflict(
+      professionalId: string,
+      startAt: Date,
+      endAt: Date,
+      excludeId?: string,
+    ): Promise<boolean> {
+      return this.repo.findConflict(professionalId, startAt, endAt, excludeId);
+    }
+
+    // No repositório:
+    where: {
+      professionalId,
+      startAt: { lt: endAt },
+      endAt: { gt: startAt },
+      ...(excludeId && { id: { not: excludeId } }),
+    }
+    ```
+  - 📌 Como detectar: buscar parâmetros com prefixo `_` nos métodos `checkConflict`, `verifyAvailability` ou similares. Se o parâmetro existe com `_`, ele nunca é usado — confirmar na chamada ao repositório e no `where` da query.
+  - 📌 Regra geral: todo parâmetro `excludeId` / `excludeAppointmentId` / `excludeReceiptId` recebido por um método de verificação de conflito **deve** aparecer explicitamente no `where` da query do repositório. Nenhum parâmetro de exclusão pode ter prefixo `_`.
+  - 📌 Relação com anti-padrão existente: análogo ao `_clinicId` descartado em repositórios multi-tenant (documentado em 30/03/2026) — ambos são parâmetros `_` que indicam ignorância intencional, mas neste caso a consequência é quebrar operações de edição, não uma falha de segurança de tenant.
+  - 📌 Aplica-se a: todos os métodos de verificação de conflito — agendamentos, recibos, cobranças, reservas de sala, qualquer entidade onde a edição deve excluir o próprio registro da checagem.
+  - 📅 Aprendido em: 03/04/2026 — code review identificou `_excludeId` em `checkConflict` de agendamentos; parâmetro jamais chegava ao `WHERE` do repositório, fazendo toda edição de agendamento resultar em conflito consigo mesma
+
+---
+
 ## Frontend
 
 ### Filtros e Pesquisa
@@ -416,6 +566,36 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: **se a lista é paginada pelo servidor, qualquer filtro ou busca que precise operar sobre o dataset completo também deve ser enviado ao servidor**. Client-side filter sobre `items` paginados é sempre incorreto — é um falso filtro que apenas restringe o subconjunto visível na página.
   - 📌 Checklist de migração para server-side: (1) paginação → server-side ✅, (2) busca textual → server-side ✅, (3) filtros de status/tipo → server-side ✅, (4) ordenação → server-side ✅. Todos ou nenhum.
   - 📅 Aprendido em: 30/03/2026 — revisão de PR #141 (paginação server-side): busca textual ficou client-side sobre `data?.items`, tornando a pesquisa ineficaz quando havia mais de uma página de resultados
+
+---
+
+- [ ] **`<ComboboxSearch>` em filtro deve usar estilo pill e em formulário deve usar estilo retangular — mensagem de dropdown vazio varia conforme estado**
+  - 🔴 Anti-padrão: usar o mesmo estilo de `<ComboboxSearch>` para contextos de filtro de listagem e de formulário de cadastro/edição; ou exibir sempre a mesma mensagem de dropdown vazio independentemente do estado do campo de busca interna:
+    ```tsx
+    // ERRADO — mesmo estilo em todos os contextos
+    <ComboboxSearch triggerClassName="rounded-md border ..." />  // retangular também no filtro
+    // ERRADO — mensagem genérica que não orienta o usuário
+    emptyMessage="Nenhum resultado"  // exibido mesmo quando o campo está completamente vazio
+    ```
+  - ✅ Correto: diferenciar o estilo conforme o contexto de uso e a mensagem de dropdown vazio conforme o estado da query interna:
+    ```tsx
+    // Em barra de filtros (pill, h-8):
+    <ComboboxSearch
+      triggerClassName="h-8 rounded-full border px-3 py-1 text-xs font-medium"
+      emptyMessage={query === '' ? 'Digite para buscar' : 'Nenhum resultado encontrado'}
+      ...
+    />
+
+    // Em formulário (retangular, h-9):
+    <ComboboxSearch
+      triggerClassName="h-9 w-full rounded-md border px-3 py-2 text-sm"
+      emptyMessage={query === '' ? 'Digite para buscar' : 'Nenhum resultado encontrado'}
+      ...
+    />
+    ```
+  - 📌 Regra geral: o `<ComboboxSearch>` tem dois contextos visuais distintos — **filtro** (`h-8`, pill, compacto, alinhado à barra) e **formulário** (`h-9`, retangular, largura total, altura padrão de input). A mensagem de dropdown vazio deve sempre diferenciar os estados: campo sem query (`''`) → "Digite para buscar"; query com busca sem resultado → "Nenhum resultado encontrado". Exibir "Nenhum resultado encontrado" com campo vazio desorientaria o usuário, que ainda não digitou nada.
+  - 📌 Aplica-se a: todo uso de `<ComboboxSearch>` — tanto nos filtros de telas de listagem quanto em formulários de cadastro, edição ou modais.
+  - 📅 Aprendido em: 04/04/2026 — code review PR #148: `<ComboboxSearch>` com estilo invertido (retangular no filtro) e mensagem de dropdown vazio sem distinção entre campo vazio e busca sem resultado
 
 ---
 
@@ -679,7 +859,54 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: `<Dialog>` do shadcn/ui fornece foco trap, fechamento por `Esc`, overlay acessível e animações consistentes — qualquer substituição manual perde esses comportamentos e gera inconsistência visual entre telas
   - 📅 Aprendido em: 25/03/2026 — revisão de dois componentes de modal implementados com `fixed inset-0 z-50` customizado
 
-- [ ] **Verificar alinhamento da barra de filtros em toda tela criada ou modificada**
+---
+
+- [ ] **Toda caixa de aviso, alerta, informação ou erro contextual DEVE usar `<InfoBanner>` — nunca CSS Tailwind inline (BLOQUEANTE)**
+  - 🔴 Anti-padrão: criar caixas de feedback visual manualmente com classes inline — o implementador tipicamente escolhe tons errados da paleta, gerando baixo contraste não intencional:
+    ```tsx
+    // ERRADO — caixa amber manual com contraste insuficiente
+    <div className="flex gap-2 rounded-lg border border-amber-400 bg-amber-100 dark:bg-amber-900/40 dark:border-amber-700 p-3">
+      <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+      <p className="text-sm text-amber-800 dark:text-amber-400">Atenção: ...</p>
+    </div>
+    // Por que fica ruim: bg-amber-100 + text-amber-800 = tons próximos = baixo contraste
+    // dark:text-amber-400 sobre dark:bg-amber-900/40 = ainda pior no dark mode
+
+    // ERRADO — caixa azul inline
+    <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs">
+      <Info className="h-3 w-3 text-blue-600" />
+      <span>Informação: ...</span>
+    </div>
+    ```
+  - ✅ Correto: importar `<InfoBanner>` de `@/components/ui/info-banner.tsx` e usar a variante semântica correta:
+    ```tsx
+    import { InfoBanner } from '@/components/ui/info-banner'
+
+    // Uso básico
+    <InfoBanner variant="warning" title="Esta ação não pode ser desfeita"
+      description="O registro será removido permanentemente do sistema." />
+
+    // Uso com conteúdo rico (listas, valores formatados)
+    <InfoBanner variant="warning" title="Créditos serão devolvidos à carteira">
+      <ul className="mt-1 space-y-0.5">
+        {items.map((item) => (
+          <li key={item.id}>• {item.label} — {formatCurrency(item.value)}</li>
+        ))}
+      </ul>
+    </InfoBanner>
+    ```
+  - 📌 Variantes disponíveis e quando usar:
+    | Variante | Quando usar |
+    |----------|------------|
+    | `warning` | Atenção, consequência potencial, dado sensível, ação com impacto |
+    | `info` | Contexto adicional, dica, informação neutra |
+    | `error` | Bloqueio, falha, ação impossível |
+    | `success` | Confirmação positiva contextual |
+  - 📌 Componente em: `aesthera/apps/web/components/ui/info-banner.tsx` — já importado como `@/components/ui/info-banner`
+  - 📌 O `<InfoBanner>` aceita `title?`, `description?` e `children` — use `children` para conteúdo rico (listas, valores) em vez de criar wrapper inline
+  - 📌 Regra geral: o componente já tem dark mode correto com combinações de contraste validado — não é necessário inventar classes de cor
+  - 📌 Dívida técnica mapeada: existem ~6 caixas inline no codebase que devem ser migradas ao `<InfoBanner>` nas próximas tasks que tocarem esses arquivos: `billing/page.tsx`, `products/page.tsx`, `appointments/page.tsx` (×1), `customers/page.tsx` (×2), `sell-product-form.tsx`
+  - 📅 Aprendido em: 04/04/2026 — revisão PR #148: bloco amber manual em `ReopenBillingButton` com `bg-amber-100 text-amber-800` (baixo contraste) e `dark:text-amber-400` sobre `dark:bg-amber-900/40` (contraste pior no dark mode); `InfoBanner` existia mas era usado em apenas 1 de ~7 lugares necessários
   - 🔴 Erro: barra de filtros com `flex gap-4` ou `space-x-2` ao invés do padrão — campos desalinhados
   - ✅ Correto: sempre usar `className="flex flex-wrap items-center gap-2"` para a div que contém filtros. Campo de busca: `h-8 w-48 text-sm`
   - 📅 Aprendido em: 21/03/2026 — tela de estoque nova
@@ -834,6 +1061,27 @@ Se a resposta for não → revise antes de prosseguir.
 
 ---
 
+- [ ] **Totalizadores financeiros devem ser posicionados ACIMA da tabela (ou em painel de resumo no topo) — nunca abaixo da paginação**
+  - 🔴 Anti-padrão: renderizar o painel de totais (total recebido, total pendente, saldo, etc.) abaixo do componente `<DataPagination>` — o usuário precisa rolar até o final da página para ver os totalizadores, que são dado de alto valor e devem ser visíveis imediatamente:
+    ```tsx
+    // ERRADO — totalizadores abaixo da paginação
+    <DataTable data={items} columns={columns} />
+    <DataPagination ... />
+    <TotalsPanel totals={totals} />  {/* invisível sem scroll */}
+    ```
+  - ✅ Correto: posicionar o painel de totalizadores sempre ANTES da tabela ou em área de resumo no topo da página (ex.: cards de KPI), nunca após a paginação:
+    ```tsx
+    // CORRETO — totalizadores visíveis sem scroll
+    <TotalsPanel totals={totals} />   {/* ou cards de KPI no topo */}
+    <DataTable data={items} columns={columns} />
+    <DataPagination ... />
+    ```
+  - 📌 Regra geral: totalizadores financeiros (total recebido, pendente, saldo, receita do período) são dados de alto valor — devem estar visíveis no viewport inicial da tela, acima ou junto ao cabeçalho. Posicioná-los abaixo da paginação faz com que sejam invisíveis para qualquer usuário que não role até o final da lista.
+  - 📌 Aplica-se a: toda tela financeira com totalizadores — `/billing`, `/financial`, `/carteira`, `/receipts`, ou qualquer tela de listagem que exiba totais, saldos ou KPIs numéricos.
+  - 📅 Aprendido em: 04/04/2026 — code review PR #148: totalizadores financeiros renderizados abaixo do `<DataPagination>`, ficando inacessíveis sem scroll
+
+---
+
 ## Geral
 
 ### Escopo e Disciplina de PR
@@ -921,6 +1169,71 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Se a feature for exclusivamente backend/API, substituir o fluxo de UI pelo endpoint + payload de teste
   - 📅 Aprendido em: 25/03/2026 — padrão definido após ausência recorrente de roteiro de teste manual em PRs
 
+- [ ] **Nunca usar `if (instance)` + `?.mock.results[0]?.value` em torno de `expect()` — asserções condicionais criam testes que passam verde sem executar**
+  - 🔴 Anti-padrão: usar `?.mock.results[0]?.value` para obter a instância de um mock e envolvê-la em `if (instance)` antes do `expect()` — se o mock não foi chamado ou o acesso opcional retorna `undefined`, o `if` nunca executa e o teste passa verde silenciosamente sem ter feito nenhuma asserção:
+    ```ts
+    // ERRADO — teste passa verde mesmo sem instância (instance = undefined → if skipped)
+    const instance = MockedService.mock.results[0]?.value;
+    if (instance) {
+      expect(instance.someMethod).toHaveBeenCalledWith(expectedPayload);
+    }
+    // Se MockedService nunca foi instanciado: mock.results[0] = undefined,
+    // instance = undefined, o if é falso → expect NÃO executa → teste PASSA
+    ```
+  - ✅ Correto: usar `vi.hoisted()` para capturar a referência ao mock de forma segura e determinista, sem depender de acesso opcional a `mock.results`:
+    ```ts
+    // CORRETO — vi.hoisted() garante referência disponível antes da resolução do módulo
+    const { mockSomeMethod } = vi.hoisted(() => ({
+      mockSomeMethod: vi.fn(),
+    }));
+
+    vi.mock('../some.service', () => ({
+      SomeService: vi.fn().mockImplementation(() => ({
+        someMethod: mockSomeMethod,
+      })),
+    }));
+
+    it('chama someMethod com o payload correto', async () => {
+      await sut.execute(input);
+      // expect sempre executa — não depende de condição
+      expect(mockSomeMethod).toHaveBeenCalledWith(expectedPayload);
+    });
+    ```
+  - 📌 Regra geral: nenhum `expect()` deve estar dentro de um bloco `if` — se a condição não for satisfeita, o teste passa sem testar coisa alguma. Em Vitest, `vi.hoisted()` é o padrão correto para capturar referências de mock antes da resolução do módulo; nunca usar `?.mock.results[0]?.value` com guarda condicional.
+  - 📌 Sinal de alerta no code review: qualquer `if (variable) { expect(...) }` em arquivo de teste é um falso positivo em potencial — a asserção pode nunca ter executado em nenhuma run do CI. Reportar como bloqueante.
+  - 📌 Aplica-se a: testes que verificam chamadas a serviços mockados, repositórios, clientes HTTP, processadores de fila — qualquer mock de classe onde a instância é acessada via `mock.results`.
+  - 📅 Aprendido em: 03/04/2026 — code review PR #148 identificou `if (instance)` em torno de `expect()` usando `?.mock.results[0]?.value`, criando asserções silenciosas que passariam verde mesmo sem execução
+
+- [ ] **Spec que inverte comportamento coberto por testes quebrará os testes por design — delegar ao `test-guardian`, nunca usar workarounds na implementação**
+  - 🔴 Anti-padrão: quando uma spec/issue deliberadamente inverte ou substitui um comportamento que já estava coberto por testes, o implementador tenta preservar as premissas antigas com adaptações no código (condicionais extras, flags de compatibilidade, lógica duplicada) para fazer o teste antigo passar junto com o novo comportamento — isso mascara a regressão intencional e gera código de duas cabeças:
+    ```ts
+    // ERRADO — workaround para não quebrar teste antigo enquanto implementa spec nova
+    async createBilling(dto: CreateBillingDto) {
+      if (dto.legacy) {
+        // lógica antiga para o teste passar
+        return this.legacyFlow(dto);
+      }
+      // novo fluxo da spec
+      return this.newFlow(dto);
+    }
+    ```
+  - ✅ Correto: implementar exatamente o que a spec define, sem branches de compatibilidade. Se testes existentes quebrarem, classificar como **Tipo 2 — Regressão por design** e reportar ao usuário antes de abrir o PR:
+    ```
+    ⚠️ Testes existentes quebraram porque a spec inverte deliberadamente o comportamento anterior:
+    - billing.service.test.ts: "deve criar cobrança vinculada ao agendamento" — FALHOU
+      Tipo: Regressão por design (spec #147 remove vínculo direto Billing→Appointment)
+
+    Não alterei os testes. Delegando ao test-guardian para reescrever com as novas premissas.
+    ```
+  - 📌 Distinção crítica em relação ao item anterior (Tipo 1/Tipo 2):
+    - **Tipo 1 — Estrutural**: regra de negócio não mudou, apenas a assinatura/contrato mudou → test-guardian adapta o teste
+    - **Tipo 2 — Regra de negócio violada involuntariamente**: implementação errou → corrigir o código
+    - **Tipo 3 — Regressão por design (este item)**: a spec intencionalmente inverte o comportamento → test-guardian reescreve o teste com as NOVAS premissas da spec; nenhum código de workaround é adicionado
+  - 📌 Como identificar: se a issue/spec descreve explicitamente que um comportamento anterior deve ser substituído (ex.: "cobrança deixa de ser gerada automaticamente pelo agendamento e passa a ser criada manualmente"), qualquer teste que valide o comportamento antigo é candidato a regressão por design.
+  - 📌 Regra geral: o implementador não tem autoridade para decidir que um teste antigo "já não faz sentido" e removê-lo ou adaptá-lo sozinho. Essa decisão pertence ao `test-guardian` (que valida se a regressão é realmente intencional) em conjunto com o PO (que documenta a mudança de regra). O implementador apenas entrega o código com a spec nova e reporta as quebras.
+  - 📌 Aplica-se a: qualquer spec que contenha linguagem como "em vez de", "substitui", "remove o vínculo", "deixa de ser automático", "passa a ser manual", "não deve mais" — sinais de que o novo comportamento é incompatível com premissas existentes.
+  - 📅 Aprendido em: 04/04/2026 — revisão de fluxo pós-atendimento (spec redesenho billing #147): spec inverte geração automática de cobranças, quebrando testes por design
+
 ### Arquitetura e Padrões do Projeto
 
 - [ ] **Task de formatação/máscara = alterar somente o campo alvo, nada mais**
@@ -961,3 +1274,8 @@ Se a resposta for não → revise antes de prosseguir.
 | 01/04/2026 | — | 1 padrão adicionado pelo treinador-agent: migration não commitada — `.gitignore` contém `apps/api/prisma/migrations/` e ignora novos arquivos de migration; sempre usar `git add -f` para forçar rastreamento da migration.sql no mesmo PR das mudanças de código; checklist obrigatório: `prisma generate` + `prisma migrate dev` + `git add -f` + commit da migration junto com o código |
 | 02/04/2026 | PR #144 | 🔁 Reincidência do anti-padrão `<select>` nativo para campos de seleção (já documentado em 25/03/2026) — `<select>` nativo usado para forma de pagamento em formulário de venda mesmo após proibição catalogada. Regra de componentes adicionada: opções fixas ≤6 → pills; opções fixas >6 → `<Select>` shadcn/ui; opções dinâmicas da API → `<ComboboxSearch>`. Nenhum `<select>` nativo é aceitável no design system Aesthera. |
 | 02/04/2026 | Issue #147 | 2 padrões adicionados pelo treinador-agent (revisão de arquitetura do redesenho do fluxo de cobrança): (1) domain events NUNCA devem ser emitidos dentro de `prisma.$transaction()` — guardar o ID criado, deixar o commit ocorrer, emitir o evento APÓS; (2) labels PT-BR de enums na UI devem ser definidas em arquivo centralizado `*-labels.ts` — nunca exibir o valor raw do enum (ex: `APPOINTMENT`, `PRESALE`) como texto para o usuário; verificação obrigatória ao criar/alterar qualquer enum. |
+| 03/04/2026 | PR #148 | 2 padrões adicionados pelo treinador-agent: (1) múltiplos branches de pagamento (voucher/cash/card) devem ter TODOS o mesmo nível de atomicidade — se qualquer branch precisa de `$transaction`, todos precisam; misturar `this.prisma.X` fora de `$transaction` com branches dentro é atomicidade incompleta; (2) assertivas condicionais com `if (instance)` + `?.mock.results[0]?.value` criam testes falso-positivos que passam verde sem executar a asserção — usar sempre `vi.hoisted()` para capturar referências de mock; nenhum `expect()` deve ser envolvido em `if`. |
+| 03/04/2026 | — | 1 padrão adicionado pelo treinador-agent: parâmetros de exclusão (`excludeId`, `excludeAppointmentId`, `excludeReceiptId`) com prefixo `_` em métodos de verificação de conflito nunca chegam ao `WHERE` da query — o prefixo `_` indica ignorância intencional; resultado é falso-positivo em toda operação de edição, bloqueando atualizações legítimas de registros existentes; solução: remover o `_` e propagar o parâmetro explicitamente ao repositório com cláusula `id: { not: excludeId }`. |
+| 04/04/2026 | — | 1 padrão adicionado pelo treinador-agent: spec que inverte deliberadamente comportamento coberto por testes gera regressão por design (Tipo 3) — implementador não adapta nem remove testes, implementa exatamente a spec nova, classifica as quebras como "Regressão por design" e delega ao `test-guardian` para reescrever com as novas premissas; nenhum workaround de compatibilidade é adicionado ao código de produção. |
+| 04/04/2026 | PR #148 | 2 padrões adicionados pelo treinador-agent: (1) `<ComboboxSearch>` em filtro deve usar estilo pill (`h-8 rounded-full`); em formulário, estilo retangular (`h-9 rounded-md`) — estilos e alturas são contextuais e não intercambiáveis; mensagem de dropdown vazio contextual: campo vazio (`''`) → "Digite para buscar"; busca sem resultado → "Nenhum resultado encontrado"; (2) totalizadores financeiros devem ser posicionados ACIMA da tabela (ou em painel de resumo no topo) — nunca abaixo do `<DataPagination>`; dado de alto valor deve ser visível no viewport inicial sem necessidade de scroll. |
+| 04/04/2026 | PR #148 | 1 padrão adicionado pelo treinador-agent: `<InfoBanner>` de `@/components/ui/info-banner.tsx` é OBRIGATÓRIO para toda caixa de aviso/alerta/info/erro contextual — nunca recriar inline com classes Tailwind (bloco amber, azul, vermelho ou verde manual). Componente estendido com `children?: React.ReactNode` e `title?` opcional para suportar conteúdo rico. Dívida técnica: ~6 caixas inline no codebase ainda precisam ser migradas (`billing/page.tsx`, `products/page.tsx`, `appointments/page.tsx`, `customers/page.tsx` ×2, `sell-product-form.tsx`). |

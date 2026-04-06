@@ -33,6 +33,8 @@ const mockPrisma = vi.hoisted(() => ({
   professional: { findFirst: vi.fn(), findMany: vi.fn() },
   service: { findFirst: vi.fn() },
   businessHour: { findFirst: vi.fn() },
+  billing: { findUnique: vi.fn() },
+  walletEntry: { findMany: vi.fn() },
 }))
 
 // ── Hoisted: mock do repositório de agendamentos ─────────────────────────────
@@ -54,6 +56,22 @@ const mockRepo = vi.hoisted(() => ({
 }))
 
 // ── vi.mock deve vir antes dos imports de módulos que o usam ─────────────────
+const mockBillingInstance = vi.hoisted(() => ({
+  createForAppointment: vi.fn(),
+  createManual: vi.fn(),
+}))
+
+const mockBillingRepoInstance = vi.hoisted(() => ({
+  findById: vi.fn(),
+}))
+
+const mockPackagesInstance = vi.hoisted(() => ({
+  linkSession: vi.fn(),
+  findLinkedSession: vi.fn(),
+  redeemSession: vi.fn(),
+  unlinkSession: vi.fn(),
+}))
+
 vi.mock('../../database/prisma/client', () => ({ prisma: mockPrisma }))
 
 vi.mock('./appointments.repository', () => ({
@@ -64,13 +82,19 @@ vi.mock('./appointments.repository', () => ({
 
 vi.mock('../packages/packages.repository', () => ({
   PackagesRepository: vi.fn(function PackagesRepository() {
-    return { linkSession: vi.fn(), findLinkedSession: vi.fn(), unlinkSession: vi.fn() }
+    return mockPackagesInstance
   }),
 }))
 
 vi.mock('../billing/billing.service', () => ({
   BillingService: vi.fn(function BillingService() {
-    return { createForAppointment: vi.fn() }
+    return mockBillingInstance
+  }),
+}))
+
+vi.mock('../billing/billing.repository', () => ({
+  BillingRepository: vi.fn(function BillingRepository() {
+    return mockBillingRepoInstance
   }),
 }))
 
@@ -562,5 +586,313 @@ describe('AppointmentsService', () => {
 
       expect(result).toMatchObject({ id: 'appt-created', status: 'draft' })
     })
+  })
+})
+
+// ── T15-T19: AppointmentsService.complete() ────────────────────────────────────
+describe('AppointmentsService.complete()', () => {
+  let service: AppointmentsService
+
+  const makeCompletedAppointment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'appt-1',
+    clinicId: 'clinic-1',
+    customerId: 'customer-1',
+    serviceId: 'service-1',
+    status: 'in_progress',
+    serviceItems: [],
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AppointmentsService()
+  })
+
+  // T19 — Regressão: complete() NÃO auto-cria billing (assertiva determinística via vi.hoisted)
+  it('T19 (regressão): complete() NÃO chama BillingService.createForAppointment automaticamente', async () => {
+    const appt = makeCompletedAppointment()
+    mockRepo.findById.mockResolvedValue(appt)
+    mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
+
+    // Packages repo — referência direta via mockPackagesInstance (sem dynamic import + if)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
+
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockPrisma.walletEntry.findMany.mockResolvedValue([])
+
+    await service.complete('clinic-1', 'appt-1')
+
+    // Assertiva determinística — nunca silenciosamente pulada
+    expect(mockBillingInstance.createForAppointment).not.toHaveBeenCalled()
+  })
+
+  // T16 — complete() retorna serviceVouchers quando há vouchers SERVICE_PRESALE ativos
+  it('T16: complete() retorna serviceVouchers com vouchers SERVICE_PRESALE ativos', async () => {
+    const appt = makeCompletedAppointment({ serviceId: 'service-1' })
+    mockRepo.findById.mockResolvedValue(appt)
+    mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
+
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
+
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockPrisma.walletEntry.findMany.mockResolvedValue([
+      { id: 'voucher-1', serviceId: 'service-1', balance: 20000, expirationDate: null, code: 'VCHR-ABC1' },
+    ])
+
+    const result = await service.complete('clinic-1', 'appt-1')
+
+    expect(result).toMatchObject({ serviceVouchers: [{ id: 'voucher-1' }] })
+  })
+
+  // T17 — complete() retorna serviceVouchers vazio quando não há vouchers ativos
+  it('T17: complete() retorna serviceVouchers=[] quando não há vouchers SERVICE_PRESALE', async () => {
+    const appt = makeCompletedAppointment()
+    mockRepo.findById.mockResolvedValue(appt)
+    mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
+
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
+
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockPrisma.walletEntry.findMany.mockResolvedValue([])
+
+    const result = await service.complete('clinic-1', 'appt-1')
+
+    expect(result).toMatchObject({ serviceVouchers: [] })
+  })
+
+  // T18 — complete() retorna { appointment, serviceVouchers: [] } para agendamento via pacote
+  it('T18: complete() retorna serviceVouchers=[] quando appointment usa linkedSession (pacote)', async () => {
+    const appt = makeCompletedAppointment()
+    mockRepo.findById.mockResolvedValue(appt)
+    mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
+
+    mockPackagesInstance.findLinkedSession.mockResolvedValue({ id: 'pkg-session-1' })
+    mockPackagesInstance.redeemSession.mockResolvedValue({})
+
+    const result = await service.complete('clinic-1', 'appt-1')
+
+    expect(result).toMatchObject({ serviceVouchers: [] })
+  })
+})
+
+// ── R13: AppointmentsService.update() — conflito de horário no reagendamento ──
+describe('R13 — AppointmentsService.update(): reagendamento bloqueia conflito de profissional', () => {
+  let service: AppointmentsService
+
+  const makeExistingAppointment = (overrides: Record<string, unknown> = {}) => ({
+    id: 'appt-1',
+    clinicId: 'clinic-1',
+    professionalId: 'professional-1',
+    serviceId: 'service-1',
+    scheduledAt: new Date('2026-03-25T09:00:00.000Z'), // 09:00–10:00
+    durationMinutes: 60,
+    status: 'draft',
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AppointmentsService()
+  })
+
+  it('deve lançar SLOT_UNAVAILABLE ao reagendar para horário conflitante com outro agendamento do profissional', async () => {
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment())
+    // Outro agendamento do mesmo profissional às 11:00–12:00
+    mockRepo.getConflictingAppointments.mockResolvedValue([
+      { scheduledAt: new Date('2026-03-25T11:00:00.000Z'), durationMinutes: 60 },
+    ])
+    mockRepo.getBlockedSlotsForDate.mockResolvedValue([])
+
+    await expect(
+      service.update('clinic-1', 'appt-1', { scheduledAt: '2026-03-25T11:00:00.000Z' }),
+    ).rejects.toMatchObject({ statusCode: 409, code: 'SLOT_UNAVAILABLE' })
+  })
+
+  it('deve permitir reagendamento quando novo horário está livre', async () => {
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment())
+    mockRepo.getConflictingAppointments.mockResolvedValue([]) // sem conflitos
+    mockRepo.getBlockedSlotsForDate.mockResolvedValue([])
+    mockRepo.update.mockResolvedValue({
+      ...makeExistingAppointment(),
+      scheduledAt: new Date('2026-03-25T14:00:00.000Z'),
+    })
+
+    const result = await service.update('clinic-1', 'appt-1', {
+      scheduledAt: '2026-03-25T14:00:00.000Z',
+    })
+
+    expect(result).toMatchObject({ id: 'appt-1' })
+  })
+
+  it('deve excluir o próprio agendamento da verificação de conflito ao reagendar (sem falso positivo)', async () => {
+    // Agendamento A em 09:00. Reagendar para 09:30 sobrepõe o slot atual —
+    // sem exclusão do próprio ID, erraria com SLOT_UNAVAILABLE.
+    // Com excludeId correto, o repositório ignora o próprio agendamento.
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment())
+    // getConflictingAppointments já exclui o próprio agendamento (excludeId=appt-1) → retorna vazio
+    mockRepo.getConflictingAppointments.mockResolvedValue([])
+    mockRepo.getBlockedSlotsForDate.mockResolvedValue([])
+    mockRepo.update.mockResolvedValue({
+      ...makeExistingAppointment(),
+      scheduledAt: new Date('2026-03-25T09:30:00.000Z'),
+    })
+
+    const result = await service.update('clinic-1', 'appt-1', {
+      scheduledAt: '2026-03-25T09:30:00.000Z',
+    })
+
+    // Verifica que o repositório recebeu o excludeId correto
+    expect(mockRepo.getConflictingAppointments).toHaveBeenCalledWith(
+      'clinic-1',
+      'professional-1',
+      '2026-03-25',
+      'appt-1', // excludeId — obrigatório para evitar falso positivo
+    )
+    expect(result).toMatchObject({ id: 'appt-1' })
+  })
+
+  it('deve bloquear reagendamento em status inválido (completed/cancelled)', async () => {
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment({ status: 'completed' }))
+
+    await expect(
+      service.update('clinic-1', 'appt-1', { scheduledAt: '2026-03-25T14:00:00.000Z' }),
+    ).rejects.toMatchObject({ statusCode: 400, code: 'INVALID_STATUS' })
+  })
+
+  it('não deve verificar conflito de horário quando scheduledAt não é alterado', async () => {
+    mockRepo.findById.mockResolvedValue(makeExistingAppointment())
+    mockRepo.update.mockResolvedValue(makeExistingAppointment({ notes: 'Observação adicionada' }))
+
+    await service.update('clinic-1', 'appt-1', { notes: 'Observação adicionada' })
+
+    // Nenhuma verificação de conflito deve ser feita quando o horário não muda
+    expect(mockRepo.getConflictingAppointments).not.toHaveBeenCalled()
+  })
+})
+
+// ── T-CP01–T-CP05: Novo fluxo pós-atendimento (RN-PA01/02/03/04/05) ──────────
+// Spec: Redesenho do Fluxo Pós-Atendimento — billing criado automaticamente no complete()
+describe('AppointmentsService.complete() — Novo fluxo pós-atendimento (RN-PA)', () => {
+  let service: AppointmentsService
+
+  const apptInProgress = {
+    id: 'appt-cp',
+    clinicId: 'clinic-1',
+    customerId: 'customer-1',
+    serviceId: 'service-1',
+    price: 18000,
+    status: 'in_progress',
+    serviceItems: [],
+  }
+  const apptCompleted = { ...apptInProgress, status: 'completed' }
+  const fullBilling = {
+    id: 'billing-cp',
+    clinicId: 'clinic-1',
+    customerId: 'customer-1',
+    appointmentId: 'appt-cp',
+    serviceId: 'service-1',
+    sourceType: 'APPOINTMENT',
+    amount: 18000,
+    status: 'pending',
+    customer: { id: 'customer-1', name: 'João Silva' },
+    appointment: { id: 'appt-cp', scheduledAt: new Date(), durationMinutes: 60, service: { id: 'service-1', name: 'Massagem' }, professional: { id: 'prof-1', name: 'Ana' } },
+    service: { id: 'service-1', name: 'Massagem' },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AppointmentsService()
+  })
+
+  // T-CP01: caso geral — sem billing prévio → cria billing APPOINTMENT automaticamente
+  it('T-CP01: complete() cria billing APPOINTMENT automaticamente quando não há billing prévio', async () => {
+    mockRepo.findById.mockResolvedValue(apptInProgress)
+    mockRepo.transition.mockResolvedValue(apptCompleted)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
+    mockPrisma.billing.findUnique.mockResolvedValue(null)               // sem billing prévio
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-cp' })
+    mockBillingRepoInstance.findById.mockResolvedValue(fullBilling)
+    mockPrisma.walletEntry.findMany.mockResolvedValue([])
+
+    const result = await service.complete('clinic-1', 'appt-cp')
+
+    expect(mockBillingInstance.createManual).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customerId: 'customer-1',
+        sourceType: 'APPOINTMENT',
+        amount: 18000,
+        appointmentId: 'appt-cp',
+      }),
+      'clinic-1',
+    )
+    expect(result.billing).toMatchObject({ id: 'billing-cp', sourceType: 'APPOINTMENT', status: 'pending' })
+  })
+
+  // T-CP02: packageSession vinculada → sem billing, retorna billing: null
+  it('T-CP02: complete() retorna billing: null quando appointment usa sessão de pacote', async () => {
+    mockRepo.findById.mockResolvedValue(apptInProgress)
+    mockRepo.transition.mockResolvedValue(apptCompleted)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue({ id: 'pkg-session-1' })
+    mockPackagesInstance.redeemSession.mockResolvedValue({})
+
+    const result = await service.complete('clinic-1', 'appt-cp')
+
+    expect(result.billing).toBeNull()
+    expect(result.serviceVouchers).toEqual([])
+    expect(mockBillingInstance.createManual).not.toHaveBeenCalled()
+  })
+
+  // T-CP03: billing já existe com status 'paid' → retorna billing existente, sem criar novo
+  it('T-CP03: complete() retorna billing existente sem criar novo quando já está pago', async () => {
+    const paidBilling = { id: 'existing-billing', status: 'paid' }
+    mockRepo.findById.mockResolvedValue(apptInProgress)
+    mockRepo.transition.mockResolvedValue(apptCompleted)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
+    mockPrisma.billing.findUnique.mockResolvedValue(paidBilling)
+    mockBillingRepoInstance.findById.mockResolvedValue({ ...fullBilling, id: 'existing-billing', status: 'paid' })
+
+    const result = await service.complete('clinic-1', 'appt-cp')
+
+    expect(mockBillingInstance.createManual).not.toHaveBeenCalled()
+    expect(result.billing?.id).toBe('existing-billing')
+    expect(result.serviceVouchers).toEqual([])
+  })
+
+  // T-CP04: billing pending existente (promoção travada) → usa existente, busca vouchers
+  it('T-CP04: complete() usa billing pending existente e busca serviceVouchers normalmente', async () => {
+    const pendingBilling = { id: 'locked-billing', status: 'pending' }
+    mockRepo.findById.mockResolvedValue(apptInProgress)
+    mockRepo.transition.mockResolvedValue(apptCompleted)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
+    mockPrisma.billing.findUnique.mockResolvedValue(pendingBilling)
+    mockBillingRepoInstance.findById.mockResolvedValue({ ...fullBilling, id: 'locked-billing', status: 'pending' })
+    mockPrisma.walletEntry.findMany.mockResolvedValue([
+      { id: 'voucher-1', serviceId: 'service-1', balance: 18000, expirationDate: null, code: 'VCHR-LOCK' },
+    ])
+
+    const result = await service.complete('clinic-1', 'appt-cp')
+
+    expect(mockBillingInstance.createManual).not.toHaveBeenCalled()
+    expect(result.billing?.id).toBe('locked-billing')
+    expect(result.serviceVouchers).toHaveLength(1)
+  })
+
+  // T-CP05: billing criado → serviceVouchers preenchido quando há vouchers SERVICE_PRESALE ativos
+  it('T-CP05: complete() retorna serviceVouchers com voucher SERVICE_PRESALE quando disponível', async () => {
+    mockRepo.findById.mockResolvedValue(apptInProgress)
+    mockRepo.transition.mockResolvedValue(apptCompleted)
+    mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-new' })
+    mockBillingRepoInstance.findById.mockResolvedValue({ ...fullBilling, id: 'billing-new' })
+    mockPrisma.walletEntry.findMany.mockResolvedValue([
+      { id: 'voucher-presale', serviceId: 'service-1', balance: 18000, expirationDate: null, code: 'VCHR-PS01' },
+    ])
+
+    const result = await service.complete('clinic-1', 'appt-cp')
+
+    expect(result.billing).not.toBeNull()
+    expect(result.serviceVouchers).toHaveLength(1)
+    expect(result.serviceVouchers[0]).toMatchObject({ id: 'voucher-presale', code: 'VCHR-PS01' })
   })
 })

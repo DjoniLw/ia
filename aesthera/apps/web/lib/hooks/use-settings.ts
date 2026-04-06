@@ -53,6 +53,7 @@ interface Clinic {
     anamnesisGroups?: AnamnesisGroup[]
     [key: string]: unknown
   } | null
+  chargeVoucherDifference?: boolean
 }
 
 interface BusinessHour {

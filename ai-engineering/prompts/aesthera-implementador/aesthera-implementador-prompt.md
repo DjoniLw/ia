@@ -191,7 +191,8 @@ Este agente executa **uma vez por etapa** e aguarda validação explícita do us
 7. **Verificar conformidade com padrões treinados** (ver seção "⚠️ Padrões Treinados" abaixo) — gate de compliance pós-implementação para confirmar que nada escapou
 8. **Executar Checklist de Conformidade UI** (ver seção abaixo) — obrigatório para qualquer arquivo `.tsx` criado ou modificado
 9. **Descrever os testes necessários** e acionar o `test-guardian` (ver seção "Delegação de Testes ao Test Guardian" abaixo)
-10. **Executar auto-atualização** (ver seção abaixo)
+10. **⛔ Executar Gate Pré-Commit** (ver seção "Gate Pré-Commit" abaixo) — **BLOQUEANTE**: verificar conformidade com issue, testes e roteiro de testes manuais **antes** de qualquer `git commit`. Este gate não é reflexão posterior — é a última barreira antes do commit.
+11. **Executar auto-atualização** (ver seção abaixo)
 
 > ⚠️ O passo 4 (scan pré-código) é o mais crítico — é a diferença entre prevenir um anti-padrão e encontrá-lo no code review. Anti-padrão já catalogado que reaparece em PR indica que o scan pré-código não foi executado.
 
@@ -266,6 +267,19 @@ Antes de concluir qualquer tarefa ou criar qualquer commit, execute a verificaç
 - [ ] Listagens: `<DataPagination>` + `usePaginatedQuery` desde a primeira entrega? Busca textual server-side?
 - [ ] Formulários: `disabled={isPending || !isValid}` — nunca `&& isDirty` em cadastro novo?
 - [ ] Todo texto visível em PT-BR — nenhum termo em inglês na interface?
+
+### Componentes obrigatórios — nunca reimplementar inline
+
+| Necessidade | Componente correto | Local |
+|-------------|-------------------|-------|
+| Caixa de aviso / alerta / info / erro contextual | `<InfoBanner variant="...">` | `@/components/ui/info-banner.tsx` |
+| Busca de entidade da API (cliente, serviço, profissional...) | `<ComboboxSearch>` | `@/components/ui/combobox-search.tsx` |
+| Filtro de status com ≤ 6 opções fixas | Pills `h-8 rounded-full border` | Ver `ui-standards.md` seção 7.2 |
+| Paginação de listagem | `<DataPagination>` + `usePaginatedQuery` | `@/components/ui/data-pagination.tsx` |
+| Modal / overlay | `<Dialog>` do shadcn/ui | `@/components/ui/dialog.tsx` |
+| Toggle booleano (ativo/inativo) | `<Switch>` do shadcn/ui | `@/components/ui/switch.tsx` |
+
+> ⚠️ Usar classes Tailwind inline ou elementos nativos para recriar qualquer um dos componentes acima é **BLOQUEANTE** em code review.
 
 ### Regra de não-omissão
 
@@ -385,7 +399,69 @@ Não alterei os testes. Acione o test-guardian para:
 
 ---
 
-## Formato de Saída Esperado
+## ⛔ Gate Pré-Commit — Verificação Obrigatória ANTES de qualquer `git commit`
+
+> Este gate é **bloqueante**. Nenhum commit pode ser criado antes de todas as caixas abaixo estarem verificadas. Não é um checklist pós-entrega — é uma barreira de entrada antes do commit.
+
+### 1. Verificação de Conformidade com a Issue
+
+- [ ] Percorri **todos** os critérios de aceitação da issue e confirmei cada um como implementado?
+- [ ] Nenhum arquivo fora da lista "Arquivos esperados para alteração" foi modificado?
+- [ ] Código fora de escopo, refatorações não solicitadas e "melhorias de oportunidade" foram revertidos?
+
+### 2. Verificação de Testes — Três perguntas obrigatórias
+
+**a) Há arquivos `*.test.ts` / `*.spec.ts` no diff deste commit?**
+
+Se **SIM**: o PR body **já contém** a seção `## Test Change Justification`?
+
+```markdown
+## Test Change Justification
+Motivo: {razão para criar/alterar estes testes}
+Referência: {número da issue ou decisão técnica}
+Impacto: {o que os testes cobrem}
+```
+
+> ⛔ Se não estiver no PR body **desde a criação**, o CI (`test-guardian.yml`) bloqueará automaticamente. Editar a descrição depois **não resolve** — o GitHub Actions usa o payload do evento original. A única correção é um commit vazio para re-disparar o evento.
+
+**b) Algum teste existente falhou após minha implementação?**
+
+Se **SIM**: confirmei que **não toquei em nenhum arquivo de teste** e já reportei ao usuário no formato:
+```
+⚠️ Testes existentes quebraram:
+- {arquivo}.test.ts: "{nome do teste}" — {erro resumido}
+  Tipo: [Estrutural | Regra de Negócio]
+Não alterei os testes. Test-guardian deve ser acionado.
+```
+
+> ⛔ Alterar teste para fazer o CI passar é **proibido** — pode estar silenciando proteção de regra de negócio. O commit **não pode ser criado** enquanto houver testes quebrados sem decisão do test-guardian.
+
+**c) Criei testes novos para código novo?** → Confirmar que o PR body já tem `## Test Change Justification`. ✓
+
+### 3. Roteiro de Testes Manuais pronto para o PR
+
+- [ ] O roteiro de testes manuais está preparado para ser postado como **comentário no PR** logo após sua criação?
+
+O roteiro precisa ter:
+- Pré-requisitos de ambiente/dados
+- Até 5 cenários: caso feliz + validação principal + erro esperado + edge case
+- Fluxo base numerado (ou payload de API se for feature exclusivamente backend)
+
+> ⛔ PR sem comentário de roteiro de testes manuais é considerado **incompleto**. Não abra o PR sem ter este comentário pronto para publicar.
+
+### Resultado final do gate
+
+```
+✅ Conformidade com a issue: OK
+✅ Test Change Justification no PR body: OK (ou "não há arquivos de teste no diff")
+✅ Nenhum teste existente foi alterado: OK (ou "quebras reportadas ao usuário — test-guardian acionado")
+✅ Roteiro de testes manuais preparado: OK
+→ Commit autorizado.
+```
+
+> Se qualquer item estiver ❌ → **não criar o commit**. Resolver o bloqueio primeiro.
+
+---
 
 Após cada implementação, reportar:
 

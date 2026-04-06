@@ -4,6 +4,7 @@ import type { AdjustWalletEntryDto, CreateWalletEntryDto, ListWalletQuery } from
 import { WalletRepository } from './wallet.repository'
 import type { Tx } from './wallet.repository'
 import { logger } from '../../shared/logger/logger'
+import { randomUUID } from 'crypto'
 
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -12,6 +13,22 @@ function generateCode(): string {
     code += chars[Math.floor(Math.random() * chars.length)]
   }
   return code
+}
+
+function buildWalletCreateDescription(originType: string, originReference?: string): string {
+  const ref = originReference ? ` (${originReference.slice(0, 8)})` : ''
+  switch (originType) {
+    case 'OVERPAYMENT':          return `Troco de recebimento em excesso${ref}`
+    case 'SERVICE_PRESALE':      return `Vale de procedimento gerado por pré-venda${ref}`
+    case 'VOUCHER_SPLIT':        return `Saldo remanescente de voucher${ref}`
+    case 'CASHBACK':             return `Cashback gerado${ref}`
+    case 'MANUAL':               return `Crédito adicionado manualmente${ref}`
+    case 'GIFT':                 return `Presente / Brinde concedido${ref}`
+    case 'REFUND':               return `Estorno creditado${ref}`
+    case 'CASHBACK_PROMOTION':   return `Cashback de promoção${ref}`
+    case 'PACKAGE_PURCHASE':     return `Crédito de compra de pacote${ref}`
+    default:                     return `Crédito gerado${ref}`
+  }
 }
 
 export class WalletService {
@@ -40,7 +57,51 @@ export class WalletService {
   async get(clinicId: string, id: string) {
     const entry = await this.repo.findById(clinicId, id)
     if (!entry) throw new NotFoundError('WalletEntry')
-    return entry
+
+    // Enriquece vale SERVICE_PRESALE com as formas de pagamento da cobrança origem
+    let billingPaymentLines: Array<{ paymentMethod: string; amount: number }> | undefined
+    if (entry.originType === 'SERVICE_PRESALE' && entry.originReference) {
+      const receipt = await prisma.manualReceipt.findUnique({
+        where: { billingId: entry.originReference },
+        include: { lines: { select: { paymentMethod: true, amount: true } } },
+      })
+      if (receipt) {
+        billingPaymentLines = receipt.lines.map((l) => ({ paymentMethod: l.paymentMethod, amount: l.amount }))
+      }
+    }
+
+    return { ...entry, billingPaymentLines }
+  }
+
+  /**
+   * Retorna vouchers SERVICE_PRESALE ativos de um cliente, opcionalmente filtrados por serviceId.
+   * SEC03 — Valida que o customerId pertence à clinicId do JWT antes de retornar dados.
+   */
+  async findActiveServiceVouchers(clinicId: string, customerId: string, serviceId?: string) {
+    // SEC03 — Validar que o customerId pertence à clínica
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, clinicId } })
+    if (!customer) {
+      throw new ForbiddenError('Cliente não encontrado ou não pertence a esta clínica')
+    }
+
+    return prisma.walletEntry.findMany({
+      where: {
+        clinicId,
+        customerId,
+        originType: 'SERVICE_PRESALE',
+        status: 'ACTIVE',
+        OR: [{ expirationDate: null }, { expirationDate: { gte: new Date() } }],
+        ...(serviceId ? { serviceId } : {}),
+      },
+      select: {
+        id: true,
+        serviceId: true,
+        balance: true,
+        expirationDate: true,
+        code: true,
+        service: { select: { id: true, name: true } },
+      },
+    })
   }
 
   /**
@@ -61,6 +122,26 @@ export class WalletService {
     const expiration = dto.expirationDate ? new Date(dto.expirationDate) : undefined
 
     return prisma.$transaction(async (tx) => {
+      // Gerar cobrança que precisa ser paga para o vale ficar ativo
+      const paymentToken = randomUUID().replace(/-/g, '')
+      const dueDate = new Date()
+      dueDate.setUTCDate(dueDate.getUTCDate() + 3)
+
+      const billing = await tx.billing.create({
+        data: {
+          clinicId,
+          customerId: dto.customerId,
+          sourceType: 'WALLET_PURCHASE' as never,
+          amount: dto.value,
+          status: 'pending',
+          paymentMethods: ['pix', 'cash', 'card', 'transfer'],
+          paymentToken,
+          dueDate,
+          notes: dto.notes ? `Venda de ${dto.type === 'CREDIT' ? 'crédito' : 'voucher'}: ${dto.notes}` : `Venda de ${dto.type === 'CREDIT' ? 'crédito' : 'voucher'}`,
+        },
+        select: { id: true, amount: true, status: true, dueDate: true, sourceType: true },
+      })
+
       const entry = await this.repo.create(
         {
           clinicId,
@@ -70,9 +151,10 @@ export class WalletService {
           balance: dto.value,
           code,
           originType: dto.originType,
-          originReference: dto.originReference,
+          originReference: billing.id,   // link para ativar quando billing for pago
           notes: dto.notes,
           expirationDate: expiration,
+          status: 'PENDING',             // ativo apenas após pagamento da cobrança
         },
         tx,
       )
@@ -83,13 +165,13 @@ export class WalletService {
           walletEntryId: entry.id,
           type: 'CREATE',
           value: dto.value,
-          reference: dto.originReference,
-          description: `Carteira criada — origem: ${dto.originType}`,
+          reference: billing.id,
+          description: buildWalletCreateDescription(dto.originType, billing.id) + ' — aguardando pagamento',
         },
         tx,
       )
 
-      return entry
+      return { entry, billing }
     })
   }
 
@@ -109,6 +191,7 @@ export class WalletService {
       notes?: string
       transactionType?: string
       transactionDescription?: string
+      serviceId?: string
     },
     tx?: Tx,
   ) {
@@ -126,6 +209,7 @@ export class WalletService {
           originType: data.originType,
           originReference: data.originReference,
           notes: data.notes,
+          ...(data.serviceId ? { serviceId: data.serviceId } : {}),
         },
         client,
       )
@@ -137,7 +221,7 @@ export class WalletService {
           type: data.transactionType ?? 'CREATE',
           value: data.value,
           reference: data.originReference,
-          description: data.transactionDescription ?? `Carteira criada — origem: ${data.originType}`,
+          description: data.transactionDescription ?? buildWalletCreateDescription(data.originType, data.originReference),
         },
         client,
       )
@@ -181,7 +265,8 @@ export class WalletService {
    * Runs inside a database transaction with a row-level lock (FOR UPDATE) to prevent
    * double spending under concurrent requests.
    * Returns: { entry, newEntry (if split), remaining (if insufficient) }
-   * Uses Redis distributed lock to prevent concurrent usage of the same wallet entry.
+   * SEC04 — Busca billing por { id, clinicId } para proteção multi-tenant.
+   * RN10 — Validação de serviceId: voucher com serviceId só pode ser usado em billing com mesmo serviceId.
    */
   async use(
     clinicId: string,
@@ -202,11 +287,50 @@ export class WalletService {
         throw new AppError('Este voucher não está ativo', 400, 'WALLET_NOT_ACTIVE')
       }
 
-      if (entry.balance < amount) {
+      // Verificar se voucher expirou
+      if (entry.expirationDate && new Date(entry.expirationDate) < new Date()) {
+        throw new AppError('Este voucher está vencido', 400, 'VOUCHER_EXPIRED')
+      }
+
+      // RN10 — Se voucher tem serviceId, validar que billing tem o mesmo serviceId
+      // RN-PV01 — Vale SERVICE_PRESALE não pode ser usado para pagar uma cobrança PRESALE
+      //            (pré-venda não pode ser paga com outra pré-venda)
+      if ((entry as { originType?: string }).originType === 'SERVICE_PRESALE' || (entry as { serviceId?: string | null }).serviceId) {
+        // SEC04 — Buscar billing por { id, clinicId }
+        const billing = await tx.billing.findFirst({ where: { id: billingId, clinicId } })
+        if (!billing) throw new NotFoundError('Billing')
+
+        // RN-PV01: bloquear uso de SERVICE_PRESALE para pagar cobrança PRESALE
+        if (
+          (entry as { originType?: string }).originType === 'SERVICE_PRESALE' &&
+          billing.sourceType === 'PRESALE'
+        ) {
+          throw new AppError(
+            'Vale de pré-venda de serviço não pode ser utilizado para pagar outra pré-venda',
+            400,
+            'PRESALE_VOUCHER_CANNOT_PAY_PRESALE',
+          )
+        }
+
+        if ((entry as { serviceId?: string | null }).serviceId && billing.serviceId !== (entry as { serviceId?: string | null }).serviceId) {
+          throw new AppError(
+            'Este vale não pode ser utilizado para este serviço',
+            400,
+            'VOUCHER_NOT_APPLICABLE_FOR_SERVICE',
+          )
+        }
+      }
+
+      // SERVICE_PRESALE: o serviço já foi pago na pré-venda; não importa o valor da cobrança.
+      // Consumir o saldo disponível integralmente e marcar a cobrança como paga.
+      const isServicePresale = (entry as { originType?: string }).originType === 'SERVICE_PRESALE'
+      if (!isServicePresale && entry.balance < amount) {
         throw new AppError('Saldo insuficiente no voucher', 400, 'INSUFFICIENT_BALANCE')
       }
 
-      const leftover = entry.balance - amount
+      // Para SERVICE_PRESALE, usar o saldo real do voucher (não o valor da cobrança)
+      const usedAmount = isServicePresale ? entry.balance : amount
+      const leftover = entry.balance - usedAmount
 
       // Mark current entry as USED (full balance consumed)
       const updatedEntry = await this.repo.updateBalance(entry.id, 0, 'USED', tx)
@@ -216,7 +340,7 @@ export class WalletService {
           clinicId,
           walletEntryId: entry.id,
           type: 'USE',
-          value: amount,
+          value: usedAmount,
           reference: billingId,
           description: `Usado em cobrança ${billingId}`,
         },

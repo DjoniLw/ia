@@ -16,7 +16,7 @@ const paymentsService = new PaymentsService()
 const ledgerService = new LedgerService()
 const notificationsService = new NotificationsService()
 
-// ── appointment.completed → create billing (handled in appointments.service) ──
+// ── appointment.completed → billing NÃO é criado automaticamente. Frontend abre CompleteAppointmentModal. ──
 // ── billing.created → create payment intent ────────────────────────────────────
 eventBus.subscribe('billing.created', async (event: DomainEvent) => {
   const billingId = event.payload.billingId as string

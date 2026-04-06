@@ -95,12 +95,15 @@ export interface BillingAppointment {
 
 export type BillingStatus = 'pending' | 'paid' | 'overdue' | 'cancelled'
 
+export type BillingSourceType = 'APPOINTMENT' | 'PRESALE' | 'MANUAL' | 'PACKAGE_SALE' | 'PRODUCT_SALE' | 'WALLET_PURCHASE'
+
 export interface Billing {
   id: string
   amount: number
   status: BillingStatus
+  sourceType: BillingSourceType
   paymentLink: string | null
-  paymentToken: string
+  paymentToken?: string
   dueDate: string
   paidAt: string | null
   overdueAt: string | null
@@ -108,8 +111,44 @@ export interface Billing {
   createdAt: string
   lockedPromotionCode?: string | null
   originalAmount?: number | null
+  serviceId?: string | null
+  service?: { id: string; name: string } | null
   customer: AppointmentCustomer
   appointment: BillingAppointment | null
+  billingEvents?: Array<{
+    id: string
+    event: string
+    fromStatus: string | null
+    toStatus: string | null
+    notes: string | null
+    createdAt: string
+  }>
+  manualReceipt?: {
+    id: string
+    totalPaid: number
+    receivedAt: string
+    notes?: string | null
+    lines: Array<{
+      id: string
+      paymentMethod: string
+      amount: number
+      walletEntryId?: string | null
+      walletEntry?: { id: string; code: string; originType: string } | null
+    }>
+  } | null
+}
+
+export interface CompleteResult {
+  appointment: Appointment
+  billing: Billing | null
+  serviceVouchers: Array<{
+    id: string
+    serviceId: string | null
+    balance: number
+    expirationDate: string | null
+    code: string
+    service: { id: string; name: string } | null
+  }>
 }
 
 interface Paginated<T> {
@@ -118,6 +157,8 @@ interface Paginated<T> {
   page: number
   limit: number
   totalAmount?: number
+  totalCashReceived?: number
+  paymentMethodBreakdown?: Array<{ paymentMethod: string; total: number }>
 }
 
 // ──── Appointments ────────────────────────────────────────────────────────────
@@ -260,6 +301,7 @@ export function useAppointmentTransition(id: string) {
       onSuccess: () => {
         invalidate()
         qc.invalidateQueries({ queryKey: ['billing'] })
+        qc.invalidateQueries({ queryKey: ['wallet'] })
       },
     }),
     cancel: useMutation({
@@ -284,10 +326,30 @@ export function useBilling(params?: Record<string, string>, options?: { enabled?
   })
 }
 
+export function useOneBilling(id: string | null) {
+  return useQuery<Billing>({
+    queryKey: ['billing', id],
+    queryFn: () => api.get(`/billing/${id}`).then((r) => r.data),
+    enabled: !!id,
+  })
+}
+
 export function useCancelBilling(id: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api.post(`/billing/${id}/cancel`).then((r) => r.data),
+    mutationFn: (reason?: string) =>
+      api.post(`/billing/${id}/cancel`, reason ? { reason } : {}).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing'] })
+      qc.invalidateQueries({ queryKey: ['wallet'] })
+    },
+  })
+}
+
+export function useReopenBilling(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (notes?: string) => api.post(`/billing/${id}/reopen`, { notes }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['billing'] }),
   })
 }
@@ -349,8 +411,30 @@ export function useCreateManualReceipt(billingId: string) {
     mutationFn: (data) => api.post(`/billing/${billingId}/receive`, data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['billing'] })
+      qc.invalidateQueries({ queryKey: ['wallet'] })
       // Força re-fetch das promoções disponíveis — usesCount pode ter mudado após aplicação
       qc.invalidateQueries({ queryKey: ['promotions-for-service'] })
+    },
+  })
+}
+
+export interface CreateBillingPayload {
+  customerId: string
+  sourceType: BillingSourceType
+  amount: number
+  serviceId?: string
+  appointmentId?: string
+  dueDate?: string
+  notes?: string
+}
+
+export function useCreateBilling() {
+  const qc = useQueryClient()
+  return useMutation<Billing, Error, CreateBillingPayload>({
+    mutationFn: (data) => api.post('/billing', data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing'] })
+      qc.invalidateQueries({ queryKey: ['appointments'] })
     },
   })
 }

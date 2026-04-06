@@ -29,6 +29,7 @@ export const UpdateClinicDto = z.object({
     })
     .optional(),
   settings: z.record(z.unknown()).optional(),
+  chargeVoucherDifference: z.boolean().optional(),
 })
 
 export type UpdateClinicDto = z.infer<typeof UpdateClinicDto>
