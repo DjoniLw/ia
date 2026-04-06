@@ -601,19 +601,21 @@ function WalletTransactionList({ entry }: { entry: WalletEntry }) {
       {expanded && (
         <div className="mt-1 space-y-1">
           {entry.transactions.map((t) => (
-            <div key={t.id} className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-1.5 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground">
+            <div key={t.id} className="rounded-md bg-muted/30 px-3 py-2 text-xs space-y-0.5">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-medium text-foreground leading-tight">
                   {WALLET_TRANSACTION_LABELS[t.type as keyof typeof WALLET_TRANSACTION_LABELS] ?? 'Desconhecido'}
                 </span>
-                {t.description && <span className="text-muted-foreground">{t.description}</span>}
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0) ? 'text-red-600' : 'text-green-600'}>
+                <span className={`shrink-0 font-semibold tabular-nums ${t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0) ? 'text-red-600' : 'text-green-600'}`}>
                   {t.type === 'USE' || (t.type === 'ADJUST' && t.value < 0) ? '-' : '+'}
                   {formatCurrency(Math.abs(t.value))}
                 </span>
-                <span className="text-muted-foreground">{formatDateTime(t.createdAt)}</span>
+              </div>
+              <div className="flex items-start justify-between gap-2">
+                {t.description
+                  ? <span className="text-muted-foreground leading-tight break-words min-w-0">{t.description}</span>
+                  : <span />}
+                <span className="shrink-0 text-muted-foreground tabular-nums">{formatDateTime(t.createdAt)}</span>
               </div>
             </div>
           ))}
