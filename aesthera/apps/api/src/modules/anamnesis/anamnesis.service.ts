@@ -321,8 +321,9 @@ export const anamnesisService = new Proxy({} as AnamnesisService, {
   },
 })
 
-/** Transforma snapshot de perguntas + respostas no formato { groupName, entries } esperado pelo prontuário. */
+/** Transforma snapshot de perguntas + respostas no formato { groupId, groupName, entries } esperado pelo prontuário. */
 function buildClinicalRecordContent(request: {
+  groupId: string
   groupName: string
   questionsSnapshot: unknown
   staffAnswers: unknown
@@ -339,7 +340,7 @@ function buildClinicalRecordContent(request: {
       return { question: q.text, answer: String(answer), type: q.type }
     })
 
-  return { groupName: request.groupName, entries }
+  return { groupId: request.groupId, groupName: request.groupName, entries }
 }
 
 /** Cria o prontuário clínico automaticamente após anamnese assinada. */

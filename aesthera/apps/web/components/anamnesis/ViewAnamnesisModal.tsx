@@ -1,9 +1,9 @@
 'use client'
 
-import { ClipboardList, PenLine } from 'lucide-react'
+import { ClipboardList, Loader2, PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
-import { type AnamnesisRequest } from '@/lib/hooks/use-resources'
+import { type AnamnesisRequest, useAnamnesisRequestById } from '@/lib/hooks/use-resources'
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Pendente',
@@ -43,10 +43,14 @@ interface Props {
 }
 
 export function ViewAnamnesisModal({ request, onClose }: Props) {
-  const questions = (request.questionsSnapshot ?? []) as unknown as QuestionEntry[]
-  const answers = getAnswers(request)
-  const signedDate = request.signedAt
-    ? new Date(request.signedAt).toLocaleString('pt-BR', {
+  // Fetch full record (list endpoint omits questionsSnapshot/clientAnswers for perf)
+  const { data: full, isLoading } = useAnamnesisRequestById(request.id)
+  const record = full ?? request
+
+  const questions = (record.questionsSnapshot ?? []) as unknown as QuestionEntry[]
+  const answers = getAnswers(record)
+  const signedDate = record.signedAt
+    ? new Date(record.signedAt).toLocaleString('pt-BR', {
         day: '2-digit', month: 'long', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })
@@ -63,23 +67,27 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
         {/* Cabeçalho */}
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
-            <p className="text-sm font-medium">{request.customer.name}</p>
-            <p className="text-xs text-muted-foreground">{request.groupName}</p>
+            <p className="text-sm font-medium">{record.customer.name}</p>
+            <p className="text-xs text-muted-foreground">{record.groupName}</p>
           </div>
           <span
             className={[
               'rounded-full px-2.5 py-0.5 text-xs font-medium',
-              STATUS_STYLE[request.status] ?? 'bg-gray-100 text-gray-500',
+              STATUS_STYLE[record.status] ?? 'bg-gray-100 text-gray-500',
             ].join(' ')}
           >
-            {STATUS_LABEL[request.status] ?? request.status}
+            {STATUS_LABEL[record.status] ?? record.status}
           </span>
         </div>
 
         <hr />
 
-        {/* Perguntas e respostas */}
-        {questions.filter((q) => q.type !== 'separator').length === 0 ? (
+        {/* Loading state */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : questions.filter((q) => q.type !== 'separator').length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
             Sem perguntas registradas.
           </p>
@@ -97,7 +105,7 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
         )}
 
         {/* Assinatura */}
-        {request.signature && (
+        {record.signature && (
           <>
             <hr />
             <div className="space-y-2">
@@ -108,7 +116,7 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
               <div className="rounded-lg border bg-white p-2 flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={request.signature}
+                  src={record.signature}
                   alt="Assinatura do paciente"
                   className="max-h-24 object-contain"
                 />

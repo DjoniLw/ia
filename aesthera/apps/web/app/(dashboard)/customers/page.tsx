@@ -2006,6 +2006,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
       qc.invalidateQueries({ queryKey: ['customer-history', customer.id] }),
       qc.invalidateQueries({ queryKey: ['clinical-records', customer.id] }),
       qc.invalidateQueries({ queryKey: ['customer-contracts', customer.id] }),
+      qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
       qc.invalidateQueries({ queryKey: ['wallet'] }),
       qc.invalidateQueries({ queryKey: ['billing'] }),
     ])
@@ -2032,6 +2033,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const [simpleRecord, setSimpleRecord] = useState({ title: '', content: '', performedAt: '' })
   // for anamnesis type
   const [anamnesisAnswers, setAnamnesisAnswers] = useState<Record<string, string>>({})
+  const [anamnesisPerformedAt, setAnamnesisPerformedAt] = useState('')
   const [entrySubmitting, setEntrySubmitting] = useState(false)
 
   // edit record
@@ -2039,6 +2041,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const [editValues, setEditValues] = useState({ title: '', content: '', performedAt: '' })
   // edit anamnesis answers (used when editingRecord.type === 'anamnesis')
   const [editAnamnesisAnswers, setEditAnamnesisAnswers] = useState<Record<string, string>>({})
+  const [editAnamnesisPerformedAt, setEditAnamnesisPerformedAt] = useState('')
   // group used in the anamnesis being edited (questions to show in edit form)
   const [editAnamnesisGroup, setEditAnamnesisGroup] = useState<AnamnesisGroup | null>(null)
   const updateRecord = useUpdateClinicalRecord(editingRecord?.id ?? '')
@@ -2055,6 +2058,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
     setSelectedGroupId(anamnesisGroups?.[0]?.id ?? '')
     setSimpleRecord({ title: '', content: '', performedAt: '' })
     setAnamnesisAnswers({})
+    setAnamnesisPerformedAt('')
     setShowEntryForm(true)
   }
 
@@ -2063,19 +2067,24 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
     if (r.type === 'anamnesis') {
       // Parse stored content: { groupId?, groupName?, entries: [...] } OR legacy flat array
       let storedGroupId: string | undefined
+      let storedGroupName: string | undefined
       let entries: Array<{ question: string; answer: string; type?: string }> = []
       try {
-        const parsed = JSON.parse(r.content) as { groupId?: string; entries?: typeof entries } | typeof entries
+        const parsed = JSON.parse(r.content) as { groupId?: string; groupName?: string; entries?: typeof entries } | typeof entries
         if (Array.isArray(parsed)) {
           entries = parsed
         } else {
           storedGroupId = parsed.groupId
+          storedGroupName = parsed.groupName
           entries = parsed.entries ?? []
         }
       } catch (err) { console.warn('Failed to parse anamnesis content for record', r.id, '– displaying empty edit form', err) }
 
-      // Find the group used for this anamnesis (by stored id, else first group)
-      const group = (storedGroupId ? anamnesisGroups?.find((g) => g.id === storedGroupId) : null) ?? anamnesisGroups?.[0] ?? null
+      // Find the group used for this anamnesis (by stored id, then by name, else first group)
+      const group = (storedGroupId ? anamnesisGroups?.find((g) => g.id === storedGroupId) : null)
+        ?? (storedGroupName ? anamnesisGroups?.find((g) => g.name === storedGroupName) : null)
+        ?? anamnesisGroups?.[0]
+        ?? null
       setEditAnamnesisGroup(group)
 
       const questions = (group?.questions ?? []).filter((q): q is AnamnesisQuestion => q.type !== 'separator')
@@ -2097,6 +2106,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         }
       }
       setEditAnamnesisAnswers(answers)
+      setEditAnamnesisPerformedAt(r.performedAt ? r.performedAt.slice(0, 10) : '')
     } else {
       setEditValues({
         title: r.title,
@@ -2129,6 +2139,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         await updateRecord.mutateAsync({
           customerId: customer.id,
           content: JSON.stringify({ groupId: editAnamnesisGroup?.id, groupName: editAnamnesisGroup?.name, entries }),
+          performedAt: editAnamnesisPerformedAt ? new Date(editAnamnesisPerformedAt + 'T12:00:00').toISOString() : undefined,
         })
         toast.success('Anamnese atualizada')
       } else {
@@ -2172,6 +2183,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           title: `Anamnese${selectedGroup ? ` – ${selectedGroup.name}` : ''}`,
           content: JSON.stringify({ groupId: selectedGroup?.id, groupName: selectedGroup?.name, entries }),
           type: 'anamnesis',
+          performedAt: anamnesisPerformedAt ? new Date(anamnesisPerformedAt + 'T12:00:00').toISOString() : null,
         })
       } else {
         if (!simpleRecord.title.trim()) { toast.error('Preencha o título'); return }
@@ -2186,6 +2198,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
       }
       setShowEntryForm(false)
       setAnamnesisAnswers({})
+      setAnamnesisPerformedAt('')
       setSimpleRecord({ title: '', content: '', performedAt: '' })
       toast.success('Lançamento salvo')
     } catch (err: unknown) {
@@ -2438,6 +2451,17 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                         </div>
                       )}
 
+                      {/* Date of evaluation */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Data de realização (opcional)</label>
+                        <input
+                          type="date"
+                          value={anamnesisPerformedAt}
+                          onChange={(e) => setAnamnesisPerformedAt(e.target.value)}
+                          className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                        />
+                      </div>
+
                       {/* Questions + separators from selected group */}
                       {(selectedGroup?.questions ?? []).length === 0 ? (
                         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/10 dark:text-amber-300">
@@ -2680,6 +2704,16 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               <p className="text-xs font-semibold text-primary">
                 Editar Anamnese{editAnamnesisGroup ? ` – ${editAnamnesisGroup.name}` : ''}
               </p>
+              {/* Date of evaluation */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Data de realização (opcional)</label>
+                <input
+                  type="date"
+                  value={editAnamnesisPerformedAt}
+                  onChange={(e) => setEditAnamnesisPerformedAt(e.target.value)}
+                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                />
+              </div>
               {templateLoading ? (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />

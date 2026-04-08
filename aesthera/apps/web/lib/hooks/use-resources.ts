@@ -969,6 +969,15 @@ export function useAnamnesisRequests(params: {
   })
 }
 
+export function useAnamnesisRequestById(id: string | null) {
+  return useQuery<AnamnesisRequest>({
+    queryKey: ['anamnesis-request', id],
+    queryFn: () => api.get(`/anamnesis-requests/${id}`).then((r) => r.data),
+    enabled: !!id,
+    staleTime: 0,
+  })
+}
+
 export function useCreateAnamnesisRequest() {
   const qc = useQueryClient()
   return useMutation({
