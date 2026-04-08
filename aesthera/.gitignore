@@ -15,7 +15,7 @@ out/
 .env.*.local
 
 # Prisma
-apps/api/prisma/migrations/
+# NOTE: migrations/ must be tracked in git — prisma migrate deploy depends on them
 
 # Logs
 *.log
