@@ -912,3 +912,85 @@ export function useDisconnectWhatsapp() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['clinic-whatsapp'] }),
   })
 }
+
+// ─── Anamnesis Requests ───────────────────────────────────────────────────────
+
+export type AnamnesisRequestMode = 'blank' | 'prefilled'
+export type AnamnesisRequestStatus = 'pending' | 'signed' | 'expired' | 'correction_requested' | 'cancelled'
+
+export interface AnamnesisRequest {
+  id: string
+  clinicId: string
+  customerId: string
+  mode: AnamnesisRequestMode
+  status: AnamnesisRequestStatus
+  groupId: string
+  groupName: string
+  questionsSnapshot: Record<string, unknown>[]
+  staffAnswers: Record<string, unknown> | null
+  clientAnswers: Record<string, unknown> | null
+  signature: string | null
+  signedAt: string | null
+  expiresAt: string
+  createdAt: string
+  customer: { id: string; name: string }
+  createdBy: { id: string; name: string }
+  clinicalRecord: { id: string } | null
+}
+
+export interface AnamnesisRequestsPage {
+  items: AnamnesisRequest[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface CreateAnamnesisRequestInput {
+  customerId: string
+  mode: AnamnesisRequestMode
+  groupId: string
+  groupName: string
+  questionsSnapshot: Record<string, unknown>[]
+  staffAnswers?: Record<string, unknown> | null
+  channel?: 'whatsapp' | 'email'
+}
+
+export function useAnamnesisRequests(params: {
+  customerId?: string
+  status?: AnamnesisRequestStatus
+  page?: number
+  limit?: number
+}) {
+  return useQuery<AnamnesisRequestsPage>({
+    queryKey: ['anamnesis-requests', params],
+    queryFn: () =>
+      api.get('/anamnesis-requests', { params }).then((r) => r.data),
+  })
+}
+
+export function useCreateAnamnesisRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateAnamnesisRequestInput) =>
+      api.post('/anamnesis-requests', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useResendAnamnesis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, channel }: { id: string; channel?: 'whatsapp' | 'email' }) =>
+      api.post(`/anamnesis-requests/${id}/resend`, { channel }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useCancelAnamnesis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/anamnesis-requests/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}

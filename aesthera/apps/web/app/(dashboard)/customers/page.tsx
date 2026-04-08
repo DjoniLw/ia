@@ -44,6 +44,10 @@ import {
   useContractTemplates,
   type CustomerContract,
   type ContractView,
+  useAnamnesisRequests,
+  useCancelAnamnesis,
+  useResendAnamnesis,
+  type AnamnesisRequest,
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
@@ -62,6 +66,8 @@ import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
 import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
+import { SendAnamnesisDialog } from '@/components/anamnesis/SendAnamnesisDialog'
+import { ViewAnamnesisModal } from '@/components/anamnesis/ViewAnamnesisModal'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import {
   WALLET_ENTRY_TYPE_LABELS,
@@ -2008,6 +2014,11 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
   // ── clinical / prontuário ──────────────────────────────────────────────
   const clinicalRecords = useClinicalRecords(customer.id)
+  const anamnesisRequestsQuery = useAnamnesisRequests({ customerId: customer.id })
+  const cancelAnamnesis = useCancelAnamnesis()
+  const resendAnamnesis = useResendAnamnesis()
+  const [showSendAnamnesisDialog, setShowSendAnamnesisDialog] = useState(false)
+  const [viewingAnamnesis, setViewingAnamnesis] = useState<AnamnesisRequest | null>(null)
   const { data: anamnesisGroups, isLoading: groupsLoading } = useAnamnesisGroups()
   const createRecord = useCreateClinicalRecord()
 
@@ -2899,6 +2910,93 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               })}
             </div>
           )}
+
+          {/* ── Fichas de Anamnese Digital ── */}
+          <div className="space-y-2 pt-2 border-t">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Anamneses por Link
+              </p>
+              <button
+                onClick={() => setShowSendAnamnesisDialog(true)}
+                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+              >
+                <Plus className="h-3 w-3" />
+                Enviar ficha
+              </button>
+            </div>
+
+            {anamnesisRequestsQuery.isLoading ? (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : !anamnesisRequestsQuery.data?.items.length ? (
+              <p className="rounded-lg border bg-muted/10 px-3 py-3 text-center text-xs text-muted-foreground">
+                Nenhuma ficha enviada. Clique em &quot;Enviar ficha&quot; para enviar uma anamnese por link.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {anamnesisRequestsQuery.data.items.map((req) => {
+                  const statusLabel: Record<string, string> = {
+                    pending: 'Pendente', signed: 'Assinado', expired: 'Expirado',
+                    correction_requested: 'Correção', cancelled: 'Cancelado',
+                  }
+                  const statusColor: Record<string, string> = {
+                    pending: 'bg-amber-100 text-amber-700',
+                    signed: 'bg-emerald-100 text-emerald-700',
+                    expired: 'bg-gray-100 text-gray-500',
+                    correction_requested: 'bg-blue-100 text-blue-700',
+                    cancelled: 'bg-red-100 text-red-500',
+                  }
+                  return (
+                    <div key={req.id} className="rounded-lg border bg-muted/10 p-2.5 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium truncate">{req.groupName}</p>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColor[req.status] ?? 'bg-muted text-muted-foreground'}`}>
+                          {statusLabel[req.status] ?? req.status}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/70">
+                        {new Date(req.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {req.signedAt && ` · Assinado em ${new Date(req.signedAt).toLocaleDateString('pt-BR')}`}
+                      </p>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <button
+                          onClick={() => setViewingAnamnesis(req)}
+                          className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50"
+                        >
+                          <Eye className="h-3 w-3" />
+                          Ver
+                        </button>
+                        {req.status === 'pending' && (
+                          <button
+                            onClick={() => void resendAnamnesis.mutateAsync({ id: req.id }).then(() => toast.success('Ficha reenviada.'))}
+                            disabled={resendAnamnesis.isPending}
+                            className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+                          >
+                            <Send className="h-3 w-3" />
+                            Reenviar
+                          </button>
+                        )}
+                        {(req.status === 'pending' || req.status === 'correction_requested') && (
+                          <button
+                            onClick={() => {
+                              void cancelAnamnesis.mutateAsync(req.id).then(() => toast.success('Ficha cancelada.'))
+                            }}
+                            disabled={cancelAnamnesis.isPending}
+                            className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            <Ban className="h-3 w-3" />
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -2914,6 +3012,26 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           name: customer.name,
           bodyDataConsentAt: customer.bodyDataConsentAt,
         }} />
+      )}
+
+      {showSendAnamnesisDialog && (
+        <SendAnamnesisDialog
+          customerId={customer.id}
+          customerName={customer.name}
+          onClose={() => setShowSendAnamnesisDialog(false)}
+          onSuccess={() => {
+            setShowSendAnamnesisDialog(false)
+            void anamnesisRequestsQuery.refetch()
+            toast.success('Ficha de anamnese criada com sucesso.')
+          }}
+        />
+      )}
+
+      {viewingAnamnesis && (
+        <ViewAnamnesisModal
+          request={viewingAnamnesis}
+          onClose={() => setViewingAnamnesis(null)}
+        />
       )}
 
       <div className="flex justify-end gap-2 border-t pt-3">

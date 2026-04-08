@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
-import { NotFoundError } from '../../shared/errors/app-error'
+import { ConflictError, NotFoundError } from '../../shared/errors/app-error'
 import { CreateClinicalRecordDto, ListClinicalRecordsQuery, UpdateClinicalRecordDto } from './clinical.dto'
 import { ClinicalRepository } from './clinical.repository'
 import { createAuditLog } from '../../shared/audit'
@@ -33,6 +33,10 @@ export async function clinicalRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }
     const existing = await repo.findById(req.clinicId, id)
     if (!existing) throw new NotFoundError('ClinicalRecord')
+    // CA08: registros vinculados a uma anamnese são imutáveis
+    if (existing.anamnesisRequestId) {
+      throw new ConflictError('Registros de anamnese são imutáveis e não podem ser editados manualmente.')
+    }
     const dto = UpdateClinicalRecordDto.parse(req.body)
     const updated = await repo.update(req.clinicId, id, dto)
     await createAuditLog({

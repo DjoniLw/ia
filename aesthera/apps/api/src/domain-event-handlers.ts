@@ -10,6 +10,7 @@ import { logger } from './shared/logger/logger'
 import { PaymentsService } from './modules/payments/payments.service'
 import { LedgerService } from './modules/ledger/ledger.service'
 import { NotificationsService } from './modules/notifications/notifications.service'
+import { handleAnamnesisSignedEvent } from './modules/anamnesis/anamnesis.service'
 import { prisma } from './database/prisma/client'
 
 const paymentsService = new PaymentsService()
@@ -145,3 +146,19 @@ eventBus.subscribe('appointment.confirmed', async (event: DomainEvent) => {
 })
 
 logger.info('Domain event handlers registered')
+
+// ── anamnesis.signed → criar ClinicalRecord automaticamente ───────────────────
+eventBus.subscribe('anamnesis.signed', async (event: DomainEvent) => {
+  const { anamnesisRequestId, clinicId, customerId, groupName, signedAt } = event.payload as {
+    anamnesisRequestId: string
+    clinicId: string
+    customerId: string
+    groupName: string
+    signedAt: string
+  }
+  try {
+    await handleAnamnesisSignedEvent({ anamnesisRequestId, clinicId, customerId, groupName, signedAt })
+  } catch (err) {
+    logger.error({ err, anamnesisRequestId }, 'Falha ao criar ClinicalRecord após anamnese assinada')
+  }
+})
