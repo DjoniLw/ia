@@ -178,29 +178,65 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                         ))}
                       </div>
                     ) : q.type === 'multiple' && q.options ? (
-                      <div className="flex flex-wrap gap-2">
-                        {q.options.map((opt) => {
-                          const selected = (staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).includes(opt)
-                          return (
-                            <button
-                              key={opt}
-                              type="button"
-                              onClick={() => {
+                      <div className="space-y-1">
+                        {(q.options ?? []).map((opt, idx) => (
+                          <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(opt)}
+                              onChange={(e) => {
                                 const current = (staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-                                const next = selected ? current.filter((s) => s !== opt) : [...current, opt]
+                                const next = e.target.checked ? [...current, opt] : current.filter((s) => s !== opt)
                                 setStaffAnswers((p) => ({ ...p, [q.id]: next.join(', ') }))
                               }}
-                              className={[
-                                'rounded-full px-3 py-1 text-xs border transition-colors',
-                                selected
-                                  ? 'bg-primary text-primary-foreground border-primary'
-                                  : 'bg-background hover:bg-muted/50',
-                              ].join(' ')}
-                            >
-                              {opt}
-                            </button>
-                          )
-                        })}
+                            />
+                            {(q.optionImages ?? [])[idx] && (
+                              <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover" />
+                            )}
+                            {opt}
+                          </label>
+                        ))}
+                        {(q.options ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                        )}
+                      </div>
+                    ) : q.type === 'select' ? (
+                      <div className="space-y-1.5">
+                        {(q.selectOptions ?? []).map((opt) => (
+                          <div key={opt.label} className="space-y-1">
+                            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`staff-select-${q.id}`}
+                                value={opt.label}
+                                checked={staffAnswers[q.id] === opt.label}
+                                onChange={() => {
+                                  setStaffAnswers((p) => {
+                                    const next = { ...p, [q.id]: opt.label }
+                                    if (!opt.withDescription) delete next[q.id + '__desc']
+                                    return next
+                                  })
+                                }}
+                              />
+                              {opt.imageUrl && (
+                                <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                              )}
+                              {opt.label}
+                            </label>
+                            {opt.withDescription && staffAnswers[q.id] === opt.label && (
+                              <textarea
+                                value={staffAnswers[q.id + '__desc'] ?? ''}
+                                onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value }))}
+                                rows={2}
+                                placeholder="Descreva…"
+                                className="ml-5 w-[calc(100%-1.25rem)] rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                              />
+                            )}
+                          </div>
+                        ))}
+                        {(q.selectOptions ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                        )}
                       </div>
                     ) : (
                       <input
