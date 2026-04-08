@@ -2390,13 +2390,14 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prontuário</p>
             </div>
-            <button
+            <Button
+              size="sm"
+              className="h-7 px-2 text-xs"
               onClick={openEntryForm}
-              className="flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="h-3 w-3 mr-1" />
               Novo lançamento
-            </button>
+            </Button>
           </div>
 
           {/* ── New-entry dialog ── */}
