@@ -2017,6 +2017,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const anamnesisRequestsQuery = useAnamnesisRequests({ customerId: customer.id, page: anamnesisPage, limit: anamnesisPageSize })
   const cancelAnamnesis = useCancelAnamnesis()
   const [showSendAnamnesisDialog, setShowSendAnamnesisDialog] = useState(false)
+  const [sendFromRecordId, setSendFromRecordId] = useState<string | null>(null)
   const [resendingAnamnesis, setResendingAnamnesis] = useState<AnamnesisRequest | null>(null)
   const [viewingAnamnesis, setViewingAnamnesis] = useState<AnamnesisRequest | null>(null)
   const { data: anamnesisGroups, isLoading: groupsLoading } = useAnamnesisGroups()
@@ -2996,28 +2997,26 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
                         <div className="flex items-center gap-2 flex-wrap pt-1">
                           {/* Action buttons */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => openEditRecord(r)}
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Editar
+                          </Button>
                           {!r.anamnesisRequestId && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-6 px-2 text-[10px]"
-                                onClick={() => openEditRecord(r)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                                Editar
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-[10px] text-destructive hover:text-destructive"
-                                disabled={deleteRecord.isPending}
-                                onClick={() => setDeletingRecord(r)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                Excluir
-                              </Button>
-                            </>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] text-destructive hover:text-destructive"
+                              disabled={deleteRecord.isPending}
+                              onClick={() => setDeletingRecord(r)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Excluir
+                            </Button>
                           )}
                           {/* Enviar para cliente (only for anamnesis manual records) */}
                           {r.type === 'anamnesis' && !r.anamnesisRequestId && (
@@ -3026,11 +3025,10 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                               size="sm"
                               className="h-6 px-2 text-[10px]"
                               onClick={() => {
-                                if (isAnamnesisEmpty) {
-                                  setShowSendAnamnesisDialog(true)
-                                } else if (missingRequired.length > 0) {
+                                if (missingRequired.length > 0) {
                                   toast.warning(`Anamnese incompleta: ${missingRequired.map((q) => q.text).join(', ')} são obrigatórios.`)
                                 } else {
+                                  setSendFromRecordId(r.id)
                                   setShowSendAnamnesisDialog(true)
                                 }
                               }}
@@ -3206,11 +3204,23 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           customerName={customer.name}
           defaultPhone={customer.phone}
           defaultEmail={customer.email}
-          onClose={() => setShowSendAnamnesisDialog(false)}
-          onSuccess={() => {
+          onClose={() => {
             setShowSendAnamnesisDialog(false)
+            setSendFromRecordId(null)
+          }}
+          onSuccess={async () => {
+            setShowSendAnamnesisDialog(false)
+            if (sendFromRecordId) {
+              try {
+                await deleteRecord.mutateAsync({ id: sendFromRecordId, customerId: customer.id })
+              } catch {
+                // não bloquear o fluxo se a exclusão falhar
+              }
+              setSendFromRecordId(null)
+            }
             void anamnesisRequestsQuery.refetch()
-            toast.success('Ficha de anamnese criada com sucesso.')
+            void clinicalRecords.refetch()
+            toast.success('Ficha enviada ao cliente.')
           }}
         />
       )}
