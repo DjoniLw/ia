@@ -378,6 +378,7 @@ export interface ClinicalRecord {
   performedAt: string | null
   createdAt: string
   updatedAt: string
+  anamnesisRequestId: string | null
   professional: { id: string; name: string } | null
 }
 
