@@ -69,4 +69,10 @@ export class ClinicalRepository {
       include: { professional: { select: { id: true, name: true } } },
     })
   }
+
+  async delete(clinicId: string, id: string) {
+    const existing = await prisma.clinicalRecord.findFirst({ where: { id, clinicId } })
+    if (!existing) throw new NotFoundError('ClinicalRecord')
+    return prisma.clinicalRecord.delete({ where: { id } })
+  }
 }

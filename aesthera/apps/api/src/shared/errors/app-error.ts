@@ -51,3 +51,10 @@ export class TenantError extends AppError {
     this.name = 'TenantError'
   }
 }
+
+export class GoneError extends AppError {
+  constructor(message: string) {
+    super(message, 410, 'GONE')
+    this.name = 'GoneError'
+  }
+}

@@ -242,6 +242,17 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+### [07/04/2026] — Consolidação: Melhorias no Modal de Agendamento
+- **Módulo:** Appointments (modal de criação + tela de calendário)
+- **O que foi feito:** Spec consolidada (artefato descartável — issue será criada pelo pipeline)
+
+### [07/04/2026] — Consolidação: Agenda Inteligente
+- **Módulo:** Appointments (novo modal SmartScheduleDialog + endpoint GET /appointments/smart-availability)
+- **O que foi feito:** Spec consolidada (artefato descartável — issue será criada pelo pipeline)
+- **⚠️ Questão aberta para PO:** ARCH-B6 — ServiceEquipment (filtro de equipamento por serviço). PO deve decidir antes da implementação.
+
+---
+
 ## Fase 10 — Pendente / Não implementado
 
 > Itens identificados no código ou features que ainda não foram construídos.
@@ -389,6 +400,63 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 ---
 
 ## Histórico de Atualizações
+
+### [2026-04-08] — feat(#145): Ficha de Anamnese Digital — implementação completa (PR #149)
+- **Módulo:** AnamnesisRequest (novo) + ClinicalRecord (extensão) + Notifications (reutilização)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(modelo AnamnesisRequest + AnamnesisGroup + AnamnesisQuestion + ClinicalRecord extensão)*
+  - `aesthera/apps/api/prisma/migrations/20260408000001_anamnesis_requests/migration.sql` *(novo)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.dto.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.repository.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.routes.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.service.ts` *(novo)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.service.test.ts` *(novo — 18 testes)*
+  - `aesthera/apps/web/app/anamnese/[token]/page.tsx` *(novo — página pública)*
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(aba Anamnese na ficha do cliente)*
+- **O que foi feito:**
+  - Backend completo: CRUD de `AnamnesisGroup`/`AnamnesisQuestion`, envio de `AnamnesisRequest` (modos `blank` e `prefilled`), módulo de assinatura pública com token HMAC-SHA256, geração de `ClinicalRecord` via domain event `anamnesis.signed`, re-envio com novo token, cancelamento, solicitação de correção.
+  - Página pública `/anamnese/[token]`: formulário responsivo para mobile, `SignatureCanvas`, consentimento LGPD, modo `prefilled` em read-only, validação de tamanho de assinatura (3MB), mensagens de erro PT-BR por status (410/409/200).
+  - Aba "Anamnese" na ficha do cliente: listagem de fichas enviadas com status, botões Reenviar/Cancelar (admin-only para cancelar), envio de nova ficha com seleção de grupo e modo.
+- **Closes:** #145
+
+### [2026-04-08] — fix(#145): Code Review PR #149 — 16 correções aplicadas
+- **Módulo:** AnamnesisRequest
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.repository.ts`
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.service.ts`
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.routes.ts`
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.dto.ts`
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.service.test.ts`
+  - `aesthera/apps/api/prisma/schema.prisma`
+  - `aesthera/apps/api/prisma/migrations/20260408000002_anamnesis_request_updated_at/migration.sql` *(novo)*
+  - `aesthera/apps/web/app/anamnese/[token]/page.tsx`
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx`
+- **O que foi feito:** Todas as 16 correções do Copilot Code Review aplicadas + 3 novos testes (18/18 passando):
+  - **Bug:** `submitSignature` aceita `correction_requested` além de `pending` (status filter `in: [...]`)
+  - **Bug:** `ClinicalRecord.content` em formato `{ groupName, entries: [{question,answer,type}] }` esperado pelo frontend — `buildClinicalRecordContent()` implementado
+  - **Spec CA11:** DELETE restrito a `admin` (retirado `staff`)
+  - **Perf:** `findAll` usa `select` explícito omitindo `signature`, `questionsSnapshot`, `clientAnswers`, `staffAnswers`
+  - **Schema:** `updatedAt@updatedAt` adicionado a `AnamnesisRequest` + migration `20260408000002`
+  - **Security:** Modo `prefilled` agora read-only (perguntas renderizadas como `<p>` com banner informativo)
+  - **LGPD CA06/CA18:** `buildConsentText()` com nome/CNPJ da clínica; `consentText` exibido no frontend e persistido no submit
+  - **CA16:** Validação de tamanho da assinatura (>3MB bloqueado no frontend antes do POST)
+  - **Role CA11:** Botão Cancelar visível apenas para `admin` na ficha do cliente
+  - **Spec:** Rota de correção pública alinhada: `PATCH /public/anamnese/:token/request-correction`
+  - **UX:** Handlers Reenviar/Cancelar com `try/catch` e `toast.error()` em caso de falha
+  - **Arch:** Singleton `anamnesisService` convertido para Proxy lazy (zero side-effects em import time)
+  - **Comment:** DTO `questionsSnapshot` documenta campo correto `text` (não `label`)
+  - **Tests:** 3 novos testes para `handleAnamnesisSignedEvent` (criar, idempotência, not-found)
+  - **Rate limit:** Rota de reenvio limitada a 3 req/hora
+  - **UX:** Mensagens 410/409 alinhadas com spec (expirado vs cancelado vs assinado)
+- **Testes:** 18/18 passando (15 existentes + 3 novos)
+
+### [2026-04-07] — PO: Melhorias no Modal de Agendamento
+- **Módulo:** Appointments
+- **O que foi feito:** Especificação gerada cobrindo 4 melhorias: (A) proteção contra double-submit com estado `isSubmitting` local + mapeamento de mensagens de erro por `errorCode` da API; (B) aumento da largura do modal em desktop (`max-w-2xl`+) mantendo responsividade mobile; (C) diálogo de confirmação de saída sem salvar posicionado via portal/AlertDialog fixo ao viewport (invisibilidade quando scrollado para baixo); (D) persistência da view do calendário (dia/semana/mês) no localStorage com chave `aesthera:appointments:view`.
+
+### [2026-04-07] — PO: Agenda Inteligente (ex-Agenda Avançada)
+- **Módulo:** Appointments
+- **O que foi feito:** Especificação gerada para redesenho da "Agenda Avançada" renomeada para "Agenda Inteligente". Novo painel de filtros com Serviço (obrigatório), Equipamento (obrigatório), Sala e Profissional (opcionais) + botão "Buscar disponibilidade". Calendário semanal mostra slots disponíveis (verdes) vs indisponíveis (cinza) considerando 4 combinações de filtros. Novo endpoint `GET /appointments/smart-availability` com params `serviceId, equipmentId, roomId?, professionalId?, dateFrom, dateTo`. Clicar em slot verde abre modal de novo agendamento pré-preenchido.
 
 ### [2026-04-04] — hotfix: migration idempotente para `wallet_transaction_type.REFUND`
 - **Arquivo(s) afetado(s):**

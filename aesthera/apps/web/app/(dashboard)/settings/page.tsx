@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  Camera,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -135,14 +136,31 @@ function AnamnesisConfigTab({
     type: QuestionType
     required: boolean
     options: string[]
+    optionImages: (string | null)[]
     selectOptions: AnamnesisQuestionOption[]
-  }>({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+  }>({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
   const [newOptionText, setNewOptionText] = useState('')
   const [newOptionWithDesc, setNewOptionWithDesc] = useState(false)
+  const [newOptionImage, setNewOptionImage] = useState<string | null>(null)
   const [newSepText, setNewSepText] = useState('')
 
   // ── drag reorder ────────────────────────────────────────────────────
   const [dragInfo, setDragInfo] = useState<{ groupId: string; index: number } | null>(null)
+
+  // ── edit existing question ───────────────────────────────────────────
+  const [editingItemKey, setEditingItemKey] = useState<string | null>(null) // `${groupId}:${itemId}`
+  const [editQ, setEditQ] = useState<{
+    text: string
+    type: QuestionType
+    required: boolean
+    options: string[]
+    optionImages: (string | null)[]
+    selectOptions: AnamnesisQuestionOption[]
+  }>({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
+  const [editSepText, setEditSepText] = useState('')
+  const [editOptionText, setEditOptionText] = useState('')
+  const [editOptionWithDesc, setEditOptionWithDesc] = useState(false)
+  const [editOptionImage, setEditOptionImage] = useState<string | null>(null)
 
   const effectiveGroups = groups ?? serverGroups ?? [DEFAULT_ANAMNESIS_GROUP]
 
@@ -193,6 +211,15 @@ function AnamnesisConfigTab({
     select: 'Escolha única',
     numeric: 'Numérico',
     date: 'Data',
+  }
+
+  const TYPE_COLOR: Record<QuestionType, string> = {
+    text:     'bg-slate-500 text-white dark:bg-slate-600',
+    yesno:    'bg-teal-600 text-white dark:bg-teal-700',
+    multiple: 'bg-purple-600 text-white dark:bg-purple-700',
+    select:   'bg-blue-600 text-white dark:bg-blue-700',
+    numeric:  'bg-amber-500 text-white dark:bg-amber-600',
+    date:     'bg-green-600 text-white dark:bg-green-700',
   }
 
   // ── group actions ───────────────────────────────────────────────────
@@ -291,14 +318,96 @@ function AnamnesisConfigTab({
     )
   }
 
+  function openEditItem(groupId: string, item: AnamnesisItem) {
+    setEditingItemKey(`${groupId}:${item.id}`)
+    if (item.type === 'separator') {
+      setEditSepText(item.text)
+    } else {
+      const q = item as AnamnesisQuestion
+      setEditQ({
+        text: q.text,
+        type: q.type,
+        required: q.required,
+        options: q.type === 'multiple' ? (q.options ?? []) : [],
+        optionImages: q.type === 'multiple' ? (q.optionImages ?? []) : [],
+        selectOptions: q.type === 'select' ? (q.selectOptions ?? []) : [],
+      })
+    }
+    setEditOptionText('')
+    setEditOptionWithDesc(false)
+    setEditOptionImage(null)
+  }
+
+  function closeEditItem() {
+    setEditingItemKey(null)
+    setEditSepText('')
+    setEditOptionText('')
+    setEditOptionWithDesc(false)
+    setEditOptionImage(null)
+  }
+
+  function addEditOption(type: 'multiple' | 'select') {
+    if (!editOptionText.trim()) return
+    if (type === 'multiple') {
+      setEditQ((prev) => ({
+        ...prev,
+        options: [...prev.options, editOptionText.trim()],
+        optionImages: [...(prev.optionImages ?? []), editOptionImage],
+      }))
+    } else {
+      setEditQ((prev) => ({
+        ...prev,
+        selectOptions: [...prev.selectOptions, { label: editOptionText.trim(), withDescription: editOptionWithDesc, ...(editOptionImage ? { imageUrl: editOptionImage } : {}) }],
+      }))
+    }
+    setEditOptionText('')
+    setEditOptionWithDesc(false)
+    setEditOptionImage(null)
+  }
+
+  function removeEditOption(idx: number, type: 'multiple' | 'select') {
+    if (type === 'multiple') {
+      setEditQ((prev) => ({
+        ...prev,
+        options: prev.options.filter((_, i) => i !== idx),
+        optionImages: (prev.optionImages ?? []).filter((_, i) => i !== idx),
+      }))
+    } else {
+      setEditQ((prev) => ({ ...prev, selectOptions: prev.selectOptions.filter((_, i) => i !== idx) }))
+    }
+  }
+
+  function saveEditItem(groupId: string, itemId: string, isSeparator: boolean) {
+    const group = effectiveGroups.find((g) => g.id === groupId)
+    if (!group) return
+    const updated = group.questions.map((item) => {
+      if (item.id !== itemId) return item
+      if (isSeparator) {
+        return { ...item, text: editSepText.trim() || item.text }
+      }
+      const q: AnamnesisQuestion = {
+        id: item.id,
+        text: editQ.text.trim() || (item as AnamnesisQuestion).text,
+        type: editQ.type,
+        required: editQ.required,
+        ...(editQ.type === 'multiple' && { options: editQ.options, optionImages: editQ.optionImages }),
+        ...(editQ.type === 'select' && { selectOptions: editQ.selectOptions }),
+      }
+      return q
+    })
+    updateGroupItems(groupId, updated)
+    closeEditItem()
+  }
+
   // ── add item actions ────────────────────────────────────────────────
 
   function openAddForm(groupId: string) {
     setAddingToGroupId(groupId)
     setAddMode('question')
-    setNewQ({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+    setNewQ({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
     setNewOptionText('')
     setNewOptionWithDesc(false)
+    setNewOptionImage(null)
     setNewSepText('')
   }
 
@@ -306,29 +415,39 @@ function AnamnesisConfigTab({
     setAddingToGroupId(null)
     setNewOptionText('')
     setNewOptionWithDesc(false)
+    setNewOptionImage(null)
     setNewSepText('')
   }
 
   function addOption() {
     if (!newOptionText.trim()) return
     if (newQ.type === 'multiple') {
-      setNewQ((prev) => ({ ...prev, options: [...prev.options, newOptionText.trim()] }))
+      setNewQ((prev) => ({
+        ...prev,
+        options: [...prev.options, newOptionText.trim()],
+        optionImages: [...prev.optionImages, newOptionImage],
+      }))
     } else if (newQ.type === 'select') {
       setNewQ((prev) => ({
         ...prev,
         selectOptions: [
           ...prev.selectOptions,
-          { label: newOptionText.trim(), withDescription: newOptionWithDesc },
+          { label: newOptionText.trim(), withDescription: newOptionWithDesc, ...(newOptionImage ? { imageUrl: newOptionImage } : {}) },
         ],
       }))
     }
     setNewOptionText('')
     setNewOptionWithDesc(false)
+    setNewOptionImage(null)
   }
 
   function removeOption(idx: number) {
     if (newQ.type === 'multiple') {
-      setNewQ((prev) => ({ ...prev, options: prev.options.filter((_, i) => i !== idx) }))
+      setNewQ((prev) => ({
+        ...prev,
+        options: prev.options.filter((_, i) => i !== idx),
+        optionImages: prev.optionImages.filter((_, i) => i !== idx),
+      }))
     } else if (newQ.type === 'select') {
       setNewQ((prev) => ({
         ...prev,
@@ -358,13 +477,14 @@ function AnamnesisConfigTab({
         text: newQ.text,
         type: newQ.type,
         required: newQ.required,
-        ...(newQ.type === 'multiple' && { options: newQ.options }),
+        ...(newQ.type === 'multiple' && { options: newQ.options, optionImages: newQ.optionImages }),
         ...(newQ.type === 'select' && { selectOptions: newQ.selectOptions }),
       }
       updateGroupItems(addingToGroupId, [...group.questions, q])
-      setNewQ({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+      setNewQ({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
       setNewOptionText('')
       setNewOptionWithDesc(false)
+      setNewOptionImage(null)
     }
   }
 
@@ -379,6 +499,21 @@ function AnamnesisConfigTab({
     reordered.splice(toIndex, 0, moved)
     updateGroupItems(groupId, reordered)
     setDragInfo(null)
+  }
+
+  // ── image helpers ────────────────────────────────────────────────────
+
+  async function readFileAsDataUrl(file: File): Promise<string | null> {
+    if (file.size > 300 * 1024) {
+      alert('Imagem muito grande. O tamanho máximo permitido é 300 KB.')
+      return null
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
   }
 
   // ── save ────────────────────────────────────────────────────────────
@@ -523,36 +658,42 @@ function AnamnesisConfigTab({
                         </p>
                       )}
                       {group.questions.map((item, i) => {
+                        const editKey = `${group.id}:${item.id}`
+                        const isEditing = editingItemKey === editKey
                         if (item.type === 'separator') {
                           return (
                             <div
                               key={item.id}
-                              draggable
+                              draggable={!isEditing}
                               onDragStart={() => setDragInfo({ groupId: group.id, index: i })}
                               onDragEnd={() => setDragInfo(null)}
                               onDragOver={(e) => e.preventDefault()}
                               onDrop={() => handleDrop(group.id, i)}
-                              className={[
-                                'flex items-center gap-2',
-                                dragInfo?.groupId === group.id && dragInfo.index === i
-                                  ? 'opacity-40'
-                                  : '',
-                              ].join(' ')}
+                              className={['flex flex-col gap-1', dragInfo?.groupId === group.id && dragInfo.index === i ? 'opacity-40' : ''].join(' ')}
                             >
-                              <GripVertical className="text-muted-foreground/40 h-4 w-4 shrink-0 cursor-grab" />
-                              <div className="flex flex-1 items-center gap-2">
-                                <Minus className="text-muted-foreground/60 h-3 w-3" />
-                                <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                                  {item.text}
-                                </span>
-                                <div className="bg-border h-px flex-1" />
-                              </div>
-                              <button
-                                onClick={() => removeItem(group.id, item.id)}
-                                className="text-muted-foreground text-xs hover:text-red-500"
-                              >
-                                ✕
-                              </button>
+                              {isEditing ? (
+                                <div className="bg-muted/20 space-y-2 rounded-lg border p-3">
+                                  <Label className="text-xs">Nome da categoria</Label>
+                                  <Input value={editSepText} onChange={(e) => setEditSepText(e.target.value)} className="text-sm" />
+                                  <div className="flex gap-2">
+                                    <Button size="sm" onClick={() => saveEditItem(group.id, item.id, true)} disabled={!editSepText.trim()}>Salvar</Button>
+                                    <Button size="sm" variant="outline" onClick={closeEditItem}>Cancelar</Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <GripVertical className="text-muted-foreground/40 h-4 w-4 shrink-0 cursor-grab" />
+                                  <div className="flex flex-1 items-center gap-2">
+                                    <Minus className="text-muted-foreground/60 h-3 w-3" />
+                                    <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">{item.text}</span>
+                                    <div className="bg-border h-px flex-1" />
+                                  </div>
+                                  <button onClick={() => openEditItem(group.id, item)} className="text-muted-foreground text-xs hover:text-foreground">
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                  <button onClick={() => removeItem(group.id, item.id)} className="text-muted-foreground text-xs hover:text-red-500">✕</button>
+                                </div>
+                              )}
                             </div>
                           )
                         }
@@ -560,60 +701,154 @@ function AnamnesisConfigTab({
                         return (
                           <div
                             key={q.id}
-                            draggable
+                            draggable={!isEditing}
                             onDragStart={() => setDragInfo({ groupId: group.id, index: i })}
                             onDragEnd={() => setDragInfo(null)}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={() => handleDrop(group.id, i)}
-                            className={[
-                              'bg-background rounded-lg border px-3 py-2',
-                              dragInfo?.groupId === group.id && dragInfo.index === i
-                                ? 'opacity-40'
-                                : '',
-                            ].join(' ')}
+                            className={['bg-background rounded-lg border', dragInfo?.groupId === group.id && dragInfo.index === i ? 'opacity-40' : ''].join(' ')}
                           >
-                            <div className="flex items-center gap-2">
-                              <GripVertical className="text-muted-foreground/50 h-4 w-4 shrink-0 cursor-grab active:cursor-grabbing" />
-                              <span className="text-foreground flex-1 text-sm">{q.text}</span>
-                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                                {TYPE_LABEL[q.type]}
-                              </span>
-                              <button
-                                onClick={() => toggleRequired(group.id, q.id)}
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-                              >
-                                {q.required ? 'Obrigatório' : 'Opcional'}
-                              </button>
-                              <button
-                                onClick={() => removeItem(group.id, q.id)}
-                                className="text-muted-foreground text-xs transition-colors hover:text-red-500"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                            {q.type === 'multiple' && (q.options ?? []).length > 0 && (
-                              <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
-                                {(q.options ?? []).map((opt) => (
-                                  <span
-                                    key={opt}
-                                    className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
-                                  >
-                                    {opt}
-                                  </span>
-                                ))}
+                            {isEditing ? (
+                              <div className="space-y-3 p-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="col-span-2 space-y-1">
+                                    <Label className="text-xs">Pergunta</Label>
+                                    <Input value={editQ.text} onChange={(e) => setEditQ({ ...editQ, text: e.target.value })} className="text-sm" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Tipo de resposta</Label>
+                                    <select
+                                      value={editQ.type}
+                                      onChange={(e) => setEditQ({ ...editQ, type: e.target.value as QuestionType, options: [], optionImages: [], selectOptions: [] })}
+                                      className="bg-background w-full rounded-md border px-2 py-1.5 text-sm"
+                                    >
+                                      {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                    </select>
+                                  </div>
+                                  <div className="flex items-end gap-2">
+                                    <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
+                                      <input type="checkbox" checked={editQ.required} onChange={(e) => setEditQ({ ...editQ, required: e.target.checked })} className="rounded" />
+                                      Obrigatório
+                                    </label>
+                                  </div>
+                                </div>
+                                {editQ.type === 'multiple' && (
+                                  <div className="space-y-2">
+                                    <Label className="text-xs">Alternativas</Label>
+                                    {editQ.options.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {editQ.options.map((opt, idx) => (
+                                          <span key={idx} className="bg-muted text-foreground flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs">
+                                            {(editQ.optionImages ?? [])[idx] && (
+                                              <img src={(editQ.optionImages ?? [])[idx]!} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
+                                            )}
+                                            {opt}
+                                            <button type="button" onClick={() => removeEditOption(idx, 'multiple')} className="hover:text-red-500"><X className="h-3 w-3" /></button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="flex gap-2 items-center">
+                                      <label className="cursor-pointer shrink-0" title="Imagem da alternativa">
+                                        <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setEditOptionImage(url) } e.currentTarget.value = '' }} />
+                                        {editOptionImage ? (
+                                          <img src={editOptionImage} alt="" className="h-7 w-7 rounded object-cover border" />
+                                        ) : (
+                                          <div className="h-7 w-7 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50">
+                                            <Camera className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                          </div>
+                                        )}
+                                      </label>
+                                      {editOptionImage && <button type="button" onClick={() => setEditOptionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
+                                      <Input value={editOptionText} onChange={(e) => setEditOptionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditOption('multiple') } }} placeholder="Nova alternativa…" className="flex-1 text-sm" />
+                                      <Button type="button" size="sm" variant="outline" onClick={() => addEditOption('multiple')} disabled={!editOptionText.trim()}>Adicionar</Button>
+                                    </div>
+                                  </div>
+                                )}
+                                {editQ.type === 'select' && (
+                                  <div className="space-y-2">
+                                    <Label className="text-xs">Alternativas</Label>
+                                    {editQ.selectOptions.length > 0 && (
+                                      <div className="space-y-1">
+                                        {editQ.selectOptions.map((opt, idx) => (
+                                          <div key={idx} className="bg-muted/50 flex items-center gap-2 rounded px-2 py-1">
+                                            {opt.imageUrl && <img src={opt.imageUrl} alt="" className="h-6 w-6 rounded object-cover shrink-0" />}
+                                            <span className="flex-1 text-xs">{opt.label}</span>
+                                            {opt.withDescription && <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white dark:bg-blue-700">com descrição</span>}
+                                            <button type="button" onClick={() => removeEditOption(idx, 'select')} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <label className="cursor-pointer shrink-0" title="Imagem da alternativa">
+                                        <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setEditOptionImage(url) } e.currentTarget.value = '' }} />
+                                        {editOptionImage ? (
+                                          <img src={editOptionImage} alt="" className="h-7 w-7 rounded object-cover border" />
+                                        ) : (
+                                          <div className="h-7 w-7 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50">
+                                            <Camera className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                          </div>
+                                        )}
+                                      </label>
+                                      {editOptionImage && <button type="button" onClick={() => setEditOptionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
+                                      <Input value={editOptionText} onChange={(e) => setEditOptionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditOption('select') } }} placeholder="Nova alternativa…" className="flex-1 text-sm" />
+                                      <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs whitespace-nowrap">
+                                        <input type="checkbox" checked={editOptionWithDesc} onChange={(e) => setEditOptionWithDesc(e.target.checked)} className="rounded" />
+                                        ✎ descrição
+                                      </label>
+                                      <Button type="button" size="sm" variant="outline" onClick={() => addEditOption('select')} disabled={!editOptionText.trim()}>Adicionar</Button>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={() => saveEditItem(group.id, q.id, false)} disabled={!editQ.text.trim()}>Salvar alterações</Button>
+                                  <Button size="sm" variant="outline" onClick={closeEditItem}>Cancelar</Button>
+                                </div>
                               </div>
-                            )}
-                            {q.type === 'select' && (q.selectOptions ?? []).length > 0 && (
-                              <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
-                                {(q.selectOptions ?? []).map((opt) => (
-                                  <span
-                                    key={opt.label}
-                                    className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
-                                  >
-                                    {opt.label}
-                                    {opt.withDescription ? ' ✎' : ''}
+                            ) : (
+                              <div className="px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <GripVertical className="text-muted-foreground/50 h-4 w-4 shrink-0 cursor-grab active:cursor-grabbing" />
+                                  <span className="text-foreground flex-1 text-sm">{q.text}</span>
+                                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[q.type]}`}>
+                                    {TYPE_LABEL[q.type]}
                                   </span>
-                                ))}
+                                  <button
+                                    onClick={() => toggleRequired(group.id, q.id)}
+                                    className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-600 text-white dark:bg-red-700' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                                  >
+                                    {q.required ? 'Obrigatório' : 'Opcional'}
+                                  </button>
+                                  <button onClick={() => openEditItem(group.id, q)} className="text-muted-foreground p-1 rounded hover:bg-muted/60 hover:text-foreground transition-colors" title="Editar pergunta">
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button onClick={() => removeItem(group.id, q.id)} className="text-muted-foreground p-1 rounded transition-colors hover:bg-red-50 hover:text-red-500" title="Remover pergunta">
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                {q.type === 'multiple' && (q.options ?? []).length > 0 && (
+                                  <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
+                                    {(q.options ?? []).map((opt, idx) => (
+                                      <span key={idx} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs flex items-center gap-1">
+                                        {(q.optionImages ?? [])[idx] && (
+                                          <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-4 w-4 rounded object-cover" />
+                                        )}
+                                        {opt}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {q.type === 'select' && (q.selectOptions ?? []).length > 0 && (
+                                  <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
+                                    {(q.selectOptions ?? []).map((opt) => (
+                                      <span key={opt.label} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs flex items-center gap-1">
+                                        {opt.imageUrl && <img src={opt.imageUrl} alt="" className="h-4 w-4 rounded object-cover" />}
+                                        {opt.label}{opt.withDescription ? ' ✎' : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -678,6 +913,7 @@ function AnamnesisConfigTab({
                                         ...newQ,
                                         type: e.target.value as QuestionType,
                                         options: [],
+                                        optionImages: [],
                                         selectOptions: [],
                                       })
                                     }
@@ -711,44 +947,36 @@ function AnamnesisConfigTab({
                                   {newQ.options.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5">
                                       {newQ.options.map((opt, idx) => (
-                                        <span
-                                          key={idx}
-                                          className="bg-muted text-foreground flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                                        >
+                                        <span key={idx} className="bg-muted text-foreground flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs">
+                                          {newQ.optionImages[idx] && (
+                                            <img src={newQ.optionImages[idx]!} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
+                                          )}
                                           {opt}
-                                          <button
-                                            type="button"
-                                            onClick={() => removeOption(idx)}
-                                            className="hover:text-red-500"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
+                                          <button type="button" onClick={() => removeOption(idx)} className="hover:text-red-500"><X className="h-3 w-3" /></button>
                                         </span>
                                       ))}
                                     </div>
                                   )}
-                                  <div className="flex gap-2">
+                                  <div className="flex gap-2 items-center">
+                                    <label className="cursor-pointer shrink-0" title="Imagem da alternativa">
+                                      <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setNewOptionImage(url) } e.currentTarget.value = '' }} />
+                                      {newOptionImage ? (
+                                        <img src={newOptionImage} alt="" className="h-7 w-7 rounded object-cover border" />
+                                      ) : (
+                                        <div className="h-7 w-7 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50">
+                                          <Camera className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                        </div>
+                                      )}
+                                    </label>
+                                    {newOptionImage && <button type="button" onClick={() => setNewOptionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
                                     <Input
                                       value={newOptionText}
                                       onChange={(e) => setNewOptionText(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault()
-                                          addOption()
-                                        }
-                                      }}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
                                       placeholder="Nova alternativa…"
                                       className="flex-1 text-sm"
                                     />
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={addOption}
-                                      disabled={!newOptionText.trim()}
-                                    >
-                                      Adicionar
-                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" onClick={addOption} disabled={!newOptionText.trim()}>Adicionar</Button>
                                   </div>
                                 </div>
                               )}
@@ -756,64 +984,45 @@ function AnamnesisConfigTab({
                               {newQ.type === 'select' && (
                                 <div className="space-y-2">
                                   <Label className="text-xs">Alternativas</Label>
-                                  <p className="text-muted-foreground text-xs">
-                                    Marque ✎ para exibir campo de descrição ao selecionar.
-                                  </p>
+                                  <p className="text-muted-foreground text-xs">Marque ✎ para exibir campo de descrição ao selecionar.</p>
                                   {newQ.selectOptions.length > 0 && (
                                     <div className="space-y-1">
                                       {newQ.selectOptions.map((opt, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="bg-muted/50 flex items-center gap-2 rounded px-2 py-1"
-                                        >
+                                        <div key={idx} className="bg-muted/50 flex items-center gap-2 rounded px-2 py-1">
+                                          {opt.imageUrl && <img src={opt.imageUrl} alt="" className="h-6 w-6 rounded object-cover shrink-0" />}
                                           <span className="flex-1 text-xs">{opt.label}</span>
                                           {opt.withDescription && (
-                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                                              com descrição
-                                            </span>
+                                            <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white dark:bg-blue-700">com descrição</span>
                                           )}
-                                          <button
-                                            type="button"
-                                            onClick={() => removeOption(idx)}
-                                            className="text-muted-foreground hover:text-red-500"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
+                                          <button type="button" onClick={() => removeOption(idx)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>
                                         </div>
                                       ))}
                                     </div>
                                   )}
                                   <div className="flex items-center gap-2">
+                                    <label className="cursor-pointer shrink-0" title="Imagem da alternativa">
+                                      <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setNewOptionImage(url) } e.currentTarget.value = '' }} />
+                                      {newOptionImage ? (
+                                        <img src={newOptionImage} alt="" className="h-7 w-7 rounded object-cover border" />
+                                      ) : (
+                                        <div className="h-7 w-7 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50">
+                                          <Camera className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                        </div>
+                                      )}
+                                    </label>
+                                    {newOptionImage && <button type="button" onClick={() => setNewOptionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
                                     <Input
                                       value={newOptionText}
                                       onChange={(e) => setNewOptionText(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault()
-                                          addOption()
-                                        }
-                                      }}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
                                       placeholder="Nova alternativa…"
                                       className="flex-1 text-sm"
                                     />
                                     <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs whitespace-nowrap">
-                                      <input
-                                        type="checkbox"
-                                        checked={newOptionWithDesc}
-                                        onChange={(e) => setNewOptionWithDesc(e.target.checked)}
-                                        className="rounded"
-                                      />
+                                      <input type="checkbox" checked={newOptionWithDesc} onChange={(e) => setNewOptionWithDesc(e.target.checked)} className="rounded" />
                                       ✎ descrição
                                     </label>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={addOption}
-                                      disabled={!newOptionText.trim()}
-                                    >
-                                      Adicionar
-                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" onClick={addOption} disabled={!newOptionText.trim()}>Adicionar</Button>
                                   </div>
                                 </div>
                               )}
@@ -1073,7 +1282,7 @@ export default function SettingsPage() {
           <TabsTrigger value="ai">Integrações IA</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="anamnesis">Anamnese</TabsTrigger>
-          <TabsTrigger value="body-measurements">Medidas Corporais</TabsTrigger>
+          <TabsTrigger value="body-measurements">Fichas de Avaliação</TabsTrigger>
           <TabsTrigger value="contracts">Contratos</TabsTrigger>
           <TabsTrigger value="email">E-mail</TabsTrigger>
         </TabsList>

@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 export interface AnamnesisQuestionOption {
   label: string
   withDescription?: boolean
+  imageUrl?: string
 }
 
 export interface AnamnesisQuestion {
@@ -11,6 +12,7 @@ export interface AnamnesisQuestion {
   text: string
   type: 'text' | 'yesno' | 'multiple' | 'numeric' | 'date' | 'select'
   options?: string[] // for 'multiple' type
+  optionImages?: (string | null)[] // parallel to options[], base64 data URL per option
   selectOptions?: AnamnesisQuestionOption[] // for 'select' type
   required: boolean
 }

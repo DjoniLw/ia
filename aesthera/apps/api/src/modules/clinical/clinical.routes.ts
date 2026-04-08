@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
-import { NotFoundError } from '../../shared/errors/app-error'
+import { ConflictError, NotFoundError } from '../../shared/errors/app-error'
 import { CreateClinicalRecordDto, ListClinicalRecordsQuery, UpdateClinicalRecordDto } from './clinical.dto'
 import { ClinicalRepository } from './clinical.repository'
 import { createAuditLog } from '../../shared/audit'
@@ -28,11 +28,35 @@ export async function clinicalRoutes(app: FastifyInstance) {
     return reply.code(201).send(record)
   })
 
+  // Delete clinical record
+  app.delete('/clinical-records/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const existing = await repo.findById(req.clinicId, id)
+    if (!existing) throw new NotFoundError('ClinicalRecord')
+    // Records linked to a signed anamnesis cannot be deleted
+    if (existing.anamnesisRequestId) {
+      throw new ConflictError('Registros de anamnese assinada não podem ser excluídos.')
+    }
+    await repo.delete(req.clinicId, id)
+    await createAuditLog({
+      clinicId: req.clinicId,
+      userId: req.user.sub,
+      action: 'clinical_record.deleted',
+      entityId: id,
+      ip: req.ip,
+    })
+    return reply.code(204).send()
+  })
+
   // Update clinical record (title, content, type, performedAt are editable)
   app.patch('/clinical-records/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
     const { id } = req.params as { id: string }
     const existing = await repo.findById(req.clinicId, id)
     if (!existing) throw new NotFoundError('ClinicalRecord')
+    // CA08: registros vinculados a uma anamnese são imutáveis
+    if (existing.anamnesisRequestId) {
+      throw new ConflictError('Registros de anamnese são imutáveis e não podem ser editados manualmente.')
+    }
     const dto = UpdateClinicalRecordDto.parse(req.body)
     const updated = await repo.update(req.clinicId, id, dto)
     await createAuditLog({

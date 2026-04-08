@@ -35,6 +35,7 @@ import { bodyMeasurementsRoutes } from './modules/body-measurements/body-measure
 import { measurementSheetsRoutes } from './modules/measurement-sheets/measurement-sheets.routes'
 import { measurementSessionsRoutes } from './modules/measurement-sessions/measurement-sessions.routes'
 import { contractsRoutes } from './modules/contracts/contracts.routes'
+import { anamnesisRoutes } from './modules/anamnesis/anamnesis.routes'
 import { PUBLIC_ROUTES } from './shared/constants/public-routes'
 import './domain-event-handlers'
 
@@ -100,6 +101,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (url.startsWith('/pay/')) return
     // /public/sign/:token é rota pública de assinatura remota (token-based)
     if (url.startsWith('/public/sign/')) return
+    // /public/anamnese/:token é rota pública de anamnese (token-based)
+    if (url.startsWith('/public/anamnese/')) return
     await tenantMiddleware(request, reply)
   })
 
@@ -151,6 +154,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await measurementSheetsRoutes(app)
   await measurementSessionsRoutes(app)
   await contractsRoutes(app)
+  await anamnesisRoutes(app)
 
   return app
 }

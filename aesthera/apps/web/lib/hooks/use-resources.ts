@@ -378,6 +378,7 @@ export interface ClinicalRecord {
   performedAt: string | null
   createdAt: string
   updatedAt: string
+  anamnesisRequestId: string | null
   professional: { id: string; name: string } | null
 }
 
@@ -417,6 +418,17 @@ export function useUpdateClinicalRecord(id: string) {
       type?: 'note' | 'exam' | 'procedure' | 'prescription' | 'anamnesis'
       performedAt?: string | null
     }) => api.patch(`/clinical-records/${id}`, data).then((r) => r.data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['clinical-records', vars.customerId] })
+    },
+  })
+}
+
+export function useDeleteClinicalRecord() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, customerId }: { id: string; customerId: string }) =>
+      api.delete(`/clinical-records/${id}`).then((r) => r.data),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['clinical-records', vars.customerId] })
     },
@@ -910,5 +922,97 @@ export function useDisconnectWhatsapp() {
   return useMutation({
     mutationFn: () => api.delete('/clinics/me/whatsapp/disconnect').then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['clinic-whatsapp'] }),
+  })
+}
+
+// ─── Anamnesis Requests ───────────────────────────────────────────────────────
+
+export type AnamnesisRequestMode = 'blank' | 'prefilled'
+export type AnamnesisRequestStatus = 'pending' | 'signed' | 'expired' | 'correction_requested' | 'cancelled'
+
+export interface AnamnesisRequest {
+  id: string
+  clinicId: string
+  customerId: string
+  mode: AnamnesisRequestMode
+  status: AnamnesisRequestStatus
+  groupId: string
+  groupName: string
+  questionsSnapshot: Record<string, unknown>[]
+  staffAnswers: Record<string, unknown> | null
+  clientAnswers: Record<string, unknown> | null
+  signature: string | null
+  signedAt: string | null
+  expiresAt: string
+  createdAt: string
+  customer: { id: string; name: string }
+  createdBy: { id: string; name: string }
+  clinicalRecord: { id: string } | null
+}
+
+export interface AnamnesisRequestsPage {
+  items: AnamnesisRequest[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface CreateAnamnesisRequestInput {
+  customerId: string
+  mode: AnamnesisRequestMode
+  groupId: string
+  groupName: string
+  questionsSnapshot: Record<string, unknown>[]
+  staffAnswers?: Record<string, unknown> | null
+  phone?: string
+  email?: string
+}
+
+export function useAnamnesisRequests(params: {
+  customerId?: string
+  status?: AnamnesisRequestStatus
+  page?: number
+  limit?: number
+}) {
+  return useQuery<AnamnesisRequestsPage>({
+    queryKey: ['anamnesis-requests', params],
+    queryFn: () =>
+      api.get('/anamnesis-requests', { params }).then((r) => r.data),
+  })
+}
+
+export function useAnamnesisRequestById(id: string | null) {
+  return useQuery<AnamnesisRequest>({
+    queryKey: ['anamnesis-request', id],
+    queryFn: () => api.get(`/anamnesis-requests/${id}`).then((r) => r.data),
+    enabled: !!id,
+    staleTime: 0,
+  })
+}
+
+export function useCreateAnamnesisRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateAnamnesisRequestInput) =>
+      api.post('/anamnesis-requests', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useResendAnamnesis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, phone, email }: { id: string; phone?: string; email?: string }) =>
+      api.post(`/anamnesis-requests/${id}/resend`, { phone, email }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useCancelAnamnesis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.delete(`/anamnesis-requests/${id}`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
   })
 }

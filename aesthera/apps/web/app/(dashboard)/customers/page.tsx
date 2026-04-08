@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Ban, Bot, ChevronDown, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
+import { AlertCircle, Ban, Bot, ChevronDown, ChevronRight, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
@@ -27,6 +27,7 @@ import {
   type ClinicalRecord,
   useCreateClinicalRecord,
   useUpdateClinicalRecord,
+  useDeleteClinicalRecord,
   useCreateCustomer,
   useClinicalRecords,
   useCustomerHistory,
@@ -44,6 +45,9 @@ import {
   useContractTemplates,
   type CustomerContract,
   type ContractView,
+  useAnamnesisRequests,
+  useCancelAnamnesis,
+  type AnamnesisRequest,
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
 import { useCepLookup } from '@/lib/hooks/use-cep-lookup'
@@ -57,11 +61,14 @@ import { DataPagination } from '@/components/ui/data-pagination'
 import { useCustomerWallet, type WalletEntry, useCreateWalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
 import { useBilling, useOneBilling, useCancelBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
-import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
+import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR, ANAMNESIS_STATUS_LABEL, ANAMNESIS_STATUS_COLOR } from '@/lib/status-colors'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
 import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
+import { SendAnamnesisDialog } from '@/components/anamnesis/SendAnamnesisDialog'
+import { ResendAnamnesisDialog } from '@/components/anamnesis/ResendAnamnesisDialog'
+import { ViewAnamnesisModal } from '@/components/anamnesis/ViewAnamnesisModal'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import {
   WALLET_ENTRY_TYPE_LABELS,
@@ -1101,8 +1108,8 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
           <div className="space-y-4">
             {/* Cobranças em aberto — todas pendentes/vencidas */}
             {openBillings.length > 0 && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/10 p-3 space-y-2">
-                <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   ⏳ Cobranças em aberto ({openBillings.length})
                 </p>
                 {openBillings.map((b: ApiBilling) => {
@@ -1110,12 +1117,7 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
                   return (
                     <div
                       key={b.id}
-                      className={[
-                        'flex items-start justify-between gap-2 rounded-md border px-3 py-2 text-xs',
-                        isOverdue
-                          ? 'bg-red-50 dark:bg-red-950/10 border-red-300 dark:border-red-700'
-                          : 'bg-white dark:bg-card border-border',
-                      ].join(' ')}
+                      className="flex items-start justify-between gap-2 rounded-md border bg-card px-3 py-2 text-xs"
                     >
                       <div className="flex flex-col gap-0.5 min-w-0 pt-0.5">
                         <span className="font-medium text-foreground truncate">
@@ -1982,11 +1984,11 @@ const TYPE_LABEL: Record<string, string> = {
   prescription: 'Prescrição',
 }
 const TYPE_COLOR: Record<string, string> = {
-  anamnesis:    'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
-  exam:         'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  note:         'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  procedure:    'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  prescription: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  anamnesis:    'bg-teal-600 text-white dark:bg-teal-700',
+  exam:         'bg-amber-500 text-white dark:bg-amber-600',
+  note:         'bg-blue-500 text-white dark:bg-blue-600',
+  procedure:    'bg-purple-600 text-white dark:bg-purple-700',
+  prescription: 'bg-green-600 text-white dark:bg-green-700',
 }
 
 function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onEdit: () => void; onClose: () => void }) {
@@ -2000,6 +2002,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
       qc.invalidateQueries({ queryKey: ['customer-history', customer.id] }),
       qc.invalidateQueries({ queryKey: ['clinical-records', customer.id] }),
       qc.invalidateQueries({ queryKey: ['customer-contracts', customer.id] }),
+      qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
       qc.invalidateQueries({ queryKey: ['wallet'] }),
       qc.invalidateQueries({ queryKey: ['billing'] }),
     ])
@@ -2007,7 +2010,16 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   }
 
   // ── clinical / prontuário ──────────────────────────────────────────────
+  const role = useRole()
   const clinicalRecords = useClinicalRecords(customer.id)
+  const [anamnesisPage, setAnamnesisPage] = useState(1)
+  const anamnesisPageSize = 5
+  const anamnesisRequestsQuery = useAnamnesisRequests({ customerId: customer.id, page: anamnesisPage, limit: anamnesisPageSize })
+  const cancelAnamnesis = useCancelAnamnesis()
+  const [showSendAnamnesisDialog, setShowSendAnamnesisDialog] = useState(false)
+  const [sendFromRecordId, setSendFromRecordId] = useState<string | null>(null)
+  const [resendingAnamnesis, setResendingAnamnesis] = useState<AnamnesisRequest | null>(null)
+  const [viewingAnamnesis, setViewingAnamnesis] = useState<AnamnesisRequest | null>(null)
   const { data: anamnesisGroups, isLoading: groupsLoading } = useAnamnesisGroups()
   const createRecord = useCreateClinicalRecord()
 
@@ -2020,6 +2032,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const [simpleRecord, setSimpleRecord] = useState({ title: '', content: '', performedAt: '' })
   // for anamnesis type
   const [anamnesisAnswers, setAnamnesisAnswers] = useState<Record<string, string>>({})
+  const [anamnesisPerformedAt, setAnamnesisPerformedAt] = useState('')
   const [entrySubmitting, setEntrySubmitting] = useState(false)
 
   // edit record
@@ -2027,10 +2040,14 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const [editValues, setEditValues] = useState({ title: '', content: '', performedAt: '' })
   // edit anamnesis answers (used when editingRecord.type === 'anamnesis')
   const [editAnamnesisAnswers, setEditAnamnesisAnswers] = useState<Record<string, string>>({})
+  const [editAnamnesisPerformedAt, setEditAnamnesisPerformedAt] = useState('')
   // group used in the anamnesis being edited (questions to show in edit form)
   const [editAnamnesisGroup, setEditAnamnesisGroup] = useState<AnamnesisGroup | null>(null)
   const updateRecord = useUpdateClinicalRecord(editingRecord?.id ?? '')
+  const deleteRecord = useDeleteClinicalRecord()
+  const [deletingRecord, setDeletingRecord] = useState<ClinicalRecord | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
+  const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set())
 
   // helpers
   const templateLoading = groupsLoading
@@ -2043,6 +2060,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
     setSelectedGroupId(anamnesisGroups?.[0]?.id ?? '')
     setSimpleRecord({ title: '', content: '', performedAt: '' })
     setAnamnesisAnswers({})
+    setAnamnesisPerformedAt('')
     setShowEntryForm(true)
   }
 
@@ -2051,19 +2069,24 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
     if (r.type === 'anamnesis') {
       // Parse stored content: { groupId?, groupName?, entries: [...] } OR legacy flat array
       let storedGroupId: string | undefined
+      let storedGroupName: string | undefined
       let entries: Array<{ question: string; answer: string; type?: string }> = []
       try {
-        const parsed = JSON.parse(r.content) as { groupId?: string; entries?: typeof entries } | typeof entries
+        const parsed = JSON.parse(r.content) as { groupId?: string; groupName?: string; entries?: typeof entries } | typeof entries
         if (Array.isArray(parsed)) {
           entries = parsed
         } else {
           storedGroupId = parsed.groupId
+          storedGroupName = parsed.groupName
           entries = parsed.entries ?? []
         }
       } catch (err) { console.warn('Failed to parse anamnesis content for record', r.id, '– displaying empty edit form', err) }
 
-      // Find the group used for this anamnesis (by stored id, else first group)
-      const group = (storedGroupId ? anamnesisGroups?.find((g) => g.id === storedGroupId) : null) ?? anamnesisGroups?.[0] ?? null
+      // Find the group used for this anamnesis (by stored id, then by name, else first group)
+      const group = (storedGroupId ? anamnesisGroups?.find((g) => g.id === storedGroupId) : null)
+        ?? (storedGroupName ? anamnesisGroups?.find((g) => g.name === storedGroupName) : null)
+        ?? anamnesisGroups?.[0]
+        ?? null
       setEditAnamnesisGroup(group)
 
       const questions = (group?.questions ?? []).filter((q): q is AnamnesisQuestion => q.type !== 'separator')
@@ -2085,6 +2108,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         }
       }
       setEditAnamnesisAnswers(answers)
+      setEditAnamnesisPerformedAt(r.performedAt ? r.performedAt.slice(0, 10) : '')
     } else {
       setEditValues({
         title: r.title,
@@ -2117,6 +2141,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         await updateRecord.mutateAsync({
           customerId: customer.id,
           content: JSON.stringify({ groupId: editAnamnesisGroup?.id, groupName: editAnamnesisGroup?.name, entries }),
+          performedAt: editAnamnesisPerformedAt ? new Date(editAnamnesisPerformedAt + 'T12:00:00').toISOString() : undefined,
         })
         toast.success('Anamnese atualizada')
       } else {
@@ -2160,6 +2185,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           title: `Anamnese${selectedGroup ? ` – ${selectedGroup.name}` : ''}`,
           content: JSON.stringify({ groupId: selectedGroup?.id, groupName: selectedGroup?.name, entries }),
           type: 'anamnesis',
+          performedAt: anamnesisPerformedAt ? new Date(anamnesisPerformedAt + 'T12:00:00').toISOString() : null,
         })
       } else {
         if (!simpleRecord.title.trim()) { toast.error('Preencha o título'); return }
@@ -2174,6 +2200,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
       }
       setShowEntryForm(false)
       setAnamnesisAnswers({})
+      setAnamnesisPerformedAt('')
       setSimpleRecord({ title: '', content: '', performedAt: '' })
       toast.success('Lançamento salvo')
     } catch (err: unknown) {
@@ -2240,7 +2267,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos'], ['evolucao', 'Evolução']] as const).map(([id, label]) => (
+        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos'], ['evolucao', 'Avaliação']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -2360,20 +2387,30 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prontuário</p>
             </div>
-            {!showEntryForm && (
-              <button
-                onClick={openEntryForm}
-                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
-              >
-                <Plus className="h-3 w-3" />
-                Novo lançamento
-              </button>
-            )}
+            <Button
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={openEntryForm}
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Novo lançamento
+            </Button>
           </div>
 
-          {/* ── New-entry form ── */}
+          {/* ── New-entry dialog ── */}
           {showEntryForm && (
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+            <Dialog open isDirty={
+              entryType === 'anamnesis'
+                ? Object.values(anamnesisAnswers).some((v) => v?.trim()) || !!anamnesisPerformedAt
+                : !!simpleRecord.title.trim() || !!simpleRecord.content.trim() || !!simpleRecord.performedAt
+            } onClose={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }}>
+              <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+                <DialogTitle className="mb-0 text-sm">Novo lançamento</DialogTitle>
+                <button type="button" onClick={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-4 overflow-y-auto max-h-[65vh]">
               {/* Type selector */}
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Tipo de lançamento</label>
@@ -2425,6 +2462,17 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                           </select>
                         </div>
                       )}
+
+                      {/* Date of evaluation */}
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Data de realização (opcional)</label>
+                        <input
+                          type="date"
+                          value={anamnesisPerformedAt}
+                          onChange={(e) => setAnamnesisPerformedAt(e.target.value)}
+                          className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                        />
+                      </div>
 
                       {/* Questions + separators from selected group */}
                       {(selectedGroup?.questions ?? []).length === 0 ? (
@@ -2492,7 +2540,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                               )}
                               {q.type === 'multiple' && (
                                 <div className="space-y-1">
-                                  {(q.options ?? []).map((opt) => (
+                                  {(q.options ?? []).map((opt, idx) => (
                                     <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
                                       <input
                                         type="checkbox"
@@ -2503,6 +2551,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                           setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
                                         }}
                                       />
+                                      {(q.optionImages ?? [])[idx] && (
+                                        <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover" />
+                                      )}
                                       {opt}
                                     </label>
                                   ))}
@@ -2529,6 +2580,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                             })
                                           }}
                                         />
+                                        {opt.imageUrl && (
+                                          <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                                        )}
                                         {opt.label}
                                       </label>
                                       {opt.withDescription && anamnesisAnswers[q.id] === opt.label && (
@@ -2595,79 +2649,106 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                 </div>
               )}
 
-              {/* Action buttons */}
-              <div className="flex gap-2 pt-1">
+              </div>
+              <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
                 <button
+                  type="button"
+                  onClick={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }}
+                  className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
                   onClick={() => void submitEntry()}
                   disabled={entrySubmitting || (entryType !== 'anamnesis' && (!simpleRecord.title.trim() || !simpleRecord.content.trim()))}
-                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {entrySubmitting ? 'Salvando…' : 'Salvar lançamento'}
                 </button>
+              </div>
+            </Dialog>
+          )}
+
+          {/* ── Edit record dialog ── */}
+          {editingRecord && editingRecord.type !== 'anamnesis' && (
+            <Dialog open isDirty onClose={() => setEditingRecord(null)}>
+              <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+                <DialogTitle className="mb-0 text-sm">Editar lançamento</DialogTitle>
+                <button type="button" onClick={() => setEditingRecord(null)} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-3 overflow-y-auto max-h-[65vh]">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Título</label>
+                  <input
+                    value={editValues.title}
+                    onChange={(e) => setEditValues((prev) => ({ ...prev, title: e.target.value }))}
+                    className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Conteúdo</label>
+                  <textarea
+                    value={editValues.content}
+                    onChange={(e) => setEditValues((prev) => ({ ...prev, content: e.target.value }))}
+                    rows={4}
+                    className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Data de realização</label>
+                  <input
+                    type="date"
+                    value={editValues.performedAt}
+                    onChange={(e) => setEditValues((prev) => ({ ...prev, performedAt: e.target.value }))}
+                    className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
                 <button
-                  onClick={() => setShowEntryForm(false)}
-                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                  type="button"
+                  onClick={() => setEditingRecord(null)}
+                  className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
                 >
                   Cancelar
                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Edit record modal ── */}
-          {editingRecord && editingRecord.type !== 'anamnesis' && (
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-              <p className="text-xs font-semibold text-primary">Editar lançamento</p>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Título</label>
-                <input
-                  value={editValues.title}
-                  onChange={(e) => setEditValues((prev) => ({ ...prev, title: e.target.value }))}
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Conteúdo</label>
-                <textarea
-                  value={editValues.content}
-                  onChange={(e) => setEditValues((prev) => ({ ...prev, content: e.target.value }))}
-                  rows={3}
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Data de realização</label>
-                <input
-                  type="date"
-                  value={editValues.performedAt}
-                  onChange={(e) => setEditValues((prev) => ({ ...prev, performedAt: e.target.value }))}
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
-                />
-              </div>
-              <div className="flex gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={() => void submitEdit()}
                   disabled={editSubmitting}
-                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {editSubmitting ? 'Salvando…' : 'Salvar alterações'}
                 </button>
-                <button
-                  onClick={() => setEditingRecord(null)}
-                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
-                >
-                  Cancelar
-                </button>
               </div>
-            </div>
+            </Dialog>
           )}
 
-          {/* ── Edit anamnesis modal ── */}
+          {/* ── Edit anamnesis dialog ── */}
           {editingRecord && editingRecord.type === 'anamnesis' && (
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
-              <p className="text-xs font-semibold text-primary">
-                Editar Anamnese{editAnamnesisGroup ? ` – ${editAnamnesisGroup.name}` : ''}
-              </p>
+            <Dialog open isDirty onClose={() => setEditingRecord(null)}>
+              <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+                <DialogTitle className="mb-0 text-sm">
+                  Editar Anamnese{editAnamnesisGroup ? ` – ${editAnamnesisGroup.name}` : ''}
+                </DialogTitle>
+                <button type="button" onClick={() => setEditingRecord(null)} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-3 overflow-y-auto max-h-[65vh]">
+              {/* Date of evaluation */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Data de realização (opcional)</label>
+                <input
+                  type="date"
+                  value={editAnamnesisPerformedAt}
+                  onChange={(e) => setEditAnamnesisPerformedAt(e.target.value)}
+                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                />
+              </div>
               {templateLoading ? (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -2734,7 +2815,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                       )}
                       {q.type === 'multiple' && (
                         <div className="space-y-1">
-                          {(q.options ?? []).map((opt) => (
+                          {(q.options ?? []).map((opt, idx) => (
                             <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
                               <input
                                 type="checkbox"
@@ -2745,6 +2826,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                   setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
                                 }}
                               />
+                              {(q.optionImages ?? [])[idx] && (
+                                <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover" />
+                              )}
                               {opt}
                             </label>
                           ))}
@@ -2768,6 +2852,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                     })
                                   }}
                                 />
+                                {opt.imageUrl && (
+                                  <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                                )}
                                 {opt.label}
                               </label>
                               {opt.withDescription && editAnamnesisAnswers[q.id] === opt.label && (
@@ -2787,22 +2874,25 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   )
                 })
               )}
-              <div className="flex gap-2 pt-1">
+              </div>
+              <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
                 <button
-                  onClick={() => void submitEdit()}
-                  disabled={editSubmitting}
-                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
-                >
-                  {editSubmitting ? 'Salvando…' : 'Salvar anamnese'}
-                </button>
-                <button
+                  type="button"
                   onClick={() => setEditingRecord(null)}
-                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                  className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
                 >
                   Cancelar
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void submitEdit()}
+                  disabled={editSubmitting}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {editSubmitting ? 'Salvando…' : 'Salvar anamnese'}
+                </button>
               </div>
-            </div>
+            </Dialog>
           )}
 
           {/* ── Chronological history ── */}
@@ -2812,20 +2902,22 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             </div>
           ) : !clinicalRecords.data?.items.length ? (
             <p className="rounded-lg border bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
-              Nenhum lançamento. Clique em "Novo lançamento" para iniciar.
+              Nenhum lançamento. Clique em &quot;Novo lançamento&quot; para iniciar.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {clinicalRecords.data.items.map((r) => {
                 // For anamnesis, parse JSON entries; for others show content as text
                 let anamnesisEntries: Array<{ question: string; answer: string; type?: string }> = []
                 let anamnesisGroupName: string | undefined
+                let anamnesisGroupId: string | undefined
                 if (r.type === 'anamnesis') {
                   try {
-                    const parsed = JSON.parse(r.content) as { groupName?: string; entries?: typeof anamnesisEntries } | typeof anamnesisEntries
+                    const parsed = JSON.parse(r.content) as { groupId?: string; groupName?: string; entries?: typeof anamnesisEntries } | typeof anamnesisEntries
                     if (Array.isArray(parsed)) {
                       anamnesisEntries = parsed
                     } else {
+                      anamnesisGroupId = parsed.groupId
                       anamnesisGroupName = parsed.groupName
                       anamnesisEntries = parsed.entries ?? []
                     }
@@ -2842,63 +2934,223 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   return answer
                 }
 
+                const isCollapsed = !expandedRecords.has(r.id)
+                const toggleCollapse = () =>
+                  setExpandedRecords((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(r.id)) next.delete(r.id)
+                    else next.add(r.id)
+                    return next
+                  })
+
+                // Missing required fields for anamnesis send
+                const group = anamnesisGroups?.find((g) => g.id === anamnesisGroupId || g.name === anamnesisGroupName)
+                const requiredQuestions = (group?.questions ?? []).filter((q): q is AnamnesisQuestion => q.type !== 'separator' && q.required)
+                const missingRequired = requiredQuestions.filter((q) => !anamnesisEntries.find((e) => e.question === q.text && e.answer?.trim()))
+                const isAnamnesisEmpty = anamnesisEntries.filter((e) => e.answer?.trim()).length === 0
+
                 return (
-                  <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-foreground">
+                  <div key={r.id} className="rounded-lg border bg-card overflow-hidden">
+                    {/* ── Header row (always visible) ── */}
+                    <button
+                      type="button"
+                      onClick={toggleCollapse}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 bg-muted/20 hover:bg-muted/30 transition-colors text-left"
+                    >
+                      {isCollapsed
+                        ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      }
+                      <span className="flex-1 text-xs font-semibold text-foreground truncate">
                         {r.type === 'anamnesis'
                           ? `Anamnese${anamnesisGroupName ? ` – ${anamnesisGroupName}` : ''}`
                           : r.title}
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
-                          {TYPE_LABEL[r.type] ?? r.type}
-                        </span>
-                        <button
-                          onClick={() => openEditRecord(r)}
-                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border"
-                        >
-                          Editar
-                        </button>
-                      </div>
-                    </div>
-
-                    {r.type === 'anamnesis' ? (
-                      <div className="space-y-1">
-                        {anamnesisEntries.filter((e) => e.answer?.trim()).map((e, i) => (
-                          <div key={i} className="flex gap-2 text-xs">
-                            <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
-                            <span className="font-medium text-foreground text-right max-w-[55%]">{formatAnswer(e.answer, e.type)}</span>
-                          </div>
-                        ))}
-                        {anamnesisEntries.filter((e) => e.answer?.trim()).length === 0 && (
-                          <p className="text-xs text-muted-foreground italic">Sem respostas registradas.</p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{r.content}</p>
-                    )}
-
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 pt-0.5">
-                      {r.performedAt && (
-                        <span className="font-medium text-muted-foreground/80">
-                          Realizado: {new Date(r.performedAt).toLocaleDateString('pt-BR')}
-                        </span>
-                      )}
-                      {r.performedAt && <span>·</span>}
-                      <span>
-                        {new Date(r.createdAt).toLocaleString('pt-BR', {
-                          day: '2-digit', month: '2-digit', year: 'numeric',
-                          hour: '2-digit', minute: '2-digit',
-                        })}
                       </span>
-                      {r.professional && <span>· {r.professional.name}</span>}
-                    </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
+                        {TYPE_LABEL[r.type] ?? r.type}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                        {r.performedAt
+                          ? new Date(r.performedAt).toLocaleDateString('pt-BR')
+                          : new Date(r.createdAt).toLocaleDateString('pt-BR')}
+                      </span>
+                    </button>
+
+                    {/* ── Expanded body ── */}
+                    {!isCollapsed && (
+                      <div className="px-3 pb-3 pt-2 space-y-2">
+                        {r.type === 'anamnesis' ? (
+                          <div className="space-y-1">
+                            {anamnesisEntries.filter((e) => e.answer?.trim()).map((e, i) => (
+                              <div key={i} className="flex gap-2 text-xs">
+                                <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
+                                <span className="font-medium text-foreground text-right max-w-[55%]">{formatAnswer(e.answer, e.type)}</span>
+                              </div>
+                            ))}
+                            {anamnesisEntries.filter((e) => e.answer?.trim()).length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">Sem respostas registradas.</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">{r.content}</p>
+                        )}
+
+                        <div className="flex items-center gap-2 flex-wrap pt-1">
+                          {/* Action buttons */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => openEditRecord(r)}
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Editar
+                          </Button>
+                          {!r.anamnesisRequestId && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-[10px] text-destructive hover:text-destructive"
+                              disabled={deleteRecord.isPending}
+                              onClick={() => setDeletingRecord(r)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Excluir
+                            </Button>
+                          )}
+                          {/* Enviar para cliente (only for anamnesis manual records) */}
+                          {r.type === 'anamnesis' && !r.anamnesisRequestId && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px]"
+                              onClick={() => {
+                                if (missingRequired.length > 0) {
+                                  toast.warning(`Anamnese incompleta: ${missingRequired.map((q) => q.text).join(', ')} são obrigatórios.`)
+                                } else {
+                                  setSendFromRecordId(r.id)
+                                  setShowSendAnamnesisDialog(true)
+                                }
+                              }}
+                            >
+                              <Send className="h-3 w-3" />
+                              Enviar para cliente
+                            </Button>
+                          )}
+
+                          <span className="ml-auto text-[10px] text-muted-foreground/60">
+                            {new Date(r.createdAt).toLocaleString('pt-BR', {
+                              day: '2-digit', month: '2-digit', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                            })}
+                            {r.professional && ` · ${r.professional.name}`}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
             </div>
           )}
+
+          {/* ── Fichas de Anamnese Digital ── */}
+          <div className="space-y-2 pt-2 border-t">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground">
+                Fichas de Anamnese Digital
+              </p>
+              <Button
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setShowSendAnamnesisDialog(true)}
+              >
+                <Send className="h-3 w-3 mr-1" />
+                Enviar ficha
+              </Button>
+            </div>
+
+            {anamnesisRequestsQuery.isLoading ? (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : !anamnesisRequestsQuery.data?.items.length ? (
+              <p className="rounded-lg border bg-muted/10 px-3 py-3 text-center text-xs text-muted-foreground">
+                Nenhuma ficha enviada. Clique em &quot;Enviar ficha&quot; para enviar uma anamnese digital por link ao cliente.
+              </p>
+            ) : (
+              <>
+              <div className="space-y-1.5">
+                {anamnesisRequestsQuery.data.items.map((req) => {
+                  return (
+                    <div key={req.id} className="rounded-lg border bg-muted/10 p-2.5 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium truncate">{req.groupName}</p>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${ANAMNESIS_STATUS_COLOR[req.status] ?? 'bg-muted text-muted-foreground'}`}>
+                          {ANAMNESIS_STATUS_LABEL[req.status] ?? req.status}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/70">
+                        {new Date(req.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {req.signedAt && ` · Assinado em ${new Date(req.signedAt).toLocaleDateString('pt-BR')}`}
+                      </p>
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => setViewingAnamnesis(req)}
+                        >
+                          <Eye className="h-3 w-3" />
+                          Ver
+                        </Button>
+                        {req.status === 'pending' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => setResendingAnamnesis(req)}
+                          >
+                            <Send className="h-3 w-3" />
+                            Reenviar
+                          </Button>
+                        )}
+                        {role === 'admin' && (req.status === 'pending' || req.status === 'correction_requested') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-[10px] text-destructive hover:text-destructive"
+                            disabled={cancelAnamnesis.isPending}
+                            onClick={async () => {
+                              try {
+                                await cancelAnamnesis.mutateAsync(req.id)
+                                toast.success('Ficha cancelada.')
+                              } catch {
+                                toast.error('Erro ao cancelar a ficha. Tente novamente.')
+                              }
+                            }}
+                          >
+                            <Ban className="h-3 w-3" />
+                            Cancelar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {(anamnesisRequestsQuery.data?.total ?? 0) > anamnesisPageSize && (
+                <DataPagination
+                  page={anamnesisPage}
+                  pageSize={anamnesisPageSize}
+                  total={anamnesisRequestsQuery.data?.total ?? 0}
+                  onPageChange={setAnamnesisPage}
+                  onPageSizeChange={() => {}}
+                />
+              )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -2914,6 +3166,84 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           name: customer.name,
           bodyDataConsentAt: customer.bodyDataConsentAt,
         }} />
+      )}
+
+      {deletingRecord && (
+        <Dialog open onClose={() => setDeletingRecord(null)}>
+          <DialogTitle>Excluir lançamento</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-2">
+            Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" size="sm" onClick={() => setDeletingRecord(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={deleteRecord.isPending}
+              onClick={async () => {
+                try {
+                  await deleteRecord.mutateAsync({ id: deletingRecord.id, customerId: customer.id })
+                  toast.success('Lançamento excluído')
+                  setDeletingRecord(null)
+                } catch {
+                  toast.error('Erro ao excluir lançamento')
+                }
+              }}
+            >
+              Excluir
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {showSendAnamnesisDialog && (
+        <SendAnamnesisDialog
+          customerId={customer.id}
+          customerName={customer.name}
+          defaultPhone={customer.phone}
+          defaultEmail={customer.email}
+          onClose={() => {
+            setShowSendAnamnesisDialog(false)
+            setSendFromRecordId(null)
+          }}
+          onSuccess={async () => {
+            setShowSendAnamnesisDialog(false)
+            if (sendFromRecordId) {
+              try {
+                await deleteRecord.mutateAsync({ id: sendFromRecordId, customerId: customer.id })
+              } catch {
+                // não bloquear o fluxo se a exclusão falhar
+              }
+              setSendFromRecordId(null)
+            }
+            void anamnesisRequestsQuery.refetch()
+            void clinicalRecords.refetch()
+            toast.success('Ficha enviada ao cliente.')
+          }}
+        />
+      )}
+
+      {resendingAnamnesis && (
+        <ResendAnamnesisDialog
+          request={resendingAnamnesis}
+          defaultPhone={customer.phone}
+          defaultEmail={customer.email}
+          onClose={() => setResendingAnamnesis(null)}
+          onSuccess={() => {
+            setResendingAnamnesis(null)
+            void anamnesisRequestsQuery.refetch()
+            toast.success('Ficha reenviada com sucesso.')
+          }}
+        />
+      )}
+
+      {viewingAnamnesis && (
+        <ViewAnamnesisModal
+          request={viewingAnamnesis}
+          onClose={() => setViewingAnamnesis(null)}
+        />
       )}
 
       <div className="flex justify-end gap-2 border-t pt-3">
