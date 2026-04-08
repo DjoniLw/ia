@@ -46,7 +46,18 @@ export class AnamnesisRepository {
         skip,
         take: q.limit,
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+          id: true,
+          clinicId: true,
+          customerId: true,
+          createdByUserId: true,
+          mode: true,
+          status: true,
+          groupId: true,
+          groupName: true,
+          expiresAt: true,
+          signedAt: true,
+          createdAt: true,
           customer: { select: { id: true, name: true } },
           createdBy: { select: { id: true, name: true } },
           clinicalRecord: { select: { id: true } },
@@ -74,7 +85,7 @@ export class AnamnesisRepository {
       where: { signToken },
       include: {
         customer: { select: { id: true, name: true } },
-        clinic: { select: { id: true, name: true, slug: true } },
+        clinic: { select: { id: true, name: true, slug: true, document: true } },
       },
     })
   }
@@ -143,7 +154,7 @@ export class AnamnesisRepository {
     const result = await prisma.anamnesisRequest.updateMany({
       where: {
         signToken,
-        status: 'pending',
+        status: { in: ['pending', 'correction_requested'] },
         expiresAt: { gt: new Date() },
       },
       data: {

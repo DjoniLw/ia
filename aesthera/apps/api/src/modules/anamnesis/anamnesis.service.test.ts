@@ -27,6 +27,15 @@ const mockAppConfig = vi.hoisted(() => ({
   frontendUrl: 'http://localhost:3000',
 }))
 
+const mockPrismaTx = vi.hoisted(() => ({
+  anamnesisRequest: { findFirst: vi.fn() },
+  clinicalRecord: { findFirst: vi.fn(), create: vi.fn() },
+}))
+
+const mockPrisma = vi.hoisted(() => ({
+  $transaction: vi.fn((cb: (tx: typeof mockPrismaTx) => Promise<unknown>) => cb(mockPrismaTx)),
+}))
+
 vi.mock('./anamnesis.repository', () => ({
   AnamnesisRepository: vi.fn(function AnamnesisRepository() {
     return mockRepo
@@ -47,7 +56,11 @@ vi.mock('../../config/app.config', () => ({
   appConfig: mockAppConfig,
 }))
 
-import { AnamnesisService } from './anamnesis.service'
+vi.mock('../../database/prisma/client', () => ({
+  prisma: mockPrisma,
+}))
+
+import { AnamnesisService, handleAnamnesisSignedEvent } from './anamnesis.service'
 import { ConflictError, GoneError, NotFoundError } from '../../shared/errors/app-error'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -305,5 +318,79 @@ describe('AnamnesisService.resend()', () => {
     mockRepo.findById.mockResolvedValue({ id: REQUEST_ID, clinicId: CLINIC_ID, status: 'cancelled' })
 
     await expect(service.resend(CLINIC_ID, REQUEST_ID, {})).rejects.toBeInstanceOf(ConflictError)
+  })
+})
+
+// ── handleAnamnesisSignedEvent ────────────────────────────────────────────────
+
+describe('handleAnamnesisSignedEvent()', () => {
+  const PAYLOAD = {
+    anamnesisRequestId: REQUEST_ID,
+    clinicId: CLINIC_ID,
+    customerId: CUSTOMER_ID,
+    groupName: 'Anamnese Facial',
+    signedAt: new Date().toISOString(),
+  }
+
+  const STORED_REQUEST = {
+    id: REQUEST_ID,
+    clinicId: CLINIC_ID,
+    groupName: 'Anamnese Facial',
+    questionsSnapshot: [
+      { id: 'q1', text: 'Tem alergias?', type: 'yesno', required: true },
+      { id: 'q2', text: 'Observações', type: 'text', required: false },
+    ],
+    staffAnswers: null,
+    clientAnswers: { q1: 'Sim', q2: 'Nenhuma' },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPrisma.$transaction.mockImplementation(
+      (cb: (tx: typeof mockPrismaTx) => Promise<unknown>) => cb(mockPrismaTx),
+    )
+  })
+
+  it('deve criar ClinicalRecord com conteúdo no formato { groupName, entries }', async () => {
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(STORED_REQUEST)
+    mockPrismaTx.clinicalRecord.findFirst.mockResolvedValue(null)
+    mockPrismaTx.clinicalRecord.create.mockResolvedValue({ id: 'cr-1' })
+
+    await handleAnamnesisSignedEvent(PAYLOAD)
+
+    expect(mockPrismaTx.clinicalRecord.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          clinicId: CLINIC_ID,
+          customerId: CUSTOMER_ID,
+          type: 'anamnesis',
+          title: 'Anamnese — Anamnese Facial',
+          content: JSON.stringify({
+            groupName: 'Anamnese Facial',
+            entries: [
+              { question: 'Tem alergias?', answer: 'Sim', type: 'yesno' },
+              { question: 'Observações', answer: 'Nenhuma', type: 'text' },
+            ],
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('não deve criar ClinicalRecord duplicado se já existe (idempotência)', async () => {
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(STORED_REQUEST)
+    mockPrismaTx.clinicalRecord.findFirst.mockResolvedValue({ id: 'cr-existing' })
+
+    await handleAnamnesisSignedEvent(PAYLOAD)
+
+    expect(mockPrismaTx.clinicalRecord.create).not.toHaveBeenCalled()
+  })
+
+  it('não deve criar ClinicalRecord quando AnamnesisRequest não é encontrado', async () => {
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(null)
+
+    await handleAnamnesisSignedEvent(PAYLOAD)
+
+    expect(mockPrismaTx.clinicalRecord.create).not.toHaveBeenCalled()
   })
 })

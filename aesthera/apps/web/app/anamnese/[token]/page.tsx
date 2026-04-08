@@ -27,6 +27,7 @@ interface PublicAnamnesisInfo {
   questionsSnapshot: QuestionEntry[]
   staffAnswers: Record<string, unknown> | null
   expiresAt: string
+  consentText?: string
 }
 
 export default function AnamnesePage() {
@@ -58,10 +59,15 @@ export default function AnamnesePage() {
       })
       .catch((err: unknown) => {
         const status = (err as { response?: { status?: number } })?.response?.status
+        const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
         if (status === 410) {
-          setErrorMsg('Este link de anamnese expirou ou foi cancelado. Solicite um novo envio à clínica.')
+          if (message?.includes('cancelado')) {
+            setErrorMsg('Este link de anamnese foi cancelado. Entre em contato com a clínica.')
+          } else {
+            setErrorMsg('Este link de anamnese expirou. Solicite um novo envio à clínica.')
+          }
         } else if (status === 409) {
-          setErrorMsg('Esta anamnese já foi preenchida e assinada.')
+          setErrorMsg('Esta ficha já foi assinada. Obrigado!')
         } else {
           setErrorMsg('Link de anamnese não encontrado ou inválido.')
         }
@@ -77,15 +83,17 @@ export default function AnamnesePage() {
         clientAnswers: answers,
         signature,
         consentGiven: true,
+        // CA06/CA18: enviar de volta o texto exibido ao paciente para garantir auditoria
+        consentText: data?.consentText,
       })
       setSubmitted(true)
       setShowCanvas(false)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 410) {
-        setErrorMsg('Este link de anamnese expirou.')
+        setErrorMsg('Este link de anamnese expirou. Solicite um novo envio à clínica.')
       } else if (status === 409) {
-        setErrorMsg('Esta anamnese já foi assinada.')
+        setErrorMsg('Esta ficha já foi assinada. Obrigado!')
       } else {
         setSubmitError('Erro ao enviar a anamnese. Tente novamente.')
       }
@@ -107,6 +115,7 @@ export default function AnamnesePage() {
 
   const questions = (data?.questionsSnapshot ?? []).filter((q) => q.type !== 'separator')
   const requiredUnanswered = questions.filter((q) => q.required && !answers[q.id])
+  const isPrefilled = data?.mode === 'prefilled'
 
   // ── Loading ────────────────────────────────────────────────────────────────
 
@@ -170,6 +179,12 @@ export default function AnamnesePage() {
         {/* Corpo */}
         <div className="px-6 py-6 space-y-6">
 
+          {isPrefilled && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              A clínica preencheu esta ficha com antecedência. Revise as informações abaixo e assine para confirmar.
+            </div>
+          )}
+
           {questions.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               Nenhuma pergunta disponível.
@@ -195,6 +210,13 @@ export default function AnamnesePage() {
                       {q.required && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
 
+                    {/* Modo prefilled: exibe respostas do staff como somente leitura */}
+                    {isPrefilled ? (
+                      <p className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                        {answers[q.id] || <span className="italic text-muted-foreground">Não preenchido</span>}
+                      </p>
+                    ) : (
+                      <>
                     {q.type === 'yesno' && (
                       <div className="flex gap-2">
                         {['Sim', 'Não'].map((opt) => (
@@ -259,6 +281,8 @@ export default function AnamnesePage() {
                         className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-violet-400 focus:outline-none"
                       />
                     )}
+                      </>
+                    )}
                   </div>
                 )
               })}
@@ -270,7 +294,14 @@ export default function AnamnesePage() {
           {/* Canvas de assinatura */}
           {showCanvas ? (
             <SignatureCanvas
-              onConfirm={(b64) => void handleSubmit(b64)}
+              onConfirm={(b64) => {
+                // CA16: validar tamanho máximo da assinatura (3 MB ≈ 4,2 MB em base64)
+                if (b64.length > 4_200_000) {
+                  setSubmitError('A assinatura excede o tamanho máximo permitido (3 MB). Tente novamente com um traço mais simples.')
+                  return
+                }
+                void handleSubmit(b64)
+              }}
               onCancel={() => setShowCanvas(false)}
               isPending={submitting}
               confirmLabel="Assinar e enviar"
@@ -286,9 +317,13 @@ export default function AnamnesePage() {
                   className="mt-0.5 h-4 w-4 shrink-0 rounded accent-violet-600"
                 />
                 <span className="text-sm text-muted-foreground">
-                  Declaro que as informações fornecidas são verdadeiras e consinto com o uso dos
-                  meus dados de saúde para finalidades clínicas, conforme a{' '}
-                  <strong>LGPD (Lei 13.709/2018)</strong>.
+                  {data?.consentText ?? (
+                    <>
+                      Declaro que as informações fornecidas são verdadeiras e consinto com o uso dos
+                      meus dados de saúde para finalidades clínicas, conforme a{' '}
+                      <strong>LGPD (Lei 13.709/2018)</strong>.
+                    </>
+                  )}
                 </span>
               </label>
 

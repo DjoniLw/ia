@@ -61,7 +61,7 @@ export async function anamnesisRoutes(app: FastifyInstance) {
    */
   app.post(
     '/anamnesis-requests/:id/resend',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])], config: { rateLimit: { max: 3, timeWindow: '1 hour' } } },
     async (req, reply) => {
       const { id } = req.params as { id: string }
       const dto = ResendAnamnesisDto.parse(req.body)
@@ -71,11 +71,11 @@ export async function anamnesisRoutes(app: FastifyInstance) {
 
   /**
    * DELETE /anamnesis-requests/:id
-   * Cancela uma solicitação de anamnese pendente.
+   * Cancela uma solicitação de anamnese pendente. Apenas admin (CA11).
    */
   app.delete(
     '/anamnesis-requests/:id',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
     async (req, reply) => {
       const { id } = req.params as { id: string }
       await svc.cancel(req.clinicId, id)
@@ -114,7 +114,7 @@ export async function anamnesisRoutes(app: FastifyInstance) {
       const userAgent = Array.isArray(rawUserAgent) ? rawUserAgent[0] : (rawUserAgent ?? null)
       const result = await svc.submit(
         token,
-        { clientAnswers: dto.clientAnswers, signature: dto.signature, consentGiven: dto.consentGiven },
+        { clientAnswers: dto.clientAnswers, signature: dto.signature, consentGiven: dto.consentGiven, consentText: dto.consentText },
         { ipAddress: req.ip ?? null, userAgent },
       )
       return reply.send(result)
@@ -122,12 +122,12 @@ export async function anamnesisRoutes(app: FastifyInstance) {
   )
 
   /**
-   * POST /public/anamnese/:token/correction
+   * PATCH /public/anamnese/:token/request-correction
    * Paciente solicita correção de uma anamnese pendente.
    * Rota pública — autenticada apenas pelo token.
    */
-  app.post(
-    '/public/anamnese/:token/correction',
+  app.patch(
+    '/public/anamnese/:token/request-correction',
     { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
     async (req, reply) => {
       const { token } = req.params as { token: string }

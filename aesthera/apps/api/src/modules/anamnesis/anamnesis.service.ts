@@ -25,6 +25,24 @@ function buildSignLink(token: string) {
   return `${appConfig.frontendUrl}/anamnese/${token}`
 }
 
+/** Gera o texto de consentimento LGPD incluindo dados da clínica (CA06/CA18). */
+function buildConsentText(opts: {
+  customerName: string
+  groupName: string
+  clinicName: string
+  clinicDocument: string | null
+}) {
+  const clinicInfo = opts.clinicDocument
+    ? `${opts.clinicName} (CNPJ ${opts.clinicDocument})`
+    : opts.clinicName
+  return (
+    `Eu, ${opts.customerName}, declaro que as informações fornecidas são verdadeiras ` +
+    `e consinto com o uso dos meus dados de saúde para finalidades clínicas por ${clinicInfo}, ` +
+    `conforme a LGPD (Lei 13.709/2018). ` +
+    `Ficha: "${opts.groupName}".`
+  )
+}
+
 export class AnamnesisService {
   private repo = new AnamnesisRepository()
   private notifications = new NotificationsService()
@@ -95,6 +113,13 @@ export class AnamnesisService {
       questionsSnapshot: request.questionsSnapshot,
       staffAnswers: request.staffAnswers,
       expiresAt: request.expiresAt,
+      // CA06/CA18: texto de consentimento gerado com dados da clínica para exibição e auditoria
+      consentText: buildConsentText({
+        customerName: request.customer.name,
+        groupName: request.groupName,
+        clinicName: request.clinic.name,
+        clinicDocument: (request.clinic as { document?: string | null }).document ?? null,
+      }),
     }
   }
 
@@ -105,6 +130,8 @@ export class AnamnesisService {
       clientAnswers: Record<string, unknown>
       signature: string
       consentGiven: true
+      /** Snapshot do texto de consentimento exibido ao paciente (CA06/CA18) */
+      consentText?: string
     },
     meta: { ipAddress: string | null; userAgent: string | null },
   ) {
@@ -127,9 +154,13 @@ export class AnamnesisService {
       .update(data.signature)
       .digest('hex')
 
-    const consentText =
-      `Paciente ${request.customer.name} consentiu com o preenchimento e assinatura ` +
-      `da anamnese "${request.groupName}" em ${new Date().toISOString()}.`
+    // CA06/CA18: persistir exatamente o texto exibido ao paciente, com fallback para geração automática
+    const consentText = data.consentText ?? buildConsentText({
+      customerName: request.customer.name,
+      groupName: request.groupName,
+      clinicName: request.clinic.name,
+      clinicDocument: (request.clinic as { document?: string | null }).document ?? null,
+    })
 
     const now = new Date()
     const count = await this.repo.submitSignature(signToken, {
@@ -273,8 +304,43 @@ export class AnamnesisService {
   }
 }
 
-// Singleton para uso no domain-event-handlers
-export const anamnesisService = new AnamnesisService()
+// Singleton lazy para evitar side effects em import time nos domain-event-handlers.
+let _anamnesisServiceInstance: AnamnesisService | undefined
+
+export function getAnamnesisService(): AnamnesisService {
+  if (!_anamnesisServiceInstance) {
+    _anamnesisServiceInstance = new AnamnesisService()
+  }
+  return _anamnesisServiceInstance
+}
+
+// Proxy mantém compatibilidade com imports existentes mas adia a instanciação até o primeiro uso.
+export const anamnesisService = new Proxy({} as AnamnesisService, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getAnamnesisService(), prop, receiver)
+  },
+})
+
+/** Transforma snapshot de perguntas + respostas no formato { groupName, entries } esperado pelo prontuário. */
+function buildClinicalRecordContent(request: {
+  groupName: string
+  questionsSnapshot: unknown
+  staffAnswers: unknown
+  clientAnswers: unknown
+}) {
+  const snapshot = (request.questionsSnapshot as Array<{ id: string; text: string; type?: string }>) ?? []
+  const clientAnswers = (request.clientAnswers as Record<string, unknown>) ?? {}
+  const staffAnswers = (request.staffAnswers as Record<string, unknown>) ?? {}
+
+  const entries = snapshot
+    .filter((q) => q.type !== 'separator')
+    .map((q) => {
+      const answer = clientAnswers[q.id] ?? staffAnswers[q.id] ?? ''
+      return { question: q.text, answer: String(answer), type: q.type }
+    })
+
+  return { groupName: request.groupName, entries }
+}
 
 /** Cria o prontuário clínico automaticamente após anamnese assinada. */
 export async function handleAnamnesisSignedEvent(payload: {
@@ -301,11 +367,7 @@ export async function handleAnamnesisSignedEvent(payload: {
         clinicId: payload.clinicId,
         customerId: payload.customerId,
         title: `Anamnese — ${payload.groupName}`,
-        content: JSON.stringify({
-          questionsSnapshot: request.questionsSnapshot,
-          staffAnswers: request.staffAnswers,
-          clientAnswers: request.clientAnswers,
-        }),
+        content: JSON.stringify(buildClinicalRecordContent(request)),
         type: 'anamnesis',
         performedAt: new Date(payload.signedAt),
         anamnesisRequestId: request.id,

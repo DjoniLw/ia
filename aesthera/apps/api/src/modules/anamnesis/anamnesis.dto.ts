@@ -22,7 +22,7 @@ export const CreateAnamnesisRequestDto = z.object({
   groupId: z.string().min(1).max(100),
   /** Snapshot do nome do grupo no momento da criação */
   groupName: z.string().min(1).max(200),
-  /** Snapshot das perguntas [{ id, label, type, required, options? }] */
+  /** Snapshot das perguntas [{ id, text, type, required, options? }] */
   questionsSnapshot: z.array(z.record(z.unknown())).min(1),
   /** Respostas pré-preenchidas pelo staff (apenas para mode=prefilled) */
   staffAnswers: z.record(z.unknown()).optional().nullable(),
@@ -60,6 +60,8 @@ export const PublicSubmitAnamnesisDto = z.object({
   consentGiven: z.literal(true, {
     errorMap: () => ({ message: 'O consentimento é obrigatório para assinar a anamnese.' }),
   }),
+  /** Snapshot do texto de consentimento exibido ao paciente (CA06/CA18) */
+  consentText: z.string().min(1).max(2000).optional(),
 })
 export type PublicSubmitAnamnesisDto = z.infer<typeof PublicSubmitAnamnesisDto>
 

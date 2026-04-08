@@ -2013,6 +2013,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   }
 
   // ── clinical / prontuário ──────────────────────────────────────────────
+  const role = useRole()
   const clinicalRecords = useClinicalRecords(customer.id)
   const anamnesisRequestsQuery = useAnamnesisRequests({ customerId: customer.id })
   const cancelAnamnesis = useCancelAnamnesis()
@@ -2970,7 +2971,14 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                         </button>
                         {req.status === 'pending' && (
                           <button
-                            onClick={() => void resendAnamnesis.mutateAsync({ id: req.id }).then(() => toast.success('Ficha reenviada.'))}
+                            onClick={async () => {
+                              try {
+                                await resendAnamnesis.mutateAsync({ id: req.id })
+                                toast.success('Ficha reenviada.')
+                              } catch {
+                                toast.error('Erro ao reenviar a ficha. Tente novamente.')
+                              }
+                            }}
                             disabled={resendAnamnesis.isPending}
                             className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
                           >
@@ -2978,10 +2986,15 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                             Reenviar
                           </button>
                         )}
-                        {(req.status === 'pending' || req.status === 'correction_requested') && (
+                        {role === 'admin' && (req.status === 'pending' || req.status === 'correction_requested') && (
                           <button
-                            onClick={() => {
-                              void cancelAnamnesis.mutateAsync(req.id).then(() => toast.success('Ficha cancelada.'))
+                            onClick={async () => {
+                              try {
+                                await cancelAnamnesis.mutateAsync(req.id)
+                                toast.success('Ficha cancelada.')
+                              } catch {
+                                toast.error('Erro ao cancelar a ficha. Tente novamente.')
+                              }
                             }}
                             disabled={cancelAnamnesis.isPending}
                             className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-50 disabled:opacity-50"
