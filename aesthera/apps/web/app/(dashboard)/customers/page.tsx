@@ -61,7 +61,7 @@ import { DataPagination } from '@/components/ui/data-pagination'
 import { useCustomerWallet, type WalletEntry, useCreateWalletEntry } from '@/lib/hooks/use-wallet'
 import { useCustomerPackages, type CustomerPackage } from '@/lib/hooks/use-packages'
 import { useBilling, useOneBilling, useCancelBilling, type Billing as ApiBilling } from '@/lib/hooks/use-appointments'
-import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR } from '@/lib/status-colors'
+import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR, ANAMNESIS_STATUS_LABEL, ANAMNESIS_STATUS_COLOR } from '@/lib/status-colors'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
@@ -2017,7 +2017,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   // ── clinical / prontuário ──────────────────────────────────────────────
   const role = useRole()
   const clinicalRecords = useClinicalRecords(customer.id)
-  const anamnesisRequestsQuery = useAnamnesisRequests({ customerId: customer.id })
+  const [anamnesisPage, setAnamnesisPage] = useState(1)
+  const anamnesisPageSize = 5
+  const anamnesisRequestsQuery = useAnamnesisRequests({ customerId: customer.id, page: anamnesisPage, limit: anamnesisPageSize })
   const cancelAnamnesis = useCancelAnamnesis()
   const [showSendAnamnesisDialog, setShowSendAnamnesisDialog] = useState(false)
   const [resendingAnamnesis, setResendingAnamnesis] = useState<AnamnesisRequest | null>(null)
@@ -2268,7 +2270,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos'], ['evolucao', 'Evolução']] as const).map(([id, label]) => (
+        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos'], ['evolucao', 'Avaliação']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -3063,16 +3065,17 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           {/* ── Fichas de Anamnese Digital ── */}
           <div className="space-y-2 pt-2 border-t">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-xs font-semibold text-muted-foreground">
                 Fichas de Anamnese Digital
               </p>
-              <button
+              <Button
+                size="sm"
+                className="h-7 px-2 text-xs"
                 onClick={() => setShowSendAnamnesisDialog(true)}
-                className="flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
               >
-                <Send className="h-3 w-3" />
+                <Send className="h-3 w-3 mr-1" />
                 Enviar ficha
-              </button>
+              </Button>
             </div>
 
             {anamnesisRequestsQuery.isLoading ? (
@@ -3084,25 +3087,15 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                 Nenhuma ficha enviada. Clique em &quot;Enviar ficha&quot; para enviar uma anamnese digital por link ao cliente.
               </p>
             ) : (
+              <>
               <div className="space-y-1.5">
                 {anamnesisRequestsQuery.data.items.map((req) => {
-                  const statusLabel: Record<string, string> = {
-                    pending: 'Pendente', signed: 'Assinado', expired: 'Expirado',
-                    correction_requested: 'Correção', cancelled: 'Cancelado',
-                  }
-                  const statusColor: Record<string, string> = {
-                    pending: 'bg-amber-100 text-amber-700',
-                    signed: 'bg-emerald-100 text-emerald-700',
-                    expired: 'bg-gray-100 text-gray-500',
-                    correction_requested: 'bg-blue-100 text-blue-700',
-                    cancelled: 'bg-red-100 text-red-500',
-                  }
                   return (
                     <div key={req.id} className="rounded-lg border bg-muted/10 p-2.5 space-y-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs font-medium truncate">{req.groupName}</p>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColor[req.status] ?? 'bg-muted text-muted-foreground'}`}>
-                          {statusLabel[req.status] ?? req.status}
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${ANAMNESIS_STATUS_COLOR[req.status] ?? 'bg-muted text-muted-foreground'}`}>
+                          {ANAMNESIS_STATUS_LABEL[req.status] ?? req.status}
                         </span>
                       </div>
                       <p className="text-[10px] text-muted-foreground/70">
@@ -3110,24 +3103,32 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                         {req.signedAt && ` · Assinado em ${new Date(req.signedAt).toLocaleDateString('pt-BR')}`}
                       </p>
                       <div className="flex items-center gap-1.5 pt-0.5">
-                        <button
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
                           onClick={() => setViewingAnamnesis(req)}
-                          className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50"
                         >
                           <Eye className="h-3 w-3" />
                           Ver
-                        </button>
+                        </Button>
                         {req.status === 'pending' && (
-                          <button
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-2 text-[10px]"
                             onClick={() => setResendingAnamnesis(req)}
-                            className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50"
                           >
                             <Send className="h-3 w-3" />
                             Reenviar
-                          </button>
+                          </Button>
                         )}
                         {role === 'admin' && (req.status === 'pending' || req.status === 'correction_requested') && (
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-[10px] text-destructive hover:text-destructive"
+                            disabled={cancelAnamnesis.isPending}
                             onClick={async () => {
                               try {
                                 await cancelAnamnesis.mutateAsync(req.id)
@@ -3136,18 +3137,26 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                 toast.error('Erro ao cancelar a ficha. Tente novamente.')
                               }
                             }}
-                            disabled={cancelAnamnesis.isPending}
-                            className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-red-500 hover:bg-red-50 disabled:opacity-50"
                           >
                             <Ban className="h-3 w-3" />
                             Cancelar
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
                   )
                 })}
               </div>
+              {(anamnesisRequestsQuery.data?.total ?? 0) > anamnesisPageSize && (
+                <DataPagination
+                  page={anamnesisPage}
+                  pageSize={anamnesisPageSize}
+                  total={anamnesisRequestsQuery.data?.total ?? 0}
+                  onPageChange={setAnamnesisPage}
+                  onPageSizeChange={() => {}}
+                />
+              )}
+              </>
             )}
           </div>
         </div>

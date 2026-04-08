@@ -110,18 +110,26 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
             {groups.length > 1 && (
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium">Grupo de anamnese</label>
-                <select
-                  value={selectedGroupId || groups[0]?.id}
-                  onChange={(e) => {
-                    setSelectedGroupId(e.target.value)
-                    setStaffAnswers({})
-                  }}
-                  className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                >
+                <div className="flex flex-wrap gap-1.5">
                   {groups.map((g) => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGroupId(g.id)
+                        setStaffAnswers({})
+                      }}
+                      className={[
+                        'rounded-full px-3 py-1 text-xs font-medium border transition-colors',
+                        (selectedGroupId || groups[0]?.id) === g.id
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-muted-foreground hover:bg-muted/50',
+                      ].join(' ')}
+                    >
+                      {g.name}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             )}
 

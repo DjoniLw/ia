@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { Loader2, RotateCcw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 export interface SignatureCanvasProps {
   onConfirm: (base64: string) => void
@@ -101,30 +102,35 @@ export function SignatureCanvas({
       </div>
       <p className="text-xs text-center text-muted-foreground">Desenhe sua assinatura acima</p>
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={clear}
-          className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
+          className="text-xs"
         >
           <RotateCcw className="h-3.5 w-3.5" />
           Limpar
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={onCancel}
-          className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted transition-colors"
+          className="text-xs"
         >
           Cancelar
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          size="sm"
           onClick={confirm}
           disabled={isEmpty || isPending}
-          className="ml-auto flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="ml-auto text-xs"
         >
           {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {confirmLabel}
-        </button>
+        </Button>
       </div>
     </div>
   )

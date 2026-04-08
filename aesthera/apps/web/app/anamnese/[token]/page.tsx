@@ -228,8 +228,8 @@ export default function AnamnesePage() {
                             className={[
                               'rounded-full px-4 py-1.5 text-sm border transition-colors font-medium',
                               answers[q.id] === opt
-                                ? 'bg-violet-600 text-white border-violet-600'
-                                : 'bg-white text-gray-700 border-gray-200 hover:border-violet-300',
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-white text-gray-700 border-gray-200 hover:border-primary/50',
                             ].join(' ')}
                           >
                             {opt}
@@ -251,8 +251,8 @@ export default function AnamnesePage() {
                               className={[
                                 'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-sm border transition-colors',
                                 selected
-                                  ? 'bg-violet-600 text-white border-violet-600'
-                                  : 'bg-white text-gray-700 border-gray-200 hover:border-violet-300',
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-white text-gray-700 border-gray-200 hover:border-primary/50',
                               ].join(' ')}
                             >
                               {img && <img src={img} alt="" className="h-14 w-14 rounded-lg object-cover" />}
@@ -276,8 +276,8 @@ export default function AnamnesePage() {
                               className={[
                                 'flex items-center gap-3 w-full rounded-xl px-3 py-2 text-sm border transition-colors text-left',
                                 answers[q.id] === opt.label
-                                  ? 'bg-violet-600 text-white border-violet-600'
-                                  : 'bg-white text-gray-700 border-gray-200 hover:border-violet-300',
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-white text-gray-700 border-gray-200 hover:border-primary/50',
                               ].join(' ')}
                             >
                               {opt.imageUrl && <img src={opt.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover shrink-0" />}
@@ -359,7 +359,7 @@ export default function AnamnesePage() {
                 type="button"
                 onClick={() => setShowCanvas(true)}
                 disabled={!consentChecked || requiredUnanswered.length > 0}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Avançar para assinatura
               </button>
