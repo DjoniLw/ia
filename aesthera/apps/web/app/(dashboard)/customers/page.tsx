@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Ban, Bot, ChevronDown, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet, X } from 'lucide-react'
+import { AlertCircle, Ban, Bot, ChevronDown, ChevronRight, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
