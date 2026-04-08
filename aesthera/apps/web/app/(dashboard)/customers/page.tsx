@@ -2048,7 +2048,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const updateRecord = useUpdateClinicalRecord(editingRecord?.id ?? '')
   const deleteRecord = useDeleteClinicalRecord()
   const [editSubmitting, setEditSubmitting] = useState(false)
-  const [collapsedRecords, setCollapsedRecords] = useState<Set<string>>(new Set())
+  const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set())
 
   // helpers
   const templateLoading = groupsLoading
@@ -2922,9 +2922,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   return answer
                 }
 
-                const isCollapsed = collapsedRecords.has(r.id)
+                const isCollapsed = !expandedRecords.has(r.id)
                 const toggleCollapse = () =>
-                  setCollapsedRecords((prev) => {
+                  setExpandedRecords((prev) => {
                     const next = new Set(prev)
                     if (next.has(r.id)) next.delete(r.id)
                     else next.add(r.id)
