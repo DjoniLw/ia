@@ -2540,7 +2540,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                               )}
                               {q.type === 'multiple' && (
                                 <div className="space-y-1">
-                                  {(q.options ?? []).map((opt) => (
+                                  {(q.options ?? []).map((opt, idx) => (
                                     <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
                                       <input
                                         type="checkbox"
@@ -2551,6 +2551,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                           setAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
                                         }}
                                       />
+                                      {(q.optionImages ?? [])[idx] && (
+                                        <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover" />
+                                      )}
                                       {opt}
                                     </label>
                                   ))}
@@ -2577,6 +2580,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                             })
                                           }}
                                         />
+                                        {opt.imageUrl && (
+                                          <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                                        )}
                                         {opt.label}
                                       </label>
                                       {opt.withDescription && anamnesisAnswers[q.id] === opt.label && (
@@ -2809,7 +2815,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                       )}
                       {q.type === 'multiple' && (
                         <div className="space-y-1">
-                          {(q.options ?? []).map((opt) => (
+                          {(q.options ?? []).map((opt, idx) => (
                             <label key={opt} className="flex items-center gap-1.5 text-xs cursor-pointer">
                               <input
                                 type="checkbox"
@@ -2820,6 +2826,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                   setEditAnamnesisAnswers((prev) => ({ ...prev, [q.id]: updated.join(',') }))
                                 }}
                               />
+                              {(q.optionImages ?? [])[idx] && (
+                                <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover" />
+                              )}
                               {opt}
                             </label>
                           ))}
@@ -2843,6 +2852,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                     })
                                   }}
                                 />
+                                {opt.imageUrl && (
+                                  <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                                )}
                                 {opt.label}
                               </label>
                               {opt.withDescription && editAnamnesisAnswers[q.id] === opt.label && (

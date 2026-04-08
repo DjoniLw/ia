@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  Camera,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -135,10 +136,12 @@ function AnamnesisConfigTab({
     type: QuestionType
     required: boolean
     options: string[]
+    optionImages: (string | null)[]
     selectOptions: AnamnesisQuestionOption[]
-  }>({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+  }>({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
   const [newOptionText, setNewOptionText] = useState('')
   const [newOptionWithDesc, setNewOptionWithDesc] = useState(false)
+  const [newOptionImage, setNewOptionImage] = useState<string | null>(null)
   const [newSepText, setNewSepText] = useState('')
 
   // ── drag reorder ────────────────────────────────────────────────────
@@ -151,11 +154,13 @@ function AnamnesisConfigTab({
     type: QuestionType
     required: boolean
     options: string[]
+    optionImages: (string | null)[]
     selectOptions: AnamnesisQuestionOption[]
-  }>({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+  }>({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
   const [editSepText, setEditSepText] = useState('')
   const [editOptionText, setEditOptionText] = useState('')
   const [editOptionWithDesc, setEditOptionWithDesc] = useState(false)
+  const [editOptionImage, setEditOptionImage] = useState<string | null>(null)
 
   const effectiveGroups = groups ?? serverGroups ?? [DEFAULT_ANAMNESIS_GROUP]
 
@@ -324,11 +329,13 @@ function AnamnesisConfigTab({
         type: q.type,
         required: q.required,
         options: q.type === 'multiple' ? (q.options ?? []) : [],
+        optionImages: q.type === 'multiple' ? (q.optionImages ?? []) : [],
         selectOptions: q.type === 'select' ? (q.selectOptions ?? []) : [],
       })
     }
     setEditOptionText('')
     setEditOptionWithDesc(false)
+    setEditOptionImage(null)
   }
 
   function closeEditItem() {
@@ -336,25 +343,35 @@ function AnamnesisConfigTab({
     setEditSepText('')
     setEditOptionText('')
     setEditOptionWithDesc(false)
+    setEditOptionImage(null)
   }
 
   function addEditOption(type: 'multiple' | 'select') {
     if (!editOptionText.trim()) return
     if (type === 'multiple') {
-      setEditQ((prev) => ({ ...prev, options: [...prev.options, editOptionText.trim()] }))
+      setEditQ((prev) => ({
+        ...prev,
+        options: [...prev.options, editOptionText.trim()],
+        optionImages: [...(prev.optionImages ?? []), editOptionImage],
+      }))
     } else {
       setEditQ((prev) => ({
         ...prev,
-        selectOptions: [...prev.selectOptions, { label: editOptionText.trim(), withDescription: editOptionWithDesc }],
+        selectOptions: [...prev.selectOptions, { label: editOptionText.trim(), withDescription: editOptionWithDesc, ...(editOptionImage ? { imageUrl: editOptionImage } : {}) }],
       }))
     }
     setEditOptionText('')
     setEditOptionWithDesc(false)
+    setEditOptionImage(null)
   }
 
   function removeEditOption(idx: number, type: 'multiple' | 'select') {
     if (type === 'multiple') {
-      setEditQ((prev) => ({ ...prev, options: prev.options.filter((_, i) => i !== idx) }))
+      setEditQ((prev) => ({
+        ...prev,
+        options: prev.options.filter((_, i) => i !== idx),
+        optionImages: (prev.optionImages ?? []).filter((_, i) => i !== idx),
+      }))
     } else {
       setEditQ((prev) => ({ ...prev, selectOptions: prev.selectOptions.filter((_, i) => i !== idx) }))
     }
@@ -373,7 +390,7 @@ function AnamnesisConfigTab({
         text: editQ.text.trim() || (item as AnamnesisQuestion).text,
         type: editQ.type,
         required: editQ.required,
-        ...(editQ.type === 'multiple' && { options: editQ.options }),
+        ...(editQ.type === 'multiple' && { options: editQ.options, optionImages: editQ.optionImages }),
         ...(editQ.type === 'select' && { selectOptions: editQ.selectOptions }),
       }
       return q
@@ -387,9 +404,10 @@ function AnamnesisConfigTab({
   function openAddForm(groupId: string) {
     setAddingToGroupId(groupId)
     setAddMode('question')
-    setNewQ({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+    setNewQ({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
     setNewOptionText('')
     setNewOptionWithDesc(false)
+    setNewOptionImage(null)
     setNewSepText('')
   }
 
@@ -397,29 +415,39 @@ function AnamnesisConfigTab({
     setAddingToGroupId(null)
     setNewOptionText('')
     setNewOptionWithDesc(false)
+    setNewOptionImage(null)
     setNewSepText('')
   }
 
   function addOption() {
     if (!newOptionText.trim()) return
     if (newQ.type === 'multiple') {
-      setNewQ((prev) => ({ ...prev, options: [...prev.options, newOptionText.trim()] }))
+      setNewQ((prev) => ({
+        ...prev,
+        options: [...prev.options, newOptionText.trim()],
+        optionImages: [...prev.optionImages, newOptionImage],
+      }))
     } else if (newQ.type === 'select') {
       setNewQ((prev) => ({
         ...prev,
         selectOptions: [
           ...prev.selectOptions,
-          { label: newOptionText.trim(), withDescription: newOptionWithDesc },
+          { label: newOptionText.trim(), withDescription: newOptionWithDesc, ...(newOptionImage ? { imageUrl: newOptionImage } : {}) },
         ],
       }))
     }
     setNewOptionText('')
     setNewOptionWithDesc(false)
+    setNewOptionImage(null)
   }
 
   function removeOption(idx: number) {
     if (newQ.type === 'multiple') {
-      setNewQ((prev) => ({ ...prev, options: prev.options.filter((_, i) => i !== idx) }))
+      setNewQ((prev) => ({
+        ...prev,
+        options: prev.options.filter((_, i) => i !== idx),
+        optionImages: prev.optionImages.filter((_, i) => i !== idx),
+      }))
     } else if (newQ.type === 'select') {
       setNewQ((prev) => ({
         ...prev,
@@ -449,13 +477,14 @@ function AnamnesisConfigTab({
         text: newQ.text,
         type: newQ.type,
         required: newQ.required,
-        ...(newQ.type === 'multiple' && { options: newQ.options }),
+        ...(newQ.type === 'multiple' && { options: newQ.options, optionImages: newQ.optionImages }),
         ...(newQ.type === 'select' && { selectOptions: newQ.selectOptions }),
       }
       updateGroupItems(addingToGroupId, [...group.questions, q])
-      setNewQ({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+      setNewQ({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
       setNewOptionText('')
       setNewOptionWithDesc(false)
+      setNewOptionImage(null)
     }
   }
 
@@ -470,6 +499,21 @@ function AnamnesisConfigTab({
     reordered.splice(toIndex, 0, moved)
     updateGroupItems(groupId, reordered)
     setDragInfo(null)
+  }
+
+  // ── image helpers ────────────────────────────────────────────────────
+
+  async function readFileAsDataUrl(file: File): Promise<string | null> {
+    if (file.size > 300 * 1024) {
+      alert('Imagem muito grande. O tamanho máximo permitido é 300 KB.')
+      return null
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
   }
 
   // ── save ────────────────────────────────────────────────────────────
@@ -675,7 +719,7 @@ function AnamnesisConfigTab({
                                     <Label className="text-xs">Tipo de resposta</Label>
                                     <select
                                       value={editQ.type}
-                                      onChange={(e) => setEditQ({ ...editQ, type: e.target.value as QuestionType, options: [], selectOptions: [] })}
+                                      onChange={(e) => setEditQ({ ...editQ, type: e.target.value as QuestionType, options: [], optionImages: [], selectOptions: [] })}
                                       className="bg-background w-full rounded-md border px-2 py-1.5 text-sm"
                                     >
                                       {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -694,14 +738,28 @@ function AnamnesisConfigTab({
                                     {editQ.options.length > 0 && (
                                       <div className="flex flex-wrap gap-1.5">
                                         {editQ.options.map((opt, idx) => (
-                                          <span key={idx} className="bg-muted text-foreground flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
+                                          <span key={idx} className="bg-muted text-foreground flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs">
+                                            {(editQ.optionImages ?? [])[idx] && (
+                                              <img src={(editQ.optionImages ?? [])[idx]!} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
+                                            )}
                                             {opt}
                                             <button type="button" onClick={() => removeEditOption(idx, 'multiple')} className="hover:text-red-500"><X className="h-3 w-3" /></button>
                                           </span>
                                         ))}
                                       </div>
                                     )}
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 items-center">
+                                      <label className="cursor-pointer shrink-0" title="Imagem da alternativa">
+                                        <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setEditOptionImage(url) } e.currentTarget.value = '' }} />
+                                        {editOptionImage ? (
+                                          <img src={editOptionImage} alt="" className="h-7 w-7 rounded object-cover border" />
+                                        ) : (
+                                          <div className="h-7 w-7 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50">
+                                            <Camera className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                          </div>
+                                        )}
+                                      </label>
+                                      {editOptionImage && <button type="button" onClick={() => setEditOptionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
                                       <Input value={editOptionText} onChange={(e) => setEditOptionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditOption('multiple') } }} placeholder="Nova alternativa…" className="flex-1 text-sm" />
                                       <Button type="button" size="sm" variant="outline" onClick={() => addEditOption('multiple')} disabled={!editOptionText.trim()}>Adicionar</Button>
                                     </div>
@@ -714,6 +772,7 @@ function AnamnesisConfigTab({
                                       <div className="space-y-1">
                                         {editQ.selectOptions.map((opt, idx) => (
                                           <div key={idx} className="bg-muted/50 flex items-center gap-2 rounded px-2 py-1">
+                                            {opt.imageUrl && <img src={opt.imageUrl} alt="" className="h-6 w-6 rounded object-cover shrink-0" />}
                                             <span className="flex-1 text-xs">{opt.label}</span>
                                             {opt.withDescription && <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white dark:bg-blue-700">com descrição</span>}
                                             <button type="button" onClick={() => removeEditOption(idx, 'select')} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>
@@ -722,6 +781,17 @@ function AnamnesisConfigTab({
                                       </div>
                                     )}
                                     <div className="flex items-center gap-2">
+                                      <label className="cursor-pointer shrink-0" title="Imagem da alternativa">
+                                        <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setEditOptionImage(url) } e.currentTarget.value = '' }} />
+                                        {editOptionImage ? (
+                                          <img src={editOptionImage} alt="" className="h-7 w-7 rounded object-cover border" />
+                                        ) : (
+                                          <div className="h-7 w-7 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50">
+                                            <Camera className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                          </div>
+                                        )}
+                                      </label>
+                                      {editOptionImage && <button type="button" onClick={() => setEditOptionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
                                       <Input value={editOptionText} onChange={(e) => setEditOptionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditOption('select') } }} placeholder="Nova alternativa…" className="flex-1 text-sm" />
                                       <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs whitespace-nowrap">
                                         <input type="checkbox" checked={editOptionWithDesc} onChange={(e) => setEditOptionWithDesc(e.target.checked)} className="rounded" />
@@ -759,15 +829,21 @@ function AnamnesisConfigTab({
                                 </div>
                                 {q.type === 'multiple' && (q.options ?? []).length > 0 && (
                                   <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
-                                    {(q.options ?? []).map((opt) => (
-                                      <span key={opt} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">{opt}</span>
+                                    {(q.options ?? []).map((opt, idx) => (
+                                      <span key={idx} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs flex items-center gap-1">
+                                        {(q.optionImages ?? [])[idx] && (
+                                          <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-4 w-4 rounded object-cover" />
+                                        )}
+                                        {opt}
+                                      </span>
                                     ))}
                                   </div>
                                 )}
                                 {q.type === 'select' && (q.selectOptions ?? []).length > 0 && (
                                   <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
                                     {(q.selectOptions ?? []).map((opt) => (
-                                      <span key={opt.label} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
+                                      <span key={opt.label} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs flex items-center gap-1">
+                                        {opt.imageUrl && <img src={opt.imageUrl} alt="" className="h-4 w-4 rounded object-cover" />}
                                         {opt.label}{opt.withDescription ? ' ✎' : ''}
                                       </span>
                                     ))}
@@ -837,6 +913,7 @@ function AnamnesisConfigTab({
                                         ...newQ,
                                         type: e.target.value as QuestionType,
                                         options: [],
+                                        optionImages: [],
                                         selectOptions: [],
                                       })
                                     }
@@ -870,44 +947,36 @@ function AnamnesisConfigTab({
                                   {newQ.options.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5">
                                       {newQ.options.map((opt, idx) => (
-                                        <span
-                                          key={idx}
-                                          className="bg-muted text-foreground flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                                        >
+                                        <span key={idx} className="bg-muted text-foreground flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs">
+                                          {newQ.optionImages[idx] && (
+                                            <img src={newQ.optionImages[idx]!} alt="" className="h-5 w-5 rounded object-cover shrink-0" />
+                                          )}
                                           {opt}
-                                          <button
-                                            type="button"
-                                            onClick={() => removeOption(idx)}
-                                            className="hover:text-red-500"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
+                                          <button type="button" onClick={() => removeOption(idx)} className="hover:text-red-500"><X className="h-3 w-3" /></button>
                                         </span>
                                       ))}
                                     </div>
                                   )}
-                                  <div className="flex gap-2">
+                                  <div className="flex gap-2 items-center">
+                                    <label className="cursor-pointer shrink-0" title="Imagem da alternativa">
+                                      <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setNewOptionImage(url) } e.currentTarget.value = '' }} />
+                                      {newOptionImage ? (
+                                        <img src={newOptionImage} alt="" className="h-7 w-7 rounded object-cover border" />
+                                      ) : (
+                                        <div className="h-7 w-7 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50">
+                                          <Camera className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                        </div>
+                                      )}
+                                    </label>
+                                    {newOptionImage && <button type="button" onClick={() => setNewOptionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
                                     <Input
                                       value={newOptionText}
                                       onChange={(e) => setNewOptionText(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault()
-                                          addOption()
-                                        }
-                                      }}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
                                       placeholder="Nova alternativa…"
                                       className="flex-1 text-sm"
                                     />
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={addOption}
-                                      disabled={!newOptionText.trim()}
-                                    >
-                                      Adicionar
-                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" onClick={addOption} disabled={!newOptionText.trim()}>Adicionar</Button>
                                   </div>
                                 </div>
                               )}
@@ -915,64 +984,45 @@ function AnamnesisConfigTab({
                               {newQ.type === 'select' && (
                                 <div className="space-y-2">
                                   <Label className="text-xs">Alternativas</Label>
-                                  <p className="text-muted-foreground text-xs">
-                                    Marque ✎ para exibir campo de descrição ao selecionar.
-                                  </p>
+                                  <p className="text-muted-foreground text-xs">Marque ✎ para exibir campo de descrição ao selecionar.</p>
                                   {newQ.selectOptions.length > 0 && (
                                     <div className="space-y-1">
                                       {newQ.selectOptions.map((opt, idx) => (
-                                        <div
-                                          key={idx}
-                                          className="bg-muted/50 flex items-center gap-2 rounded px-2 py-1"
-                                        >
+                                        <div key={idx} className="bg-muted/50 flex items-center gap-2 rounded px-2 py-1">
+                                          {opt.imageUrl && <img src={opt.imageUrl} alt="" className="h-6 w-6 rounded object-cover shrink-0" />}
                                           <span className="flex-1 text-xs">{opt.label}</span>
                                           {opt.withDescription && (
-                                            <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white dark:bg-blue-700">
-                                              com descrição
-                                            </span>
+                                            <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white dark:bg-blue-700">com descrição</span>
                                           )}
-                                          <button
-                                            type="button"
-                                            onClick={() => removeOption(idx)}
-                                            className="text-muted-foreground hover:text-red-500"
-                                          >
-                                            <X className="h-3 w-3" />
-                                          </button>
+                                          <button type="button" onClick={() => removeOption(idx)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>
                                         </div>
                                       ))}
                                     </div>
                                   )}
                                   <div className="flex items-center gap-2">
+                                    <label className="cursor-pointer shrink-0" title="Imagem da alternativa">
+                                      <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setNewOptionImage(url) } e.currentTarget.value = '' }} />
+                                      {newOptionImage ? (
+                                        <img src={newOptionImage} alt="" className="h-7 w-7 rounded object-cover border" />
+                                      ) : (
+                                        <div className="h-7 w-7 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50">
+                                          <Camera className="h-3.5 w-3.5 text-muted-foreground/50" />
+                                        </div>
+                                      )}
+                                    </label>
+                                    {newOptionImage && <button type="button" onClick={() => setNewOptionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
                                     <Input
                                       value={newOptionText}
                                       onChange={(e) => setNewOptionText(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.preventDefault()
-                                          addOption()
-                                        }
-                                      }}
+                                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption() } }}
                                       placeholder="Nova alternativa…"
                                       className="flex-1 text-sm"
                                     />
                                     <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs whitespace-nowrap">
-                                      <input
-                                        type="checkbox"
-                                        checked={newOptionWithDesc}
-                                        onChange={(e) => setNewOptionWithDesc(e.target.checked)}
-                                        className="rounded"
-                                      />
+                                      <input type="checkbox" checked={newOptionWithDesc} onChange={(e) => setNewOptionWithDesc(e.target.checked)} className="rounded" />
                                       ✎ descrição
                                     </label>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={addOption}
-                                      disabled={!newOptionText.trim()}
-                                    >
-                                      Adicionar
-                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" onClick={addOption} disabled={!newOptionText.trim()}>Adicionar</Button>
                                   </div>
                                 </div>
                               )}
