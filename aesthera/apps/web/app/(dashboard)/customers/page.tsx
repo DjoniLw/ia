@@ -1109,7 +1109,7 @@ function CustomerWalletTab({ customerId, customerName }: { customerId: string; c
             {/* Cobranças em aberto — todas pendentes/vencidas */}
             {openBillings.length > 0 && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/10 p-3 space-y-2">
-                <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
+                <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   ⏳ Cobranças em aberto ({openBillings.length})
                 </p>
                 {openBillings.map((b: ApiBilling) => {

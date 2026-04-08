@@ -172,13 +172,13 @@ function UploadArea({
 
   if (!consentAt) {
     return (
-      <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:bg-yellow-900/10 dark:border-yellow-800 p-4 flex gap-3 items-start">
-        <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700 p-4 flex gap-3 items-start">
+        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+          <p className="text-sm font-semibold text-foreground">
             Consentimento LGPD não registrado
           </p>
-          <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Este cliente ainda não forneceu consentimento para registro de dados corporais. O
             upload de fotos está desabilitado. Para registrar o consentimento, acesse a aba
             &ldquo;Contratos &amp; LGPD&rdquo; do perfil do cliente.

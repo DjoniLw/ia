@@ -1282,7 +1282,7 @@ export default function SettingsPage() {
           <TabsTrigger value="ai">Integrações IA</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
           <TabsTrigger value="anamnesis">Anamnese</TabsTrigger>
-          <TabsTrigger value="body-measurements">Medidas Corporais</TabsTrigger>
+          <TabsTrigger value="body-measurements">Fichas de Avaliação</TabsTrigger>
           <TabsTrigger value="contracts">Contratos</TabsTrigger>
           <TabsTrigger value="email">E-mail</TabsTrigger>
         </TabsList>
