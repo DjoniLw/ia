@@ -14,7 +14,8 @@ interface QuestionEntry {
   text: string
   type: 'text' | 'yesno' | 'multiple' | 'numeric' | 'date' | 'select' | 'separator'
   options?: string[]
-  selectOptions?: { value: string; label: string }[]
+  optionImages?: (string | null)[]
+  selectOptions?: { label: string; withDescription?: boolean; imageUrl?: string }[]
   required: boolean
 }
 
@@ -239,20 +240,22 @@ export default function AnamnesePage() {
 
                     {q.type === 'multiple' && q.options && (
                       <div className="flex flex-wrap gap-2">
-                        {q.options.map((opt) => {
+                        {q.options.map((opt, idx) => {
                           const selected = (answers[q.id] ?? '').split(',').map((s) => s.trim()).includes(opt)
+                          const img = (q.optionImages ?? [])[idx]
                           return (
                             <button
                               key={opt}
                               type="button"
                               onClick={() => toggleMultiOption(q.id, opt)}
                               className={[
-                                'rounded-full px-3 py-1 text-sm border transition-colors',
+                                'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-sm border transition-colors',
                                 selected
                                   ? 'bg-violet-600 text-white border-violet-600'
                                   : 'bg-white text-gray-700 border-gray-200 hover:border-violet-300',
                               ].join(' ')}
                             >
+                              {img && <img src={img} alt="" className="h-14 w-14 rounded-lg object-cover" />}
                               {opt}
                             </button>
                           )
@@ -261,16 +264,37 @@ export default function AnamnesePage() {
                     )}
 
                     {q.type === 'select' && q.selectOptions && (
-                      <select
-                        value={answers[q.id] ?? ''}
-                        onChange={(e) => setAnswer(q.id, e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-violet-400 focus:outline-none"
-                      >
-                        <option value="">Selecione...</option>
-                        {q.selectOptions.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
+                      <div className="space-y-2">
+                        {q.selectOptions.map((opt) => (
+                          <div key={opt.label} className="space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAnswer(q.id, answers[q.id] === opt.label ? '' : opt.label)
+                                if (!opt.withDescription) setAnswer(q.id + '__desc', '')
+                              }}
+                              className={[
+                                'flex items-center gap-3 w-full rounded-xl px-3 py-2 text-sm border transition-colors text-left',
+                                answers[q.id] === opt.label
+                                  ? 'bg-violet-600 text-white border-violet-600'
+                                  : 'bg-white text-gray-700 border-gray-200 hover:border-violet-300',
+                              ].join(' ')}
+                            >
+                              {opt.imageUrl && <img src={opt.imageUrl} alt="" className="h-12 w-12 rounded-lg object-cover shrink-0" />}
+                              <span>{opt.label}</span>
+                            </button>
+                            {opt.withDescription && answers[q.id] === opt.label && (
+                              <textarea
+                                value={answers[q.id + '__desc'] ?? ''}
+                                onChange={(e) => setAnswer(q.id + '__desc', e.target.value)}
+                                rows={2}
+                                placeholder="Descreva..."
+                                className="ml-4 w-[calc(100%-1rem)] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm resize-none focus:border-violet-400 focus:outline-none"
+                              />
+                            )}
+                          </div>
                         ))}
-                      </select>
+                      </div>
                     )}
 
                     {(q.type === 'text' || q.type === 'numeric' || q.type === 'date') && (
