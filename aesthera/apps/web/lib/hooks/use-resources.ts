@@ -952,7 +952,8 @@ export interface CreateAnamnesisRequestInput {
   groupName: string
   questionsSnapshot: Record<string, unknown>[]
   staffAnswers?: Record<string, unknown> | null
-  channel?: 'whatsapp' | 'email'
+  phone?: string
+  email?: string
 }
 
 export function useAnamnesisRequests(params: {
@@ -980,8 +981,8 @@ export function useCreateAnamnesisRequest() {
 export function useResendAnamnesis() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, channel }: { id: string; channel?: 'whatsapp' | 'email' }) =>
-      api.post(`/anamnesis-requests/${id}/resend`, { channel }).then((r) => r.data),
+    mutationFn: ({ id, phone, email }: { id: string; phone?: string; email?: string }) =>
+      api.post(`/anamnesis-requests/${id}/resend`, { phone, email }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
   })
 }

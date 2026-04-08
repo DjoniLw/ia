@@ -3,6 +3,10 @@
 import { useState } from 'react'
 import { Loader2, Mail, MessageCircle, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { useAnamnesisGroups, type AnamnesisQuestion } from '@/lib/hooks/use-settings'
 import { useCreateAnamnesisRequest } from '@/lib/hooks/use-resources'
@@ -10,17 +14,27 @@ import { useCreateAnamnesisRequest } from '@/lib/hooks/use-resources'
 interface Props {
   customerId: string
   customerName: string
+  defaultPhone?: string | null
+  defaultEmail?: string | null
   onClose: () => void
   onSuccess: () => void
 }
 
-export function SendAnamnesisDialog({ customerId, customerName, onClose, onSuccess }: Props) {
+export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, defaultEmail, onClose, onSuccess }: Props) {
   const { data: groups, isLoading: groupsLoading } = useAnamnesisGroups()
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   const [mode, setMode] = useState<'blank' | 'prefilled'>('blank')
   const [staffAnswers, setStaffAnswers] = useState<Record<string, string>>({})
-  const [channel, setChannel] = useState<'whatsapp' | 'email' | undefined>(undefined)
+
+  // ── Canais de envio (mesmo padrão do contrato) ─────────────────────────────
+  const [sendViaWhatsapp, setSendViaWhatsapp] = useState(true)
+  const [sendViaEmail, setSendViaEmail] = useState(true)
+  const [phone, setPhone] = useState(defaultPhone ?? '')
+  const [phoneValid, setPhoneValid] = useState(false)
+  const [phoneError, setPhoneError] = useState('')
+  const [email, setEmail] = useState(defaultEmail ?? '')
+
   const [error, setError] = useState<string | null>(null)
 
   const selectedGroup = groups?.find((g) => g.id === selectedGroupId) ?? groups?.[0] ?? null
@@ -30,8 +44,27 @@ export function SendAnamnesisDialog({ customerId, customerName, onClose, onSucce
 
   const createRequest = useCreateAnamnesisRequest()
 
+  function handlePhoneChange(e164: string, isValid: boolean) {
+    setPhone(e164)
+    setPhoneValid(isValid)
+    if (e164.replace(/\D/g, '').length > 2) {
+      setPhoneError(isValid ? '' : 'Número inválido — verifique o DDD e os dígitos')
+    } else {
+      setPhoneError('')
+    }
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const canSend = (() => {
+    if (!selectedGroup) return false
+    if (!sendViaWhatsapp && !sendViaEmail) return false
+    if (sendViaWhatsapp && !phoneValid) return false
+    if (sendViaEmail && !emailRegex.test(email.trim())) return false
+    return true
+  })()
+
   async function handleSend() {
-    if (!selectedGroup) return
+    if (!selectedGroup || !canSend) return
     setError(null)
     try {
       await createRequest.mutateAsync({
@@ -41,7 +74,8 @@ export function SendAnamnesisDialog({ customerId, customerName, onClose, onSucce
         groupName: selectedGroup.name,
         questionsSnapshot: selectedGroup.questions.map((q) => ({ ...q })) as Record<string, unknown>[],
         staffAnswers: mode === 'prefilled' ? staffAnswers : undefined,
-        channel,
+        phone: sendViaWhatsapp ? phone : undefined,
+        email: sendViaEmail ? email.trim() : undefined,
       })
       onSuccess()
     } catch {
@@ -181,34 +215,68 @@ export function SendAnamnesisDialog({ customerId, customerName, onClose, onSucce
               </div>
             )}
 
-            {/* Canal de envio */}
-            <div className="space-y-2 rounded-lg border p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Enviar link por (opcional)
-              </p>
-              <div className="flex gap-2">
-                {(['whatsapp', 'email'] as const).map((ch) => (
-                  <button
-                    key={ch}
-                    type="button"
-                    onClick={() => setChannel((c) => (c === ch ? undefined : ch))}
-                    className={[
-                      'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
-                      channel === ch
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background text-muted-foreground hover:bg-muted/50',
-                    ].join(' ')}
-                  >
-                    {ch === 'whatsapp' ? (
-                      <MessageCircle className="h-3.5 w-3.5 text-green-600" />
-                    ) : (
-                      <Mail className="h-3.5 w-3.5 text-blue-500" />
-                    )}
-                    {ch === 'whatsapp' ? 'WhatsApp' : 'E-mail'}
-                  </button>
-                ))}
+            {/* Canal de envio (mesmo padrão do contrato) */}
+            <div className="space-y-3 rounded-lg border p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Enviar por</p>
+
+              {/* WhatsApp */}
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="anamnesis-send-via-whatsapp"
+                  checked={sendViaWhatsapp}
+                  onCheckedChange={setSendViaWhatsapp}
+                />
+                <label htmlFor="anamnesis-send-via-whatsapp" className="flex items-center gap-2 cursor-pointer select-none">
+                  <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
+                  <span className="text-sm font-medium">WhatsApp</span>
+                </label>
               </div>
-              <p className="text-xs text-muted-foreground">
+
+              {sendViaWhatsapp && (
+                <div className="ml-7 space-y-1.5">
+                  <PhoneInput
+                    id="anamnesis-send-phone"
+                    value={phone}
+                    onChange={handlePhoneChange}
+                  />
+                  {phoneError && (
+                    <p className="text-xs text-red-500">{phoneError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* E-mail */}
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="anamnesis-send-via-email"
+                  checked={sendViaEmail}
+                  onCheckedChange={setSendViaEmail}
+                />
+                <label htmlFor="anamnesis-send-via-email" className="flex items-center gap-2 cursor-pointer select-none">
+                  <Mail className="h-4 w-4 text-violet-600 shrink-0" />
+                  <span className="text-sm font-medium">E-mail</span>
+                </label>
+              </div>
+
+              {sendViaEmail && (
+                <div className="ml-7 space-y-1.5">
+                  <Label htmlFor="anamnesis-send-email">E-mail do cliente</Label>
+                  <Input
+                    id="anamnesis-send-email"
+                    type="email"
+                    placeholder="cliente@exemplo.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+              )}
+
+              {!sendViaWhatsapp && !sendViaEmail && (
+                <p className="text-xs text-red-500">Selecione ao menos um canal de envio.</p>
+              )}
+
+              <p className="text-xs text-muted-foreground pt-1">
                 O link expira em 72 horas. Você pode reenviar depois se necessário.
               </p>
             </div>
@@ -225,7 +293,7 @@ export function SendAnamnesisDialog({ customerId, customerName, onClose, onSucce
               <Button
                 size="sm"
                 onClick={handleSend}
-                disabled={!selectedGroup || isPending}
+                disabled={!selectedGroup || !canSend || isPending}
               >
                 {isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />

@@ -26,8 +26,10 @@ export const CreateAnamnesisRequestDto = z.object({
   questionsSnapshot: z.array(z.record(z.unknown())).min(1),
   /** Respostas pré-preenchidas pelo staff (apenas para mode=prefilled) */
   staffAnswers: z.record(z.unknown()).optional().nullable(),
-  /** Canal de envio: 'whatsapp' | 'email' (apenas para envio remoto) */
-  channel: z.enum(['whatsapp', 'email']).optional(),
+  /** Telefone para envio via WhatsApp (override do telefone do cliente) */
+  phone: z.string().min(10, 'Número de telefone inválido').optional(),
+  /** E-mail para envio via e-mail (override do e-mail do cliente) */
+  email: z.string().email('E-mail inválido').optional(),
 })
 export type CreateAnamnesisRequestDto = z.infer<typeof CreateAnamnesisRequestDto>
 
@@ -40,7 +42,10 @@ export const ListAnamnesisRequestsQuery = z.object({
 export type ListAnamnesisRequestsQuery = z.infer<typeof ListAnamnesisRequestsQuery>
 
 export const ResendAnamnesisDto = z.object({
-  channel: z.enum(['whatsapp', 'email']).optional(),
+  /** Telefone para envio via WhatsApp (override do telefone do cliente) */
+  phone: z.string().min(10, 'Número de telefone inválido').optional(),
+  /** E-mail para envio via e-mail (override do e-mail do cliente) */
+  email: z.string().email('E-mail inválido').optional(),
 })
 export type ResendAnamnesisDto = z.infer<typeof ResendAnamnesisDto>
 

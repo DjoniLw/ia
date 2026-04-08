@@ -46,7 +46,6 @@ import {
   type ContractView,
   useAnamnesisRequests,
   useCancelAnamnesis,
-  useResendAnamnesis,
   type AnamnesisRequest,
 } from '@/lib/hooks/use-resources'
 import { type AnamnesisQuestion, type AnamnesisGroup, useAnamnesisGroups } from '@/lib/hooks/use-settings'
@@ -67,6 +66,7 @@ import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
 import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
 import { SendAnamnesisDialog } from '@/components/anamnesis/SendAnamnesisDialog'
+import { ResendAnamnesisDialog } from '@/components/anamnesis/ResendAnamnesisDialog'
 import { ViewAnamnesisModal } from '@/components/anamnesis/ViewAnamnesisModal'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import {
@@ -2017,8 +2017,8 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const clinicalRecords = useClinicalRecords(customer.id)
   const anamnesisRequestsQuery = useAnamnesisRequests({ customerId: customer.id })
   const cancelAnamnesis = useCancelAnamnesis()
-  const resendAnamnesis = useResendAnamnesis()
   const [showSendAnamnesisDialog, setShowSendAnamnesisDialog] = useState(false)
+  const [resendingAnamnesis, setResendingAnamnesis] = useState<AnamnesisRequest | null>(null)
   const [viewingAnamnesis, setViewingAnamnesis] = useState<AnamnesisRequest | null>(null)
   const { data: anamnesisGroups, isLoading: groupsLoading } = useAnamnesisGroups()
   const createRecord = useCreateClinicalRecord()
@@ -2971,16 +2971,8 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                         </button>
                         {req.status === 'pending' && (
                           <button
-                            onClick={async () => {
-                              try {
-                                await resendAnamnesis.mutateAsync({ id: req.id })
-                                toast.success('Ficha reenviada.')
-                              } catch {
-                                toast.error('Erro ao reenviar a ficha. Tente novamente.')
-                              }
-                            }}
-                            disabled={resendAnamnesis.isPending}
-                            className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 disabled:opacity-50"
+                            onClick={() => setResendingAnamnesis(req)}
+                            className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50"
                           >
                             <Send className="h-3 w-3" />
                             Reenviar
@@ -3031,11 +3023,27 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
         <SendAnamnesisDialog
           customerId={customer.id}
           customerName={customer.name}
+          defaultPhone={customer.phone}
+          defaultEmail={customer.email}
           onClose={() => setShowSendAnamnesisDialog(false)}
           onSuccess={() => {
             setShowSendAnamnesisDialog(false)
             void anamnesisRequestsQuery.refetch()
             toast.success('Ficha de anamnese criada com sucesso.')
+          }}
+        />
+      )}
+
+      {resendingAnamnesis && (
+        <ResendAnamnesisDialog
+          request={resendingAnamnesis}
+          defaultPhone={customer.phone}
+          defaultEmail={customer.email}
+          onClose={() => setResendingAnamnesis(null)}
+          onSuccess={() => {
+            setResendingAnamnesis(null)
+            void anamnesisRequestsQuery.refetch()
+            toast.success('Ficha reenviada com sucesso.')
           }}
         />
       )}

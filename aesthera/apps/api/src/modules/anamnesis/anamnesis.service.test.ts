@@ -146,7 +146,7 @@ describe('AnamnesisService.create()', () => {
       groupId: 'group-1',
       groupName: 'Anamnese Facial',
       questionsSnapshot: [{ id: '1', label: 'Alergias?', type: 'text', required: true }],
-      channel: 'whatsapp',
+      phone: '+5511999999999',
     })
 
     // Aguardar microtasks assíncronas

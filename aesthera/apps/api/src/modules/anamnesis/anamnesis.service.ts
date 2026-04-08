@@ -58,9 +58,9 @@ export class AnamnesisService {
     })
 
     // Envio assíncrono — não bloqueia a resposta
-    if (data.channel) {
+    if (data.phone || data.email) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.#sendNotification(clinicId, request as any, data.channel).catch((err) =>
+      this.#sendNotification(clinicId, request as any, { phone: data.phone, email: data.email }).catch((err) =>
         logger.error({ err, requestId: request.id }, 'Falha ao enviar notificação de anamnese'),
       )
     }
@@ -207,9 +207,9 @@ export class AnamnesisService {
     const expiresAt = buildExpiresAt()
     const updated = await this.repo.resend(clinicId, id, newToken, expiresAt)
 
-    if (data.channel) {
+    if (data.phone || data.email) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.#sendNotification(clinicId, updated as any, data.channel).catch((err) =>
+      this.#sendNotification(clinicId, updated as any, { phone: data.phone, email: data.email }).catch((err) =>
         logger.error({ err, requestId: id }, 'Falha ao reenviar notificação de anamnese'),
       )
     }
@@ -247,7 +247,7 @@ export class AnamnesisService {
       signToken: string
       expiresAt: Date
     },
-    channel: 'whatsapp' | 'email',
+    channels: { phone?: string; email?: string },
   ) {
     const link = buildSignLink(request.signToken)
     const expiresFormatted = request.expiresAt.toLocaleDateString('pt-BR', {
@@ -258,10 +258,10 @@ export class AnamnesisService {
       minute: '2-digit',
     })
 
-    if (channel === 'whatsapp' && request.customer.phone) {
+    if (channels.phone) {
       await this.notifications.sendWhatsApp({
         clinicId,
-        phone: request.customer.phone,
+        phone: channels.phone,
         message:
           `Olá! A clínica enviou uma ficha de anamnese para você preencher.\n\n` +
           `📋 *${request.groupName}*\n\n` +
@@ -272,10 +272,10 @@ export class AnamnesisService {
       })
     }
 
-    if (channel === 'email' && request.customer.email) {
+    if (channels.email) {
       await this.notifications.sendEmail({
         clinicId,
-        email: request.customer.email,
+        email: channels.email,
         subject: `Ficha de anamnese: ${request.groupName}`,
         htmlBody: `
           <p>Olá!</p>
