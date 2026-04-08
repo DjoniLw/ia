@@ -2049,6 +2049,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const [editAnamnesisGroup, setEditAnamnesisGroup] = useState<AnamnesisGroup | null>(null)
   const updateRecord = useUpdateClinicalRecord(editingRecord?.id ?? '')
   const deleteRecord = useDeleteClinicalRecord()
+  const [deletingRecord, setDeletingRecord] = useState<ClinicalRecord | null>(null)
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set())
 
@@ -3002,37 +3003,35 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                           {/* Action buttons */}
                           {!r.anamnesisRequestId && (
                             <>
-                              <button
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2 text-[10px]"
                                 onClick={() => openEditRecord(r)}
-                                className="flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                               >
                                 <Pencil className="h-3 w-3" />
                                 Editar
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (!confirm('Excluir este lançamento? Esta ação não pode ser desfeita.')) return
-                                  try {
-                                    await deleteRecord.mutateAsync({ id: r.id, customerId: customer.id })
-                                    toast.success('Lançamento excluído')
-                                  } catch {
-                                    toast.error('Erro ao excluir lançamento')
-                                  }
-                                }}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-[10px] text-destructive hover:text-destructive"
                                 disabled={deleteRecord.isPending}
-                                className="flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                                onClick={() => setDeletingRecord(r)}
                               >
                                 <Trash2 className="h-3 w-3" />
                                 Excluir
-                              </button>
+                              </Button>
                             </>
                           )}
                           {/* Enviar para cliente (only for anamnesis manual records) */}
                           {r.type === 'anamnesis' && !r.anamnesisRequestId && (
-                            <button
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 px-2 text-[10px]"
                               onClick={() => {
                                 if (isAnamnesisEmpty) {
-                                  if (!confirm('A anamnese está vazia. Deseja mesmo enviá-la para o cliente responder?')) return
                                   setShowSendAnamnesisDialog(true)
                                 } else if (missingRequired.length > 0) {
                                   toast.warning(`Anamnese incompleta: ${missingRequired.map((q) => q.text).join(', ')} são obrigatórios.`)
@@ -3040,11 +3039,10 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                                   setShowSendAnamnesisDialog(true)
                                 }
                               }}
-                              className="flex items-center gap-1 rounded border border-primary/40 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/5"
                             >
                               <Send className="h-3 w-3" />
                               Enviar para cliente
-                            </button>
+                            </Button>
                           )}
 
                           <span className="ml-auto text-[10px] text-muted-foreground/60">
@@ -3175,6 +3173,36 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           name: customer.name,
           bodyDataConsentAt: customer.bodyDataConsentAt,
         }} />
+      )}
+
+      {deletingRecord && (
+        <Dialog open onClose={() => setDeletingRecord(null)}>
+          <DialogTitle>Excluir lançamento</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-2">
+            Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" size="sm" onClick={() => setDeletingRecord(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={deleteRecord.isPending}
+              onClick={async () => {
+                try {
+                  await deleteRecord.mutateAsync({ id: deletingRecord.id, customerId: customer.id })
+                  toast.success('Lançamento excluído')
+                  setDeletingRecord(null)
+                } catch {
+                  toast.error('Erro ao excluir lançamento')
+                }
+              }}
+            >
+              Excluir
+            </Button>
+          </div>
+        </Dialog>
       )}
 
       {showSendAnamnesisDialog && (
