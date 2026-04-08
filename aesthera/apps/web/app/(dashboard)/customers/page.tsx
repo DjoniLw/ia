@@ -27,6 +27,7 @@ import {
   type ClinicalRecord,
   useCreateClinicalRecord,
   useUpdateClinicalRecord,
+  useDeleteClinicalRecord,
   useCreateCustomer,
   useClinicalRecords,
   useCustomerHistory,
@@ -1988,11 +1989,11 @@ const TYPE_LABEL: Record<string, string> = {
   prescription: 'Prescrição',
 }
 const TYPE_COLOR: Record<string, string> = {
-  anamnesis:    'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
-  exam:         'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  note:         'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  procedure:    'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  prescription: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  anamnesis:    'bg-teal-600 text-white dark:bg-teal-700',
+  exam:         'bg-amber-500 text-white dark:bg-amber-600',
+  note:         'bg-blue-500 text-white dark:bg-blue-600',
+  procedure:    'bg-purple-600 text-white dark:bg-purple-700',
+  prescription: 'bg-green-600 text-white dark:bg-green-700',
 }
 
 function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onEdit: () => void; onClose: () => void }) {
@@ -2045,7 +2046,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   // group used in the anamnesis being edited (questions to show in edit form)
   const [editAnamnesisGroup, setEditAnamnesisGroup] = useState<AnamnesisGroup | null>(null)
   const updateRecord = useUpdateClinicalRecord(editingRecord?.id ?? '')
+  const deleteRecord = useDeleteClinicalRecord()
   const [editSubmitting, setEditSubmitting] = useState(false)
+  const [collapsedRecords, setCollapsedRecords] = useState<Set<string>>(new Set())
 
   // helpers
   const templateLoading = groupsLoading
@@ -2385,27 +2388,22 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prontuário</p>
             </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setShowSendAnamnesisDialog(true)}
-                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
-              >
-                <Send className="h-3 w-3" />
-                Enviar ficha
-              </button>
-              <button
-                onClick={openEntryForm}
-                className="flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                <Plus className="h-3 w-3" />
-                Novo lançamento
-              </button>
-            </div>
+            <button
+              onClick={openEntryForm}
+              className="flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-3 w-3" />
+              Novo lançamento
+            </button>
           </div>
 
           {/* ── New-entry dialog ── */}
           {showEntryForm && (
-            <Dialog open onClose={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }}>
+            <Dialog open isDirty={
+              entryType === 'anamnesis'
+                ? Object.values(anamnesisAnswers).some((v) => v?.trim()) || !!anamnesisPerformedAt
+                : !!simpleRecord.title.trim() || !!simpleRecord.content.trim() || !!simpleRecord.performedAt
+            } onClose={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }}>
               <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
                 <DialogTitle className="mb-0 text-sm">Novo lançamento</DialogTitle>
                 <button type="button" onClick={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
@@ -2668,7 +2666,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
           {/* ── Edit record dialog ── */}
           {editingRecord && editingRecord.type !== 'anamnesis' && (
-            <Dialog open onClose={() => setEditingRecord(null)}>
+            <Dialog open isDirty onClose={() => setEditingRecord(null)}>
               <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
                 <DialogTitle className="mb-0 text-sm">Editar lançamento</DialogTitle>
                 <button type="button" onClick={() => setEditingRecord(null)} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
@@ -2725,7 +2723,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
           {/* ── Edit anamnesis dialog ── */}
           {editingRecord && editingRecord.type === 'anamnesis' && (
-            <Dialog open onClose={() => setEditingRecord(null)}>
+            <Dialog open isDirty onClose={() => setEditingRecord(null)}>
               <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
                 <DialogTitle className="mb-0 text-sm">
                   Editar Anamnese{editAnamnesisGroup ? ` – ${editAnamnesisGroup.name}` : ''}
@@ -2892,20 +2890,22 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             </div>
           ) : !clinicalRecords.data?.items.length ? (
             <p className="rounded-lg border bg-muted/10 px-3 py-4 text-center text-xs text-muted-foreground">
-              Nenhum lançamento. Clique em "Novo lançamento" para iniciar.
+              Nenhum lançamento. Clique em &quot;Novo lançamento&quot; para iniciar.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {clinicalRecords.data.items.map((r) => {
                 // For anamnesis, parse JSON entries; for others show content as text
                 let anamnesisEntries: Array<{ question: string; answer: string; type?: string }> = []
                 let anamnesisGroupName: string | undefined
+                let anamnesisGroupId: string | undefined
                 if (r.type === 'anamnesis') {
                   try {
-                    const parsed = JSON.parse(r.content) as { groupName?: string; entries?: typeof anamnesisEntries } | typeof anamnesisEntries
+                    const parsed = JSON.parse(r.content) as { groupId?: string; groupName?: string; entries?: typeof anamnesisEntries } | typeof anamnesisEntries
                     if (Array.isArray(parsed)) {
                       anamnesisEntries = parsed
                     } else {
+                      anamnesisGroupId = parsed.groupId
                       anamnesisGroupName = parsed.groupName
                       anamnesisEntries = parsed.entries ?? []
                     }
@@ -2922,59 +2922,126 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   return answer
                 }
 
+                const isCollapsed = collapsedRecords.has(r.id)
+                const toggleCollapse = () =>
+                  setCollapsedRecords((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(r.id)) next.delete(r.id)
+                    else next.add(r.id)
+                    return next
+                  })
+
+                // Missing required fields for anamnesis send
+                const group = anamnesisGroups?.find((g) => g.id === anamnesisGroupId || g.name === anamnesisGroupName)
+                const requiredQuestions = (group?.questions ?? []).filter((q): q is AnamnesisQuestion => q.type !== 'separator' && q.required)
+                const missingRequired = requiredQuestions.filter((q) => !anamnesisEntries.find((e) => e.question === q.text && e.answer?.trim()))
+                const isAnamnesisEmpty = anamnesisEntries.filter((e) => e.answer?.trim()).length === 0
+
                 return (
-                  <div key={r.id} className="rounded-lg border bg-muted/10 p-3 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-foreground">
+                  <div key={r.id} className="rounded-lg border bg-card overflow-hidden">
+                    {/* ── Header row (always visible) ── */}
+                    <button
+                      type="button"
+                      onClick={toggleCollapse}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 bg-muted/20 hover:bg-muted/30 transition-colors text-left"
+                    >
+                      {isCollapsed
+                        ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      }
+                      <span className="flex-1 text-xs font-semibold text-foreground truncate">
                         {r.type === 'anamnesis'
                           ? `Anamnese${anamnesisGroupName ? ` – ${anamnesisGroupName}` : ''}`
                           : r.title}
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
-                          {TYPE_LABEL[r.type] ?? r.type}
-                        </span>
-                        <button
-                          onClick={() => openEditRecord(r)}
-                          className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                        >
-                          <Pencil className="h-2.5 w-2.5" />
-                          Editar
-                        </button>
-                      </div>
-                    </div>
-
-                    {r.type === 'anamnesis' ? (
-                      <div className="space-y-1">
-                        {anamnesisEntries.filter((e) => e.answer?.trim()).map((e, i) => (
-                          <div key={i} className="flex gap-2 text-xs">
-                            <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
-                            <span className="font-medium text-foreground text-right max-w-[55%]">{formatAnswer(e.answer, e.type)}</span>
-                          </div>
-                        ))}
-                        {anamnesisEntries.filter((e) => e.answer?.trim()).length === 0 && (
-                          <p className="text-xs text-muted-foreground italic">Sem respostas registradas.</p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{r.content}</p>
-                    )}
-
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60 pt-0.5">
-                      {r.performedAt && (
-                        <span className="font-medium text-muted-foreground/80">
-                          Realizado: {new Date(r.performedAt).toLocaleDateString('pt-BR')}
-                        </span>
-                      )}
-                      {r.performedAt && <span>·</span>}
-                      <span>
-                        {new Date(r.createdAt).toLocaleString('pt-BR', {
-                          day: '2-digit', month: '2-digit', year: 'numeric',
-                          hour: '2-digit', minute: '2-digit',
-                        })}
                       </span>
-                      {r.professional && <span>· {r.professional.name}</span>}
-                    </div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${TYPE_COLOR[r.type] ?? 'bg-muted text-muted-foreground'}`}>
+                        {TYPE_LABEL[r.type] ?? r.type}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                        {r.performedAt
+                          ? new Date(r.performedAt).toLocaleDateString('pt-BR')
+                          : new Date(r.createdAt).toLocaleDateString('pt-BR')}
+                      </span>
+                    </button>
+
+                    {/* ── Expanded body ── */}
+                    {!isCollapsed && (
+                      <div className="px-3 pb-3 pt-2 space-y-2">
+                        {r.type === 'anamnesis' ? (
+                          <div className="space-y-1">
+                            {anamnesisEntries.filter((e) => e.answer?.trim()).map((e, i) => (
+                              <div key={i} className="flex gap-2 text-xs">
+                                <span className="min-w-0 flex-1 text-muted-foreground">{e.question}:</span>
+                                <span className="font-medium text-foreground text-right max-w-[55%]">{formatAnswer(e.answer, e.type)}</span>
+                              </div>
+                            ))}
+                            {anamnesisEntries.filter((e) => e.answer?.trim()).length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">Sem respostas registradas.</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground whitespace-pre-wrap">{r.content}</p>
+                        )}
+
+                        <div className="flex items-center gap-2 flex-wrap pt-1">
+                          {/* Action buttons */}
+                          {!r.anamnesisRequestId && (
+                            <>
+                              <button
+                                onClick={() => openEditRecord(r)}
+                                className="flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                              >
+                                <Pencil className="h-3 w-3" />
+                                Editar
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm('Excluir este lançamento? Esta ação não pode ser desfeita.')) return
+                                  try {
+                                    await deleteRecord.mutateAsync({ id: r.id, customerId: customer.id })
+                                    toast.success('Lançamento excluído')
+                                  } catch {
+                                    toast.error('Erro ao excluir lançamento')
+                                  }
+                                }}
+                                disabled={deleteRecord.isPending}
+                                className="flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-red-50 hover:text-red-500 hover:border-red-200"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Excluir
+                              </button>
+                            </>
+                          )}
+                          {/* Enviar para cliente (only for anamnesis manual records) */}
+                          {r.type === 'anamnesis' && !r.anamnesisRequestId && (
+                            <button
+                              onClick={() => {
+                                if (isAnamnesisEmpty) {
+                                  if (!confirm('A anamnese está vazia. Deseja mesmo enviá-la para o cliente responder?')) return
+                                  setShowSendAnamnesisDialog(true)
+                                } else if (missingRequired.length > 0) {
+                                  toast.warning(`Anamnese incompleta: ${missingRequired.map((q) => q.text).join(', ')} são obrigatórios.`)
+                                } else {
+                                  setShowSendAnamnesisDialog(true)
+                                }
+                              }}
+                              className="flex items-center gap-1 rounded border border-primary/40 px-2 py-1 text-[10px] font-medium text-primary hover:bg-primary/5"
+                            >
+                              <Send className="h-3 w-3" />
+                              Enviar para cliente
+                            </button>
+                          )}
+
+                          <span className="ml-auto text-[10px] text-muted-foreground/60">
+                            {new Date(r.createdAt).toLocaleString('pt-BR', {
+                              day: '2-digit', month: '2-digit', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                            })}
+                            {r.professional && ` · ${r.professional.name}`}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}

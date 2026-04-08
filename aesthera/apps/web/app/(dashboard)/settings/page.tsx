@@ -144,6 +144,19 @@ function AnamnesisConfigTab({
   // ── drag reorder ────────────────────────────────────────────────────
   const [dragInfo, setDragInfo] = useState<{ groupId: string; index: number } | null>(null)
 
+  // ── edit existing question ───────────────────────────────────────────
+  const [editingItemKey, setEditingItemKey] = useState<string | null>(null) // `${groupId}:${itemId}`
+  const [editQ, setEditQ] = useState<{
+    text: string
+    type: QuestionType
+    required: boolean
+    options: string[]
+    selectOptions: AnamnesisQuestionOption[]
+  }>({ text: '', type: 'text', required: false, options: [], selectOptions: [] })
+  const [editSepText, setEditSepText] = useState('')
+  const [editOptionText, setEditOptionText] = useState('')
+  const [editOptionWithDesc, setEditOptionWithDesc] = useState(false)
+
   const effectiveGroups = groups ?? serverGroups ?? [DEFAULT_ANAMNESIS_GROUP]
 
   // ── dirty-state detection & navigation guard ────────────────────────
@@ -289,6 +302,75 @@ function AnamnesisConfigTab({
       groupId,
       group.questions.filter((q) => q.id !== itemId),
     )
+  }
+
+  function openEditItem(groupId: string, item: AnamnesisItem) {
+    setEditingItemKey(`${groupId}:${item.id}`)
+    if (item.type === 'separator') {
+      setEditSepText(item.text)
+    } else {
+      const q = item as AnamnesisQuestion
+      setEditQ({
+        text: q.text,
+        type: q.type,
+        required: q.required,
+        options: q.type === 'multiple' ? (q.options ?? []) : [],
+        selectOptions: q.type === 'select' ? (q.selectOptions ?? []) : [],
+      })
+    }
+    setEditOptionText('')
+    setEditOptionWithDesc(false)
+  }
+
+  function closeEditItem() {
+    setEditingItemKey(null)
+    setEditSepText('')
+    setEditOptionText('')
+    setEditOptionWithDesc(false)
+  }
+
+  function addEditOption(type: 'multiple' | 'select') {
+    if (!editOptionText.trim()) return
+    if (type === 'multiple') {
+      setEditQ((prev) => ({ ...prev, options: [...prev.options, editOptionText.trim()] }))
+    } else {
+      setEditQ((prev) => ({
+        ...prev,
+        selectOptions: [...prev.selectOptions, { label: editOptionText.trim(), withDescription: editOptionWithDesc }],
+      }))
+    }
+    setEditOptionText('')
+    setEditOptionWithDesc(false)
+  }
+
+  function removeEditOption(idx: number, type: 'multiple' | 'select') {
+    if (type === 'multiple') {
+      setEditQ((prev) => ({ ...prev, options: prev.options.filter((_, i) => i !== idx) }))
+    } else {
+      setEditQ((prev) => ({ ...prev, selectOptions: prev.selectOptions.filter((_, i) => i !== idx) }))
+    }
+  }
+
+  function saveEditItem(groupId: string, itemId: string, isSeparator: boolean) {
+    const group = effectiveGroups.find((g) => g.id === groupId)
+    if (!group) return
+    const updated = group.questions.map((item) => {
+      if (item.id !== itemId) return item
+      if (isSeparator) {
+        return { ...item, text: editSepText.trim() || item.text }
+      }
+      const q: AnamnesisQuestion = {
+        id: item.id,
+        text: editQ.text.trim() || (item as AnamnesisQuestion).text,
+        type: editQ.type,
+        required: editQ.required,
+        ...(editQ.type === 'multiple' && { options: editQ.options }),
+        ...(editQ.type === 'select' && { selectOptions: editQ.selectOptions }),
+      }
+      return q
+    })
+    updateGroupItems(groupId, updated)
+    closeEditItem()
   }
 
   // ── add item actions ────────────────────────────────────────────────
@@ -523,36 +605,42 @@ function AnamnesisConfigTab({
                         </p>
                       )}
                       {group.questions.map((item, i) => {
+                        const editKey = `${group.id}:${item.id}`
+                        const isEditing = editingItemKey === editKey
                         if (item.type === 'separator') {
                           return (
                             <div
                               key={item.id}
-                              draggable
+                              draggable={!isEditing}
                               onDragStart={() => setDragInfo({ groupId: group.id, index: i })}
                               onDragEnd={() => setDragInfo(null)}
                               onDragOver={(e) => e.preventDefault()}
                               onDrop={() => handleDrop(group.id, i)}
-                              className={[
-                                'flex items-center gap-2',
-                                dragInfo?.groupId === group.id && dragInfo.index === i
-                                  ? 'opacity-40'
-                                  : '',
-                              ].join(' ')}
+                              className={['flex flex-col gap-1', dragInfo?.groupId === group.id && dragInfo.index === i ? 'opacity-40' : ''].join(' ')}
                             >
-                              <GripVertical className="text-muted-foreground/40 h-4 w-4 shrink-0 cursor-grab" />
-                              <div className="flex flex-1 items-center gap-2">
-                                <Minus className="text-muted-foreground/60 h-3 w-3" />
-                                <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-                                  {item.text}
-                                </span>
-                                <div className="bg-border h-px flex-1" />
-                              </div>
-                              <button
-                                onClick={() => removeItem(group.id, item.id)}
-                                className="text-muted-foreground text-xs hover:text-red-500"
-                              >
-                                ✕
-                              </button>
+                              {isEditing ? (
+                                <div className="bg-muted/20 space-y-2 rounded-lg border p-3">
+                                  <Label className="text-xs">Nome da categoria</Label>
+                                  <Input value={editSepText} onChange={(e) => setEditSepText(e.target.value)} className="text-sm" />
+                                  <div className="flex gap-2">
+                                    <Button size="sm" onClick={() => saveEditItem(group.id, item.id, true)} disabled={!editSepText.trim()}>Salvar</Button>
+                                    <Button size="sm" variant="outline" onClick={closeEditItem}>Cancelar</Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <GripVertical className="text-muted-foreground/40 h-4 w-4 shrink-0 cursor-grab" />
+                                  <div className="flex flex-1 items-center gap-2">
+                                    <Minus className="text-muted-foreground/60 h-3 w-3" />
+                                    <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">{item.text}</span>
+                                    <div className="bg-border h-px flex-1" />
+                                  </div>
+                                  <button onClick={() => openEditItem(group.id, item)} className="text-muted-foreground text-xs hover:text-foreground">
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                  <button onClick={() => removeItem(group.id, item.id)} className="text-muted-foreground text-xs hover:text-red-500">✕</button>
+                                </div>
+                              )}
                             </div>
                           )
                         }
@@ -560,60 +648,122 @@ function AnamnesisConfigTab({
                         return (
                           <div
                             key={q.id}
-                            draggable
+                            draggable={!isEditing}
                             onDragStart={() => setDragInfo({ groupId: group.id, index: i })}
                             onDragEnd={() => setDragInfo(null)}
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={() => handleDrop(group.id, i)}
-                            className={[
-                              'bg-background rounded-lg border px-3 py-2',
-                              dragInfo?.groupId === group.id && dragInfo.index === i
-                                ? 'opacity-40'
-                                : '',
-                            ].join(' ')}
+                            className={['bg-background rounded-lg border', dragInfo?.groupId === group.id && dragInfo.index === i ? 'opacity-40' : ''].join(' ')}
                           >
-                            <div className="flex items-center gap-2">
-                              <GripVertical className="text-muted-foreground/50 h-4 w-4 shrink-0 cursor-grab active:cursor-grabbing" />
-                              <span className="text-foreground flex-1 text-sm">{q.text}</span>
-                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                                {TYPE_LABEL[q.type]}
-                              </span>
-                              <button
-                                onClick={() => toggleRequired(group.id, q.id)}
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-                              >
-                                {q.required ? 'Obrigatório' : 'Opcional'}
-                              </button>
-                              <button
-                                onClick={() => removeItem(group.id, q.id)}
-                                className="text-muted-foreground text-xs transition-colors hover:text-red-500"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                            {q.type === 'multiple' && (q.options ?? []).length > 0 && (
-                              <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
-                                {(q.options ?? []).map((opt) => (
-                                  <span
-                                    key={opt}
-                                    className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
-                                  >
-                                    {opt}
-                                  </span>
-                                ))}
+                            {isEditing ? (
+                              <div className="space-y-3 p-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="col-span-2 space-y-1">
+                                    <Label className="text-xs">Pergunta</Label>
+                                    <Input value={editQ.text} onChange={(e) => setEditQ({ ...editQ, text: e.target.value })} className="text-sm" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Tipo de resposta</Label>
+                                    <select
+                                      value={editQ.type}
+                                      onChange={(e) => setEditQ({ ...editQ, type: e.target.value as QuestionType, options: [], selectOptions: [] })}
+                                      className="bg-background w-full rounded-md border px-2 py-1.5 text-sm"
+                                    >
+                                      {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                    </select>
+                                  </div>
+                                  <div className="flex items-end gap-2">
+                                    <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
+                                      <input type="checkbox" checked={editQ.required} onChange={(e) => setEditQ({ ...editQ, required: e.target.checked })} className="rounded" />
+                                      Obrigatório
+                                    </label>
+                                  </div>
+                                </div>
+                                {editQ.type === 'multiple' && (
+                                  <div className="space-y-2">
+                                    <Label className="text-xs">Alternativas</Label>
+                                    {editQ.options.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {editQ.options.map((opt, idx) => (
+                                          <span key={idx} className="bg-muted text-foreground flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
+                                            {opt}
+                                            <button type="button" onClick={() => removeEditOption(idx, 'multiple')} className="hover:text-red-500"><X className="h-3 w-3" /></button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="flex gap-2">
+                                      <Input value={editOptionText} onChange={(e) => setEditOptionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditOption('multiple') } }} placeholder="Nova alternativa…" className="flex-1 text-sm" />
+                                      <Button type="button" size="sm" variant="outline" onClick={() => addEditOption('multiple')} disabled={!editOptionText.trim()}>Adicionar</Button>
+                                    </div>
+                                  </div>
+                                )}
+                                {editQ.type === 'select' && (
+                                  <div className="space-y-2">
+                                    <Label className="text-xs">Alternativas</Label>
+                                    {editQ.selectOptions.length > 0 && (
+                                      <div className="space-y-1">
+                                        {editQ.selectOptions.map((opt, idx) => (
+                                          <div key={idx} className="bg-muted/50 flex items-center gap-2 rounded px-2 py-1">
+                                            <span className="flex-1 text-xs">{opt.label}</span>
+                                            {opt.withDescription && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">com descrição</span>}
+                                            <button type="button" onClick={() => removeEditOption(idx, 'select')} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <Input value={editOptionText} onChange={(e) => setEditOptionText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEditOption('select') } }} placeholder="Nova alternativa…" className="flex-1 text-sm" />
+                                      <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs whitespace-nowrap">
+                                        <input type="checkbox" checked={editOptionWithDesc} onChange={(e) => setEditOptionWithDesc(e.target.checked)} className="rounded" />
+                                        ✎ descrição
+                                      </label>
+                                      <Button type="button" size="sm" variant="outline" onClick={() => addEditOption('select')} disabled={!editOptionText.trim()}>Adicionar</Button>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={() => saveEditItem(group.id, q.id, false)} disabled={!editQ.text.trim()}>Salvar alterações</Button>
+                                  <Button size="sm" variant="outline" onClick={closeEditItem}>Cancelar</Button>
+                                </div>
                               </div>
-                            )}
-                            {q.type === 'select' && (q.selectOptions ?? []).length > 0 && (
-                              <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
-                                {(q.selectOptions ?? []).map((opt) => (
-                                  <span
-                                    key={opt.label}
-                                    className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
-                                  >
-                                    {opt.label}
-                                    {opt.withDescription ? ' ✎' : ''}
+                            ) : (
+                              <div className="px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <GripVertical className="text-muted-foreground/50 h-4 w-4 shrink-0 cursor-grab active:cursor-grabbing" />
+                                  <span className="text-foreground flex-1 text-sm">{q.text}</span>
+                                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                    {TYPE_LABEL[q.type]}
                                   </span>
-                                ))}
+                                  <button
+                                    onClick={() => toggleRequired(group.id, q.id)}
+                                    className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                                  >
+                                    {q.required ? 'Obrigatório' : 'Opcional'}
+                                  </button>
+                                  <button onClick={() => openEditItem(group.id, q)} className="text-muted-foreground p-1 rounded hover:bg-muted/60 hover:text-foreground transition-colors" title="Editar pergunta">
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button onClick={() => removeItem(group.id, q.id)} className="text-muted-foreground p-1 rounded transition-colors hover:bg-red-50 hover:text-red-500" title="Remover pergunta">
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                {q.type === 'multiple' && (q.options ?? []).length > 0 && (
+                                  <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
+                                    {(q.options ?? []).map((opt) => (
+                                      <span key={opt} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">{opt}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                {q.type === 'select' && (q.selectOptions ?? []).length > 0 && (
+                                  <div className="mt-1.5 ml-6 flex flex-wrap gap-1">
+                                    {(q.selectOptions ?? []).map((opt) => (
+                                      <span key={opt.label} className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
+                                        {opt.label}{opt.withDescription ? ' ✎' : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

@@ -423,6 +423,17 @@ export function useUpdateClinicalRecord(id: string) {
   })
 }
 
+export function useDeleteClinicalRecord() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, customerId }: { id: string; customerId: string }) =>
+      api.delete(`/clinical-records/${id}`).then((r) => r.data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['clinical-records', vars.customerId] })
+    },
+  })
+}
+
 // ──── Equipment ────────────────────────────────────────────────────────────────
 
 export interface Equipment {
