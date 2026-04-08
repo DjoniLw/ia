@@ -42,26 +42,29 @@
 ## Enums do Schema (estado atual)
 
 ```
-ClinicStatus:       active | suspended | cancelled
-ClinicPlan:         trial | starter | pro | enterprise
-UserRole:           admin | staff
-TransferStatus:     pending | confirmed | rejected | expired
-TransferKind:       clinic_registration | user_invite
-AppointmentStatus:  draft | confirmed | in_progress | completed | cancelled | no_show
-BillingStatus:      pending | paid | overdue | cancelled
-PaymentGateway:     stripe | mercadopago
-PaymentMethod:      pix | boleto | card
-PaymentStatus:      pending | paid | failed | expired | refunded | disputed
-LedgerEntryType:    credit | debit
-WalletEntryType:    VOUCHER | CREDIT | CASHBACK | PACKAGE
-WalletEntryStatus:  ACTIVE | USED | EXPIRED
-WalletOriginType:   OVERPAYMENT | GIFT | REFUND | CASHBACK_PROMOTION | PACKAGE_PURCHASE | VOUCHER_SPLIT
-WalletTransactionType: CREATE | USE | SPLIT | ADJUST
-NotificationType:   whatsapp | email
-NotificationStatus: pending | sent | failed
-RecurrenceType:     none | daily | weekly
-PromotionDiscountType: PERCENTAGE | FIXED
-PromotionStatus:    active | inactive | expired
+ClinicStatus:           active | suspended | cancelled
+ClinicPlan:             trial | starter | pro | enterprise
+UserRole:               admin | staff
+TransferStatus:         pending | confirmed | rejected | expired
+TransferKind:           clinic_registration | user_invite
+AppointmentStatus:      draft | confirmed | in_progress | completed | cancelled | no_show
+BillingStatus:          pending | paid | overdue | cancelled
+PaymentGateway:         stripe | mercadopago
+PaymentMethod:          pix | boleto | card
+PaymentStatus:          pending | paid | failed | expired | refunded | disputed
+LedgerEntryType:        credit | debit
+WalletEntryType:        VOUCHER | CREDIT | CASHBACK | PACKAGE
+WalletEntryStatus:      ACTIVE | USED | EXPIRED
+WalletOriginType:       OVERPAYMENT | GIFT | REFUND | CASHBACK_PROMOTION | PACKAGE_PURCHASE | VOUCHER_SPLIT
+WalletTransactionType:  CREATE | USE | SPLIT | ADJUST
+NotificationType:       whatsapp | email
+NotificationStatus:     pending | sent | failed
+RecurrenceType:         none | daily | weekly
+PromotionDiscountType:  PERCENTAGE | FIXED
+PromotionStatus:        active | inactive | expired
+AnamnesisStatus:        DRAFT | CLINIC_FILLED | SENT_TO_CLIENT | CLIENT_SUBMITTED | SIGNED | EXPIRED | CANCELLED
+  ⚠️ Substituí AnamnesisRequestStatus (pending→SENT_TO_CLIENT, correction_requested→CLIENT_SUBMITTED) — redesign 08/04/2026
+ContractStatus:         pending | signed  (CustomerContract)
 ```
 
 ---
@@ -88,10 +91,10 @@ PromotionStatus:    active | inactive | expired
 | `billing` | `Billing` | `appointmentId` UNIQUE (1:1). **Não** é mais criado automaticamente por `appointment.completed` — staff confirma via `CompleteAppointmentModal`. `paymentToken` público. |
 | `payments` | `Payment` | `gatewayPaymentId` UNIQUE. `gatewayEventId` = idempotência em webhooks. |
 | `ledger_entries` | `LedgerEntry` | Append-only. Sem `updatedAt`. Nunca atualizar/deletar. |
-| `notification_logs` | `NotificationLog` | Log de envios WhatsApp/email. `retryCount`. |
+| `notification_logs` | `NotificationLog` | Log de envios WhatsApp/email. `retryCount`. Campo `anamnesisId` a adicionar no redesign. |
 | `products` | `Product` | Catálogo de produtos vendidos. `stockQuantity`. |
 | `product_sales` | `ProductSale` | Venda de produto. Debita estoque. |
-| `clinical_records` | `ClinicalRecord` | Prontuário clínico. Por profissional. |
+| `clinical_records` | `ClinicalRecord` | Prontuário clínico. Por profissional. `type` NÃO inclui mais `anamnesis` após redesign. FK `anamnesisId` mantida para registros históricos. |
 | `equipment` | `Equipment` | Equipamentos da clínica. Soft-delete. |
 | `appointment_equipment` | `AppointmentEquipment` | N:N Appointment ↔ Equipment. |
 | `rooms` | `Room` | Salas de atendimento. Soft-delete. |
@@ -105,6 +108,9 @@ PromotionStatus:    active | inactive | expired
 | `service_package_items` | `ServicePackageItem` | Itens de um pacote (serviço + quantidade). |
 | `customer_packages` | `CustomerPackage` | Pacote comprado por cliente. `sessionsUsed`. |
 | `audit_logs` | `AuditLog` | Log de auditoria de ações críticas. |
+| `anamnesis` | `Anamnesis` | **RENOMEADO de `anamnesis_requests`** (redesign 08/04/2026). Ciclo de vida próprio — separado de `ClinicalRecord`. Ver seção Módulo Anamnesis abaixo. |
+| `contract_templates` | `ContractTemplate` | Templates de contrato da clínica. `storageKey` = chave de arquivo. |
+| `customer_contracts` | `CustomerContract` | Contratos gerados por cliente. `signToken` único. `signatureMode`: `assinafy` ou `manual`. `signedPdfKey` = R2 key. |
 
 **Convenções globais do schema:**
 - `clinic_id` em **todas** as tabelas — sem exceção
@@ -239,20 +245,74 @@ src/integrations/
 
 ---
 
+## Módulo Anamnesis — Estado e Decisões (redesign 08/04/2026)
+
+> Revisão arquitetural completa em `outputs/po/anamnese-redesign-doc.md` (spec PO).
+
+### Estado Real do Módulo
+- Tabela `anamnesis_requests` (Prisma: `AnamnesisRequest`) — **implementada e em uso** no branch `feat/anamnese-digital-145`
+- Backend: `src/modules/anamnesis/` — service, repository, routes, DTOs, testes — **completo**
+- Frontend público: `app/anamnese/[token]/page.tsx` — **implementado**
+- Rotas públicas: `GET/POST /public/anamnese/:token` — **implementadas**
+
+### Decisões do Redesign (08/04/2026)
+
+| # | Decisão |
+|---|---------|
+| D1 | **Renomear** `AnamnesisRequest` → `Anamnesis` (tabela `anamnesis_requests` → `anamnesis`). É EVOLUÇÃO, não substituição do zero. |
+| D2 | **Manter obrigatoriamente**: `signatureHash`, `consentGivenAt`, `consentText`, `ipAddress`, `userAgent` — campos LGPD/não-repúdio omitidos na spec PO. |
+| D3 | **Adicionar** `diffResolvedAt DateTime?` e `diffResolvedByUserId String?` — rastreabilidade de quem resolveu o diff. |
+| D4 | **Atomicidade**: `diffResolution + signedAt + status=SIGNED` em `prisma.$transaction()` no endpoint `resolve-diff`. |
+| D5 | **Rota pública**: manter `/public/anamnese/:token` — NÃO alterar para `/anamnese/public/:token` (spec PO errada). Frontend já integrado. |
+| D6 | **`templateId` = `groupId`** — referência fraca sem FK física. Grupos de perguntas em Settings são os "templates" de anamnese. Não criar modelo `AnamnesisTemplate` separado. |
+| D7 | **Consolidar snapshot**: `groupName + questionsSnapshot` → `templateSnapshot: Json { templateId, templateName, capturedAt, questions }`. |
+| D8 | **Migrar `correction_requested`** → `CLIENT_SUBMITTED` antes de remover o estado do enum. Verificar dados em produção antes da migration. |
+| D9 | **TTL = 7 dias (168h)** — alterar de 72h para 168h no `anamnesis.service.ts`. |
+| D10 | **Adicionar** `anamnesisId String?` em `NotificationLog` + emitir domain events `anamnesis.sent` e `anamnesis.resent`. |
+| D11 | **FK** `anamnesisId` em `ClinicalRecord` mantida (renomeada de `anamnesisRequestId`) para integridade histórica. Remoção em sprint futura. |
+| D12 | **`SignatureCanvas`** deve ser extraído para `components/shared/signature-canvas.tsx` antes de compartilhar entre anamnese e contratos. |
+
+### Enum `AnamnesisStatus` (novo — substituí `AnamnesisRequestStatus`)
+```
+DRAFT            -- rascunho local, editável, deletável
+CLINIC_FILLED    -- clínica finalizou sem enviar ao cliente
+SENT_TO_CLIENT   -- link enviado, aguardando resposta [era: pending]
+CLIENT_SUBMITTED -- cliente respondeu, aguarda revisão do diff
+SIGNED           -- assinada, imutável [era: signed]
+EXPIRED          -- token expirou [era: expired]
+CANCELLED        -- link cancelado [era: cancelled]
+```
+
+### Schema Canônico `Anamnesis` (após redesign)
+Campos obrigatórios preservados (não remover):
+- `signatureHash` (SHA-256 para não-repúdio)
+- `consentGivenAt` / `consentText` (LGPD art. 11)
+- `ipAddress` / `userAgent` (evidência de autoria)
+- `reminderJobId` (para cancelamento de BullMQ delayed job)
+- `sentAt` (timestamp do envio do link)
+
+---
+
 ## Módulos Pendentes / Incompletos
 
 | Módulo | Status | Detalhe |
 |--------|--------|---------|
-| **Contracts** | 🔲 Spec existe, código não | `features/contracts.md` existe; `clinical.service.ts` ausente |
-| **Clinical Records** | ⚠️ Parcial | DTO e repository criados; `clinical.service.ts` ausente; tela não implementada |
-| **Sales page** | ⚠️ Parcial | Pasta `/sales` no frontend existe; página não implementada |
+| **Anamnesis** | ⚠️ Em redesign | `AnamnesisRequest` implementado. Redesign propõe renomear + novos estados + diff. Schema real mais completo que spec PO. |
+| **Contracts** | ⚠️ Parcial | Schema completo (`CustomerContract`, `ContractTemplate`). Backend parcial; `features/contracts.md` desatualizado (descreve schema mais simples que o real). |
+| **Clinical Records** | ⚠️ Parcial | DTO e repository criados; `clinical.service.ts` ausente; tela não implementada. Após redesign de anamnese: remover `anamnesis` do type. |
+| **Sales page** | ⚠️ Parcial | Pasta `/sales` no frontend existe; página não implementada. |
 
 ---
 
 ## Decisões Técnicas Registradas por Este Agente
 
-> Seção atualizada automaticamente quando novas decisões são tomadas.
-
 | Data | Decisão | Módulo/Área impactada |
 |------|---------|----------------------|
-| — | — | — |
+| 08/04/2026 | Renomear `AnamnesisRequest` → `Anamnesis` (evolução, não substituição) | anamnesis |
+| 08/04/2026 | Manter campos LGPD/segurança omitidos na spec PO (`signatureHash`, `consentGivenAt`, etc.) | anamnesis |
+| 08/04/2026 | 7 estados em `AnamnesisStatus` + remoção de `correction_requested` com migration | anamnesis |
+| 08/04/2026 | `diffResolution` atômico com `status=SIGNED` via `prisma.$transaction()` | anamnesis |
+| 08/04/2026 | Manter rota pública `/public/anamnese/:token` (NÃO `/anamnese/public/:token`) | anamnesis, routing |
+| 08/04/2026 | TTL de anamnese: 7 dias (168h) em vez de 72h | anamnesis |
+| 08/04/2026 | `templateId` na anamnese = `groupId` de Settings > Anamnese (sem modelo separado) | anamnesis, settings |
+| 08/04/2026 | `SignatureCanvas` extraído para `components/shared/` antes de compartilhar | contracts, anamnesis, frontend |

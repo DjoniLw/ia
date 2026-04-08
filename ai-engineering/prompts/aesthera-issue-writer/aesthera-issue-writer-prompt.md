@@ -625,11 +625,11 @@ Quando uma ou mais sugestões de treinamento forem identificadas, gerar uma issu
 
 ## Objetivo
 
-Registrar o padrão/anti-padrão identificado no `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` para prevenir reincidência nas próximas implementações.
+Registrar o padrão/anti-padrão identificado no arquivo de padrões correto (em `ai-engineering/prompts/aesthera-implementador/patterns/`) para prevenir reincidência nas próximas implementações.
 
 ## O que fazer
 
-- Solicitar ao `treinador-agent` que registre o seguinte aprendizado no `code-review-learnings.md` do implementador:
+- Solicitar ao `treinador-agent` que registre o seguinte aprendizado no arquivo de padrões correto do implementador:
 
 ### Anti-padrão / Padrão identificado
 
@@ -648,7 +648,7 @@ Registrar o padrão/anti-padrão identificado no `ai-engineering/prompts/aesther
 
 ## Critérios de Aceitação
 
-- [ ] O aprendizado foi registrado em `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+- [ ] O aprendizado foi registrado no arquivo de padrões correto em `ai-engineering/prompts/aesthera-implementador/patterns/`
 - [ ] O registro inclui: descrição do anti-padrão, situação encontrada, forma correta e contexto
 ```
 

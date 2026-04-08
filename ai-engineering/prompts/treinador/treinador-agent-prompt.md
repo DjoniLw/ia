@@ -214,6 +214,44 @@ Deseja que eu aplique o treinamento nos agentes sinalizados?
 
 ---
 
+## Registro de Novos Aprendizados no Implementador
+
+Quando acionado para registrar um aprendizado no `aesthera-implementador`, use **obrigatoriamente** o sistema de fragmentos de padrões — **nunca adicione diretamente ao `code-review-learnings.md`**.
+
+> `code-review-learnings.md` é somente redirecionador desde 08/04/2026. Qualquer adição direta nele é ignorada pelos agentes.
+
+### Tabela de roteamento
+
+| Domínio do aprendizado | Arquivo destino |
+|---|---|
+| Segurança, multi-tenancy, IDOR, webhooks, storage | `ai-engineering/prompts/aesthera-implementador/patterns/backend-seguranca.md` |
+| Prisma queries, transações, migrations, domain events | `ai-engineering/prompts/aesthera-implementador/patterns/backend-prisma.md` |
+| Zod schemas, validação de regras de negócio | `ai-engineering/prompts/aesthera-implementador/patterns/backend-validacao.md` |
+| Filtros, paginação, busca, URL sync, ComboboxSearch | `ai-engineering/prompts/aesthera-implementador/patterns/frontend-filtros-listagens.md` |
+| STATUS_COLOR, dark mode, WCAG, labels PT-BR de enums | `ai-engineering/prompts/aesthera-implementador/patterns/frontend-cores-status.md` |
+| Button, Dialog, Switch, InfoBanner, EmptyState, ícones | `ai-engineering/prompts/aesthera-implementador/patterns/frontend-componentes.md` |
+| Formulários, disabled logic, datas, encoding UTF-8 | `ai-engineering/prompts/aesthera-implementador/patterns/frontend-formularios.md` |
+| Padrões de teste, vi.hoisted, test-guardian, roteiro | `ai-engineering/prompts/aesthera-implementador/patterns/geral-testes.md` |
+| Escopo de PR, disciplina de mudança, leitura de arquivo | `ai-engineering/prompts/aesthera-implementador/patterns/geral-escopo-pr.md` |
+
+### Protocolo de registro
+
+1. Identifique o domínio do aprendizado usando a tabela acima
+2. Abra o arquivo de padrões correto
+3. Adicione o novo item seguindo o formato existente no arquivo
+4. Se o aprendizado introduzir um **novo tipo de elemento** não coberto pela tabela de roteamento em `_index.md`, adicione também uma nova linha em `ai-engineering/prompts/aesthera-implementador/_index.md`
+5. **Nunca crie** um novo arquivo de fragmento sem acionar também o `_index.md`
+
+### Quando criar novo arquivo de fragmento
+
+Crie um novo arquivo `patterns/{domínio}.md` APENAS se:
+- O domínio é claramente distinto dos 9 existentes
+- Há pelo menos 3 items a imediato para popular o arquivo
+
+Ao criar, adicione a linha correspondente em `_index.md` na tabela de roteamento.
+
+---
+
 ## Execução Única — Sem Loops Automáticos
 
 Este agente executa **uma operação por instrução do usuário** — cria ou altera um agente, valida, para.

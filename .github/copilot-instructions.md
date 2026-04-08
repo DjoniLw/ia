@@ -32,9 +32,9 @@ Para cada PR ou conjunto de mudanças revisado, verificar obrigatoriamente:
 
 ### 0. Anti-padrões acumulados (verificar ANTES de qualquer outro item)
 
-Antes de iniciar a revisão, leia o arquivo `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`. Ele contém todos os anti-padrões identificados em revisões anteriores — organizados por categoria (Backend, Frontend, Geral).
+Antes de iniciar a revisão, carregue `ai-engineering/prompts/aesthera-implementador/_index.md` para identificar quais arquivos de padrões são relevantes às mudanças do PR — depois carregue apenas os fragmentos mapeados. Para PRs com mudanças de frontend → `patterns/frontend-*.md`; backend → `patterns/backend-*.md`; testes → `patterns/geral-testes.md`; disciplina de PR → `patterns/geral-escopo-pr.md`.
 
-Para cada item do `code-review-learnings.md`, verificar se o código em revisão comete o mesmo erro. Se sim, sinalizar com o mesmo nível de severidade indicado no item (bloqueante ou sugestão).
+Para cada padrão nos arquivos `patterns/*.md` relevantes, verificar se o código em revisão comete o mesmo erro. Se sim, sinalizar com o mesmo nível de severidade indicado no item (bloqueante ou sugestão).
 
 > ⚠️ Esta etapa é obrigatória e tem prioridade sobre as demais. Anti-padrões já catalogados não devem passar despercebidos em nenhuma revisão.
 
@@ -67,7 +67,7 @@ Para cada item do `code-review-learnings.md`, verificar se o código em revisão
 
 ## Sugestão de Auto-treinamento do Implementador
 
-Durante o code review, ao identificar um **padrão relevante**, sinalize no final da revisão sugerindo que o `treinador-agent` registre o aprendizado no arquivo `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`.
+Durante o code review, ao identificar um **padrão relevante**, sinalize no final da revisão sugerindo que o `treinador-agent` registre o aprendizado no arquivo de padrões correto (ver tabela de roteamento em `ai-engineering/prompts/treinador/treinador-agent-prompt.md`).
 
 ### Quando sugerir o auto-treinamento
 
@@ -90,9 +90,9 @@ Sugira sempre que a revisão identificar:
 Ao final de toda revisão que identificar um item treinável, inclua:
 
 > 💡 **Sugestão de treinamento do implementador:**
-> Este erro/padrão pode ser registrado no `code-review-learnings.md` para prevenir reincidência.
+> Este erro/padrão pode ser registrado no arquivo de padrões correto para prevenir reincidência.
 > Para registrar, use o **`treinador-agent`** com a instrução:
-> _"Adicione ao `code-review-learnings.md` do implementador: [descrição do padrão, anti-padrão encontrado, e a forma correta]"_
+> _"Adicione ao sistema de padrões do implementador: [descrição do padrão, anti-padrão encontrado, e a forma correta]"_
 
 > ⚠️ Apenas o `treinador-agent` tem autoridade para modificar arquivos de prompt e learnings. Não altere esses arquivos diretamente durante uma revisão.
 

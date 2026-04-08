@@ -117,11 +117,11 @@ Leia os arquivos abaixo **nesta ordem** antes de iniciar qualquer implementaçã
 4. `ai-engineering/projects/aesthera/context/architecture.md` — padrões e estrutura de pastas
 5. `ai-engineering/projects/aesthera/features/{módulo-relevante}.md` — spec do módulo sendo implementado
 6. `ai-engineering/projects/aesthera/PLAN.md` — estado atual do plano de desenvolvimento
-7. `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` — **PRÉ-REQUISITO BLOQUEANTE: leia este arquivo ANTES de escrever qualquer linha de código**. Após ler, liste explicitamente quais padrões se aplicam à tarefa atual. Só então comece a implementar. Ignorar este passo causou reincidências de anti-padrões documentados em PRs posteriores.
+7. `ai-engineering/prompts/aesthera-implementador/_index.md` — **FASE 1 — PLANEJAMENTO (obrigatório antes de qualquer código)**: carregue APENAS este arquivo para decompor a tarefa em elementos e mapear quais arquivos de padrões carregar por elemento. Produza o **Bloco de Planejamento visível** (ver formato no próprio `_index.md`). Na Fase 2 (execução), para cada elemento: carregue apenas os arquivos de padrões mapeados → implemente → exiba output → aguarde confirmação → próximo. **Jamais carregue `code-review-learnings.md` diretamente** — ele é somente redirecionador.
 8. **Se a tarefa envolver qualquer arquivo `.tsx`** → `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md` — **PRÉ-REQUISITO BLOQUEANTE para todo trabalho frontend**: leia antes de escrever qualquer código de UI. Liste quais padrões visuais/UX se aplicam antes de começar.
 9. **Se a tarefa envolver criação, alteração ou remoção de tela** → `aesthera/docs/screen-mapping.md` — mapeamento canônico de todas as telas do sistema
 
-> ⛔ **Gate obrigatório**: antes de passar para a implementação, registre (mentalmente ou em comentário) quais itens dos learnings se aplicam à tarefa. Se não houver nenhum item aplicável, registre explicitamente: "Nenhum padrão dos learnings se aplica a esta tarefa — motivo: {razão}". Silêncio não é verificação.
+> ⛔ **Gate obrigatório**: antes de passar para a implementação, liste **visivelmente** quais itens dos learnings se aplicam à tarefa. Produzir um bloco de confirmação visível é obrigatório — confirmações apenas mentais não contam. Se não houver nenhum item aplicável, declare explicitamente (na resposta): "Nenhum padrão dos learnings se aplica a esta tarefa — motivo: {razão}". Silêncio não é verificação.
 
 ---
 
@@ -181,11 +181,25 @@ Este agente executa **uma vez por etapa** e aguarda validação explícita do us
 1. **Ler e confirmar a issue** (ver seção "Leitura Obrigatória da Issue" acima) — obrigatório quando há número de issue. A issue define o escopo completo: o que implementar, o que não tocar, quais arquivos mexer
 2. **Validar ou atualizar** a spec em `ai-engineering/projects/aesthera/features/{módulo}.md` antes de codificar
 3. **Mapear zonas estáveis** (ver seção "Mapeamento de Zona Estável" abaixo) — obrigatório quando a task toca arquivos existentes
-4. **⛔ Scan PRÉ-CÓDIGO de padrões treinados** — antes de escrever qualquer linha, percorra os learnings relevantes e liste quais padrões se aplicam:
-   - Sempre: `code-review-learnings.md` — backend + frontend
+4. **⛔ Scan PRÉ-CÓDIGO de padrões treinados** — antes de escrever qualquer linha, percorra os learnings relevantes e produza **visivelmente** o bloco de confirmação abaixo:
+   - Sempre: arquivos de padrões mapeados via `_index.md` para cada elemento (carregados na Fase 2)
    - Se envolve `.tsx`: `ux-reviewer-learnings.md` — visuais e componentes
-   - Para cada seção relevante ao que será implementado (filtros? modais? status badges? formulários?), confirme: "Sei como este padrão deve ser implementado corretamente."
-   - **Só avance para o passo 5 após confirmar o scan.** Implementar sem fazer o scan é a causa raiz de reincidências de anti-padrões documentados.
+   - Para cada seção relevante ao que será implementado (filtros? modais? status badges? formulários? listagens com tabs?), declare no output:
+
+   ```
+   📋 SCAN PRÉ-CÓDIGO — Padrões Aplicáveis
+   FrontEnd:
+   - [x/NÃO] STATUS_LABEL/COLOR: {"importados de lib/status-colors.ts" | "N/A — sem mapeamentos de status"}
+   - [x/NÃO] bg-primary: {"tokens de DS usados" | "N/A — sem cores brand na tela"}
+   - [x/NÃO] <Button>: {"todos os botões de ação usam <Button>" | "N/A — sem botões novos"}
+   - [x/NÃO] DataPagination: {"incluído em todas as abas/seções com lista" | "N/A — sem listagens"}
+   - [x/NÃO] <Dialog>: ... | <ComboboxSearch>: ... | <Switch>: ... | <InfoBanner>: ...
+   Backend:
+   - [x/NÃO] clinicId em todos os WHERE: ...
+   - [x/NÃO] roleGuard nos endpoints: ...
+   ```
+
+   - **Só avance para o passo 5 após produzir este bloco.** Sem output visível, o scan não foi executado — a causa raiz de reincidências de anti-padrões é exactamente a omissão deste bloco.
 5. **Implementar** a mudança em `aesthera/` — aplicando ativamente os padrões identificados no passo 4
 6. **Verificar conformidade com a issue** — percorra cada critério de aceitação da issue e confirme que foi implementado (ver "Gate de conformidade com a issue" na seção de Leitura da Issue)
 7. **Verificar conformidade com padrões treinados** (ver seção "⚠️ Padrões Treinados" abaixo) — gate de compliance pós-implementação para confirmar que nada escapou
@@ -253,18 +267,20 @@ Cada item nos arquivos de learnings representa um erro real, identificado e cata
 Antes de concluir qualquer tarefa ou criar qualquer commit, execute a verificação abaixo. Não há exceção.
 
 **Para tarefas com backend:**
-- [ ] Percorri cada item da seção "Backend" do `code-review-learnings.md` e verifiquei no código produzido?
+- [ ] Percorri os padrões dos arquivos `patterns/backend-*.md` relevantes (mapeados via `_index.md` na Fase 1) e verifiquei no código produzido?
 - [ ] Segurança e multi-tenancy: `clinicId` em todos os `WHERE`, `roleGuard` em todos os endpoints, sem `_clinicId`?
 - [ ] Transações: operações atômicas usam `tx` propagado para todos os services envolvidos?
 - [ ] Webhooks: falha explícita quando secret não está configurado (fail-fast, nunca skip silencioso)?
 
 **Para tarefas com frontend (qualquer arquivo `.tsx`):**
-- [ ] Percorri cada item da seção "Frontend" do `code-review-learnings.md`?
+- [ ] Percorri os padrões dos arquivos `patterns/frontend-*.md` relevantes (mapeados via `_index.md` na Fase 1)?
 - [ ] Percorri cada item do `ux-reviewer-learnings.md`? (seções: Cores e Dark Mode, Empty States, Filtros e Barras de Busca, Listagens e Tabelas, Formulários, Textos)
-- [ ] Constantes de cor/status estão em `lib/status-colors.ts` — não definidas inline no arquivo de tela?
+- [ ] Constantes de cor/status importadas de `lib/status-colors.ts` — não definidas localmente nem **dentro de callbacks `.map()`**?
+- [ ] Cores de brand usam tokens do design system (`bg-primary`, `text-primary`) — nenhum `bg-violet-*` ou `bg-purple-*` hardcoded para representar a cor primária?
+- [ ] Botões de ação usam `<Button>` do design system — nenhum `<button>` nativo (exceto pills de filtro de status)?
+- [ ] `<DataPagination>` presente em **todas** as seções/tabs que exibem listas — não só na página principal?
 - [ ] Dark mode: opacidade mínima `/40` em todos os badges? Texto branco sobre amber/orange tem contraste ≥ 4.5:1?
 - [ ] Filtros: `<ComboboxSearch>` para entidades da API, pills para status fixo, legenda de filtros ativos, botão "Restaurar padrão"?
-- [ ] Listagens: `<DataPagination>` + `usePaginatedQuery` desde a primeira entrega? Busca textual server-side?
 - [ ] Formulários: `disabled={isPending || !isValid}` — nunca `&& isDirty` em cadastro novo?
 - [ ] Todo texto visível em PT-BR — nenhum termo em inglês na interface?
 
@@ -275,9 +291,11 @@ Antes de concluir qualquer tarefa ou criar qualquer commit, execute a verificaç
 | Caixa de aviso / alerta / info / erro contextual | `<InfoBanner variant="...">` | `@/components/ui/info-banner.tsx` |
 | Busca de entidade da API (cliente, serviço, profissional...) | `<ComboboxSearch>` | `@/components/ui/combobox-search.tsx` |
 | Filtro de status com ≤ 6 opções fixas | Pills `h-8 rounded-full border` | Ver `ui-standards.md` seção 7.2 |
-| Paginação de listagem | `<DataPagination>` + `usePaginatedQuery` | `@/components/ui/data-pagination.tsx` |
+| Paginação de listagem (TODA tab/seção com lista) | `<DataPagination>` + `usePaginatedQuery` | `@/components/ui/data-pagination.tsx` |
 | Modal / overlay | `<Dialog>` do shadcn/ui | `@/components/ui/dialog.tsx` |
 | Toggle booleano (ativo/inativo) | `<Switch>` do shadcn/ui | `@/components/ui/switch.tsx` |
+| Botão de ação (salvar, excluir, editar, cancelar) | `<Button variant="...">` | `@/components/ui/button.tsx` |
+| Cor de brand / primária | Token `bg-primary` / `text-primary` | `tailwind.config.*` → `primary` |
 
 > ⚠️ Usar classes Tailwind inline ou elementos nativos para recriar qualquer um dos componentes acima é **BLOQUEANTE** em code review.
 
@@ -572,7 +590,23 @@ Se a tarefa envolveu **criação, alteração ou remoção de qualquer tela** (p
 
 Toda vez que a **Etapa 4** produzir itens classificados como **ÚTIL** — independentemente de terem sido aplicados ou não — você **deve** atualizar o arquivo de aprendizados:
 
-**Arquivo:** `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+**Sistema de Padrões:** `ai-engineering/prompts/aesthera-implementador/patterns/`
+
+> ⚠️ **Nunca adicionar ao `code-review-learnings.md`** — este arquivo é somente redirecionador desde 08/04/2026. Novos aprendizados devem ir para o arquivo de padrões correto.
+
+### Tabela de roteamento de aprendizados
+
+| Domínio do aprendizado | Arquivo destino |
+|---|---|
+| Segurança, multi-tenancy, IDOR, webhooks, storage | `patterns/backend-seguranca.md` |
+| Prisma queries, transações, migrations, domain events | `patterns/backend-prisma.md` |
+| Zod schemas, validação de regras de negócio | `patterns/backend-validacao.md` |
+| Filtros, paginação, busca, URL sync | `patterns/frontend-filtros-listagens.md` |
+| STATUS_COLOR, dark mode, WCAG, labels PT-BR de enums | `patterns/frontend-cores-status.md` |
+| Componentes (Button, Dialog, Switch, InfoBanner, etc.) | `patterns/frontend-componentes.md` |
+| Formulários, disabled logic, datas, encoding | `patterns/frontend-formularios.md` |
+| Padrões de teste, vi.hoisted, test-guardian | `patterns/geral-testes.md` |
+| Escopo de PR, disciplina de mudança | `patterns/geral-escopo-pr.md` |
 
 ### Quando executar
 
@@ -581,9 +615,9 @@ Toda vez que a **Etapa 4** produzir itens classificados como **ÚTIL** — indep
 
 ### Como registrar
 
-1. Abra `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
-2. Identifique a **categoria** do aprendizado (ver seções do arquivo)
-3. Adicione um novo item na categoria correspondente seguindo o formato:
+1. Determine o domínio do aprendizado usando a tabela de roteamento acima
+2. Abra o arquivo de padrões correto (ex: `patterns/frontend-componentes.md`)
+3. Adicione um novo item seguindo o formato:
 
 ```markdown
 - [ ] **{descrição curta do padrão a verificar}**
@@ -592,7 +626,7 @@ Toda vez que a **Etapa 4** produzir itens classificados como **ÚTIL** — indep
   - 📅 Aprendido em: {data} — PR #{número}
 ```
 
-4. Se a categoria não existir no arquivo, crie-a no bloco correto (Backend, Frontend ou Geral)
+4. Se o domínio não estiver coberto por nenhum arquivo existente, **acionar o treinador-agent** para criar o fragmento correto
 5. Se o mesmo padrão já existir mas como item diferente, consolide em vez de duplicar
 
 ### O que NÃO registrar

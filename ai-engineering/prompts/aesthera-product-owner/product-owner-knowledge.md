@@ -62,6 +62,10 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 - Disponibilidade verificada com lock de transação (anti double-booking)
 - Slots de 15 min, baseado em horários do profissional menos agendamentos existentes e bloqueios
 - `completed` dispara evento `appointment.completed` → cria billing automaticamente
+- **Double-submit**: frontend deve manter estado local `isSubmitting` para bloquear envios duplicados antes da mutation ser registrada como `isPending`
+- **Mapeamento de erros**: códigos `DOUBLE_BOOKING`, `PROFESSIONAL_UNAVAILABLE`, `ROOM_CONFLICT`, `EQUIPMENT_CONFLICT`, `ROOM_REQUIRED` devem ter mensagens PT-BR específicas no frontend
+- **View do calendário**: persistida em `localStorage` chave `aesthera:appointments:view` — data sempre resetada para hoje ao montar a tela
+- **Agenda Inteligente**: busca de disponibilidade orientada a recurso (serviço + equipamento + sala? + profissional?) — endpoint `GET /appointments/smart-availability` — retorna disponibilidade por dia/slot no intervalo solicitado
 
 ### Billing
 - Criado automaticamente em `appointment.completed` (nunca por chamada direta)
@@ -115,7 +119,7 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 |--------|--------|-------|
 | **BodyMeasurements** | 📋 Especificado | Medidas corporais configuráveis + fotos. Pré-requisito: módulo `uploads`. Spec: `fase3-cliente-relacionamento-doc.md` |
 | **Uploads** | 📋 Especificado | Pre-signed URL (Cloudflare R2 / S3), CustomerFile, TTL 1h. Pré-requisito do BodyMeasurements. |
-| **AnamnesisRequest** | 📋 Especificado | Envio de ficha de anamnese (branco ou pré-preenchida) para cliente preencher/validar e assinar digitalmente. Assinatura idêntica ao padrão de contratos. Spec: `outputs/po/anamnese-assinatura-digital-doc.md` |
+| **Anamnesis** | 📋 Especificado | Módulo próprio de anamnese separado do prontuário. Entidade com ciclo de vida completo (draft → assinada), envio ao cliente, comparativo de alterações e assinatura digital. Spec: `outputs/po/anamnese-redesign-doc.md` |
 
 ---
 
@@ -151,6 +155,9 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 | Fase 3 — Cliente, Relacionamento, Carteira | 2026-03 | `outputs/fase3-cliente-relacionamento-doc.md` |
 | Fase 3 — Spec Final Consolidada | 2026-03 | `outputs/fase3-cliente-relacionamento-spec-final.md` |
 | **Pagamento, Pacotes e Promoções** | **2026-03-24** | **`outputs/po/fluxo-pagamento-pacotes-promocoes-doc.md`** |
+| **Melhorias Modal de Agendamento** | **2026-04-07** | **`outputs/po/agendamento-melhorias-modal-doc.md`** |
+| **Agenda Inteligente (ex-Avançada)** | **2026-04-07** | **`outputs/po/agenda-inteligente-doc.md`** |
+| **Redesign Módulo de Anamnese** | **2026-04-08** | **`outputs/po/anamnese-redesign-doc.md`** |
 
 ---
 

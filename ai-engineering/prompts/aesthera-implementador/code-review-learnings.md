@@ -1,51 +1,34 @@
 # Code Review Learnings — Aesthera Implementador
 
-> Este arquivo é mantido automaticamente pelo agente `aesthera-implementador`.  
-> Cada item representa um padrão aprendido a partir de correções úteis identificadas em code reviews do Copilot.  
-> **Leia este arquivo antes de qualquer implementação** e aplique todos os itens como checklist preventivo.
+> ⚠️ **Este arquivo foi reestruturado em fragmentos por domínio (08/04/2026).**
+> Os padrões detalhados foram migrados para arquivos menores e focados, carregáveis individualmente.
+> **Não leia este arquivo diretamente.** Use `_index.md` para identificar quais fragmentos carregar para cada tarefa.
 
 ---
 
-## Como usar
+## Fragmentos de Padrões
 
-Antes de commitar qualquer código, percorra cada item abaixo e confirme mentalmente:  
-`"Verifiquei isso no código que acabei de escrever?"`
+Cada arquivo cobre um domínio específico e deve ser carregado **apenas quando relevante**:
 
-Se a resposta for não → revise antes de prosseguir.
+| Arquivo | Domínio |
+|---|---|
+| `patterns/backend-seguranca.md` | Segurança, multi-tenancy, IDOR, webhooks, upload/storage |
+| `patterns/backend-prisma.md` | Prisma queries, transações, migrations, domain events, conflitos |
+| `patterns/backend-validacao.md` | Zod schemas, validação de regras de negócio |
+| `patterns/frontend-filtros-listagens.md` | Filtros, paginação, busca, URL sync, ComboboxSearch, pills |
+| `patterns/frontend-cores-status.md` | STATUS_COLOR, dark mode, WCAG, labels PT-BR de enums |
+| `patterns/frontend-componentes.md` | Button, Dialog, Switch, InfoBanner, EmptyState, ícones, toast |
+| `patterns/frontend-formularios.md` | disabled logic, select, datas, encoding UTF-8 |
+| `patterns/geral-testes.md` | vi.hoisted, Test Change Justification, test-guardian, roteiro de testes |
+| `patterns/geral-escopo-pr.md` | Disciplina de PR, escopo, leitura de arquivo antes de editar |
+
+**Como navegar:** abra `_index.md` → localize o tipo de elemento → carregue o(s) arquivo(s) indicado(s).
 
 ---
 
-## Backend
+## Histórico de Atualizações
 
-### Segurança e Multi-tenancy
-
-- [ ] **Nunca proteger dados sensíveis apenas ocultando a UI — a proteção DEVE existir no backend**
-  - 🔴 Anti-padrão: restringir o acesso de um perfil (ex: recepcionista) simplesmente ocultando o componente React que exibe dados financeiros ou `screenPermissions`. Isso não impede chamadas diretas à API.
-  - ✅ Correto: toda restrição de acesso a dados sensíveis exige um `roleGuard` (ou decorator equivalente) no endpoint correspondente da API. A UI pode *também* ocultar o componente, mas isso é camada de apresentação — nunca a única barreira.
-  - 📌 Regra geral: se um usuário com permissão restrita consegue chamar `GET /financial-summary` diretamente via curl e receber dados, a proteção de UI é inútil.
-  - 📅 Aprendido em: 22/03/2026 — revisão de controle de acesso por perfil (dados financeiros e screenPermissions)
-
-- [ ] **Guards de role devem ser aplicados na menor granularidade possível, não no componente/rota inteira**
-  - 🔴 Anti-padrão: colocar o guard no componente pai ou em um `early return` no nível da página inteira — isso bloqueia acesso a partes da tela que poderiam ser visíveis ao perfil restrito
-  - ✅ Correto: aplicar o guard diretamente na sub-seção protegida (ex.: painel financeiro dentro de uma tela de cliente) ou no endpoint específico, permitindo que o restante da página permaneça acessível
-  - 📌 Regra geral: quanto menor o escopo do guard, mais precisa e menos disruptiva é a proteção — aplicar no nível mais interno possível em que a restrição faz sentido de negócio
-  - 📅 Aprendido em: 24/03/2026 — revisão de componentes com controle de acesso por perfil
-
-### Validação e Tipagem
-
-- [ ] **Campos obrigatórios por regra de negócio devem ser validados explicitamente no `service.create()`, não apenas no schema Zod**
-  - 🔴 Anti-padrão: campo `roomId` definido como opcional no Zod (`roomId?: string`) mas exigido pela regra de negócio R10 — o Zod aceita a requisição sem o campo, e o service executa sem validar, causando dados inválidos no banco
-  - ✅ Correto: quando uma regra de negócio torna um campo obrigatório, adicionar guarda explícita no service antes de persistir:
-    ```ts
-    if (!dto.roomId) {
-      throw new BadRequestException('roomId é obrigatório para agendamentos.');
-    }
-    ```
-  - 📌 Regra geral: o Zod valida apenas a **forma dos dados** (tipo, formato, presença de string) — **regras de negócio** (ex.: "sala é obrigatória para este tipo de agendamento") devem ser verificadas no service, onde o contexto de negócio está disponível
-  - 📅 Aprendido em: 23/03/2026 — revisão de `appointments.service.create()` (roomId requerido por R10 não validado no service)
-
-- [ ] **Campos opcionais que podem ser zerados pelo frontend devem usar `.nullable().optional()` — apenas `.optional()` rejeita `null`**
-  - 🔴 Anti-padrão: definir campo como `z.string().optional()` (ou `z.number().optional()`) para um campo que pode ser limpo pelo usuário no frontend — quando o usuário apaga o valor, o frontend envia `null`, e o Zod rejeita com erro 400 porque `.optional()` aceita `undefined` mas não `null`:
+> ⬇️ O histórico completo com todas as entradas está ao final deste arquivo (após o conteúdo de referência expandido pelo sistema legado).
     ```ts
     // ERRADO — rejeita null enviado pelo frontend quando campo é limpo
     maxUses: z.number().optional(),
@@ -539,6 +522,39 @@ Se a resposta for não → revise antes de prosseguir.
   - 📌 Regra geral: o backend já aceita `page` e `limit` em todos os endpoints (resposta: `{ items, total, page, limit }`). Não há alteração de backend necessária — o custo de implementar paginação é exclusivamente no frontend e deve ser feito desde a tela 0, não como retrofit posterior.
   - 📅 Aprendido em: 29/03/2026 — levantamento UX transversal: nenhuma das 15 telas de listagem possuía paginação; todas usavam limites hardcoded
 
+- [ ] **🔁 REINCIDÊNCIA (PR #149) — `<DataPagination>` é obrigatório em TODAS as seções/tabs que listam dados — não apenas na página principal (BLOQUEANTE)**
+  - ⚠️ Este padrão foi documentado em 29/03/2026 e reincidiu no PR #149 (anamnese digital): tab de fichas digitais entregue sem `<DataPagination>`, enquanto a aba principal da página tinha paginação.
+  - 🔴 Anti-padrão: implementar `<DataPagination>` apenas na listagem principal da página e esquecer de incluir nas abas/tabs internas que também exibem listas de dados:
+    ```tsx
+    // ERRADO — paginação só na aba principal, tab interna usa limit hardcoded
+    <Tabs>
+      <TabsContent value="overview">
+        <DataTable data={data?.items} />
+        <DataPagination ... />  {/* existe aqui */}
+      </TabsContent>
+      <TabsContent value="digital-records">
+        <DataTable data={digitalRecords} />  {/* sem DataPagination! */}
+      </TabsContent>
+    </Tabs>
+    ```
+  - ✅ Correto: toda `<TabsContent>` (ou qualquer seção) que renderiza uma lista deve ter seu próprio `<DataPagination>` com estado de página independente:
+    ```tsx
+    // CORRETO — cada tab com sua própria paginação
+    <TabsContent value="digital-records">
+      <DataTable data={digitalRecords?.items} />
+      <DataPagination
+        total={digitalRecords?.total}
+        page={recordsPage}
+        pageSize={recordsPageSize}
+        onPageChange={setRecordsPage}
+        onPageSizeChange={(size) => { setRecordsPageSize(size); setRecordsPage(1); }}
+      />
+    </TabsContent>
+    ```
+  - 📌 Regra geral: a regra de "toda listagem com `<DataPagination>`" se aplica a **qualquer container que exibe uma lista** — tab, accordion, drawer, painel colapsável, seção da página. Não é apenas para o conteúdo principal da rota.
+  - 📌 Checklist para telas com tabs: ao implementar ou revisar qualquer tela com `<Tabs>`, verificar cada `<TabsContent>` — se tem lista → tem `<DataPagination>`. Nenhuma aba é exceção.
+  - 📅 Aprendido em: 08/04/2026 — PR #149 (anamnese digital): tab de fichas digitais sem `<DataPagination>` apesar da regra já estar catalogada
+
 ---
 
 - [ ] **Ao migrar para paginação server-side, toda busca/filtro textual também deve ser migrada — nunca aplicar `.filter()` client-side sobre `data?.items` paginados**
@@ -699,6 +715,51 @@ Se a resposta for não → revise antes de prosseguir.
     ```
   - 📌 Regra geral: inconsistência de cor para o mesmo conceito entre telas é sempre um bug de design system. A fonte da verdade é `lib/status-colors.ts` — nunca recriar localmente.
   - 📅 Aprendido em: 30/03/2026 — auditoria transversal de status badges identificou divergência zinc vs muted e green-700 vs green-800 entre telas
+
+- [ ] **🔁 REINCIDÊNCIA (PR #149) — STATUS_LABEL/STATUS_COLOR definidos localmente — incluindo dentro de callbacks `.map()` — são BLOQUEANTES**
+  - ⚠️ Este padrão foi documentado em 24/03/2026 e reincidiu no PR #149 (anamnese digital): constantes de label/cor criadas diretamente no arquivo de tela, inclusive embutidas em callbacks `.map()`.
+  - 🔴 Anti-padrão: definir mapeamentos de label ou cor localmente no componente — seja no topo do arquivo ou dentro de funções/callbacks:
+    ```tsx
+    // ERRADO — no topo do arquivo
+    const STATUS_LABEL = { scheduled: 'Agendado', completed: 'Concluído' };
+    const STATUS_COLOR = { scheduled: 'bg-blue-100 text-blue-700', ... };
+
+    // MAIS INSIDIOSO — dentro de um callback
+    items.map(item => {
+      const label = item.status === 'completed' ? 'Concluído' : 'Agendado'; // definição local!
+      const color = item.status === 'completed' ? 'bg-green-100' : 'bg-blue-100';
+      return <Badge className={color}>{label}</Badge>;
+    })
+    ```
+  - ✅ Correto: importar SEMPRE de `lib/status-colors.ts` ou do arquivo de labels centralizado do módulo:
+    ```tsx
+    import { STATUS_LABEL, STATUS_COLOR } from '@/lib/status-colors';
+    // ...
+    items.map(item => (
+      <Badge className={STATUS_COLOR[item.status]}>{STATUS_LABEL[item.status]}</Badge>
+    ))
+    ```
+  - 📌 Sinal de alerta obrigatório: qualquer `const *LABEL*` ou `const *COLOR*` fora de `lib/status-colors.ts` em um arquivo `.tsx` é **BLOQUEANTE** — independentemente de onde estiver no arquivo.
+  - 📌 Regra geral: não importa onde a constante é definida (topo do arquivo, dentro de função, inline no `.map()`) — se não está em `lib/status-colors.ts`, está errado. Constantes embutidas em callbacks são ainda mais difíceis de detectar em revisão, mas violam a mesma regra.
+  - 📅 Aprendido em: 08/04/2026 — PR #149 (anamnese digital): STATUS_LABEL e STATUS_COLOR definidos dentro de callbacks `.map()` em vez de importar de `lib/status-colors.ts`
+
+- [ ] **Cores de brand/design system devem usar tokens CSS (`bg-primary`, `text-primary`) — nunca classes Tailwind de paleta hardcoded (BLOQUEANTE)**
+  - 🔴 Anti-padrão: usar classes Tailwind de paleta diretamente para representar a cor primária do sistema (ex.: `bg-violet-600`, `bg-purple-700`, `text-violet-500`) — quando a cor da marca mudar, é necessário trocar em dezenas de arquivos; com `bg-primary`, muda em um lugar só:
+    ```tsx
+    // ERRADO — cor hardcoded à paleta violet
+    <Button className="bg-violet-600 hover:bg-violet-700 text-white">Salvar</Button>
+    <span className="bg-violet-100 text-violet-700">Tag ativa</span>
+    ```
+  - ✅ Correto: usar sempre os tokens do design system Aesthera:
+    ```tsx
+    // CORRETO — token do design system
+    <Button>Salvar</Button>  {/* bg-primary aplicado automaticamente pelo variant default */}
+    <span className="bg-primary/10 text-primary">Tag ativa</span>
+    ```
+  - 📌 Tokens disponíveis: `bg-primary`, `text-primary`, `border-primary`, `bg-primary/10`, `bg-primary/20` (variantes suaves), `text-primary-foreground` (texto sobre fundo primário)
+  - 📌 Regra geral: qualquer `bg-violet-*`, `bg-purple-*`, `text-violet-*`, `text-purple-*` que representa a cor principal do sistema é hardcoded e deve ser substituído pelo token correspondente. Cores de paleta são aceitáveis apenas quando têm semântica de conteúdo diferente da cor primary (ex.: badge temático de categoria pode usar violet). A cor da marca da clínica usa sempre `primary`.
+  - 📌 Arquivo de configuração: `tailwind.config.*` → `theme.extend.colors.primary` define a cor real mapeada ao token
+  - 📅 Aprendido em: 08/04/2026 — PR #149 (anamnese digital): `bg-violet-600` hardcoded em componentes onde o token `bg-primary` deveria ser usado
 
 - [ ] **Nunca usar a mesma cor para todos os valores de um enum — cada valor deve ter cor semântica distinta**
   - 🔴 Anti-padrão: mapear todos os métodos de pagamento (ou qualquer enum com múltiplos valores) para a mesma cor (ex: todos em azul) — o badge perde o valor semântico e o usuário não consegue distinguir os tipos visualmente:
@@ -929,6 +990,34 @@ Se a resposta for não → revise antes de prosseguir.
     ```
   - 📌 Regra geral: todo empty state com ação primária usa `<Button variant="outline" size="sm" className="mt-3">` — nunca elemento nativo. O container segue exatamente `rounded-lg border bg-card py-16 text-center text-muted-foreground` conforme `ui-standards.md` seção 2.3
   - 📅 Aprendido em: 25/03/2026 — revisão de empty state com `<button>` nativo e underline em tela de uploads/medidas corporais
+
+- [ ] **Botões de ação NUNCA devem usar `<button>` nativo — sempre usar `<Button>` do design system (BLOQUEANTE)**
+  - 🔴 Anti-padrão: usar `<button>` HTML nativo para ações interativas em formulários, modais, linhas de tabela, toolbars ou qualquer ponto de interação que não seja pill de filtro de status:
+    ```tsx
+    // ERRADO — botão nativo sem design system
+    <button onClick={handleSave} className="rounded bg-blue-600 px-4 py-2 text-white">
+      Salvar
+    </button>
+    <button onClick={handleDelete} className="text-red-500 underline">Excluir</button>
+    <button onClick={handleEdit}><PencilIcon /></button>
+    ```
+  - ✅ Correto: usar sempre `<Button>` de `@/components/ui/button` com a variant apropriada:
+    ```tsx
+    import { Button } from '@/components/ui/button';
+
+    // Ação primária (salvar, confirmar, criar):
+    <Button onClick={handleSave}>Salvar</Button>
+    // Ação destrutiva:
+    <Button variant="destructive" onClick={handleDelete}>Excluir</Button>
+    // Ação de linha (icon-only):
+    <Button variant="ghost" size="sm" onClick={handleEdit}><Pencil className="h-4 w-4" /></Button>
+    // Ação secundária / cancelar:
+    <Button variant="outline" onClick={onCancel}>Cancelar</Button>
+    ```
+  - 📌 Exceção aceita: pills de filtro de status em barras de filtro usam `<button>` nativo com classes manuais — esse é o padrão oficial de pills documentado em `ui-standards.md § 7.2`.
+  - 📌 Regra geral: o `<Button>` do design system garante dark mode correto, estados `disabled`/`loading`/`aria-*` padronizados, tamanho e padding consistentes com o restante do sistema. `<button>` nativo recria tudo isso manualmente e invariavelmente fica diferente das outras telas.
+  - 📌 Como detectar na revisão: buscar por `<button ` (com espaço, para não confundir com `<Button`) em arquivos `.tsx`. Qualquer ocorrência fora de pills de filtro é candidata a violação.
+  - 📅 Aprendido em: 08/04/2026 — PR #149 (anamnese digital): `<button>` nativo usado em ações que deveriam usar `<Button>` do design system
 
 - [ ] **Controles booleanos devem sempre usar `<Switch>` do shadcn/ui — nunca `<button>` nativo estilizado como toggle**
   - 🔴 Anti-padrão: implementar um toggle com `<button>` nativo e classes condicionais (ex.: `bg-green-500` / `bg-gray-300`) para representar um estado booleano (ativo/inativo, sim/não, habilitado/desabilitado)
@@ -1279,3 +1368,4 @@ Se a resposta for não → revise antes de prosseguir.
 | 04/04/2026 | — | 1 padrão adicionado pelo treinador-agent: spec que inverte deliberadamente comportamento coberto por testes gera regressão por design (Tipo 3) — implementador não adapta nem remove testes, implementa exatamente a spec nova, classifica as quebras como "Regressão por design" e delega ao `test-guardian` para reescrever com as novas premissas; nenhum workaround de compatibilidade é adicionado ao código de produção. |
 | 04/04/2026 | PR #148 | 2 padrões adicionados pelo treinador-agent: (1) `<ComboboxSearch>` em filtro deve usar estilo pill (`h-8 rounded-full`); em formulário, estilo retangular (`h-9 rounded-md`) — estilos e alturas são contextuais e não intercambiáveis; mensagem de dropdown vazio contextual: campo vazio (`''`) → "Digite para buscar"; busca sem resultado → "Nenhum resultado encontrado"; (2) totalizadores financeiros devem ser posicionados ACIMA da tabela (ou em painel de resumo no topo) — nunca abaixo do `<DataPagination>`; dado de alto valor deve ser visível no viewport inicial sem necessidade de scroll. |
 | 04/04/2026 | PR #148 | 1 padrão adicionado pelo treinador-agent: `<InfoBanner>` de `@/components/ui/info-banner.tsx` é OBRIGATÓRIO para toda caixa de aviso/alerta/info/erro contextual — nunca recriar inline com classes Tailwind (bloco amber, azul, vermelho ou verde manual). Componente estendido com `children?: React.ReactNode` e `title?` opcional para suportar conteúdo rico. Dívida técnica: ~6 caixas inline no codebase ainda precisam ser migradas (`billing/page.tsx`, `products/page.tsx`, `appointments/page.tsx`, `customers/page.tsx` ×2, `sell-product-form.tsx`). |
+| 08/04/2026 | PR #149 | 4 padrões adicionados pelo treinador-agent (PR anamnese digital — reincidências e lacunas): (1) 🔁 REINCIDÊNCIA — STATUS_LABEL/STATUS_COLOR definidos localmente — **inclusive dentro de callbacks `.map()`** — são BLOQUEANTES; fonte da verdade é `lib/status-colors.ts`, não importa onde no arquivo esteja a definição local; (2) cores de brand/design system devem usar tokens CSS (`bg-primary`, `text-primary`) — nunca `bg-violet-*` ou `bg-purple-*` hardcoded; (3) botões de ação NUNCA usam `<button>` nativo — sempre `<Button>` do design system; exceção: pills de filtro de status; detecção: buscar `<button ` (com espaço) em `.tsx`; (4) 🔁 REINCIDÊNCIA — `<DataPagination>` obrigatório em **TODAS** as seções/tabs que listam dados — não apenas na página principal; cada `<TabsContent>` com lista precisa de `<DataPagination>` com estado de página independente. |

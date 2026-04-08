@@ -25,7 +25,7 @@ Antes de qualquer ação, leia nesta ordem:
 
 1. `AGENT_RULES.md` — raiz do repositório (regras gerais de governança)
 2. `.github/copilot-instructions.md` — regras específicas do projeto (padrões de UI, checklist de consistência, anti-padrões acumulados)
-3. `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` — catálogo de anti-padrões já identificados em revisões anteriores
+3. `ai-engineering/prompts/aesthera-implementador/_index.md` — tabela de roteamento: identifica quais arquivos `patterns/*.md` carregar com base nos tipos de elementos no PR (backend → `backend-*.md`, frontend → `frontend-*.md`, testes → `patterns/geral-testes.md`)
 
 > ⚠️ Nunca inicie a revisão sem ter lido os três arquivos acima. Anti-padrões catalogados devem ser verificados em TODOS os arquivos do PR.
 
@@ -73,7 +73,7 @@ Informe ao usuário quais especialistas serão acionados antes de prosseguir:
 
 ### 3.1 Anti-padrões catalogados (PRIORIDADE MÁXIMA)
 
-Percorra cada item do `code-review-learnings.md`. Para cada anti-padrão catalogado, verifique se o código do PR comete o mesmo erro. Se sim → registre como **bloqueante** com referência ao arquivo e linha.
+Percorra cada padrão dos arquivos `patterns/*.md` relevantes ao PR (carregados via `_index.md`). Para cada anti-padrão catalogado, verifique se o código do PR comete o mesmo erro. Se sim → registre como **bloqueante** com referência ao arquivo e linha.
 
 ### 3.2 Regras do AGENT_RULES.md
 

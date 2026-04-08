@@ -450,6 +450,20 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
   - **UX:** Mensagens 410/409 alinhadas com spec (expirado vs cancelado vs assinado)
 - **Testes:** 18/18 passando (15 existentes + 3 novos)
 
+### [2026-04-08] — PO: Redesign do Módulo de Anamnese
+
+- **Módulo:** Anamnesis (redesenho arquitetural)
+- **O que foi feito:** Especificação gerada para separar a anamnese do prontuário genérico (`ClinicalRecord`) e tratá-la como entidade com ciclo de vida próprio. Problema identificado: anamnese como "tipo" do prontuário força usuário a criar duplicatas ao querer enviar ao cliente. Novo design: entidade `Anamnesis` com 7 estados (`draft → clinic_filled → sent_to_client → client_submitted → signed | expired | cancelled`), suporte a 3 fluxos (clínica preenche e envia / envia em branco / clínica preenche e arquiva), diff campo-a-campo quando clínica pré-preencheu e cliente alterou, resolução de divergências por campo antes de assinar, página pública `/anamnese/[token]` reutilizando padrão de contratos. Nova aba "Anamnese" na ficha do cliente substitui o tipo anamnese no prontuário.
+- **Spec:** `outputs/po/anamnese-redesign-doc.md`
+- **Status:** ✅ Spec final consolidada — pronta para issue-writer
+
+### [2026-04-08] — Consolidador: Redesign do Módulo de Anamnese — spec final
+
+- **Módulo:** Anamnesis (redesenho arquitetural)
+- **O que foi feito:** Spec final consolidada a partir das revisões de UX (6 bloqueantes), Security (2 bloqueantes, 4 médios) e Arquiteto (3 bloqueantes, 4 importantes). 3 conflitos resolvidos: (1) diff com ações campo-a-campo + atalhos globais; (2) rota pública corrigida para `/public/anamnese/:token`; (3) módulo tratado como evolução do PR #149, não criação do zero. Incorporados: `signatureHash`, `consentGivenAt`, `ipAddress`, `userAgent` no modelo; `consentText` server-side; `select:` explícito em `findById`; `clientAnswers` com Zod; formulário público paginado; modal em 2 etapas; diff responsivo (tabela desktop / cards mobile); migration obrigatória para `correction_requested`.
+- **Spec:** `outputs/consolidador/anamnese-redesign-spec-final.md`
+- **Status:** ✅ Pronta para issue-writer
+
 ### [2026-04-07] — PO: Melhorias no Modal de Agendamento
 - **Módulo:** Appointments
 - **O que foi feito:** Especificação gerada cobrindo 4 melhorias: (A) proteção contra double-submit com estado `isSubmitting` local + mapeamento de mensagens de erro por `errorCode` da API; (B) aumento da largura do modal em desktop (`max-w-2xl`+) mantendo responsividade mobile; (C) diálogo de confirmação de saída sem salvar posicionado via portal/AlertDialog fixo ao viewport (invisibilidade quando scrollado para baixo); (D) persistência da view do calendário (dia/semana/mês) no localStorage com chave `aesthera:appointments:view`.
@@ -468,6 +482,31 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - **Arquivo gerado:** `outputs/code-review/pr/revisao_pr148_2026-04-03.md`
 - **O que foi feito:** Revisão do PR #148 (feat: redesenho fluxo cobrança de serviços — issue #147). Orquestração: security-auditor, ux-reviewer, test-guardian.
 - **Resultado:** REPROVADO — 8 bloqueantes, 9 sugestões. Principais bloqueantes: fluxo Cash/PIX/Card sem `$transaction` (corrupção de dados financeiros), T05/T19 com assertivas condicionais que podem ser silenciosamente puladas, T06 ausente (billing complementar RN14/RN15 sem testes), badges PACKAGE_SALE/PRODUCT_SALE exibindo enum inglês na UI.
+
+### [2026-04-08] — treinamento: aesthera-implementador — 4 novos anti-padrões (PR #149) + correção estrutural do scan pré-código
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md`
+  - `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`
+- **O que foi feito:** Quatro anti-padrões registrados via treinador-agent com origem no PR de anamnese digital (#149): (1) REINCIDÊNCIA — STATUS_LABEL/STATUS_COLOR definidos localmente, inclusive dentro de callbacks `.map()` — BLOQUEANTE; (2) LACUNA — cores de brand usam `bg-violet-*` hardcoded em vez de tokens `bg-primary`/`text-primary` — BLOQUEANTE; (3) LACUNA — `<button>` nativo para ações que deveriam usar `<Button>` do design system — BLOQUEANTE; (4) REINCIDÊNCIA — `<DataPagination>` ausente em tabs internas da página (tab de fichas digitais) — BLOQUEANTE. Além dos anti-padrões, correção estrutural crítica no prompt do implementador: (a) eliminado "mentalmente" do gate do scan pré-código — o output do scan agora é OBRIGATORIAMENTE VISÍVEL com bloco formatado; (b) step 4 do Fluxo de Trabalho refatorado para exigir bloco de confirmação explícito antes de avançar; (c) gate de compliance frontend atualizado com os 4 novos itens; (d) tabela de "Componentes obrigatórios" expandida com `<Button>` e tokens de cor.
+- **Impacto:** O "furo" raiz identificado (scan "mental" sem output visível) foi corrigido — o implementador agora produz evidência verificável do scan antes de codificar, prevenindo reincidências dos padrões catalogados.
+
+### [2026-04-08] — arquitetura: fragmentação do sistema de aprendizados + two-phase execution protocol
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/_index.md` *(novo — tabela de roteamento por tipo de elemento)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/backend-seguranca.md` *(novo — 8 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/backend-prisma.md` *(novo — 7 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/backend-validacao.md` *(novo — 3 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/frontend-filtros-listagens.md` *(novo — 7 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/frontend-cores-status.md` *(novo — 9 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/frontend-componentes.md` *(novo — 11 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/frontend-formularios.md` *(novo — 4 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/geral-testes.md` *(novo — 6 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/patterns/geral-escopo-pr.md` *(novo — 3 itens)*
+  - `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` *(convertido em redirecionador — conteúdo migrado para `patterns/`)*
+  - `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md` *(atualizado — item 7 aponta para `_index.md`, gate de compliance e auto-treinamento adaptados)*
+  - `ai-engineering/prompts/treinador/treinador-agent-prompt.md` *(atualizado — nova seção de roteamento de aprendizados)*
+- **O que foi feito:** O monolítico `code-review-learnings.md` (~1400 linhas, 60+ itens) foi fragmentado em 9 arquivos de padrões por domínio. O `_index.md` serve como tabela de roteamento com 40+ tipos de elementos mapeados. O implementador executa em **Fase 1 (Planejamento)** — carrega `_index.md`, decompõe a tarefa, produz Bloco de Planejamento visível — e **Fase 2 (Execução)** — carrega apenas os fragmentos relevantes por elemento antes de implementar cada um, aguarda confirmação e avança. O treinador-agent foi atualizado com a tabela de roteamento para saber qual arquivo `patterns/*.md` recebe cada novo aprendizado.
+- **Motivação:** O arquivo monolítico causava compressão de contexto — o modelo esquecia itens iniciais ao implementar os finais. Fragmentação resolve isso: cada elemento carrega apenas o contexto necessário, tornando a verificação rastreável e verificável.
 
 ### [2026-04-03] — treinamento: aesthera-implementador — 2 novos anti-padrões (PR #148)
 - **Arquivo(s) afetado(s):**
