@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertCircle, Ban, Bot, ChevronDown, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet } from 'lucide-react'
+import { AlertCircle, Ban, Bot, ChevronDown, ChevronUp, CheckCircle2, ClipboardList, ExternalLink, Eye, FileSignature, FileText, Info, Loader2, Package, Pencil, Plus, RefreshCw, Scissors, Search, Send, Trash2, Upload, User, Wallet, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Controller, useForm } from 'react-hook-form'
@@ -2385,20 +2385,34 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prontuário</p>
             </div>
-            {!showEntryForm && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setShowSendAnamnesisDialog(true)}
+                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+              >
+                <Send className="h-3 w-3" />
+                Enviar ficha
+              </button>
               <button
                 onClick={openEntryForm}
-                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                className="flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
               >
                 <Plus className="h-3 w-3" />
                 Novo lançamento
               </button>
-            )}
+            </div>
           </div>
 
-          {/* ── New-entry form ── */}
+          {/* ── New-entry dialog ── */}
           {showEntryForm && (
-            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+            <Dialog open onClose={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }}>
+              <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+                <DialogTitle className="mb-0 text-sm">Novo lançamento</DialogTitle>
+                <button type="button" onClick={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-4 overflow-y-auto max-h-[65vh]">
               {/* Type selector */}
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Tipo de lançamento</label>
@@ -2631,79 +2645,96 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                 </div>
               )}
 
-              {/* Action buttons */}
-              <div className="flex gap-2 pt-1">
+              </div>
+              <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
                 <button
+                  type="button"
+                  onClick={() => { setShowEntryForm(false); setAnamnesisAnswers({}); setAnamnesisPerformedAt(''); setSimpleRecord({ title: '', content: '', performedAt: '' }) }}
+                  className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
                   onClick={() => void submitEntry()}
                   disabled={entrySubmitting || (entryType !== 'anamnesis' && (!simpleRecord.title.trim() || !simpleRecord.content.trim()))}
-                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {entrySubmitting ? 'Salvando…' : 'Salvar lançamento'}
                 </button>
+              </div>
+            </Dialog>
+          )}
+
+          {/* ── Edit record dialog ── */}
+          {editingRecord && editingRecord.type !== 'anamnesis' && (
+            <Dialog open onClose={() => setEditingRecord(null)}>
+              <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+                <DialogTitle className="mb-0 text-sm">Editar lançamento</DialogTitle>
+                <button type="button" onClick={() => setEditingRecord(null)} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-3 overflow-y-auto max-h-[65vh]">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Título</label>
+                  <input
+                    value={editValues.title}
+                    onChange={(e) => setEditValues((prev) => ({ ...prev, title: e.target.value }))}
+                    className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Conteúdo</label>
+                  <textarea
+                    value={editValues.content}
+                    onChange={(e) => setEditValues((prev) => ({ ...prev, content: e.target.value }))}
+                    rows={4}
+                    className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Data de realização</label>
+                  <input
+                    type="date"
+                    value={editValues.performedAt}
+                    onChange={(e) => setEditValues((prev) => ({ ...prev, performedAt: e.target.value }))}
+                    className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
                 <button
-                  onClick={() => setShowEntryForm(false)}
-                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                  type="button"
+                  onClick={() => setEditingRecord(null)}
+                  className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
                 >
                   Cancelar
                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* ── Edit record modal ── */}
-          {editingRecord && editingRecord.type !== 'anamnesis' && (
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
-              <p className="text-xs font-semibold text-primary">Editar lançamento</p>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Título</label>
-                <input
-                  value={editValues.title}
-                  onChange={(e) => setEditValues((prev) => ({ ...prev, title: e.target.value }))}
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Conteúdo</label>
-                <textarea
-                  value={editValues.content}
-                  onChange={(e) => setEditValues((prev) => ({ ...prev, content: e.target.value }))}
-                  rows={3}
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs resize-none"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Data de realização</label>
-                <input
-                  type="date"
-                  value={editValues.performedAt}
-                  onChange={(e) => setEditValues((prev) => ({ ...prev, performedAt: e.target.value }))}
-                  className="w-full rounded-md border bg-background px-2 py-1 text-xs"
-                />
-              </div>
-              <div className="flex gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={() => void submitEdit()}
                   disabled={editSubmitting}
-                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {editSubmitting ? 'Salvando…' : 'Salvar alterações'}
                 </button>
-                <button
-                  onClick={() => setEditingRecord(null)}
-                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
-                >
-                  Cancelar
-                </button>
               </div>
-            </div>
+            </Dialog>
           )}
 
-          {/* ── Edit anamnesis modal ── */}
+          {/* ── Edit anamnesis dialog ── */}
           {editingRecord && editingRecord.type === 'anamnesis' && (
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
-              <p className="text-xs font-semibold text-primary">
-                Editar Anamnese{editAnamnesisGroup ? ` – ${editAnamnesisGroup.name}` : ''}
-              </p>
+            <Dialog open onClose={() => setEditingRecord(null)}>
+              <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+                <DialogTitle className="mb-0 text-sm">
+                  Editar Anamnese{editAnamnesisGroup ? ` – ${editAnamnesisGroup.name}` : ''}
+                </DialogTitle>
+                <button type="button" onClick={() => setEditingRecord(null)} className="text-muted-foreground hover:text-foreground" aria-label="Fechar">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4 space-y-3 overflow-y-auto max-h-[65vh]">
               {/* Date of evaluation */}
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Data de realização (opcional)</label>
@@ -2833,22 +2864,25 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                   )
                 })
               )}
-              <div className="flex gap-2 pt-1">
+              </div>
+              <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
                 <button
-                  onClick={() => void submitEdit()}
-                  disabled={editSubmitting}
-                  className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
-                >
-                  {editSubmitting ? 'Salvando…' : 'Salvar anamnese'}
-                </button>
-                <button
+                  type="button"
                   onClick={() => setEditingRecord(null)}
-                  className="rounded-md border px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                  className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
                 >
                   Cancelar
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void submitEdit()}
+                  disabled={editSubmitting}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {editSubmitting ? 'Salvando…' : 'Salvar anamnese'}
+                </button>
               </div>
-            </div>
+            </Dialog>
           )}
 
           {/* ── Chronological history ── */}
@@ -2902,8 +2936,9 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
                         </span>
                         <button
                           onClick={() => openEditRecord(r)}
-                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-muted/50 hover:text-foreground border"
+                          className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                         >
+                          <Pencil className="h-2.5 w-2.5" />
                           Editar
                         </button>
                       </div>
@@ -2950,13 +2985,13 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           <div className="space-y-2 pt-2 border-t">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Anamneses por Link
+                Fichas de Anamnese Digital
               </p>
               <button
                 onClick={() => setShowSendAnamnesisDialog(true)}
-                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted/50"
+                className="flex items-center gap-1 rounded-lg bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
               >
-                <Plus className="h-3 w-3" />
+                <Send className="h-3 w-3" />
                 Enviar ficha
               </button>
             </div>
@@ -2967,7 +3002,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
               </div>
             ) : !anamnesisRequestsQuery.data?.items.length ? (
               <p className="rounded-lg border bg-muted/10 px-3 py-3 text-center text-xs text-muted-foreground">
-                Nenhuma ficha enviada. Clique em &quot;Enviar ficha&quot; para enviar uma anamnese por link.
+                Nenhuma ficha enviada. Clique em &quot;Enviar ficha&quot; para enviar uma anamnese digital por link ao cliente.
               </p>
             ) : (
               <div className="space-y-1.5">
