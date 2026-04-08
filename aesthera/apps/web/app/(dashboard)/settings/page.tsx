@@ -208,6 +208,15 @@ function AnamnesisConfigTab({
     date: 'Data',
   }
 
+  const TYPE_COLOR: Record<QuestionType, string> = {
+    text:     'bg-slate-500 text-white dark:bg-slate-600',
+    yesno:    'bg-teal-600 text-white dark:bg-teal-700',
+    multiple: 'bg-purple-600 text-white dark:bg-purple-700',
+    select:   'bg-blue-600 text-white dark:bg-blue-700',
+    numeric:  'bg-amber-500 text-white dark:bg-amber-600',
+    date:     'bg-green-600 text-white dark:bg-green-700',
+  }
+
   // ── group actions ───────────────────────────────────────────────────
 
   function addGroup() {
@@ -706,7 +715,7 @@ function AnamnesisConfigTab({
                                         {editQ.selectOptions.map((opt, idx) => (
                                           <div key={idx} className="bg-muted/50 flex items-center gap-2 rounded px-2 py-1">
                                             <span className="flex-1 text-xs">{opt.label}</span>
-                                            {opt.withDescription && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">com descrição</span>}
+                                            {opt.withDescription && <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white dark:bg-blue-700">com descrição</span>}
                                             <button type="button" onClick={() => removeEditOption(idx, 'select')} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>
                                           </div>
                                         ))}
@@ -732,12 +741,12 @@ function AnamnesisConfigTab({
                                 <div className="flex items-center gap-2">
                                   <GripVertical className="text-muted-foreground/50 h-4 w-4 shrink-0 cursor-grab active:cursor-grabbing" />
                                   <span className="text-foreground flex-1 text-sm">{q.text}</span>
-                                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[q.type]}`}>
                                     {TYPE_LABEL[q.type]}
                                   </span>
                                   <button
                                     onClick={() => toggleRequired(group.id, q.id)}
-                                    className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+                                    className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${q.required ? 'bg-red-600 text-white dark:bg-red-700' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
                                   >
                                     {q.required ? 'Obrigatório' : 'Opcional'}
                                   </button>
@@ -918,7 +927,7 @@ function AnamnesisConfigTab({
                                         >
                                           <span className="flex-1 text-xs">{opt.label}</span>
                                           {opt.withDescription && (
-                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                            <span className="rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white dark:bg-blue-700">
                                               com descrição
                                             </span>
                                           )}
