@@ -450,6 +450,12 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
   - **UX:** Mensagens 410/409 alinhadas com spec (expirado vs cancelado vs assinado)
 - **Testes:** 18/18 passando (15 existentes + 3 novos)
 
+### [2026-04-08] — Code Review Issue #152 — Redesign do Módulo de Anamnese
+
+- **Arquivo gerado:** `outputs/code-review/pr/revisao_issue152_2026-04-08.md`
+- **O que foi feito:** Revisão da implementação da issue #152 — 14 bloqueantes, 12 sugestões
+- **Impacto:** Implementação reprovada por múltiplas vulnerabilidades de segurança (IDOR em `updateStatus`/`setSignToken`, SEC2 `signToken` exposto em 3 endpoints, SEC6 base64 em PostgreSQL) e violações de design system (`<button>` nativo)
+
 ### [2026-04-08] — feat(#152): Redesign do Módulo de Anamnese — Ciclo de Vida Completo + Segurança LGPD + UI Completa
 
 - **Módulo:** Anamnesis (evolução do PR #149)
@@ -523,6 +529,13 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
   - `ai-engineering/prompts/aesthera-implementador/aesthera-implementador-prompt.md`
 - **O que foi feito:** Quatro anti-padrões registrados via treinador-agent com origem no PR de anamnese digital (#149): (1) REINCIDÊNCIA — STATUS_LABEL/STATUS_COLOR definidos localmente, inclusive dentro de callbacks `.map()` — BLOQUEANTE; (2) LACUNA — cores de brand usam `bg-violet-*` hardcoded em vez de tokens `bg-primary`/`text-primary` — BLOQUEANTE; (3) LACUNA — `<button>` nativo para ações que deveriam usar `<Button>` do design system — BLOQUEANTE; (4) REINCIDÊNCIA — `<DataPagination>` ausente em tabs internas da página (tab de fichas digitais) — BLOQUEANTE. Além dos anti-padrões, correção estrutural crítica no prompt do implementador: (a) eliminado "mentalmente" do gate do scan pré-código — o output do scan agora é OBRIGATORIAMENTE VISÍVEL com bloco formatado; (b) step 4 do Fluxo de Trabalho refatorado para exigir bloco de confirmação explícito antes de avançar; (c) gate de compliance frontend atualizado com os 4 novos itens; (d) tabela de "Componentes obrigatórios" expandida com `<Button>` e tokens de cor.
 - **Impacto:** O "furo" raiz identificado (scan "mental" sem output visível) foi corrigido — o implementador agora produz evidência verificável do scan antes de codificar, prevenindo reincidências dos padrões catalogados.
+
+### [2026-04-08] — treinamento: aesthera-implementador — 3 padrões (issue #152) via treinador-agent
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/patterns/backend-seguranca.md`
+  - `ai-engineering/prompts/aesthera-implementador/patterns/geral-testes.md`
+  - `ai-engineering/prompts/aesthera-implementador/code-review-learnings.md` *(histórico)*
+- **O que foi feito:** (1) 🔁 REINCIDÊNCIA — item `_clinicId` em repositório atualizado com flag de reincidência, detecção via `grep -n '_clinicId' *.repository.ts` e data 08/04/2026; (2) NOVO — `include` sem `select` na entidade principal expõe campos sensíveis em route handlers — adicionado a `backend-seguranca.md` com lista de campos proibidos e heurística de detecção; (3) NOVO — testes de `$transaction` sem cenário de falha do último step não testam atomicidade — adicionado a `geral-testes.md` com template de teste de rollback.
 
 ### [2026-04-08] — arquitetura: fragmentação do sistema de aprendizados + two-phase execution protocol
 - **Arquivo(s) afetado(s):**

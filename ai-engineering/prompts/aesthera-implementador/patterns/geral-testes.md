@@ -85,3 +85,23 @@
   - 📌 Máximo 5 cenários: caso feliz, validação principal, erro esperado, edge case.
   - 📌 Para features exclusivamente backend/API: substituir fluxo de UI pelo endpoint + payload de teste.
   - 📅 25/03/2026
+
+---
+
+- [ ] **Testes de `$transaction` devem incluir cenário de falha do último step — nunca só happy path**
+  - 🔴 Anti-padrão: `mockPrisma.$transaction.mockImplementation(async (cb) => cb(mockTx))` apenas — o callback executa sem erro; nunca verifica que a transação propaga o erro quando um step intermediário falha.
+  - ✅ Correto — para cada `$transaction` implementado, adicionar:
+    ```ts
+    it('deve propagar erro se o último step da transação falhar (atomicidade)', async () => {
+      // Mock dos steps anteriores como sucesso
+      mockTx.entity.update.mockResolvedValue({ id: ENTITY_ID, status: 'updated' });
+      // Mock do último step como falha
+      mockTx.auditLog.create.mockRejectedValue(new Error('DB constraint'));
+
+      await expect(service.execute(input)).rejects.toThrow('DB constraint');
+      // Em produção, o Prisma reverte todos os steps anteriores
+    });
+    ```
+  - 📌 Regra: "testar atomicidade" sem simular falha não testa atomicidade — apenas testa o happy path dentro de um callback.
+  - 📌 O que verificar: existe pelo menos 1 teste onde o **último step** (`auditLog.create`, `billing.update`, etc.) lança e o service propaga o erro? Se não → a garantia de rollback está sem cobertura.
+  - 📅 08/04/2026 — issue #152 (`resolveDiff` com `$transaction` testado apenas em sucesso; falha de `auditLog.create` não coberta)
