@@ -1970,10 +1970,9 @@ type DetailTab = 'profile' | 'history' | 'wallet' | 'prontuario' | 'anamnese' | 
 type EntryType = ClinicalRecord['type']
 
 const ENTRY_TYPES: { value: EntryType; label: string }[] = [
-  { value: 'anamnesis', label: 'Anamnese' },
-  { value: 'exam',      label: 'Exame' },
-  { value: 'note',      label: 'Observação' },
-  { value: 'procedure', label: 'Procedimento' },
+  { value: 'exam',         label: 'Exame' },
+  { value: 'note',         label: 'Observação' },
+  { value: 'procedure',    label: 'Procedimento' },
   { value: 'prescription', label: 'Prescrição' },
 ]
 
@@ -2026,7 +2025,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
   // new-entry form
   const [showEntryForm, setShowEntryForm] = useState(false)
-  const [entryType, setEntryType] = useState<EntryType>('anamnesis')
+  const [entryType, setEntryType] = useState<EntryType>('exam')
   // selected group for new anamnesis
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   // for non-anamnesis types
@@ -2057,7 +2056,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
   const selectedGroupQuestions = (selectedGroup?.questions ?? []).filter((q): q is AnamnesisQuestion => q.type !== 'separator')
 
   function openEntryForm() {
-    setEntryType('anamnesis')
+    setEntryType('exam')
     setSelectedGroupId(anamnesisGroups?.[0]?.id ?? '')
     setSimpleRecord({ title: '', content: '', performedAt: '' })
     setAnamnesisAnswers({})

@@ -12,15 +12,15 @@ export const ANAMNESIS_STATUS_LABEL: Record<string, string> = {
 
 /** @deprecated Use ANAMNESIS_STATUS_COLORS */
 export const ANAMNESIS_STATUS_COLOR: Record<string, string> = {
-  draft: 'bg-slate-100 text-slate-600 dark:bg-slate-900/40 dark:text-slate-300',
-  clinic_filled: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
-  sent_to_client: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
-  client_submitted: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  signed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  draft: 'bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300',
+  clinic_filled: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
+  sent_to_client: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
+  client_submitted: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
+  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  signed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
   expired: 'bg-muted text-muted-foreground',
-  correction_requested: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-  cancelled: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
+  correction_requested: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400',
 }
 
 /** Constante canônica para cores de status de anamnese */

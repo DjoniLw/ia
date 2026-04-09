@@ -168,7 +168,7 @@ export function AnamnesisTab({
                 <p className="text-xs font-medium truncate">{req.groupName}</p>
                 <span
                   className={[
-                    'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                    'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
                     ANAMNESIS_STATUS_COLORS[req.status] ?? 'bg-muted text-muted-foreground',
                   ].join(' ')}
                 >
