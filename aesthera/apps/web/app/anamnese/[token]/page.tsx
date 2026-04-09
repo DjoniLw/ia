@@ -44,6 +44,8 @@ export default function AnamnesePage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [triedAdvance, setTriedAdvance] = useState(false)
 
   useEffect(() => {
     axios
@@ -123,9 +125,39 @@ export default function AnamnesePage() {
     setAnswer(id, next.join(', '))
   }
 
-  const questions = (data?.questionsSnapshot ?? []).filter((q) => q.type !== 'separator')
-  const requiredUnanswered = questions.filter((q) => q.required && !answers[q.id])
+  function handleNext() {
+    if (currentRequiredEmpty.length > 0) {
+      setTriedAdvance(true)
+      return
+    }
+    setCurrentStep((prev) => prev + 1)
+    setTriedAdvance(false)
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const isPrefilled = data?.mode === 'prefilled'
+  const allQs = data?.questionsSnapshot ?? []
+  const allNonSepQs = allQs.filter((q) => q.type !== 'separator')
+  const requiredUnanswered = allNonSepQs.filter((q) => q.required && !answers[q.id])
+  const stepsData = (() => {
+    const result: Array<{ title?: string; questions: QuestionEntry[] }> = []
+    let cur: { title?: string; questions: QuestionEntry[] } = { questions: [] }
+    for (const q of allQs) {
+      if (q.type === 'separator') {
+        if (cur.questions.length > 0) result.push(cur)
+        cur = { title: q.text, questions: [] }
+      } else {
+        cur.questions.push(q)
+      }
+    }
+    if (cur.questions.length > 0 || cur.title) result.push(cur)
+    return result.length > 0 ? result : [{ questions: [] }]
+  })()
+  const totalSteps = stepsData.length
+  const currentStepData = stepsData[currentStep] ?? { questions: [] }
+  const currentStepQs = currentStepData.questions
+  const currentRequiredEmpty = currentStepQs.filter((q) => q.required && !answers[q.id])
+  const isLastStep = currentStep === totalSteps - 1
 
   // ── Loading ────────────────────────────────────────────────────────────────
 
@@ -195,32 +227,50 @@ export default function AnamnesePage() {
             </div>
           )}
 
-          {questions.length === 0 ? (
+          {/* Progresso de etapas */}
+          {totalSteps > 1 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Etapa {currentStep + 1} de {totalSteps}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {Math.round(((currentStep + 1) / totalSteps) * 100)}%
+                </p>
+              </div>
+              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${((currentStep + 1) / totalSteps) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {currentStepData.title && (
+            <div className="space-y-1">
+              <p className="text-xs font-bold uppercase tracking-wider text-primary">
+                {currentStepData.title}
+              </p>
+              <hr className="border-border" />
+            </div>
+          )}
+
+          {currentStepQs.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               Nenhuma pergunta disponível.
             </p>
           ) : (
             <div className="space-y-5">
-              {(data?.questionsSnapshot ?? []).map((q) => {
-                if (q.type === 'separator') {
-                  return (
-                    <div key={q.id} className="space-y-1 pt-2">
-                      <p className="text-xs font-bold uppercase tracking-wider text-primary">
-                        {q.text}
-                      </p>
-                      <hr className="border-border" />
-                    </div>
-                  )
-                }
-
+              {currentStepQs.map((q) => {
+                const hasError = triedAdvance && q.required && !answers[q.id]
                 return (
                   <div key={q.id} className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-800">
+                    <label className={['block text-sm font-medium', hasError ? 'text-red-600' : 'text-gray-800'].join(' ')}>
                       {q.text}
                       {q.required && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
 
-                    {/* Modo prefilled: exibe respostas do staff como somente leitura */}
                     {isPrefilled ? (
                       <p className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700">
                         {answers[q.id] || <span className="italic text-muted-foreground">Não preenchido</span>}
@@ -228,7 +278,7 @@ export default function AnamnesePage() {
                     ) : (
                       <>
                     {q.type === 'yesno' && (
-                      <div className="flex gap-2">
+                      <div className={['flex gap-2', hasError ? 'rounded-xl ring-1 ring-red-500 p-1' : ''].join(' ')}>
                         {['Sim', 'Não'].map((opt) => (
                           <button
                             key={opt}
@@ -248,7 +298,7 @@ export default function AnamnesePage() {
                     )}
 
                     {q.type === 'multiple' && q.options && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className={['flex flex-wrap gap-2', hasError ? 'rounded-xl ring-1 ring-red-500 p-1' : ''].join(' ')}>
                         {q.options.map((opt, idx) => {
                           const selected = (answers[q.id] ?? '').split(',').map((s) => s.trim()).includes(opt)
                           const img = (q.optionImages ?? [])[idx]
@@ -273,7 +323,7 @@ export default function AnamnesePage() {
                     )}
 
                     {q.type === 'select' && q.selectOptions && (
-                      <div className="space-y-2">
+                      <div className={['space-y-2', hasError ? 'rounded-xl ring-1 ring-red-500 p-1' : ''].join(' ')}>
                         {q.selectOptions.map((opt) => (
                           <div key={opt.label} className="space-y-1">
                             <button
@@ -311,10 +361,13 @@ export default function AnamnesePage() {
                         type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
                         value={answers[q.id] ?? ''}
                         onChange={(e) => setAnswer(q.id, e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                        className={['w-full rounded-xl border px-3 py-2 text-sm focus:outline-none', hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-200 bg-white focus:border-primary'].join(' ')}
                       />
                     )}
                       </>
+                    )}
+                    {hasError && (
+                      <p className="text-xs text-red-500">Campo obrigatório.</p>
                     )}
                   </div>
                 )
@@ -339,7 +392,7 @@ export default function AnamnesePage() {
               isPending={submitting}
               confirmLabel="Assinar e enviar"
             />
-          ) : (
+          ) : isLastStep ? (
             <div className="space-y-4">
               {/* Consentimento LGPD */}
               <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -364,14 +417,29 @@ export default function AnamnesePage() {
                 <p className="text-xs text-red-500">{submitError}</p>
               )}
 
-              <Button
-                type="button"
-                onClick={() => setShowCanvas(true)}
-                disabled={!consentChecked || requiredUnanswered.length > 0}
-                className="w-full rounded-xl py-3 text-sm font-semibold"
-              >
-                Avançar para assinatura
-              </Button>
+              <div className="flex gap-3">
+                {currentStep > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => { setCurrentStep((prev) => prev - 1); setTriedAdvance(false) }}
+                    className="flex-1 rounded-xl py-3 text-sm font-semibold"
+                  >
+                    Anterior
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (currentRequiredEmpty.length > 0) { setTriedAdvance(true); return }
+                    setShowCanvas(true)
+                  }}
+                  disabled={!consentChecked || requiredUnanswered.length > 0}
+                  className="flex-1 rounded-xl py-3 text-sm font-semibold"
+                >
+                  Avançar para assinatura
+                </Button>
+              </div>
 
               {requiredUnanswered.length > 0 && (
                 <p className="text-xs text-muted-foreground text-center">
@@ -380,6 +448,26 @@ export default function AnamnesePage() {
                     : `${requiredUnanswered.length} perguntas obrigatórias não respondidas.`}
                 </p>
               )}
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              {currentStep > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setCurrentStep((prev) => prev - 1); setTriedAdvance(false) }}
+                  className="flex-1 rounded-xl py-3 text-sm font-semibold"
+                >
+                  Anterior
+                </Button>
+              )}
+              <Button
+                type="button"
+                onClick={handleNext}
+                className="flex-1 rounded-xl py-3 text-sm font-semibold"
+              >
+                Próximo
+              </Button>
             </div>
           )}
 

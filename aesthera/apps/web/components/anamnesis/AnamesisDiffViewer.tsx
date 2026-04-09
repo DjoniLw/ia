@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useResolveAnamesisDiff } from '@/lib/hooks/use-resources'
+import { Button } from '@/components/ui/button'
 
 interface DiffEntry {
   questionId: string
@@ -56,22 +57,18 @@ export function AnamesisDiffViewer({ anamnesisId, entries, onResolved, onCancel 
           Nenhuma divergência encontrada. As respostas da clínica e do cliente são idênticas.
         </p>
         <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
-          >
+          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
             Voltar
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="sm"
             onClick={() => void handleConfirm()}
             disabled={resolveDiff.isPending}
-            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50 flex items-center gap-1.5"
           >
             {resolveDiff.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
             Confirmar revisão
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -85,20 +82,12 @@ export function AnamesisDiffViewer({ anamnesisId, entries, onResolved, onCancel 
           Escolha qual resposta manter para cada campo.
         </p>
         <div className="flex gap-1.5">
-          <button
-            type="button"
-            onClick={() => acceptAll('clinic')}
-            className="rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/50"
-          >
+          <Button type="button" variant="outline" size="sm" onClick={() => acceptAll('clinic')}>
             Aceitar tudo da clínica
-          </button>
-          <button
-            type="button"
-            onClick={() => acceptAll('client')}
-            className="rounded border px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted/50"
-          >
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => acceptAll('client')}>
             Aceitar tudo do cliente
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -117,7 +106,7 @@ export function AnamesisDiffViewer({ anamnesisId, entries, onResolved, onCancel 
             {divergent.map((entry) => {
               const choice = resolutions[entry.questionId]
               return (
-                <tr key={entry.questionId} className="border-b last:border-0 bg-yellow-50 dark:bg-yellow-950/10">
+                <tr key={entry.questionId} className="border-b last:border-0 bg-yellow-50 dark:bg-yellow-950/40">
                   <td className="px-3 py-2 font-medium text-foreground align-top">{entry.question}</td>
                   <td className={['px-3 py-2 align-top text-muted-foreground', choice === 'clinic' ? 'font-semibold text-emerald-700 dark:text-emerald-400' : ''].join(' ')}>
                     {entry.clinicAnswer || <span className="italic text-muted-foreground/50">Em branco</span>}
@@ -159,7 +148,7 @@ export function AnamesisDiffViewer({ anamnesisId, entries, onResolved, onCancel 
         {divergent.map((entry) => {
           const choice = resolutions[entry.questionId]
           return (
-            <div key={entry.questionId} className="rounded-lg border bg-yellow-50 dark:bg-yellow-950/10 p-3 space-y-2">
+            <div key={entry.questionId} className="rounded-lg border bg-yellow-50 dark:bg-yellow-950/40 p-3 space-y-2">
               <p className="text-xs font-semibold text-foreground">{entry.question}</p>
               <div className="grid grid-cols-2 gap-2">
                 <label className={['rounded border p-2 cursor-pointer text-[10px] space-y-0.5', choice === 'clinic' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20' : 'bg-card'].join(' ')}>
@@ -179,18 +168,18 @@ export function AnamesisDiffViewer({ anamnesisId, entries, onResolved, onCancel 
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
-        <button type="button" onClick={onCancel} className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
           Cancelar
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          size="sm"
           onClick={() => void handleConfirm()}
           disabled={!allResolved || resolveDiff.isPending}
-          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50 flex items-center gap-1.5"
         >
           {resolveDiff.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
           Confirmar revisão
-        </button>
+        </Button>
       </div>
     </div>
   )

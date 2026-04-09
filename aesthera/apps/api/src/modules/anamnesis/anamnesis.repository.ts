@@ -25,9 +25,30 @@ export class AnamnesisRepository {
         signToken: data.signToken,
         expiresAt: data.expiresAt,
       },
-      include: {
+      // SEC2: select explícito — signToken, signatureUrl, consentText, ipAddress, userAgent NUNCA retornados
+      select: {
+        id: true,
+        clinicId: true,
+        customerId: true,
+        createdByUserId: true,
+        mode: true,
+        status: true,
+        groupId: true,
+        groupName: true,
+        questionsSnapshot: true,
+        staffAnswers: true,
+        clientAnswers: true,
+        diffResolution: true,
+        signatureHash: true,
+        consentGivenAt: true,
+        signedAt: true,
+        expiresAt: true,
+        tokenExpiresAt: true,
+        createdAt: true,
+        updatedAt: true,
         customer: { select: { id: true, name: true, phone: true, email: true } },
         createdBy: { select: { id: true, name: true } },
+        clinicalRecord: { select: { id: true } },
       },
     })
   }
@@ -133,15 +154,43 @@ export class AnamnesisRepository {
     })
   }
 
-  async updateStatus(_clinicId: string, id: string, status: string) {
+  /** Atualiza o status garantindo multi-tenancy. Lança NotFoundError se não encontrado ou clínica errada. */
+  async updateStatus(clinicId: string, id: string, status: string) {
+    // Verificação de ownership: findFirst com clinicId antes de update
+    const existing = await prisma.anamnesisRequest.findFirst({
+      where: { id, clinicId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!existing) throw new NotFoundError('AnamnesisRequest')
     return prisma.anamnesisRequest.update({
       where: { id },
       data: { status: status as never },
+      select: {
+        id: true,
+        clinicId: true,
+        customerId: true,
+        createdByUserId: true,
+        mode: true,
+        status: true,
+        groupId: true,
+        groupName: true,
+        expiresAt: true,
+        tokenExpiresAt: true,
+        signedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     })
   }
 
   /** Persiste signToken + consentText e transiciona para sent_to_client. */
-  async setSignToken(_clinicId: string, id: string, signToken: string, expiresAt: Date, consentText: string) {
+  async setSignToken(clinicId: string, id: string, signToken: string, expiresAt: Date, consentText: string) {
+    // Verificação de ownership — evita IDOR cross-tenant
+    const existing = await prisma.anamnesisRequest.findFirst({
+      where: { id, clinicId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!existing) throw new NotFoundError('AnamnesisRequest')
     return prisma.anamnesisRequest.update({
       where: { id },
       data: {
@@ -151,14 +200,13 @@ export class AnamnesisRepository {
         consentText,
         status: 'sent_to_client',
       },
+      // SEC2: signToken NUNCA retornado — usar a variável local no service para notificações
       select: {
         id: true,
         clinicId: true,
         status: true,
         groupName: true,
         expiresAt: true,
-        // SEC2: signToken retornado aqui para envio de notificação — não exposto na API
-        signToken: true,
         customer: { select: { id: true, name: true, phone: true, email: true } },
       },
     })
@@ -169,7 +217,8 @@ export class AnamnesisRepository {
       where: { id, clinicId, deletedAt: null },
     })
     if (!existing) throw new NotFoundError('AnamnesisRequest')
-    if (!['pending', 'correction_requested'].includes(existing.status)) {
+    const cancellableStatuses = ['pending', 'draft', 'clinic_filled', 'sent_to_client', 'correction_requested']
+    if (!cancellableStatuses.includes(existing.status)) {
       return existing
     }
     return prisma.anamnesisRequest.update({
@@ -195,7 +244,21 @@ export class AnamnesisRepository {
         expiresAt,
         status: 'pending',
       },
-      include: {
+      // SEC2: select explícito — signToken, signatureUrl, consentText, ipAddress, userAgent NUNCA retornados
+      select: {
+        id: true,
+        clinicId: true,
+        customerId: true,
+        createdByUserId: true,
+        mode: true,
+        status: true,
+        groupId: true,
+        groupName: true,
+        expiresAt: true,
+        tokenExpiresAt: true,
+        signedAt: true,
+        createdAt: true,
+        updatedAt: true,
         customer: { select: { id: true, name: true, phone: true, email: true } },
       },
     })
@@ -209,7 +272,7 @@ export class AnamnesisRepository {
     signToken: string,
     data: {
       clientAnswers: Record<string, unknown>
-      signatureBase64: string
+      signatureUrl: string
       signatureHash: string
       consentText: string
       consentGivenAt: Date
@@ -226,7 +289,7 @@ export class AnamnesisRepository {
       },
       data: {
         clientAnswers: data.clientAnswers as Prisma.InputJsonValue,
-        signatureUrl: data.signatureBase64,
+        signatureUrl: data.signatureUrl,
         signatureHash: data.signatureHash,
         consentText: data.consentText,
         consentGivenAt: data.consentGivenAt,

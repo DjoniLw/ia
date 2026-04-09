@@ -114,6 +114,26 @@ export async function getObjectFirstBytes(
 }
 
 /**
+ * Upload direto de um Buffer para o R2 (server-side).
+ * Retorna o storageKey para persistência no banco.
+ * Usar para dados privados que não devem ser acessíveis publicamente sem presigned URL.
+ */
+export async function uploadBuffer(
+  storageKey: string,
+  buffer: Buffer,
+  contentType: string,
+): Promise<string> {
+  const cmd = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: storageKey,
+    ContentType: contentType,
+    Body: buffer,
+  })
+  await getR2Client().send(cmd)
+  return storageKey
+}
+
+/**
  * Retorna o Buffer completo de um objeto no R2.
  * Usado para cálculo de hash de documentos (audit trail).
  */

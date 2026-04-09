@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Ban, Eye, Loader2, Plus, Send } from 'lucide-react'
+import { Ban, ClipboardList, Eye, Loader2, Plus, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { DataPagination } from '@/components/ui/data-pagination'
@@ -13,17 +13,19 @@ import {
   useFinalizeAnamnesis,
   useSendAnamnesis,
 } from '@/lib/hooks/use-resources'
-import { ANAMNESIS_STATUS_COLOR, ANAMNESIS_STATUS_LABEL } from '@/lib/status-colors'
+import { ANAMNESIS_STATUS_COLORS, ANAMNESIS_STATUS_LABEL } from '@/lib/status-colors'
 import { useRole } from '@/lib/hooks/use-role'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { AnamesisDiffViewer } from './AnamesisDiffViewer'
 
 const STATUS_FILTER_OPTIONS: { value: AnamnesisRequestStatus | ''; label: string }[] = [
   { value: '', label: 'Todos' },
+  { value: 'pending', label: 'Pendente' },
   { value: 'draft', label: 'Rascunho' },
   { value: 'clinic_filled', label: 'Preenchida' },
   { value: 'sent_to_client', label: 'Enviada' },
   { value: 'client_submitted', label: 'Aguardando revisão' },
+  { value: 'correction_requested', label: 'Correção solicitada' },
   { value: 'signed', label: 'Assinada' },
   { value: 'expired', label: 'Expirada' },
   { value: 'cancelled', label: 'Cancelada' },
@@ -50,6 +52,7 @@ export function AnamnesisTab({
   const [statusFilter, setStatusFilter] = useState<AnamnesisRequestStatus | ''>('')
   const [diffReq, setDiffReq] = useState<AnamnesisRequest | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
+  const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
   const [sendEmail, setSendEmail] = useState('')
 
@@ -115,7 +118,7 @@ export function AnamnesisTab({
     <div className="space-y-3">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fichas de Anamnese</p>
+        <p className="text-xs font-semibold text-muted-foreground">Fichas de Anamnese</p>
         <Button size="sm" className="h-7 px-2 text-xs" onClick={onCreateNew}>
           <Plus className="h-3 w-3 mr-1" />
           Nova ficha
@@ -147,12 +150,19 @@ export function AnamnesisTab({
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         </div>
       ) : !data?.items.length ? (
-        <div className="rounded-lg border bg-muted/10 px-3 py-6 text-center">
+        <div className="rounded-lg border bg-muted/10 px-3 py-8 text-center space-y-2">
+          <ClipboardList className="h-8 w-8 mx-auto text-muted-foreground/40" />
           <p className="text-xs text-muted-foreground">
             {statusFilter
               ? 'Nenhuma ficha com esse status.'
-              : 'Nenhuma ficha de anamnese. Clique em "Nova ficha" para começar.'}
+              : 'Nenhuma ficha de anamnese cadastrada.'}
           </p>
+          {!statusFilter && (
+            <Button size="sm" variant="outline" className="mx-auto text-xs" onClick={onCreateNew}>
+              <Plus className="h-3 w-3 mr-1" />
+              Nova ficha
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -163,7 +173,7 @@ export function AnamnesisTab({
                 <span
                   className={[
                     'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
-                    ANAMNESIS_STATUS_COLOR[req.status] ?? 'bg-muted text-muted-foreground',
+                    ANAMNESIS_STATUS_COLORS[req.status] ?? 'bg-muted text-muted-foreground',
                   ].join(' ')}
                 >
                   {ANAMNESIS_STATUS_LABEL[req.status] ?? req.status}
@@ -213,7 +223,7 @@ export function AnamnesisTab({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-6 px-2 text-[10px] border-violet-500 text-violet-700 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/20"
+                    className="h-6 px-2 text-[10px]"
                     onClick={() => setDiffReq(req)}
                   >
                     Revisar respostas
@@ -227,7 +237,7 @@ export function AnamnesisTab({
                     size="sm"
                     className="h-6 px-2 text-[10px] text-destructive hover:text-destructive"
                     disabled={cancelAnamnesis.isPending}
-                    onClick={() => void handleCancel(req.id)}
+                    onClick={() => setCancelConfirmId(req.id)}
                   >
                     <Ban className="h-3 w-3" />
                     Cancelar
@@ -281,22 +291,55 @@ export function AnamnesisTab({
             </div>
           </div>
           <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => { setSendingId(null); setSendPhone(''); setSendEmail('') }}
-              className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50"
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="sm"
               onClick={() => void handleSend(sendingId)}
               disabled={sendAnamnesis.isPending}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50 flex items-center gap-1.5"
             >
               {sendAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
               Enviar
-            </button>
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog de confirmação de cancelamento */}
+      {cancelConfirmId && (
+        <Dialog open onClose={() => setCancelConfirmId(null)}>
+          <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+            <DialogTitle className="mb-0 text-sm">Confirmar cancelamento</DialogTitle>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Tem certeza que deseja cancelar esta ficha de anamnese? Esta ação não pode ser desfeita.
+            </p>
+          </div>
+          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
+            <Button type="button" variant="outline" size="sm" onClick={() => setCancelConfirmId(null)}>
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={cancelAnamnesis.isPending}
+              onClick={async () => {
+                await handleCancel(cancelConfirmId)
+                setCancelConfirmId(null)
+              }}
+            >
+              {cancelAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              Confirmar cancelamento
+            </Button>
           </div>
         </Dialog>
       )}

@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// ── Mocks ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Mocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const mockRepo = vi.hoisted(() => ({
   create: vi.fn(),
@@ -31,13 +31,14 @@ const mockAppConfig = vi.hoisted(() => ({
 }))
 
 const mockPrismaTx = vi.hoisted(() => ({
-  anamnesisRequest: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+  anamnesisRequest: { findFirst: vi.fn(), update: vi.fn() },
   clinicalRecord: { findFirst: vi.fn(), create: vi.fn() },
   auditLog: { create: vi.fn() },
 }))
 
 const mockPrisma = vi.hoisted(() => ({
   $transaction: vi.fn((cb: (tx: typeof mockPrismaTx) => Promise<unknown>) => cb(mockPrismaTx)),
+  auditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
 }))
 
 vi.mock('./anamnesis.repository', () => ({
@@ -64,10 +65,14 @@ vi.mock('../../database/prisma/client', () => ({
   prisma: mockPrisma,
 }))
 
+vi.mock('../../integrations/r2/r2.service', () => ({
+  uploadBuffer: vi.fn().mockResolvedValue('anamnesis/clinic-uuid-1/request-uuid-1/signature.png'),
+}))
+
 import { AnamnesisService, handleAnamnesisSignedEvent } from './anamnesis.service'
 import { ConflictError, GoneError, NotFoundError } from '../../shared/errors/app-error'
 
-// ── Constantes ────────────────────────────────────────────────────────────────
+// â”€â”€ Constantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const CLINIC_ID = 'clinic-uuid-1'
 const USER_ID = 'user-uuid-1'
@@ -75,7 +80,7 @@ const CUSTOMER_ID = 'customer-uuid-1'
 const REQUEST_ID = 'request-uuid-1'
 const SIGN_TOKEN = 'abc123token'
 
-const FUTURE_DATE = new Date(Date.now() + 72 * 60 * 60 * 1000)
+const A_VALID_FUTURE_DATE = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 const PAST_DATE = new Date(Date.now() - 1 * 60 * 60 * 1000)
 
 const BASE_PUBLIC_REQUEST = {
@@ -84,16 +89,16 @@ const BASE_PUBLIC_REQUEST = {
   customerId: CUSTOMER_ID,
   signToken: SIGN_TOKEN,
   status: 'pending',
-  expiresAt: FUTURE_DATE,
+  expiresAt: A_VALID_FUTURE_DATE,
   mode: 'blank',
   groupName: 'Anamnese Facial',
   questionsSnapshot: [],
   staffAnswers: null,
-  clinic: { id: CLINIC_ID, name: 'Clínica Teste', slug: 'clinica-teste' },
-  customer: { id: CUSTOMER_ID, name: 'João Silva', phone: '+5511999999999', email: 'joao@test.com' },
+  clinic: { id: CLINIC_ID, name: 'ClÃ­nica Teste', slug: 'clinica-teste' },
+  customer: { id: CUSTOMER_ID, name: 'JoÃ£o Silva', phone: '+5511999999999', email: 'joao@test.com' },
 }
 
-// ── create ────────────────────────────────────────────────────────────────────
+// â”€â”€ create â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('AnamnesisService.create()', () => {
   let service: AnamnesisService
@@ -103,11 +108,11 @@ describe('AnamnesisService.create()', () => {
     service = new AnamnesisService()
   })
 
-  it('deve criar solicitação com token e expiração de 72h', async () => {
+  it('deve criar solicitaÃ§Ã£o com token e prazo de expiraÃ§Ã£o', async () => {
     const fakeRequest = {
       id: REQUEST_ID,
       createdBy: { id: USER_ID, name: 'Staff' },
-      customer: { id: CUSTOMER_ID, name: 'João', phone: null, email: null },
+      customer: { id: CUSTOMER_ID, name: 'JoÃ£o', phone: null, email: null },
     }
     mockRepo.create.mockResolvedValue(fakeRequest)
 
@@ -137,10 +142,10 @@ describe('AnamnesisService.create()', () => {
     const fakeRequest = {
       id: REQUEST_ID,
       createdBy: { id: USER_ID, name: 'Staff' },
-      customer: { id: CUSTOMER_ID, name: 'João', phone: '+5511999999999', email: null },
+      customer: { id: CUSTOMER_ID, name: 'JoÃ£o', phone: '+5511999999999', email: null },
       signToken: SIGN_TOKEN,
       groupName: 'Anamnese Facial',
-      expiresAt: FUTURE_DATE,
+      expiresAt: A_VALID_FUTURE_DATE,
     }
     mockRepo.create.mockResolvedValue(fakeRequest)
 
@@ -153,7 +158,7 @@ describe('AnamnesisService.create()', () => {
       phone: '+5511999999999',
     })
 
-    // Aguardar microtasks assíncronas
+    // Aguardar microtasks assÃ­ncronas
     await vi.waitFor(() => expect(mockNotificationsService.sendWhatsApp).toHaveBeenCalled())
     expect(mockNotificationsService.sendWhatsApp).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -165,7 +170,7 @@ describe('AnamnesisService.create()', () => {
   })
 })
 
-// ── getPublicInfo ─────────────────────────────────────────────────────────────
+// â”€â”€ getPublicInfo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('AnamnesisService.getPublicInfo()', () => {
   let service: AnamnesisService
@@ -175,27 +180,27 @@ describe('AnamnesisService.getPublicInfo()', () => {
     service = new AnamnesisService()
   })
 
-  it('deve retornar dados do formulário para token válido', async () => {
+  it('deve retornar dados do formulÃ¡rio para token vÃ¡lido', async () => {
     mockRepo.findByToken.mockResolvedValue(BASE_PUBLIC_REQUEST)
 
     const result = await service.getPublicInfo(SIGN_TOKEN)
 
     expect(result).toMatchObject({
       id: REQUEST_ID,
-      clinicName: 'Clínica Teste',
-      customerName: 'João Silva',
+      clinicName: 'ClÃ­nica Teste',
+      customerName: 'JoÃ£o Silva',
       mode: 'blank',
       groupName: 'Anamnese Facial',
     })
   })
 
-  it('deve lançar NotFoundError quando token não existe', async () => {
+  it('deve lanÃ§ar NotFoundError quando token nÃ£o existe', async () => {
     mockRepo.findByToken.mockResolvedValue(null)
 
     await expect(service.getPublicInfo('token-invalido')).rejects.toBeInstanceOf(NotFoundError)
   })
 
-  it('deve lançar GoneError (410) quando expiresAt < now e status=pending — lazy check', async () => {
+  it('deve lanÃ§ar GoneError (410) quando expiresAt < now e status=pending â€” lazy check', async () => {
     mockRepo.findByToken.mockResolvedValue({ ...BASE_PUBLIC_REQUEST, expiresAt: PAST_DATE })
     mockRepo.markExpired.mockResolvedValue({ count: 1 })
 
@@ -203,26 +208,32 @@ describe('AnamnesisService.getPublicInfo()', () => {
     expect(mockRepo.markExpired).toHaveBeenCalledWith(CLINIC_ID, REQUEST_ID)
   })
 
-  it('deve lançar GoneError quando status=expired', async () => {
+  it('deve lanÃ§ar GoneError quando status=expired', async () => {
     mockRepo.findByToken.mockResolvedValue({ ...BASE_PUBLIC_REQUEST, status: 'expired' })
 
     await expect(service.getPublicInfo(SIGN_TOKEN)).rejects.toBeInstanceOf(GoneError)
   })
 
-  it('deve lançar ConflictError (409) quando status=signed', async () => {
+  it('deve lanÃ§ar ConflictError (409) quando status=signed', async () => {
     mockRepo.findByToken.mockResolvedValue({ ...BASE_PUBLIC_REQUEST, status: 'signed' })
 
     await expect(service.getPublicInfo(SIGN_TOKEN)).rejects.toBeInstanceOf(ConflictError)
   })
 
-  it('deve lançar GoneError quando status=cancelled', async () => {
+  it('deve lanÃ§ar GoneError quando status=cancelled', async () => {
     mockRepo.findByToken.mockResolvedValue({ ...BASE_PUBLIC_REQUEST, status: 'cancelled' })
 
     await expect(service.getPublicInfo(SIGN_TOKEN)).rejects.toBeInstanceOf(GoneError)
   })
+
+  it('deve lanÃ§ar ConflictError quando status=client_submitted', async () => {
+    mockRepo.findByToken.mockResolvedValue({ ...BASE_PUBLIC_REQUEST, status: 'client_submitted' })
+
+    await expect(service.getPublicInfo(SIGN_TOKEN)).rejects.toBeInstanceOf(ConflictError)
+  })
 })
 
-// ── submit ────────────────────────────────────────────────────────────────────
+// â”€â”€ submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('AnamnesisService.submit()', () => {
   let service: AnamnesisService
@@ -247,9 +258,9 @@ describe('AnamnesisService.submit()', () => {
       SIGN_TOKEN,
       expect.objectContaining({
         clientAnswers: { q1: 'Nenhuma' },
-        signatureBase64: VALID_SIGNATURE,
+        signatureUrl: expect.any(String),
         signatureHash: expect.any(String),
-        consentText: expect.stringContaining('João Silva'),
+        consentText: expect.stringContaining('JoÃ£o Silva'),
       }),
     )
     expect(mockEventBus.publish).toHaveBeenCalledWith(
@@ -261,7 +272,7 @@ describe('AnamnesisService.submit()', () => {
     )
   })
 
-  it('deve lançar GoneError se expiresAt < now antes de submeter', async () => {
+  it('deve lanÃ§ar GoneError se expiresAt < now antes de submeter', async () => {
     mockRepo.findByToken.mockResolvedValue({ ...BASE_PUBLIC_REQUEST, expiresAt: PAST_DATE })
     mockRepo.markExpired.mockResolvedValue({ count: 1 })
 
@@ -269,13 +280,13 @@ describe('AnamnesisService.submit()', () => {
     expect(mockRepo.submitSignature).not.toHaveBeenCalled()
   })
 
-  it('deve lançar ConflictError se status não é pending/correction_requested', async () => {
+  it('deve lanÃ§ar ConflictError se status nÃ£o Ã© pending/correction_requested', async () => {
     mockRepo.findByToken.mockResolvedValue({ ...BASE_PUBLIC_REQUEST, status: 'signed' })
 
     await expect(service.submit(SIGN_TOKEN, DTO, META)).rejects.toBeInstanceOf(ConflictError)
   })
 
-  it('deve lançar ConflictError em race condition — updateMany retorna 0', async () => {
+  it('deve lanÃ§ar ConflictError em race condition â€” updateMany retorna 0', async () => {
     mockRepo.findByToken.mockResolvedValue(BASE_PUBLIC_REQUEST)
     mockRepo.submitSignature.mockResolvedValue(0) // race condition
 
@@ -283,7 +294,7 @@ describe('AnamnesisService.submit()', () => {
   })
 })
 
-// ── resend ────────────────────────────────────────────────────────────────────
+// â”€â”€ resend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('AnamnesisService.resend()', () => {
   let service: AnamnesisService
@@ -298,7 +309,7 @@ describe('AnamnesisService.resend()', () => {
       id: REQUEST_ID,
       clinicId: CLINIC_ID,
       status: 'expired',
-      customer: { id: CUSTOMER_ID, name: 'João', phone: null, email: null },
+      customer: { id: CUSTOMER_ID, name: 'JoÃ£o', phone: null, email: null },
     }
     mockRepo.findById.mockResolvedValue(existing)
     mockRepo.resend.mockResolvedValue({ ...existing, status: 'pending' })
@@ -313,20 +324,20 @@ describe('AnamnesisService.resend()', () => {
     )
   })
 
-  it('deve lançar ConflictError ao tentar reenviar anamnese já assinada', async () => {
+  it('deve lanÃ§ar ConflictError ao tentar reenviar anamnese jÃ¡ assinada', async () => {
     mockRepo.findById.mockResolvedValue({ id: REQUEST_ID, clinicId: CLINIC_ID, status: 'signed' })
 
     await expect(service.resend(CLINIC_ID, REQUEST_ID, {})).rejects.toBeInstanceOf(ConflictError)
   })
 
-  it('deve lançar ConflictError ao tentar reenviar anamnese cancelada', async () => {
+  it('deve lanÃ§ar ConflictError ao tentar reenviar anamnese cancelada', async () => {
     mockRepo.findById.mockResolvedValue({ id: REQUEST_ID, clinicId: CLINIC_ID, status: 'cancelled' })
 
     await expect(service.resend(CLINIC_ID, REQUEST_ID, {})).rejects.toBeInstanceOf(ConflictError)
   })
 })
 
-// ── handleAnamnesisSignedEvent ────────────────────────────────────────────────
+// â”€â”€ handleAnamnesisSignedEvent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('handleAnamnesisSignedEvent()', () => {
   const PAYLOAD = {
@@ -343,7 +354,7 @@ describe('handleAnamnesisSignedEvent()', () => {
     groupName: 'Anamnese Facial',
     questionsSnapshot: [
       { id: 'q1', text: 'Tem alergias?', type: 'yesno', required: true },
-      { id: 'q2', text: 'Observações', type: 'text', required: false },
+      { id: 'q2', text: 'ObservaÃ§Ãµes', type: 'text', required: false },
     ],
     staffAnswers: null,
     clientAnswers: { q1: 'Sim', q2: 'Nenhuma' },
@@ -356,7 +367,7 @@ describe('handleAnamnesisSignedEvent()', () => {
     )
   })
 
-  it('deve criar ClinicalRecord com conteúdo no formato { groupName, entries }', async () => {
+  it('deve criar ClinicalRecord com conteÃºdo no formato { groupName, entries }', async () => {
     mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(STORED_REQUEST)
     mockPrismaTx.clinicalRecord.findFirst.mockResolvedValue(null)
     mockPrismaTx.clinicalRecord.create.mockResolvedValue({ id: 'cr-1' })
@@ -374,7 +385,7 @@ describe('handleAnamnesisSignedEvent()', () => {
             groupName: 'Anamnese Facial',
             entries: [
               { question: 'Tem alergias?', answer: 'Sim', type: 'yesno' },
-              { question: 'Observações', answer: 'Nenhuma', type: 'text' },
+              { question: 'ObservaÃ§Ãµes', answer: 'Nenhuma', type: 'text' },
             ],
           }),
         }),
@@ -382,7 +393,7 @@ describe('handleAnamnesisSignedEvent()', () => {
     )
   })
 
-  it('não deve criar ClinicalRecord duplicado se já existe (idempotência)', async () => {
+  it('nÃ£o deve criar ClinicalRecord duplicado se jÃ¡ existe (idempotÃªncia)', async () => {
     mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(STORED_REQUEST)
     mockPrismaTx.clinicalRecord.findFirst.mockResolvedValue({ id: 'cr-existing' })
 
@@ -391,7 +402,7 @@ describe('handleAnamnesisSignedEvent()', () => {
     expect(mockPrismaTx.clinicalRecord.create).not.toHaveBeenCalled()
   })
 
-  it('não deve criar ClinicalRecord quando AnamnesisRequest não é encontrado', async () => {
+  it('nÃ£o deve criar ClinicalRecord quando AnamnesisRequest nÃ£o Ã© encontrado', async () => {
     mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(null)
 
     await handleAnamnesisSignedEvent(PAYLOAD)
@@ -400,9 +411,9 @@ describe('handleAnamnesisSignedEvent()', () => {
   })
 })
 
-// ── SEC1: consentText sempre server-side ──────────────────────────────────────
+// â”€â”€ SEC1: consentText sempre server-side â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('SEC1 — consentText gerado server-side', () => {
+describe('SEC1 â€” consentText gerado server-side', () => {
   let service: AnamnesisService
 
   beforeEach(() => {
@@ -413,7 +424,7 @@ describe('SEC1 — consentText gerado server-side', () => {
   it('deve ignorar consentText enviado no body e usar o valor do banco', async () => {
     mockRepo.findByToken.mockResolvedValue({
       ...BASE_PUBLIC_REQUEST,
-      clinic: { id: CLINIC_ID, name: 'Clínica Beleza', slug: 'clinica-beleza', document: '12.345.678/0001-99' },
+      clinic: { id: CLINIC_ID, name: 'ClÃ­nica Beleza', slug: 'clinica-beleza', document: '12.345.678/0001-99' },
     })
     mockRepo.submitSignature.mockResolvedValue(1)
 
@@ -424,15 +435,15 @@ describe('SEC1 — consentText gerado server-side', () => {
     )
 
     const callArgs = mockRepo.submitSignature.mock.calls[0][1]
-    // consentText deve conter o nome da clínica do banco, jamais valor externo
-    expect(callArgs.consentText).toContain('Clínica Beleza')
-    expect(callArgs.consentText).toContain('João Silva')
+    // consentText deve conter o nome da clÃ­nica do banco, jamais valor externo
+    expect(callArgs.consentText).toContain('ClÃ­nica Beleza')
+    expect(callArgs.consentText).toContain('JoÃ£o Silva')
   })
 })
 
-// ── SEC2: signToken nunca retornado na API pública ────────────────────────────
+// â”€â”€ SEC2: signToken nunca retornado na API pÃºblica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('SEC2 — signToken ausente do retorno de getPublicInfo', () => {
+describe('SEC2 â€” signToken ausente do retorno de getPublicInfo', () => {
   let service: AnamnesisService
 
   beforeEach(() => {
@@ -440,7 +451,7 @@ describe('SEC2 — signToken ausente do retorno de getPublicInfo', () => {
     service = new AnamnesisService()
   })
 
-  it('não deve retornar signToken na resposta de getPublicInfo', async () => {
+  it('nÃ£o deve retornar signToken na resposta de getPublicInfo', async () => {
     mockRepo.findByToken.mockResolvedValue(BASE_PUBLIC_REQUEST)
 
     const result = await service.getPublicInfo(SIGN_TOKEN)
@@ -449,9 +460,9 @@ describe('SEC2 — signToken ausente do retorno de getPublicInfo', () => {
   })
 })
 
-// ── SEC3: expiração verificada universalmente (TOCTOU) ────────────────────────
+// â”€â”€ SEC3: expiraÃ§Ã£o verificada universalmente (TOCTOU) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('SEC3 — expiração verificada em GET e POST', () => {
+describe('SEC3 â€” expiraÃ§Ã£o verificada em GET e POST', () => {
   let service: AnamnesisService
 
   beforeEach(() => {
@@ -487,9 +498,9 @@ describe('SEC3 — expiração verificada em GET e POST', () => {
   })
 })
 
-// ── RN10: tokenExpiresAt = now + 7 dias ───────────────────────────────────────
+// â”€â”€ RN10: tokenExpiresAt = now + 7 dias â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('RN10 — token expira em 7 dias', () => {
+describe('RN10 â€” token expira em 7 dias', () => {
   let service: AnamnesisService
 
   beforeEach(() => {
@@ -501,7 +512,7 @@ describe('RN10 — token expira em 7 dias', () => {
     mockRepo.create.mockImplementation(async (_clinicId, _userId, data) => ({
       id: REQUEST_ID,
       ...data,
-      customer: { id: CUSTOMER_ID, name: 'João', phone: null, email: null },
+      customer: { id: CUSTOMER_ID, name: 'JoÃ£o', phone: null, email: null },
       createdBy: { id: USER_ID, name: 'Staff' },
     }))
 
@@ -525,7 +536,7 @@ describe('RN10 — token expira em 7 dias', () => {
   })
 })
 
-// ── resolveDiff ───────────────────────────────────────────────────────────────
+// â”€â”€ resolveDiff â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('AnamnesisService.resolveDiff()', () => {
   let service: AnamnesisService
@@ -542,7 +553,7 @@ describe('AnamnesisService.resolveDiff()', () => {
     const anamnesisRow = { id: REQUEST_ID, status: 'client_submitted', clinicId: CLINIC_ID }
     const updatedRow = { id: REQUEST_ID, status: 'signed' }
 
-    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue(anamnesisRow)
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(anamnesisRow)
     mockPrismaTx.anamnesisRequest.update.mockResolvedValue(updatedRow)
     mockPrismaTx.auditLog.create.mockResolvedValue({ id: 'audit-1' })
 
@@ -559,27 +570,27 @@ describe('AnamnesisService.resolveDiff()', () => {
     expect(mockPrismaTx.auditLog.create).toHaveBeenCalled()
   })
 
-  it('deve lançar NotFoundError quando anamnese não encontrada', async () => {
-    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue(null)
+  it('deve lanÃ§ar NotFoundError quando anamnese nÃ£o encontrada', async () => {
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(null)
 
     await expect(
       service.resolveDiff(CLINIC_ID, REQUEST_ID, { resolutions: {} }, USER_ID),
     ).rejects.toBeInstanceOf(NotFoundError)
   })
 
-  it('deve retornar idempotente quando status já é signed', async () => {
+  it('deve retornar idempotente quando status jÃ¡ Ã© signed', async () => {
     const signedRow = { id: REQUEST_ID, status: 'signed', clinicId: CLINIC_ID }
-    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue(signedRow)
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(signedRow)
 
     await service.resolveDiff(CLINIC_ID, REQUEST_ID, { resolutions: {} }, USER_ID)
 
-    // Não deve tentar fazer update se já está signed
+    // NÃ£o deve tentar fazer update se jÃ¡ estÃ¡ signed
     expect(mockPrismaTx.anamnesisRequest.update).not.toHaveBeenCalled()
     expect(mockPrismaTx.auditLog.create).not.toHaveBeenCalled()
   })
 
-  it('deve rejeitar multi-tenancy: clinicId diferente lança NotFoundError', async () => {
-    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue({
+  it('deve rejeitar multi-tenancy: clinicId diferente lanÃ§a NotFoundError', async () => {
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue({
       id: REQUEST_ID,
       status: 'client_submitted',
       clinicId: 'outra-clinica-uuid',
@@ -591,7 +602,7 @@ describe('AnamnesisService.resolveDiff()', () => {
   })
 
   it('deve rejeitar status diferente de client_submitted com ValidationError', async () => {
-    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue({
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue({
       id: REQUEST_ID,
       status: 'pending',
       clinicId: CLINIC_ID,
@@ -604,7 +615,7 @@ describe('AnamnesisService.resolveDiff()', () => {
   })
 })
 
-// ── finalize ──────────────────────────────────────────────────────────────────
+// â”€â”€ finalize â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe('AnamnesisService.finalize()', () => {
   let service: AnamnesisService
@@ -614,7 +625,7 @@ describe('AnamnesisService.finalize()', () => {
     service = new AnamnesisService()
   })
 
-  it('deve transicionar draft → clinic_filled', async () => {
+  it('deve transicionar draft â†’ clinic_filled', async () => {
     mockRepo.findById.mockResolvedValue({ id: REQUEST_ID, status: 'draft', clinicId: CLINIC_ID })
     mockRepo.updateStatus = vi.fn().mockResolvedValue({ id: REQUEST_ID, status: 'clinic_filled' })
 
@@ -624,16 +635,82 @@ describe('AnamnesisService.finalize()', () => {
     expect(result).toMatchObject({ status: 'clinic_filled' })
   })
 
-  it('deve lançar ValidationError se status não é draft', async () => {
+  it('deve lanÃ§ar ValidationError se status nÃ£o Ã© draft', async () => {
     mockRepo.findById.mockResolvedValue({ id: REQUEST_ID, status: 'signed', clinicId: CLINIC_ID })
 
     const { ValidationError } = await import('../../shared/errors/app-error')
     await expect(service.finalize(CLINIC_ID, REQUEST_ID)).rejects.toBeInstanceOf(ValidationError)
   })
 
-  it('deve lançar NotFoundError se anamnese não existe', async () => {
+  it('deve lanÃ§ar NotFoundError se anamnese nÃ£o existe', async () => {
     mockRepo.findById.mockResolvedValue(null)
 
     await expect(service.finalize(CLINIC_ID, REQUEST_ID)).rejects.toBeInstanceOf(NotFoundError)
   })
 })
+
+// â”€â”€ resolveDiff: atomicidade de rollback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+describe('AnamnesisService.resolveDiff() â€” atomicidade de rollback', () => {
+  let service: AnamnesisService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AnamnesisService()
+    mockPrisma.$transaction.mockImplementation(
+      (cb: (tx: typeof mockPrismaTx) => Promise<unknown>) => cb(mockPrismaTx),
+    )
+  })
+
+  it('deve reverter status signed se auditLog.create falhar (atomicidade)', async () => {
+    mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue({ id: REQUEST_ID, status: 'client_submitted', clinicId: CLINIC_ID })
+    mockPrismaTx.anamnesisRequest.update.mockResolvedValue({ id: REQUEST_ID, status: 'signed' })
+    mockPrismaTx.auditLog.create.mockRejectedValue(new Error('DB error'))
+
+    await expect(
+      service.resolveDiff(CLINIC_ID, REQUEST_ID, { resolutions: {} }, USER_ID),
+    ).rejects.toThrow('DB error')
+    // A transaÃ§Ã£o propagou o erro â€” em produÃ§Ã£o, o update Ã© revertido pelo Prisma
+  })
+})
+
+// â”€â”€ submit: auditLog RN21 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+describe('AnamnesisService.submit() â€” auditLog RN21', () => {
+  let service: AnamnesisService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AnamnesisService()
+  })
+
+  const VALID_SIGNATURE = 'data:image/png;base64,' + 'A'.repeat(1_100)
+  const META = { ipAddress: '192.168.0.1', userAgent: 'Mozilla/5.0' }
+
+  it('deve registrar auditLog apÃ³s submissÃ£o pÃºblica com sucesso', async () => {
+    mockRepo.findByToken.mockResolvedValue(BASE_PUBLIC_REQUEST)
+    mockRepo.submitSignature.mockResolvedValue(1)
+    mockPrisma.auditLog = { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) } as never
+
+    await service.submit(
+      SIGN_TOKEN,
+      { clientAnswers: {}, signatureBase64: VALID_SIGNATURE, consentGiven: true },
+      META,
+    )
+
+    // auditLog Ã© criado de forma best-effort (microtask) â€” aguardar
+    await vi.waitFor(() => {
+      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'anamnesis.public-submit',
+            entityId: REQUEST_ID,
+            clinicId: CLINIC_ID,
+            userId: 'public',
+          }),
+        }),
+      )
+    })
+  })
+})
+

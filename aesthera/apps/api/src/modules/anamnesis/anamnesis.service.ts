@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { appConfig } from '../../config/app.config'
 import { prisma } from '../../database/prisma/client'
+import { uploadBuffer } from '../../integrations/r2/r2.service'
 import { ConflictError, GoneError, NotFoundError, ValidationError } from '../../shared/errors/app-error'
 import { createDomainEvent } from '../../shared/events/domain-event'
 import { eventBus } from '../../shared/events/event-bus'
@@ -61,8 +62,8 @@ export class AnamnesisService {
 
     // Envio assíncrono — não bloqueia a resposta
     if (data.phone || data.email) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.#sendNotification(clinicId, request as any, { phone: data.phone, email: data.email }).catch((err) =>
+      // SEC2: signToken passado da variável local — não vem do objeto `request` (que não o expõe)
+      this.#sendNotification(clinicId, { ...request, signToken }, { phone: data.phone, email: data.email }).catch((err) =>
         logger.error({ err, requestId: request.id }, 'Falha ao enviar notificação de anamnese'),
       )
     }
@@ -172,9 +173,21 @@ export class AnamnesisService {
     })
 
     const now = new Date()
+
+    // SEC6: Upload da assinatura para object storage — NUNCA persistir base64 em PostgreSQL
+    const signatureBase64Data = data.signatureBase64.replace(/^data:image\/\w+;base64,/, '')
+    const signatureStorageKey = await uploadBuffer(
+      `anamnesis/${request.clinicId}/${request.id}/signature.png`,
+      Buffer.from(signatureBase64Data, 'base64'),
+      'image/png',
+    ).catch((err) => {
+      logger.error({ err, requestId: request.id }, 'Falha no upload da assinatura para R2 — abortando submit')
+      throw err
+    })
+
     const count = await this.repo.submitSignature(signToken, {
       clientAnswers: data.clientAnswers,
-      signatureBase64: data.signatureBase64,
+      signatureUrl: signatureStorageKey,
       signatureHash,
       consentText,
       consentGivenAt: now,
@@ -189,6 +202,17 @@ export class AnamnesisService {
     }
 
     logger.info({ clinicId: request.clinicId, requestId: request.id }, 'Anamnese assinada')
+
+    // RN21: Registrar auditLog da submissão pública (best-effort — não bloqueia resposta)
+    prisma.auditLog.create({
+      data: {
+        action: 'anamnesis.public-submit',
+        entityId: request.id,
+        clinicId: request.clinicId,
+        userId: 'public',
+        metadata: { ipAddress: meta.ipAddress, userAgent: meta.userAgent } as Prisma.InputJsonValue,
+      },
+    }).catch((err) => logger.error({ err, requestId: request.id }, 'Falha ao criar auditLog de submit'))
 
     // Publicar evento para criação automática do prontuário
     eventBus.publish(
@@ -208,7 +232,7 @@ export class AnamnesisService {
     const existing = await this.repo.findById(clinicId, id)
     if (!existing) throw new NotFoundError('AnamnesisRequest')
 
-    if (!['pending', 'correction_requested', 'expired'].includes(existing.status)) {
+    if (!['pending', 'correction_requested', 'expired', 'sent_to_client'].includes(existing.status)) {
       throw new ConflictError('Não é possível reenviar uma anamnese cancelada ou já assinada.')
     }
 
@@ -217,8 +241,8 @@ export class AnamnesisService {
     const updated = await this.repo.resend(clinicId, id, newToken, expiresAt)
 
     if (data.phone || data.email) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.#sendNotification(clinicId, updated as any, { phone: data.phone, email: data.email }).catch((err) =>
+      // SEC2: signToken passado da variável local newToken — não vem do objeto `updated`
+      this.#sendNotification(clinicId, { ...updated, signToken: newToken }, { phone: data.phone, email: data.email }).catch((err) =>
         logger.error({ err, requestId: id }, 'Falha ao reenviar notificação de anamnese'),
       )
     }
@@ -263,8 +287,8 @@ export class AnamnesisService {
     const updated = await this.repo.setSignToken(clinicId, id, signToken, expiresAt, consentText)
 
     if (channels.phone || channels.email) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.#sendNotification(clinicId, updated as any, channels).catch((err) =>
+      // SEC2: signToken passado da variável local — não vem do objeto `updated` (que não o expõe)
+      this.#sendNotification(clinicId, { ...updated, signToken }, channels).catch((err) =>
         logger.error({ err, requestId: id }, 'Falha ao enviar notificação de anamnese'),
       )
     }
@@ -279,8 +303,8 @@ export class AnamnesisService {
    */
   async resolveDiff(clinicId: string, id: string, dto: ResolveDiffDto, userId: string) {
     const result = await prisma.$transaction(async (tx) => {
-      const anamnesis = await tx.anamnesisRequest.findUnique({
-        where: { id },
+      const anamnesis = await tx.anamnesisRequest.findFirst({
+        where: { id, deletedAt: null },
         select: { id: true, status: true, clinicId: true },
       })
       if (!anamnesis) throw new NotFoundError('AnamnesisRequest')
@@ -288,7 +312,7 @@ export class AnamnesisService {
 
       // Idempotência: já assinada, retorna sem re-processar
       if (anamnesis.status === 'signed') {
-        return tx.anamnesisRequest.findUnique({ where: { id } })
+        return tx.anamnesisRequest.findFirst({ where: { id } })
       }
 
       if (anamnesis.status !== 'client_submitted') {
