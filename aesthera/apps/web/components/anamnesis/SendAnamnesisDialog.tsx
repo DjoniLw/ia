@@ -271,7 +271,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
     {/* ── Modal de pré-preenchimento ─────────────────────────────── */}
     {showPrefillForm && (
       <Dialog open onClose={() => setShowPrefillForm(false)}>
-        <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10 -mx-6 -mt-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
           <p className="text-sm font-semibold">
             Pré-preencher — {selectedGroup?.name ?? 'Grupo'}
           </p>
@@ -285,7 +285,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
           </button>
         </div>
 
-        <div className="space-y-4 overflow-y-auto max-h-[65vh] pb-2">
+        <div className="space-y-4 overflow-y-auto max-h-[65vh] pb-2 pr-1">
           {questions.map((q) => (
             <div key={q.id} className="space-y-1.5">
               <label className="text-xs font-medium">
