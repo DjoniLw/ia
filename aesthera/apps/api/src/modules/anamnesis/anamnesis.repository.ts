@@ -106,6 +106,7 @@ export class AnamnesisRepository {
         clientAnswers: true,
         diffResolution: true,
         signatureHash: true,
+        signatureUrl: true, // exposto para painel da clínica — endpoint autenticado
         consentGivenAt: true,
         signedAt: true,
         expiresAt: true,

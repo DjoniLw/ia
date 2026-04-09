@@ -16,19 +16,15 @@ import {
 import { ANAMNESIS_STATUS_COLORS, ANAMNESIS_STATUS_LABEL } from '@/lib/status-colors'
 import { useRole } from '@/lib/hooks/use-role'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
-import { AnamesisDiffViewer } from './AnamesisDiffViewer'
+import { AnamnesisDiffViewer } from './AnamnesisDiffViewer'
 
+const STATUS_FILTER_VALUES: AnamnesisRequestStatus[] = [
+  'pending', 'draft', 'clinic_filled', 'sent_to_client',
+  'client_submitted', 'correction_requested', 'signed', 'expired', 'cancelled',
+]
 const STATUS_FILTER_OPTIONS: { value: AnamnesisRequestStatus | ''; label: string }[] = [
   { value: '', label: 'Todos' },
-  { value: 'pending', label: 'Pendente' },
-  { value: 'draft', label: 'Rascunho' },
-  { value: 'clinic_filled', label: 'Preenchida' },
-  { value: 'sent_to_client', label: 'Enviada' },
-  { value: 'client_submitted', label: 'Aguardando revisão' },
-  { value: 'correction_requested', label: 'Correção solicitada' },
-  { value: 'signed', label: 'Assinada' },
-  { value: 'expired', label: 'Expirada' },
-  { value: 'cancelled', label: 'Cancelada' },
+  ...STATUS_FILTER_VALUES.map((value) => ({ value, label: ANAMNESIS_STATUS_LABEL[value] ?? value })),
 ]
 
 interface Props {
@@ -43,8 +39,8 @@ interface Props {
 export function AnamnesisTab({
   customerId,
   customerName: _customerName,
-  defaultPhone: _defaultPhone,
-  defaultEmail: _defaultEmail,
+  defaultPhone,
+  defaultEmail,
   onCreateNew,
   onView,
 }: Props) {
@@ -211,7 +207,7 @@ export function AnamnesisTab({
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-[10px]"
-                    onClick={() => setSendingId(req.id)}
+                    onClick={() => { setSendingId(req.id); setSendPhone(defaultPhone ?? ''); setSendEmail(defaultEmail ?? '') }}
                   >
                     <Send className="h-3 w-3" />
                     Enviar ao cliente
@@ -351,7 +347,7 @@ export function AnamnesisTab({
             <DialogTitle className="mb-0 text-sm">Revisar respostas — {diffReq.groupName}</DialogTitle>
           </div>
           <div className="p-4 overflow-y-auto max-h-[70vh]">
-            <AnamesisDiffViewer
+            <AnamnesisDiffViewer
               anamnesisId={diffReq.id}
               entries={buildDiffEntries(diffReq)}
               onResolved={() => setDiffReq(null)}

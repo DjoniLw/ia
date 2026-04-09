@@ -54,10 +54,14 @@ export const ResendAnamnesisDto = z.object({
 export type ResendAnamnesisDto = z.infer<typeof ResendAnamnesisDto>
 
 /** DTO para envio da ficha ao cliente (canais de notificação) */
-export const SendAnamnesisDto = z.object({
-  phone: z.string().min(10, 'Número de telefone inválido').optional(),
-  email: z.string().email('E-mail inválido').optional(),
-})
+export const SendAnamnesisDto = z
+  .object({
+    phone: z.string().min(10, 'Número de telefone inválido').optional(),
+    email: z.string().email('E-mail inválido').optional(),
+  })
+  .refine((data) => Boolean(data.phone ?? data.email), {
+    message: 'Informe pelo menos um canal de envio: telefone ou e-mail.',
+  })
 export type SendAnamnesisDto = z.infer<typeof SendAnamnesisDto>
 
 // ─── Resolve Diff DTO (SEC — transação atômica) ───────────────────────────────
@@ -85,8 +89,14 @@ export const PublicSubmitAnamnesisDto = z.object({
       (obj) => Object.keys(obj).length <= 200,
       { message: 'Número máximo de 200 campos excedido' },
     ),
-  /** Base64 PNG da assinatura manuscrita — mínimo 1.000 bytes (trace válido) — SEC6 */
-  signatureBase64: z.string().min(1_000, 'Assinatura inválida — trace mínimo não atingido'),
+  /** Base64 PNG da assinatura manuscrita — mínimo 1.000 bytes (trace válido) + prefixo PNG — SEC6 */
+  signatureBase64: z
+    .string()
+    .min(1_000, 'Assinatura inválida — trace mínimo não atingido')
+    .refine(
+      (v) => v.startsWith('data:image/png;base64,'),
+      'Formato de assinatura inválido. Esperado PNG em base64.',
+    ),
   /** Consentimento LGPD explícito */
   consentGiven: z.literal(true, {
     errorMap: () => ({ message: 'O consentimento é obrigatório para assinar a anamnese.' }),

@@ -14,6 +14,28 @@ import { AnamnesisRepository } from './anamnesis.repository'
 // RN10: token expira em 7 dias
 const TTL_DAYS = 7
 
+/** SEC2 — select seguro para retorno da API (nunca vaza signToken, signatureUrl, consentText, ipAddress, userAgent) */
+const safeAnamnesisSelect = {
+  id: true,
+  clinicId: true,
+  customerId: true,
+  mode: true,
+  status: true,
+  groupId: true,
+  groupName: true,
+  questionsSnapshot: true,
+  staffAnswers: true,
+  clientAnswers: true,
+  diffResolution: true,
+  signatureHash: true,
+  consentGivenAt: true,
+  signedAt: true,
+  expiresAt: true,
+  tokenExpiresAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const
+
 function generateSignToken() {
   return crypto.randomBytes(32).toString('hex')
 }
@@ -312,7 +334,10 @@ export class AnamnesisService {
 
       // Idempotência: já assinada, retorna sem re-processar
       if (anamnesis.status === 'signed') {
-        return tx.anamnesisRequest.findFirst({ where: { id } })
+        return tx.anamnesisRequest.findFirst({
+          where: { id, clinicId, deletedAt: null },
+          select: safeAnamnesisSelect,
+        })
       }
 
       if (anamnesis.status !== 'client_submitted') {
@@ -326,6 +351,7 @@ export class AnamnesisService {
           status: 'signed',
           signedAt: new Date(),
         },
+        select: safeAnamnesisSelect,
       })
 
       await tx.auditLog.create({

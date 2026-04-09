@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useResolveAnamesisDiff } from '@/lib/hooks/use-resources'
+import { useResolveAnamnesisDiff } from '@/lib/hooks/use-resources'
 import { Button } from '@/components/ui/button'
 
 interface DiffEntry {
@@ -20,9 +20,9 @@ interface Props {
   onCancel: () => void
 }
 
-export function AnamesisDiffViewer({ anamnesisId, entries, onResolved, onCancel }: Props) {
+export function AnamnesisDiffViewer({ anamnesisId, entries, onResolved, onCancel }: Props) {
   const [resolutions, setResolutions] = useState<Record<string, 'clinic' | 'client'>>({})
-  const resolveDiff = useResolveAnamesisDiff()
+  const resolveDiff = useResolveAnamnesisDiff()
 
   const divergent = entries.filter((e) => e.clinicAnswer !== e.clientAnswer)
   const allResolved = divergent.length === 0 || divergent.every((e) => resolutions[e.questionId])

@@ -952,6 +952,7 @@ export interface AnamnesisRequest {
   clientAnswers: Record<string, unknown> | null
   diffResolution: Record<string, 'clinic' | 'client'> | null
   signatureHash: string | null
+  signatureUrl: string | null
   signedAt: string | null
   expiresAt: string
   tokenExpiresAt: string | null
@@ -1046,7 +1047,7 @@ export function useSendAnamnesis() {
   })
 }
 
-export function useResolveAnamesisDiff() {
+export function useResolveAnamnesisDiff() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, resolutions }: { id: string; resolutions: Record<string, 'clinic' | 'client'> }) =>

@@ -321,7 +321,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
               )}
 
               <p className="text-xs text-muted-foreground pt-1">
-                O link expira em 72 horas. Você pode reenviar depois se necessário.
+                O link expira em 7 dias. Você pode reenviar depois se necessário.
               </p>
             </div>
 
