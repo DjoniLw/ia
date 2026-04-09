@@ -1,6 +1,6 @@
 'use client'
 
-import { ClipboardList, Loader2, PenLine } from 'lucide-react'
+import { AlertCircle, ClipboardList, Loader2, PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { type AnamnesisRequest, useAnamnesisRequestById } from '@/lib/hooks/use-resources'
@@ -10,11 +10,6 @@ interface QuestionEntry {
   id: string
   text: string
   type: string
-}
-
-function getAnswers(request: AnamnesisRequest): Record<string, unknown> {
-  // clientAnswers tem prioridade; staffAnswers como fallback
-  return (request.clientAnswers ?? request.staffAnswers ?? {}) as Record<string, unknown>
 }
 
 function renderAnswer(value: unknown): string {
@@ -28,14 +23,14 @@ interface Props {
 }
 
 export function ViewAnamnesisModal({ request, onClose }: Props) {
-  // Fetch full record (list endpoint omits questionsSnapshot/clientAnswers for perf)
-  const { data: full, isLoading } = useAnamnesisRequestById(request.id)
-  const record = full ?? request
+  // Fetch full record (list endpoint omits questionsSnapshot/clientAnswers para perf)
+  const { data: full, isLoading, isError, refetch } = useAnamnesisRequestById(request.id)
 
-  const questions = (record.questionsSnapshot ?? []) as unknown as QuestionEntry[]
-  const answers = getAnswers(record)
-  const signedDate = record.signedAt
-    ? new Date(record.signedAt).toLocaleString('pt-BR', {
+  // Questões e respostas vêm do full record; header usa request (sempre disponível)
+  const questions = (full?.questionsSnapshot ?? []) as unknown as QuestionEntry[]
+  const answers = ((full?.clientAnswers ?? full?.staffAnswers ?? {}) as Record<string, unknown>)
+  const signedDate = (full?.signedAt ?? request.signedAt)
+    ? new Date((full?.signedAt ?? request.signedAt)!).toLocaleString('pt-BR', {
         day: '2-digit', month: 'long', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })
@@ -49,32 +44,40 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
       </DialogTitle>
 
       <div className="space-y-4 mt-4">
-        {/* Cabeçalho */}
+        {/* Cabeçalho — sempre visível imediatamente */}
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
-            <p className="text-sm font-medium">{record.customer.name}</p>
-            <p className="text-xs text-muted-foreground">{record.groupName}</p>
+            <p className="text-sm font-medium">{request.customer.name}</p>
+            <p className="text-xs text-muted-foreground">{request.groupName}</p>
           </div>
           <span
             className={[
-              'rounded-full px-2.5 py-0.5 text-xs font-medium',
-              ANAMNESIS_STATUS_COLOR[record.status] ?? 'bg-muted text-muted-foreground',
+              'rounded-full px-2.5 py-0.5 text-xs font-semibold',
+              ANAMNESIS_STATUS_COLOR[request.status] ?? 'bg-muted text-muted-foreground',
             ].join(' ')}
           >
-            {ANAMNESIS_STATUS_LABEL[record.status] ?? record.status}
+            {ANAMNESIS_STATUS_LABEL[request.status] ?? request.status}
           </span>
         </div>
 
         <hr />
 
-        {/* Loading state */}
+        {/* Corpo — aguarda full record */}
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <AlertCircle className="h-8 w-8 text-destructive/60" />
+            <p className="text-sm text-muted-foreground">Não foi possível carregar a ficha.</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
         ) : questions.filter((q) => q.type !== 'separator').length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
-            Sem perguntas registradas.
+            Sem perguntas registradas nesta ficha.
           </p>
         ) : (
           <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
@@ -90,7 +93,7 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
         )}
 
         {/* Assinatura */}
-        {record.signatureUrl && (
+        {full?.signatureUrl && (
           <>
             <hr />
             <div className="space-y-2">
@@ -101,7 +104,7 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
               <div className="rounded-lg border bg-white p-2 flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={record.signatureUrl}
+                  src={full.signatureUrl}
                   alt="Assinatura do paciente"
                   className="max-h-24 object-contain"
                 />
