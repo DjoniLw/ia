@@ -113,7 +113,7 @@ export class AnamnesisRepository {
         tokenExpiresAt: true,
         createdAt: true,
         updatedAt: true,
-        // SEC2: signToken, signatureUrl, consentText, ipAddress, userAgent NUNCA retornados
+        // SEC2: signToken, consentText, ipAddress, userAgent NUNCA retornados
         customer: { select: { id: true, name: true, phone: true, email: true } },
         createdBy: { select: { id: true, name: true } },
         clinicalRecord: { select: { id: true } },
