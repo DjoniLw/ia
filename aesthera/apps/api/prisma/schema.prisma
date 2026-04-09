@@ -206,6 +206,10 @@ enum AnamnesisRequestMode {
 }
 
 enum AnamnesisRequestStatus {
+  draft
+  clinic_filled
+  sent_to_client
+  client_submitted
   pending
   signed
   expired
@@ -879,11 +883,14 @@ model AnamnesisRequest {
   questionsSnapshot Json                   @map("questions_snapshot") // snapshot das perguntas
   staffAnswers      Json?                  @map("staff_answers") // respostas pré-preenchidas pelo staff
   clientAnswers     Json?                  @map("client_answers") // respostas do paciente
-  signature         String? // base64 PNG da assinatura
+  diffResolution    Json?                  @map("diff_resolution") // {fieldKey: "clinic" | "client"}
+  signature         String? // base64 PNG da assinatura (legacy)
   signatureHash     String?                @map("signature_hash") // SHA-256 da assinatura
+  signatureUrl      String?                @map("signature_url") // URL no object storage (S3/R2)
   consentGivenAt    DateTime?              @map("consent_given_at")
-  consentText       String?                @map("consent_text") // snapshot do texto de consentimento
+  consentText       String?                @map("consent_text") // snapshot do texto de consentimento — SEMPRE server-side
   signToken         String                 @unique @map("sign_token") // token público de acesso ao link
+  tokenExpiresAt    DateTime?              @map("token_expires_at")
   expiresAt         DateTime               @map("expires_at")
   signedAt          DateTime?              @map("signed_at")
   ipAddress         String?                @map("ip_address")
@@ -898,6 +905,7 @@ model AnamnesisRequest {
   clinicalRecord ClinicalRecord?
 
   @@index([clinicId, customerId])
+  @@index([clinicId, status])
   @@index([signToken])
   @@index([status])
   @@map("anamnesis_requests")

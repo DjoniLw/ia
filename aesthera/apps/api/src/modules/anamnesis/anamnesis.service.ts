@@ -1,15 +1,17 @@
 import crypto from 'node:crypto'
+import { Prisma } from '@prisma/client'
 import { appConfig } from '../../config/app.config'
 import { prisma } from '../../database/prisma/client'
-import { ConflictError, GoneError, NotFoundError } from '../../shared/errors/app-error'
+import { ConflictError, GoneError, NotFoundError, ValidationError } from '../../shared/errors/app-error'
 import { createDomainEvent } from '../../shared/events/domain-event'
 import { eventBus } from '../../shared/events/event-bus'
 import { logger } from '../../shared/logger/logger'
 import { NotificationsService } from '../notifications/notifications.service'
-import type { CreateAnamnesisRequestDto, ListAnamnesisRequestsQuery, ResendAnamnesisDto } from './anamnesis.dto'
+import type { CreateAnamnesisRequestDto, ListAnamnesisRequestsQuery, ResendAnamnesisDto, ResolveDiffDto } from './anamnesis.dto'
 import { AnamnesisRepository } from './anamnesis.repository'
 
-const TTL_HOURS = 72
+// RN10: token expira em 7 dias
+const TTL_DAYS = 7
 
 function generateSignToken() {
   return crypto.randomBytes(32).toString('hex')
@@ -17,7 +19,7 @@ function generateSignToken() {
 
 function buildExpiresAt() {
   const d = new Date()
-  d.setHours(d.getHours() + TTL_HOURS)
+  d.setDate(d.getDate() + TTL_DAYS)
   return d
 }
 
@@ -86,17 +88,23 @@ export class AnamnesisService {
     const request = await this.repo.findByToken(signToken)
     if (!request) throw new NotFoundError('AnamnesisRequest')
 
-    // Lazy expiry check (CA09)
-    if (request.expiresAt < new Date() && request.status === 'pending') {
-      await this.repo.markExpired(request.clinicId, request.id)
-      throw new GoneError('Este link de anamnese expirou. Solicite um novo envio à clínica.')
+    // SEC3: verificar expiração UNIVERSALMENTE — independente do status (prevenção TOCTOU)
+    if (request.expiresAt < new Date()) {
+      if (request.status === 'pending' || request.status === 'sent_to_client') {
+        await this.repo.markExpired(request.clinicId, request.id)
+      }
+      throw new GoneError('Este link expirou. Entre em contato com a clínica para receber um novo link.')
     }
 
     if (request.status === 'expired') {
-      throw new GoneError('Este link de anamnese expirou. Solicite um novo envio à clínica.')
+      throw new GoneError('Este link expirou. Entre em contato com a clínica para receber um novo link.')
     }
 
-    if (request.status === 'signed') {
+    if (request.status === 'signed' || request.status === 'client_submitted') {
+      const signedAt = request.signedAt
+      if (signedAt) {
+        throw new ConflictError(`Esta ficha já foi preenchida e assinada em ${new Date(signedAt).toLocaleDateString('pt-BR')}.`)
+      }
       throw new ConflictError('Esta anamnese já foi assinada.')
     }
 
@@ -127,11 +135,10 @@ export class AnamnesisService {
   async submit(
     signToken: string,
     data: {
-      clientAnswers: Record<string, unknown>
-      signature: string
+      clientAnswers: Record<string, string>
+      signatureBase64: string
       consentGiven: true
-      /** Snapshot do texto de consentimento exibido ao paciente (CA06/CA18) */
-      consentText?: string
+      // ⛔ consentText: NUNCA aceito do body — SEC1/RN17
     },
     meta: { ipAddress: string | null; userAgent: string | null },
   ) {
@@ -139,23 +146,25 @@ export class AnamnesisService {
     const request = await this.repo.findByToken(signToken)
     if (!request) throw new NotFoundError('AnamnesisRequest')
 
-    // Lazy expiry check
-    if (request.expiresAt < new Date() && request.status === 'pending') {
-      await this.repo.markExpired(request.clinicId, request.id)
-      throw new GoneError('Este link de anamnese expirou. Solicite um novo envio à clínica.')
+    // SEC3: expiração verificada novamente no POST (prevenção TOCTOU)
+    if (request.expiresAt < new Date()) {
+      if (request.status === 'pending' || request.status === 'sent_to_client') {
+        await this.repo.markExpired(request.clinicId, request.id)
+      }
+      throw new GoneError('Este link expirou. Entre em contato com a clínica para receber um novo link.')
     }
 
-    if (request.status !== 'pending' && request.status !== 'correction_requested') {
-      throw new ConflictError('Esta anamnese não está disponível para assinatura.')
+    if (request.status !== 'pending' && request.status !== 'sent_to_client' && request.status !== 'correction_requested') {
+      throw new ConflictError('Esta anamnese não está disponível para preenchimento.')
     }
 
     const signatureHash = crypto
       .createHash('sha256')
-      .update(data.signature)
+      .update(data.signatureBase64)
       .digest('hex')
 
-    // CA06/CA18: persistir exatamente o texto exibido ao paciente, com fallback para geração automática
-    const consentText = data.consentText ?? buildConsentText({
+    // SEC1: consentText gerado server-side — IGNORAR qualquer valor do body
+    const consentText = buildConsentText({
       customerName: request.customer.name,
       groupName: request.groupName,
       clinicName: request.clinic.name,
@@ -165,7 +174,7 @@ export class AnamnesisService {
     const now = new Date()
     const count = await this.repo.submitSignature(signToken, {
       clientAnswers: data.clientAnswers,
-      signature: data.signature,
+      signatureBase64: data.signatureBase64,
       signatureHash,
       consentText,
       consentGivenAt: now,
@@ -222,10 +231,101 @@ export class AnamnesisService {
     return this.repo.cancel(clinicId, id)
   }
 
+  /** Finaliza localmente: DRAFT → CLINIC_FILLED */
+  async finalize(clinicId: string, id: string) {
+    const existing = await this.repo.findById(clinicId, id)
+    if (!existing) throw new NotFoundError('AnamnesisRequest')
+    if (existing.status !== 'draft' && existing.status !== 'pending') {
+      throw new ValidationError('Apenas anamneses em rascunho podem ser finalizadas localmente.')
+    }
+    return this.repo.updateStatus(clinicId, id, 'clinic_filled')
+  }
+
+  /** Envia ao cliente: gera signToken + consentText server-side + notificação */
+  async sendToClient(clinicId: string, id: string, channels: { phone?: string; email?: string }) {
+    const existing = await this.repo.findByIdWithClinic(clinicId, id)
+    if (!existing) throw new NotFoundError('AnamnesisRequest')
+    if (!['draft', 'pending', 'clinic_filled'].includes(existing.status)) {
+      throw new ValidationError('Esta anamnese não pode ser enviada ao cliente no status atual.')
+    }
+
+    const signToken = generateSignToken()
+    const expiresAt = buildExpiresAt()
+
+    // consentText gerado server-side — RN17/SEC1
+    const consentText = buildConsentText({
+      customerName: existing.customer.name,
+      groupName: existing.groupName,
+      clinicName: existing.clinic.name,
+      clinicDocument: (existing.clinic as { document?: string | null }).document ?? null,
+    })
+
+    const updated = await this.repo.setSignToken(clinicId, id, signToken, expiresAt, consentText)
+
+    if (channels.phone || channels.email) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.#sendNotification(clinicId, updated as any, channels).catch((err) =>
+        logger.error({ err, requestId: id }, 'Falha ao enviar notificação de anamnese'),
+      )
+    }
+
+    logger.info({ clinicId, requestId: id }, 'AnamnesisRequest enviada ao cliente')
+    return updated
+  }
+
+  /**
+   * resolve-diff — resolve divergências campo-a-campo e transiciona para SIGNED.
+   * Transação atômica: se auditLog falhar, o status SIGNED é revertido.
+   */
+  async resolveDiff(clinicId: string, id: string, dto: ResolveDiffDto, userId: string) {
+    const result = await prisma.$transaction(async (tx) => {
+      const anamnesis = await tx.anamnesisRequest.findUnique({
+        where: { id },
+        select: { id: true, status: true, clinicId: true },
+      })
+      if (!anamnesis) throw new NotFoundError('AnamnesisRequest')
+      if (anamnesis.clinicId !== clinicId) throw new NotFoundError('AnamnesisRequest')
+
+      // Idempotência: já assinada, retorna sem re-processar
+      if (anamnesis.status === 'signed') {
+        return tx.anamnesisRequest.findUnique({ where: { id } })
+      }
+
+      if (anamnesis.status !== 'client_submitted') {
+        throw new ValidationError('Apenas anamneses com status "Aguardando revisão" podem ser resolvidas.')
+      }
+
+      const updated = await tx.anamnesisRequest.update({
+        where: { id },
+        data: {
+          diffResolution: dto.resolutions,
+          status: 'signed',
+          signedAt: new Date(),
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: 'anamnesis.resolve-diff',
+          entityId: id,
+          clinicId,
+          userId,
+          metadata: dto.resolutions as Prisma.InputJsonValue,
+        },
+      })
+
+      return updated
+    })
+
+    logger.info({ clinicId, requestId: id }, 'Anamnese resolve-diff concluído')
+    return result
+  }
+
   async requestCorrection(signToken: string) {
     const request = await this.repo.findByToken(signToken)
     if (!request) throw new NotFoundError('AnamnesisRequest')
 
+    // SEC3: expiração verificada universalmente
     if (request.expiresAt < new Date()) {
       throw new GoneError('Este link de anamnese expirou.')
     }

@@ -71,10 +71,46 @@ export class AnamnesisRepository {
   async findById(clinicId: string, id: string) {
     return prisma.anamnesisRequest.findFirst({
       where: { id, clinicId, deletedAt: null },
-      include: {
+      select: {
+        id: true,
+        clinicId: true,
+        customerId: true,
+        createdByUserId: true,
+        mode: true,
+        status: true,
+        groupId: true,
+        groupName: true,
+        questionsSnapshot: true,
+        staffAnswers: true,
+        clientAnswers: true,
+        diffResolution: true,
+        signatureHash: true,
+        consentGivenAt: true,
+        signedAt: true,
+        expiresAt: true,
+        tokenExpiresAt: true,
+        createdAt: true,
+        updatedAt: true,
+        // SEC2: signToken, signatureUrl, consentText, ipAddress, userAgent NUNCA retornados
         customer: { select: { id: true, name: true, phone: true, email: true } },
         createdBy: { select: { id: true, name: true } },
         clinicalRecord: { select: { id: true } },
+      },
+    })
+  }
+
+  /** Busca com dados da clínica — usado pelo sendToClient para gerar consentText server-side. */
+  async findByIdWithClinic(clinicId: string, id: string) {
+    return prisma.anamnesisRequest.findFirst({
+      where: { id, clinicId, deletedAt: null },
+      select: {
+        id: true,
+        clinicId: true,
+        status: true,
+        groupName: true,
+        // SEC2: signToken nunca retornado
+        customer: { select: { id: true, name: true, phone: true, email: true } },
+        clinic: { select: { id: true, name: true, document: true } },
       },
     })
   }
@@ -92,8 +128,39 @@ export class AnamnesisRepository {
 
   async markExpired(clinicId: string, id: string) {
     return prisma.anamnesisRequest.updateMany({
-      where: { id, clinicId, status: 'pending' },
+      where: { id, clinicId, status: { in: ['pending', 'sent_to_client'] } },
       data: { status: 'expired' },
+    })
+  }
+
+  async updateStatus(_clinicId: string, id: string, status: string) {
+    return prisma.anamnesisRequest.update({
+      where: { id },
+      data: { status: status as never },
+    })
+  }
+
+  /** Persiste signToken + consentText e transiciona para sent_to_client. */
+  async setSignToken(_clinicId: string, id: string, signToken: string, expiresAt: Date, consentText: string) {
+    return prisma.anamnesisRequest.update({
+      where: { id },
+      data: {
+        signToken,
+        expiresAt,
+        tokenExpiresAt: expiresAt,
+        consentText,
+        status: 'sent_to_client',
+      },
+      select: {
+        id: true,
+        clinicId: true,
+        status: true,
+        groupName: true,
+        expiresAt: true,
+        // SEC2: signToken retornado aqui para envio de notificação — não exposto na API
+        signToken: true,
+        customer: { select: { id: true, name: true, phone: true, email: true } },
+      },
     })
   }
 
@@ -142,7 +209,7 @@ export class AnamnesisRepository {
     signToken: string,
     data: {
       clientAnswers: Record<string, unknown>
-      signature: string
+      signatureBase64: string
       signatureHash: string
       consentText: string
       consentGivenAt: Date
@@ -154,19 +221,19 @@ export class AnamnesisRepository {
     const result = await prisma.anamnesisRequest.updateMany({
       where: {
         signToken,
-        status: { in: ['pending', 'correction_requested'] },
+        status: { in: ['pending', 'sent_to_client', 'correction_requested'] },
         expiresAt: { gt: new Date() },
       },
       data: {
         clientAnswers: data.clientAnswers as Prisma.InputJsonValue,
-        signature: data.signature,
+        signatureUrl: data.signatureBase64,
         signatureHash: data.signatureHash,
         consentText: data.consentText,
         consentGivenAt: data.consentGivenAt,
         signedAt: data.signedAt,
         ipAddress: data.ipAddress,
         userAgent: data.userAgent,
-        status: 'signed',
+        status: 'client_submitted',
       },
     })
     return result.count
@@ -174,7 +241,7 @@ export class AnamnesisRepository {
 
   async requestCorrection(signToken: string) {
     return prisma.anamnesisRequest.updateMany({
-      where: { signToken, status: 'pending', expiresAt: { gt: new Date() } },
+      where: { signToken, status: { in: ['pending', 'sent_to_client'] }, expiresAt: { gt: new Date() } },
       data: { status: 'correction_requested' },
     })
   }

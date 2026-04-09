@@ -450,6 +450,40 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
   - **UX:** Mensagens 410/409 alinhadas com spec (expirado vs cancelado vs assinado)
 - **Testes:** 18/18 passando (15 existentes + 3 novos)
 
+### [2026-04-08] — feat(#152): Redesign do Módulo de Anamnese — Ciclo de Vida Completo + Segurança LGPD + UI Completa
+
+- **Módulo:** Anamnesis (evolução do PR #149)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(novos enum values, campos diffResolution/signatureUrl/tokenExpiresAt, index)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.dto.ts` *(enum 9 valores, ResolveDiffSchema, SendAnamnesisDto)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.service.ts` *(TTL 7 dias, finalize/sendToClient/resolveDiff, Prisma import)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.repository.ts` *(SEC2 select explícito, findByIdWithClinic, updateStatus, setSignToken, submitSignature→signatureBase64)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.routes.ts` *(endpoints finalize/send/cancel/resolve-diff)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.service.test.ts` *(31 testes — SEC1-6, RN10, resolveDiff×5, finalize×3)*
+  - `aesthera/apps/web/lib/status-colors.ts` *(9 status, /40 opacities, ANAMNESIS_STATUS_COLORS alias)*
+  - `aesthera/apps/web/lib/anamnesis-labels.ts` *(novo — ANAMNESIS_STATUS_LABELS + ANAMNESIS_ACTION_LABELS)*
+  - `aesthera/apps/web/lib/hooks/use-resources.ts` *(AnamnesisRequestStatus 9 valores, novos hooks)*
+  - `aesthera/apps/web/components/anamnesis/AnamesisDiffViewer.tsx` *(novo — diff responsivo campo-a-campo)*
+  - `aesthera/apps/web/components/anamnesis/AnamnesisTab.tsx` *(novo — aba completa com filtros/ações/diálogos)*
+  - `aesthera/apps/web/components/anamnesis/ViewAnamnesisModal.tsx` *(signature→signatureHash)*
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(aba Anamnese integrada)*
+  - `aesthera/apps/web/app/anamnese/[token]/page.tsx` *(SEC1 consentText, violet→primary, error messages)*
+- **O que foi feito:**
+  - **Ciclo de vida completo (9 estados):** `draft → clinic_filled → sent_to_client → client_submitted → signed | expired | cancelled | correction_requested`
+  - **SEC1:** `consentText` gerado server-side — nunca lido do body da requisição pública
+  - **SEC2:** `findById()` usa `select:` explícito — `signToken`, `signatureUrl`, `consentText`, `ipAddress`, `userAgent` nunca retornados em respostas de listagem/GET
+  - **SEC3:** Expiração verificada universalmente em GET e POST (lazy check mesmo para status=pending)
+  - **SEC5/SEC6:** Limites de campo no DTO + `signatureBase64` mínimo 1000 bytes
+  - **RN10:** TTL de 7 dias (corrigido de 72h)
+  - **resolve-diff:** Endpoint atômico em transação Prisma — valida tenant, status `client_submitted`, idempotência (`signed` retorna 200), registra AuditLog com userId
+  - **finalize:** Transiciona `draft → clinic_filled`
+  - **sendToClient:** Gera token HMAC-SHA256, persiste via `setSignToken()`, envia WhatsApp/email
+  - **AnamesisDiffViewer:** Tabela desktop 3 colunas + cards mobile, atalhos "Aceitar tudo", rádio por campo
+  - **AnamnesisTab:** Filtros por status pill, paginação 10/page, botões de ação por estado, dialogs para envio e resolução de diff
+  - **Página pública:** Cores `violet-*` → `primary`, SEC1 fix, mensagens de erro alinhadas à spec
+  - **Testes:** 31/31 passando (todos novos e existentes)
+- **Closes:** #152
+
 ### [2026-04-08] — PO: Redesign do Módulo de Anamnese
 
 - **Módulo:** Anamnesis (redesenho arquitetural)

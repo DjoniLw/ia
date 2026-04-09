@@ -928,7 +928,16 @@ export function useDisconnectWhatsapp() {
 // ─── Anamnesis Requests ───────────────────────────────────────────────────────
 
 export type AnamnesisRequestMode = 'blank' | 'prefilled'
-export type AnamnesisRequestStatus = 'pending' | 'signed' | 'expired' | 'correction_requested' | 'cancelled'
+export type AnamnesisRequestStatus =
+  | 'draft'
+  | 'clinic_filled'
+  | 'sent_to_client'
+  | 'client_submitted'
+  | 'pending'
+  | 'signed'
+  | 'expired'
+  | 'correction_requested'
+  | 'cancelled'
 
 export interface AnamnesisRequest {
   id: string
@@ -941,9 +950,11 @@ export interface AnamnesisRequest {
   questionsSnapshot: Record<string, unknown>[]
   staffAnswers: Record<string, unknown> | null
   clientAnswers: Record<string, unknown> | null
-  signature: string | null
+  diffResolution: Record<string, 'clinic' | 'client'> | null
+  signatureHash: string | null
   signedAt: string | null
   expiresAt: string
+  tokenExpiresAt: string | null
   createdAt: string
   customer: { id: string; name: string }
   createdBy: { id: string; name: string }
@@ -1012,7 +1023,34 @@ export function useCancelAnamnesis() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) =>
-      api.delete(`/anamnesis-requests/${id}`).then((r) => r.data),
+      api.post(`/anamnesis-requests/${id}/cancel`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useFinalizeAnamnesis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/anamnesis-requests/${id}/finalize`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useSendAnamnesis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, phone, email }: { id: string; phone?: string; email?: string }) =>
+      api.post(`/anamnesis-requests/${id}/send`, { phone, email }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useResolveAnamesisDiff() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, resolutions }: { id: string; resolutions: Record<string, 'clinic' | 'client'> }) =>
+      api.post(`/anamnesis-requests/${id}/resolve-diff`, { resolutions }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
   })
 }

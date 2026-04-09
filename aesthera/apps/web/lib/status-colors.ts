@@ -1,18 +1,30 @@
 export const ANAMNESIS_STATUS_LABEL: Record<string, string> = {
+  draft: 'Rascunho',
+  clinic_filled: 'Preenchida pela clínica',
+  sent_to_client: 'Enviada ao cliente',
+  client_submitted: 'Aguardando revisão',
   pending: 'Pendente',
-  signed: 'Assinado',
-  expired: 'Expirado',
+  signed: 'Assinada',
+  expired: 'Expirada',
   correction_requested: 'Correção solicitada',
-  cancelled: 'Cancelado',
+  cancelled: 'Cancelada',
 }
 
+/** @deprecated Use ANAMNESIS_STATUS_LABEL */
 export const ANAMNESIS_STATUS_COLOR: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-  signed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+  draft: 'bg-slate-100 text-slate-600 dark:bg-slate-900/40 dark:text-slate-300',
+  clinic_filled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  sent_to_client: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  client_submitted: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  signed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   expired: 'bg-muted text-muted-foreground',
-  correction_requested: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  cancelled: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+  correction_requested: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  cancelled: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
 }
+
+/** Constante canônica para cores de status de anamnese */
+export const ANAMNESIS_STATUS_COLORS = ANAMNESIS_STATUS_COLOR
 
 export const PROMOTION_STATUS_COLOR: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',

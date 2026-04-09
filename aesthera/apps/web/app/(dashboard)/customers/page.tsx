@@ -69,6 +69,7 @@ import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
 import { SendAnamnesisDialog } from '@/components/anamnesis/SendAnamnesisDialog'
 import { ResendAnamnesisDialog } from '@/components/anamnesis/ResendAnamnesisDialog'
 import { ViewAnamnesisModal } from '@/components/anamnesis/ViewAnamnesisModal'
+import { AnamnesisTab } from '@/components/anamnesis/AnamnesisTab'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import {
   WALLET_ENTRY_TYPE_LABELS,
@@ -1963,7 +1964,7 @@ function ContractsTab({ customer }: { customer: Customer }) {
 
 // ──── Customer Detail Panel ────────────────────────────────────────────────────
 
-type DetailTab = 'profile' | 'history' | 'wallet' | 'prontuario' | 'contracts' | 'evolucao'
+type DetailTab = 'profile' | 'history' | 'wallet' | 'prontuario' | 'anamnese' | 'contracts' | 'evolucao'
 
 // Types for the new-entry form
 type EntryType = ClinicalRecord['type']
@@ -2267,7 +2268,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['contracts', 'Contratos'], ['evolucao', 'Avaliação']] as const).map(([id, label]) => (
+        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['anamnese', 'Anamnese'], ['contracts', 'Contratos'], ['evolucao', 'Avaliação']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -3152,6 +3153,18 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Anamnese digital ───────────────────────────────────────── */}
+      {detailTab === 'anamnese' && (
+        <AnamnesisTab
+          customerId={customer.id}
+          customerName={customer.name}
+          defaultPhone={customer.phone}
+          defaultEmail={customer.email}
+          onCreateNew={() => setShowSendAnamnesisDialog(true)}
+          onView={(req) => setViewingAnamnesis(req)}
+        />
       )}
 
       {/* ── Contratos ─────────────────────────────────────────────────── */}

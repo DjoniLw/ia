@@ -6,6 +6,10 @@ export const AnamnesisRequestMode = z.enum(['blank', 'prefilled'])
 export type AnamnesisRequestMode = z.infer<typeof AnamnesisRequestMode>
 
 export const AnamnesisRequestStatus = z.enum([
+  'draft',
+  'clinic_filled',
+  'sent_to_client',
+  'client_submitted',
   'pending',
   'signed',
   'expired',
@@ -49,24 +53,45 @@ export const ResendAnamnesisDto = z.object({
 })
 export type ResendAnamnesisDto = z.infer<typeof ResendAnamnesisDto>
 
+/** DTO para envio da ficha ao cliente (canais de notificação) */
+export const SendAnamnesisDto = z.object({
+  phone: z.string().min(10, 'Número de telefone inválido').optional(),
+  email: z.string().email('E-mail inválido').optional(),
+})
+export type SendAnamnesisDto = z.infer<typeof SendAnamnesisDto>
+
+// ─── Resolve Diff DTO (SEC — transação atômica) ───────────────────────────────
+
+/**
+ * ResolveDiffSchema — resolve divergências campo-a-campo.
+ * ⛔ consentText: NUNCA declarado aqui — gerado server-side.
+ */
+export const ResolveDiffSchema = z.object({
+  resolutions: z.record(z.enum(['clinic', 'client'])),
+})
+export type ResolveDiffDto = z.infer<typeof ResolveDiffSchema>
+
 // ─── Public DTOs ─────────────────────────────────────────────────────────────
 
+/**
+ * PublicSubmitAnamnesisDto — submissão pública da ficha pelo cliente.
+ * ⛔ consentText: NUNCA declarado aqui — poisoning prevention (SEC1/RN17).
+ *    O valor SEMPRE vem do banco, nunca do body.
+ */
 export const PublicSubmitAnamnesisDto = z.object({
-  clientAnswers: z.record(z.unknown()),
-  /** Base64 PNG da assinatura manuscrita — máx 4.2 MB */
-  signature: z
-    .string()
-    .max(4_200_000, 'Assinatura excede o tamanho máximo permitido.')
+  clientAnswers: z
+    .record(z.string().max(10_000, 'Máximo de 10.000 caracteres por campo'))
     .refine(
-      (v) => v.startsWith('data:image/png;base64,'),
-      'Formato de assinatura inválido. Esperado PNG em base64.',
+      (obj) => Object.keys(obj).length <= 200,
+      { message: 'Número máximo de 200 campos excedido' },
     ),
+  /** Base64 PNG da assinatura manuscrita — mínimo 1.000 bytes (trace válido) — SEC6 */
+  signatureBase64: z.string().min(1_000, 'Assinatura inválida — trace mínimo não atingido'),
   /** Consentimento LGPD explícito */
   consentGiven: z.literal(true, {
     errorMap: () => ({ message: 'O consentimento é obrigatório para assinar a anamnese.' }),
   }),
-  /** Snapshot do texto de consentimento exibido ao paciente (CA06/CA18) */
-  consentText: z.string().min(1).max(2000).optional(),
+  // ⛔ consentText: NUNCA declarar aqui — poisoning prevention (SEC1)
 })
 export type PublicSubmitAnamnesisDto = z.infer<typeof PublicSubmitAnamnesisDto>
 

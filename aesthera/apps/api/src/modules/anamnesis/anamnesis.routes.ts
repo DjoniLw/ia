@@ -7,6 +7,8 @@ import {
   PublicRequestCorrectionDto,
   PublicSubmitAnamnesisDto,
   ResendAnamnesisDto,
+  ResolveDiffSchema,
+  SendAnamnesisDto,
 } from './anamnesis.dto'
 import { AnamnesisService } from './anamnesis.service'
 
@@ -83,6 +85,61 @@ export async function anamnesisRoutes(app: FastifyInstance) {
     },
   )
 
+  /**
+   * POST /anamnesis-requests/:id/cancel
+   * Alias REST semântico para cancelamento (idêntico ao DELETE).
+   */
+  app.post(
+    '/anamnesis-requests/:id/cancel',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      await svc.cancel(req.clinicId, id)
+      return reply.status(204).send()
+    },
+  )
+
+  /**
+   * POST /anamnesis-requests/:id/finalize
+   * Finaliza o rascunho da clínica sem enviar ao cliente (DRAFT → CLINIC_FILLED).
+   */
+  app.post(
+    '/anamnesis-requests/:id/finalize',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      return reply.send(await svc.finalize(req.clinicId, id))
+    },
+  )
+
+  /**
+   * POST /anamnesis-requests/:id/send
+   * Envia ao cliente: gera signToken + consentText server-side.
+   */
+  app.post(
+    '/anamnesis-requests/:id/send',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])], config: { rateLimit: { max: 5, timeWindow: '1 hour' } } },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const dto = SendAnamnesisDto.parse(req.body)
+      return reply.send(await svc.sendToClient(req.clinicId, id, dto))
+    },
+  )
+
+  /**
+   * POST /anamnesis-requests/:id/resolve-diff
+   * Resolve divergências campo-a-campo e transiciona para SIGNED (atômico).
+   */
+  app.post(
+    '/anamnesis-requests/:id/resolve-diff',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const dto = ResolveDiffSchema.parse(req.body)
+      return reply.send(await svc.resolveDiff(req.clinicId, id, dto, req.user.sub))
+    },
+  )
+
   // ── Público ──────────────────────────────────────────────────────────────────
 
   /**
@@ -114,7 +171,7 @@ export async function anamnesisRoutes(app: FastifyInstance) {
       const userAgent = Array.isArray(rawUserAgent) ? rawUserAgent[0] : (rawUserAgent ?? null)
       const result = await svc.submit(
         token,
-        { clientAnswers: dto.clientAnswers, signature: dto.signature, consentGiven: dto.consentGiven, consentText: dto.consentText },
+        { clientAnswers: dto.clientAnswers, signatureBase64: dto.signatureBase64, consentGiven: dto.consentGiven },
         { ipAddress: req.ip ?? null, userAgent },
       )
       return reply.send(result)

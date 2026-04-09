@@ -90,7 +90,7 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
         )}
 
         {/* Assinatura */}
-        {record.signature && (
+        {record.signatureHash && (
           <>
             <hr />
             <div className="space-y-2">
@@ -101,7 +101,7 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
               <div className="rounded-lg border bg-white p-2 flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={record.signature}
+                  src={record.signatureHash}
                   alt="Assinatura do paciente"
                   className="max-h-24 object-contain"
                 />

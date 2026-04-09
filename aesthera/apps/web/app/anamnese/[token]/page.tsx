@@ -66,12 +66,14 @@ export default function AnamnesePage() {
           if (message?.includes('cancelado')) {
             setErrorMsg('Este link de anamnese foi cancelado. Entre em contato com a clínica.')
           } else {
-            setErrorMsg('Este link de anamnese expirou. Solicite um novo envio à clínica.')
+            setErrorMsg('Este link expirou. Entre em contato com a clínica para receber um novo link.')
           }
         } else if (status === 409) {
-          setErrorMsg('Esta ficha já foi assinada. Obrigado!')
+          setErrorMsg('Esta ficha já foi preenchida e assinada. Obrigado!')
+        } else if (status === 404) {
+          setErrorMsg('Link de anamnese inválido ou não encontrado.')
         } else {
-          setErrorMsg('Link de anamnese não encontrado ou inválido.')
+          setErrorMsg('Não foi possível carregar a ficha. Tente novamente mais tarde.')
         }
       })
       .finally(() => setLoading(false))
@@ -83,19 +85,25 @@ export default function AnamnesePage() {
     try {
       await axios.post(`${API_URL}/public/anamnese/${token}`, {
         clientAnswers: answers,
-        signature,
+        signatureBase64: signature,
         consentGiven: true,
-        // CA06/CA18: enviar de volta o texto exibido ao paciente para garantir auditoria
-        consentText: data?.consentText,
+        // ⛔ consentText: NUNCA enviado do cliente — SEC1/RN17 — gerado server-side
       })
       setSubmitted(true)
       setShowCanvas(false)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       if (status === 410) {
-        setErrorMsg('Este link de anamnese expirou. Solicite um novo envio à clínica.')
+        if (message?.includes('cancelado')) {
+          setErrorMsg('Este link de anamnese foi cancelado. Entre em contato com a clínica.')
+        } else {
+          setErrorMsg('Este link expirou. Entre em contato com a clínica para receber um novo link.')
+        }
       } else if (status === 409) {
-        setErrorMsg('Esta ficha já foi assinada. Obrigado!')
+        setErrorMsg('Esta ficha já foi preenchida e assinada. Obrigado!')
+      } else if (status === 422) {
+        setSubmitError(message ?? 'Dados inválidos. Verifique suas respostas e tente novamente.')
       } else {
         setSubmitError('Erro ao enviar a anamnese. Tente novamente.')
       }
@@ -124,7 +132,7 @@ export default function AnamnesePage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -164,10 +172,10 @@ export default function AnamnesePage() {
   // ── Formulário ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-start bg-gradient-to-br from-violet-50 to-white px-4 py-10">
+    <div className="flex min-h-screen flex-col items-center justify-start bg-muted/20 px-4 py-10">
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl overflow-hidden">
         {/* Cabeçalho */}
-        <div className="bg-gradient-to-r from-violet-600 to-violet-700 px-6 py-5 text-white">
+        <div className="bg-primary px-6 py-5 text-primary-foreground">
           <div className="flex items-center gap-2 mb-1 opacity-80">
             <ClipboardList className="h-4 w-4" />
             <p className="text-sm font-medium">Ficha de Anamnese</p>
@@ -197,10 +205,10 @@ export default function AnamnesePage() {
                 if (q.type === 'separator') {
                   return (
                     <div key={q.id} className="space-y-1 pt-2">
-                      <p className="text-xs font-bold uppercase tracking-wider text-violet-600">
+                      <p className="text-xs font-bold uppercase tracking-wider text-primary">
                         {q.text}
                       </p>
-                      <hr className="border-violet-100" />
+                      <hr className="border-border" />
                     </div>
                   )
                 }
@@ -290,7 +298,7 @@ export default function AnamnesePage() {
                                 onChange={(e) => setAnswer(q.id + '__desc', e.target.value)}
                                 rows={2}
                                 placeholder="Descreva..."
-                                className="ml-4 w-[calc(100%-1rem)] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm resize-none focus:border-violet-400 focus:outline-none"
+                                className="ml-4 w-[calc(100%-1rem)] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm resize-none focus:border-primary focus:outline-none"
                               />
                             )}
                           </div>
@@ -303,7 +311,7 @@ export default function AnamnesePage() {
                         type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
                         value={answers[q.id] ?? ''}
                         onChange={(e) => setAnswer(q.id, e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-violet-400 focus:outline-none"
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
                       />
                     )}
                       </>
@@ -339,7 +347,7 @@ export default function AnamnesePage() {
                   type="checkbox"
                   checked={consentChecked}
                   onChange={(e) => setConsentChecked(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded accent-violet-600"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded accent-primary"
                 />
                 <span className="text-sm text-muted-foreground">
                   {data?.consentText ?? (

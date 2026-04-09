@@ -6,12 +6,15 @@ const mockRepo = vi.hoisted(() => ({
   create: vi.fn(),
   findAll: vi.fn(),
   findById: vi.fn(),
+  findByIdWithClinic: vi.fn(),
   findByToken: vi.fn(),
   markExpired: vi.fn(),
   cancel: vi.fn(),
   resend: vi.fn(),
   submitSignature: vi.fn(),
   requestCorrection: vi.fn(),
+  updateStatus: vi.fn(),
+  setSignToken: vi.fn(),
 }))
 
 const mockNotificationsService = vi.hoisted(() => ({
@@ -28,8 +31,9 @@ const mockAppConfig = vi.hoisted(() => ({
 }))
 
 const mockPrismaTx = vi.hoisted(() => ({
-  anamnesisRequest: { findFirst: vi.fn() },
+  anamnesisRequest: { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   clinicalRecord: { findFirst: vi.fn(), create: vi.fn() },
+  auditLog: { create: vi.fn() },
 }))
 
 const mockPrisma = vi.hoisted(() => ({
@@ -228,9 +232,9 @@ describe('AnamnesisService.submit()', () => {
     service = new AnamnesisService()
   })
 
-  const VALID_SIGNATURE = 'data:image/png;base64,abc123'
+  const VALID_SIGNATURE = 'data:image/png;base64,' + 'A'.repeat(1_100)
   const META = { ipAddress: '192.168.0.1', userAgent: 'Mozilla/5.0' }
-  const DTO = { clientAnswers: { q1: 'Nenhuma' }, signature: VALID_SIGNATURE, consentGiven: true as const }
+  const DTO = { clientAnswers: { q1: 'Nenhuma' }, signatureBase64: VALID_SIGNATURE, consentGiven: true as const }
 
   it('deve assinar anamnese com sucesso e publicar evento anamnesis.signed', async () => {
     mockRepo.findByToken.mockResolvedValue(BASE_PUBLIC_REQUEST)
@@ -243,6 +247,7 @@ describe('AnamnesisService.submit()', () => {
       SIGN_TOKEN,
       expect.objectContaining({
         clientAnswers: { q1: 'Nenhuma' },
+        signatureBase64: VALID_SIGNATURE,
         signatureHash: expect.any(String),
         consentText: expect.stringContaining('João Silva'),
       }),
@@ -392,5 +397,243 @@ describe('handleAnamnesisSignedEvent()', () => {
     await handleAnamnesisSignedEvent(PAYLOAD)
 
     expect(mockPrismaTx.clinicalRecord.create).not.toHaveBeenCalled()
+  })
+})
+
+// ── SEC1: consentText sempre server-side ──────────────────────────────────────
+
+describe('SEC1 — consentText gerado server-side', () => {
+  let service: AnamnesisService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AnamnesisService()
+  })
+
+  it('deve ignorar consentText enviado no body e usar o valor do banco', async () => {
+    mockRepo.findByToken.mockResolvedValue({
+      ...BASE_PUBLIC_REQUEST,
+      clinic: { id: CLINIC_ID, name: 'Clínica Beleza', slug: 'clinica-beleza', document: '12.345.678/0001-99' },
+    })
+    mockRepo.submitSignature.mockResolvedValue(1)
+
+    await service.submit(
+      SIGN_TOKEN,
+      { clientAnswers: {}, signatureBase64: 'x'.repeat(1_100), consentGiven: true },
+      { ipAddress: null, userAgent: null },
+    )
+
+    const callArgs = mockRepo.submitSignature.mock.calls[0][1]
+    // consentText deve conter o nome da clínica do banco, jamais valor externo
+    expect(callArgs.consentText).toContain('Clínica Beleza')
+    expect(callArgs.consentText).toContain('João Silva')
+  })
+})
+
+// ── SEC2: signToken nunca retornado na API pública ────────────────────────────
+
+describe('SEC2 — signToken ausente do retorno de getPublicInfo', () => {
+  let service: AnamnesisService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AnamnesisService()
+  })
+
+  it('não deve retornar signToken na resposta de getPublicInfo', async () => {
+    mockRepo.findByToken.mockResolvedValue(BASE_PUBLIC_REQUEST)
+
+    const result = await service.getPublicInfo(SIGN_TOKEN)
+
+    expect(result).not.toHaveProperty('signToken')
+  })
+})
+
+// ── SEC3: expiração verificada universalmente (TOCTOU) ────────────────────────
+
+describe('SEC3 — expiração verificada em GET e POST', () => {
+  let service: AnamnesisService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AnamnesisService()
+  })
+
+  it('deve rejeitar POST com token expirado mesmo se status=pending', async () => {
+    mockRepo.findByToken.mockResolvedValue({ ...BASE_PUBLIC_REQUEST, expiresAt: PAST_DATE })
+    mockRepo.markExpired.mockResolvedValue({ count: 1 })
+
+    await expect(
+      service.submit(
+        SIGN_TOKEN,
+        { clientAnswers: {}, signatureBase64: 'x'.repeat(1_100), consentGiven: true },
+        { ipAddress: null, userAgent: null },
+      ),
+    ).rejects.toBeInstanceOf(GoneError)
+
+    expect(mockRepo.submitSignature).not.toHaveBeenCalled()
+  })
+
+  it('deve marcar como expirado no GET para status=sent_to_client', async () => {
+    mockRepo.findByToken.mockResolvedValue({
+      ...BASE_PUBLIC_REQUEST,
+      status: 'sent_to_client',
+      expiresAt: PAST_DATE,
+    })
+    mockRepo.markExpired.mockResolvedValue({ count: 1 })
+
+    await expect(service.getPublicInfo(SIGN_TOKEN)).rejects.toBeInstanceOf(GoneError)
+    expect(mockRepo.markExpired).toHaveBeenCalledWith(CLINIC_ID, REQUEST_ID)
+  })
+})
+
+// ── RN10: tokenExpiresAt = now + 7 dias ───────────────────────────────────────
+
+describe('RN10 — token expira em 7 dias', () => {
+  let service: AnamnesisService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AnamnesisService()
+  })
+
+  it('deve criar expiresAt com prazo de 7 dias a partir de agora', async () => {
+    mockRepo.create.mockImplementation(async (_clinicId, _userId, data) => ({
+      id: REQUEST_ID,
+      ...data,
+      customer: { id: CUSTOMER_ID, name: 'João', phone: null, email: null },
+      createdBy: { id: USER_ID, name: 'Staff' },
+    }))
+
+    const before = new Date()
+    await service.create(CLINIC_ID, USER_ID, {
+      customerId: CUSTOMER_ID,
+      mode: 'blank',
+      groupId: 'g1',
+      groupName: 'Ficha',
+      questionsSnapshot: [{ id: '1', text: 'q', type: 'text', required: false }],
+    })
+    const after = new Date()
+
+    const call = mockRepo.create.mock.calls[0][2] as { expiresAt: Date }
+    const diffMs = call.expiresAt.getTime() - before.getTime()
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
+    const tolerance = after.getTime() - before.getTime() + 1000
+
+    expect(diffMs).toBeGreaterThanOrEqual(sevenDaysMs)
+    expect(diffMs).toBeLessThanOrEqual(sevenDaysMs + tolerance)
+  })
+})
+
+// ── resolveDiff ───────────────────────────────────────────────────────────────
+
+describe('AnamnesisService.resolveDiff()', () => {
+  let service: AnamnesisService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AnamnesisService()
+    mockPrisma.$transaction.mockImplementation(
+      (cb: (tx: typeof mockPrismaTx) => Promise<unknown>) => cb(mockPrismaTx),
+    )
+  })
+
+  it('deve resolver diff e criar auditLog atomicamente', async () => {
+    const anamnesisRow = { id: REQUEST_ID, status: 'client_submitted', clinicId: CLINIC_ID }
+    const updatedRow = { id: REQUEST_ID, status: 'signed' }
+
+    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue(anamnesisRow)
+    mockPrismaTx.anamnesisRequest.update.mockResolvedValue(updatedRow)
+    mockPrismaTx.auditLog.create.mockResolvedValue({ id: 'audit-1' })
+
+    const result = await service.resolveDiff(CLINIC_ID, REQUEST_ID, {
+      resolutions: { q1: 'clinic', q2: 'client' },
+    }, USER_ID)
+
+    expect(result).toEqual(updatedRow)
+    expect(mockPrismaTx.anamnesisRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'signed', diffResolution: { q1: 'clinic', q2: 'client' } }),
+      }),
+    )
+    expect(mockPrismaTx.auditLog.create).toHaveBeenCalled()
+  })
+
+  it('deve lançar NotFoundError quando anamnese não encontrada', async () => {
+    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue(null)
+
+    await expect(
+      service.resolveDiff(CLINIC_ID, REQUEST_ID, { resolutions: {} }, USER_ID),
+    ).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('deve retornar idempotente quando status já é signed', async () => {
+    const signedRow = { id: REQUEST_ID, status: 'signed', clinicId: CLINIC_ID }
+    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue(signedRow)
+
+    await service.resolveDiff(CLINIC_ID, REQUEST_ID, { resolutions: {} }, USER_ID)
+
+    // Não deve tentar fazer update se já está signed
+    expect(mockPrismaTx.anamnesisRequest.update).not.toHaveBeenCalled()
+    expect(mockPrismaTx.auditLog.create).not.toHaveBeenCalled()
+  })
+
+  it('deve rejeitar multi-tenancy: clinicId diferente lança NotFoundError', async () => {
+    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue({
+      id: REQUEST_ID,
+      status: 'client_submitted',
+      clinicId: 'outra-clinica-uuid',
+    })
+
+    await expect(
+      service.resolveDiff(CLINIC_ID, REQUEST_ID, { resolutions: {} }, USER_ID),
+    ).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('deve rejeitar status diferente de client_submitted com ValidationError', async () => {
+    mockPrismaTx.anamnesisRequest.findUnique.mockResolvedValue({
+      id: REQUEST_ID,
+      status: 'pending',
+      clinicId: CLINIC_ID,
+    })
+
+    const { ValidationError } = await import('../../shared/errors/app-error')
+    await expect(
+      service.resolveDiff(CLINIC_ID, REQUEST_ID, { resolutions: {} }, USER_ID),
+    ).rejects.toBeInstanceOf(ValidationError)
+  })
+})
+
+// ── finalize ──────────────────────────────────────────────────────────────────
+
+describe('AnamnesisService.finalize()', () => {
+  let service: AnamnesisService
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new AnamnesisService()
+  })
+
+  it('deve transicionar draft → clinic_filled', async () => {
+    mockRepo.findById.mockResolvedValue({ id: REQUEST_ID, status: 'draft', clinicId: CLINIC_ID })
+    mockRepo.updateStatus = vi.fn().mockResolvedValue({ id: REQUEST_ID, status: 'clinic_filled' })
+
+    const result = await service.finalize(CLINIC_ID, REQUEST_ID)
+
+    expect(mockRepo.updateStatus).toHaveBeenCalledWith(CLINIC_ID, REQUEST_ID, 'clinic_filled')
+    expect(result).toMatchObject({ status: 'clinic_filled' })
+  })
+
+  it('deve lançar ValidationError se status não é draft', async () => {
+    mockRepo.findById.mockResolvedValue({ id: REQUEST_ID, status: 'signed', clinicId: CLINIC_ID })
+
+    const { ValidationError } = await import('../../shared/errors/app-error')
+    await expect(service.finalize(CLINIC_ID, REQUEST_ID)).rejects.toBeInstanceOf(ValidationError)
+  })
+
+  it('deve lançar NotFoundError se anamnese não existe', async () => {
+    mockRepo.findById.mockResolvedValue(null)
+
+    await expect(service.finalize(CLINIC_ID, REQUEST_ID)).rejects.toBeInstanceOf(NotFoundError)
   })
 })
