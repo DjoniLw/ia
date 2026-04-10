@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, ChevronRight, Loader2, Mail, MessageCircle, Save, Send } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Loader2, Mail, MessageCircle, Save, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -42,6 +42,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
   const [email, setEmail] = useState(defaultEmail ?? '')
 
   const [error, setError] = useState<string | null>(null)
+  const [showPrefillForm, setShowPrefillForm] = useState(false)
 
   const selectedGroup = groups?.find((g) => g.id === selectedGroupId) ?? groups?.[0] ?? null
   const questions = (selectedGroup?.questions ?? []).filter(
@@ -138,6 +139,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
   }
 
   return (
+    <>
     <Dialog open onClose={onClose}>
       <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
         <div className="flex items-center gap-2">
@@ -231,112 +233,19 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
               </div>
             </div>
 
-            {/* FormulÃ¡rio de prÃ©-preenchimento â€” inline, sem scroll aninhado */}
+
+            {/* Pré-preenchimento — abre modal separado */}
             {mode === 'prefilled' && questions.length > 0 && (
-              <div className="space-y-4 rounded-lg border bg-muted/10 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium">
-                    Respostas da clÃ­nica
-                  </p>
+              <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2.5">
+                <div>
+                  <p className="text-xs font-medium">Respostas pré-preenchidas</p>
                   <p className="text-xs text-muted-foreground">
-                    {answeredCount}/{questions.length} respondida{questions.length !== 1 ? 's' : ''}
+                    {answeredCount} de {questions.length} pergunta{questions.length !== 1 ? 's' : ''} respondida{questions.length !== 1 ? 's' : ''}
                   </p>
                 </div>
-                {questions.map((q) => (
-                  <div key={q.id} className="space-y-1.5">
-                    <label className="text-xs font-medium">
-                      {q.text}
-                      {q.required && <span className="text-red-500 ml-0.5">*</span>}
-                    </label>
-                    {q.type === 'yesno' ? (
-                      <div className="flex gap-2">
-                        {['Sim', 'NÃ£o'].map((opt) => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setStaffAnswers((p) => ({ ...p, [q.id]: opt }))}
-                            className={[
-                              'rounded-full px-3 py-1 text-xs border transition-colors',
-                              staffAnswers[q.id] === opt
-                                ? 'bg-primary text-primary-foreground border-primary'
-                                : 'bg-background hover:bg-muted/50',
-                            ].join(' ')}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    ) : q.type === 'multiple' && q.options ? (
-                      <div className="space-y-1">
-                        {(q.options ?? []).map((opt, idx) => (
-                          <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={(staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(opt)}
-                              onChange={(e) => {
-                                const current = (staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-                                const next = e.target.checked ? [...current, opt] : current.filter((s) => s !== opt)
-                                setStaffAnswers((p) => ({ ...p, [q.id]: next.join(', ') }))
-                              }}
-                            />
-                            {(q.optionImages ?? [])[idx] && (
-                              <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
-                            )}
-                            {opt}
-                          </label>
-                        ))}
-                        {(q.options ?? []).length === 0 && (
-                          <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
-                        )}
-                      </div>
-                    ) : q.type === 'select' ? (
-                      <div className="space-y-2">
-                        {(q.selectOptions ?? []).map((opt) => (
-                          <div key={opt.label} className="space-y-1">
-                            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`prefill-select-${q.id}`}
-                                value={opt.label}
-                                checked={staffAnswers[q.id] === opt.label}
-                                onChange={() => {
-                                  setStaffAnswers((p) => {
-                                    const next = { ...p, [q.id]: opt.label }
-                                    if (!opt.withDescription) delete next[q.id + '__desc']
-                                    return next
-                                  })
-                                }}
-                              />
-                              {opt.imageUrl && (
-                                <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
-                              )}
-                              {opt.label}
-                            </label>
-                            {opt.withDescription && staffAnswers[q.id] === opt.label && (
-                              <textarea
-                                value={staffAnswers[q.id + '__desc'] ?? ''}
-                                onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value }))}
-                                rows={2}
-                                placeholder="Descrevaâ€¦"
-                                className="ml-6 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 py-1 text-sm resize-none"
-                              />
-                            )}
-                          </div>
-                        ))}
-                        {(q.selectOptions ?? []).length === 0 && (
-                          <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
-                        )}
-                      </div>
-                    ) : (
-                      <input
-                        type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
-                        value={staffAnswers[q.id] ?? ''}
-                        onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id]: e.target.value }))}
-                        className="w-full rounded-md border bg-background px-2 py-2 text-sm"
-                      />
-                    )}
-                  </div>
-                ))}
+                <Button size="sm" variant="outline" type="button" onClick={() => setShowPrefillForm(true)}>
+                  Preencher respostas
+                </Button>
               </div>
             )}
           </>
@@ -508,5 +417,129 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
         </div>
       )}
     </Dialog>
+
+    {/* ── Modal de pré-preenchimento ─────────────────────────────── */}
+    {showPrefillForm && (
+      <Dialog open onClose={() => setShowPrefillForm(false)}>
+        <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+          <p className="text-sm font-semibold">
+            Pré-preencher — {selectedGroup?.name ?? 'Grupo'}
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowPrefillForm(false)}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Fechar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 overflow-y-auto max-h-[65vh] pb-2 pr-1 p-4">
+          {questions.map((q) => (
+            <div key={q.id} className="space-y-1.5">
+              <label className="text-xs font-medium">
+                {q.text}
+                {q.required && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              {q.type === 'yesno' ? (
+                <div className="flex gap-2">
+                  {['Sim', 'Não'].map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setStaffAnswers((p) => ({ ...p, [q.id]: opt }))}
+                      className={[
+                        'rounded-full px-3 py-1 text-xs border transition-colors',
+                        staffAnswers[q.id] === opt
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background hover:bg-muted/50',
+                      ].join(' ')}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              ) : q.type === 'multiple' && q.options ? (
+                <div className="space-y-1">
+                  {(q.options ?? []).map((opt, idx) => (
+                    <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(opt)}
+                        onChange={(e) => {
+                          const current = (staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+                          const next = e.target.checked ? [...current, opt] : current.filter((s) => s !== opt)
+                          setStaffAnswers((p) => ({ ...p, [q.id]: next.join(', ') }))
+                        }}
+                      />
+                      {(q.optionImages ?? [])[idx] && (
+                        <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                      )}
+                      {opt}
+                    </label>
+                  ))}
+                  {(q.options ?? []).length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                  )}
+                </div>
+              ) : q.type === 'select' ? (
+                <div className="space-y-2">
+                  {(q.selectOptions ?? []).map((opt) => (
+                    <div key={opt.label} className="space-y-1">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`prefill-select-${q.id}`}
+                          value={opt.label}
+                          checked={staffAnswers[q.id] === opt.label}
+                          onChange={() => {
+                            setStaffAnswers((p) => {
+                              const next = { ...p, [q.id]: opt.label }
+                              if (!opt.withDescription) delete next[q.id + '__desc']
+                              return next
+                            })
+                          }}
+                        />
+                        {opt.imageUrl && (
+                          <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                        )}
+                        {opt.label}
+                      </label>
+                      {opt.withDescription && staffAnswers[q.id] === opt.label && (
+                        <textarea
+                          value={staffAnswers[q.id + '__desc'] ?? ''}
+                          onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value }))}
+                          rows={2}
+                          placeholder="Descreva…"
+                          className="ml-6 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 py-1 text-sm resize-none"
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {(q.selectOptions ?? []).length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                  )}
+                </div>
+              ) : (
+                <input
+                  type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
+                  value={staffAnswers[q.id] ?? ''}
+                  onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id]: e.target.value }))}
+                  className="w-full rounded-md border bg-background px-2 py-2 text-sm"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end rounded-b-xl">
+          <Button size="sm" onClick={() => setShowPrefillForm(false)}>
+            Confirmar respostas
+          </Button>
+        </div>
+      </Dialog>
+    )}
+    </>
   )
 }
