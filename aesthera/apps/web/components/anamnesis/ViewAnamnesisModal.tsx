@@ -32,7 +32,9 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
 
   // Questões e respostas vêm do full record; header usa request (sempre disponível)
   const questions = (full?.questionsSnapshot ?? []) as unknown as QuestionEntry[]
-  const answers = ((full?.clientAnswers ?? full?.staffAnswers ?? {}) as Record<string, unknown>)
+  // Fichas assinadas: staffAnswers contém respostas finais mescladas (após resolve-diff)
+  // Fichas do cliente (sem staffAnswers): usa clientAnswers
+  const answers = ((full?.staffAnswers ?? full?.clientAnswers ?? {}) as Record<string, unknown>)
   const signedDate = (full?.signedAt ?? request.signedAt)
     ? new Date((full?.signedAt ?? request.signedAt)!).toLocaleString('pt-BR', {
         day: '2-digit', month: 'long', year: 'numeric',
