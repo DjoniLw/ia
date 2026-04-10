@@ -9,6 +9,7 @@ import {
   ResendAnamnesisDto,
   ResolveDiffSchema,
   SendAnamnesisDto,
+  UpdateAnamnesisStaffAnswersDto,
 } from './anamnesis.dto'
 import { AnamnesisService } from './anamnesis.service'
 
@@ -54,6 +55,20 @@ export async function anamnesisRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { id } = req.params as { id: string }
       return reply.send(await svc.get(req.clinicId, id))
+    },
+  )
+
+  /**
+   * GET /anamnesis-requests/:id/signature
+   * Gera uma presigned GET URL temporária (1h) para visualização da assinatura.
+   */
+  app.get(
+    '/anamnesis-requests/:id/signature',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const url = await svc.getSignatureUrl(req.clinicId, id)
+      return reply.send({ url })
     },
   )
 
@@ -127,6 +142,20 @@ export async function anamnesisRoutes(app: FastifyInstance) {
   )
 
   /**
+   * PATCH /anamnesis-requests/:id
+   * Atualiza as respostas da clínica em fichas com status clinic_filled.
+   */
+  app.patch(
+    '/anamnesis-requests/:id',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const dto = UpdateAnamnesisStaffAnswersDto.parse(req.body)
+      return reply.send(await svc.updateStaffAnswers(req.clinicId, id, dto))
+    },
+  )
+
+  /**
    * POST /anamnesis-requests/:id/resolve-diff
    * Resolve divergências campo-a-campo e transiciona para SIGNED (atômico).
    */
@@ -137,6 +166,20 @@ export async function anamnesisRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string }
       const dto = ResolveDiffSchema.parse(req.body)
       return reply.send(await svc.resolveDiff(req.clinicId, id, dto, req.user.sub))
+    },
+  )
+
+  /**
+   * POST /anamnesis-requests/:id/reopen
+   * Reabre uma ficha assinada para edição (signed → clinic_filled).
+   * Limpa dados do cliente e assinatura. Apenas admin e staff.
+   */
+  app.post(
+    '/anamnesis-requests/:id/reopen',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      return reply.send(await svc.reopen(req.clinicId, id, req.user.sub))
     },
   )
 

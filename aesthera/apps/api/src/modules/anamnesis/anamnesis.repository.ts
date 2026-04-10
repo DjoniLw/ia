@@ -185,6 +185,32 @@ export class AnamnesisRepository {
     })
   }
 
+  /** Atualiza respostas da clínica — apenas para fichas clinic_filled (validado no service). */
+  async updateStaffAnswers(clinicId: string, id: string, staffAnswers: Record<string, unknown>) {
+    const result = await prisma.anamnesisRequest.updateMany({
+      where: { id, clinicId, deletedAt: null },
+      data: { staffAnswers: staffAnswers as Prisma.InputJsonValue },
+    })
+    if (result.count === 0) throw new NotFoundError('AnamnesisRequest')
+    return prisma.anamnesisRequest.findFirst({
+      where: { id, clinicId },
+      select: {
+        id: true,
+        clinicId: true,
+        customerId: true,
+        mode: true,
+        status: true,
+        groupId: true,
+        groupName: true,
+        staffAnswers: true,
+        diffResolution: true,
+        updatedAt: true,
+        customer: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+      },
+    })
+  }
+
   /** Persiste signToken + consentText e transiciona para sent_to_client. */
   async setSignToken(clinicId: string, id: string, signToken: string, expiresAt: Date, consentText: string) {
     // Verificação de ownership — evita IDOR cross-tenant
@@ -281,6 +307,7 @@ export class AnamnesisRepository {
       signedAt: Date
       ipAddress: string | null
       userAgent: string | null
+      status: 'client_submitted' | 'signed'
     },
   ) {
     const result = await prisma.anamnesisRequest.updateMany({
@@ -298,7 +325,7 @@ export class AnamnesisRepository {
         signedAt: data.signedAt,
         ipAddress: data.ipAddress,
         userAgent: data.userAgent,
-        status: 'client_submitted',
+        status: data.status,
       },
     })
     return result.count

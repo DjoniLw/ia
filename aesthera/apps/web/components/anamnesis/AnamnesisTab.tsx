@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Ban, ClipboardList, Eye, Loader2, Mail, MessageCircle, Plus, Save, Send } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Ban, ClipboardList, Eye, Loader2, Mail, MessageCircle, Pencil, Plus, Save, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -16,7 +16,10 @@ import {
   useAnamnesisRequests,
   useCancelAnamnesis,
   useFinalizeAnamnesis,
+  useResolveAnamnesisDiff,
+  useReopenAnamnesis,
   useSendAnamnesis,
+  useUpdateAnamnesisRequest,
 } from '@/lib/hooks/use-resources'
 import { ANAMNESIS_STATUS_COLORS, ANAMNESIS_STATUS_LABEL } from '@/lib/status-colors'
 import { useRole } from '@/lib/hooks/use-role'
@@ -43,7 +46,7 @@ interface Props {
 
 export function AnamnesisTab({
   customerId,
-  customerName,
+  customerName: _customerName,
   defaultPhone,
   defaultEmail,
   onCreateNew,
@@ -52,14 +55,19 @@ export function AnamnesisTab({
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<AnamnesisRequestStatus | ''>('')
   const [diffReq, setDiffReq] = useState<AnamnesisRequest | null>(null)
+  const [editingReq, setEditingReq] = useState<AnamnesisRequest | null>(null)
+  const [editAnswers, setEditAnswers] = useState<Record<string, string>>({})
+  const [editDirty, setEditDirty] = useState(false)
+  const [editingWasSigned, setEditingWasSigned] = useState(false)
+  const [signedEditConfirmOpen, setSignedEditConfirmOpen] = useState(false)
   const [sendingId, setSendingId] = useState<string | null>(null)
-  const [sendingMode, setSendingMode] = useState<'blank' | 'prefilled'>('blank')
-  const [dispatchMode, setDispatchMode] = useState<'send' | 'save'>('send')
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
+  const [editValidationError, setEditValidationError] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
   const [sendPhoneValid, setSendPhoneValid] = useState(false)
   const [sendPhoneError, setSendPhoneError] = useState('')
   const [sendEmail, setSendEmail] = useState('')
+  const [sendDispatchMode, setSendDispatchMode] = useState<'send' | 'save'>('send')
   const [sendViaWhatsapp, setSendViaWhatsapp] = useState(true)
   const [sendViaEmail, setSendViaEmail] = useState(true)
 
@@ -76,14 +84,30 @@ export function AnamnesisTab({
   const cancelAnamnesis = useCancelAnamnesis()
   const finalizeAnamnesis = useFinalizeAnamnesis()
   const sendAnamnesis = useSendAnamnesis()
+  const updateAnamnesis = useUpdateAnamnesisRequest()
+  const confirmReview = useResolveAnamnesisDiff()
+  const reopenAnamnesis = useReopenAnamnesis()
 
-  // Carrega o registro completo ao abrir o diff (list items não têm questionsSnapshot/staffAnswers/clientAnswers)
-  const { data: diffReqFull, isLoading: diffLoading } = useAnamnesisRequestById(diffReq?.id ?? null)
+  // Carrega o registro completo (com questionsSnapshot) quando o dialog de edição abre
+  const { data: editingReqFull, isLoading: editingLoading } = useAnamnesisRequestById(editingReq?.id ?? null)
 
-  function openSendDialog(id: string, mode: 'blank' | 'prefilled') {
+  // Carrega o registro completo para o diff viewer (list items não têm staffAnswers/clientAnswers)
+  const { data: diffReqFull, isLoading: diffReqLoading } = useAnamnesisRequestById(diffReq?.id ?? null)
+
+  // Sincroniza respostas quando os dados completos carregam (list items não têm staffAnswers/clientAnswers)
+  // Depende de editingReq?.id também para re-executar quando o mesmo registro é reaberto (cache hit)
+  useEffect(() => {
+    if (editingReqFull && editingReqFull.id === editingReq?.id && !editDirty) {
+      // Fichas preenchidas pelo paciente têm respostas em clientAnswers; fichas da clínica em staffAnswers
+      const answers = (editingReqFull.staffAnswers ?? editingReqFull.clientAnswers ?? {}) as Record<string, string>
+      setEditAnswers(answers)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingReq?.id, editingReqFull?.id])
+
+  function openSendDialog(id: string) {
     setSendingId(id)
-    setSendingMode(mode)
-    setDispatchMode('send')
+    setSendDispatchMode('send')
     setSendPhone(defaultPhone ?? '')
     setSendPhoneValid(false)
     setSendPhoneError('')
@@ -91,34 +115,6 @@ export function AnamnesisTab({
     setSendViaWhatsapp(Boolean(defaultPhone))
     setSendViaEmail(Boolean(defaultEmail))
   }
-
-  function resetSendDialog() {
-    setSendingId(null)
-    setSendPhone('')
-    setSendPhoneValid(false)
-    setSendPhoneError('')
-    setSendEmail('')
-    setSendViaWhatsapp(true)
-    setSendViaEmail(true)
-  }
-
-  function handleSendPhoneChange(e164: string, isValid: boolean) {
-    setSendPhone(e164)
-    setSendPhoneValid(isValid)
-    if (e164.replace(/\D/g, '').length > 2) {
-      setSendPhoneError(isValid ? '' : 'Número inválido — verifique o DDD e os dígitos')
-    } else {
-      setSendPhoneError('')
-    }
-  }
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  const canSendNow = (() => {
-    if (!sendViaWhatsapp && !sendViaEmail) return false
-    if (sendViaWhatsapp && !sendPhoneValid) return false
-    if (sendViaEmail && !emailRegex.test(sendEmail.trim())) return false
-    return true
-  })()
 
   async function handleCancel(id: string) {
     try {
@@ -138,6 +134,85 @@ export function AnamnesisTab({
     }
   }
 
+  function closeEditDialog() {
+    setEditingReq(null)
+    setEditAnswers({})
+    setEditDirty(false)
+    setEditValidationError(null)
+    setEditingWasSigned(false)
+    setSignedEditConfirmOpen(false)
+  }
+
+  async function handleSaveEdit(id: string) {
+    // Sem alterações: fechar silenciosamente
+    if (!editDirty) {
+      closeEditDialog()
+      return
+    }
+    const questions = (editingReqFull?.questionsSnapshot ?? []) as Array<{ id: string; type: string; required?: boolean }>
+    const requiredEmpty = questions.filter((q) => q.type !== 'separator' && q.required && !editAnswers[q.id]?.trim())
+    setEditValidationError(null)
+    if (requiredEmpty.length > 0) {
+      setEditValidationError(`${requiredEmpty.length} campo(s) obrigatório(s) não preenchido(s).`)
+      return
+    }
+    // Ficha assinada com alterações: pede confirmação antes
+    if (editingWasSigned) {
+      setSignedEditConfirmOpen(true)
+      return
+    }
+    // Ficha não assinada: salva e abre dialog de envio
+    try {
+      await updateAnamnesis.mutateAsync({ id, staffAnswers: editAnswers as Record<string, unknown> })
+      toast.success('Respostas atualizadas.')
+      closeEditDialog()
+      openSendDialog(id)
+    } catch {
+      toast.error('Erro ao salvar. Tente novamente.')
+    }
+  }
+
+  async function handleConfirmSignedEdit(id: string) {
+    try {
+      await reopenAnamnesis.mutateAsync(id)
+      await updateAnamnesis.mutateAsync({ id, staffAnswers: editAnswers as Record<string, unknown> })
+      toast.success('Ficha atualizada e reaberta para envio.')
+      closeEditDialog()
+      openSendDialog(id)
+    } catch {
+      toast.error('Erro ao salvar alterações. Tente novamente.')
+    }
+  }
+
+  function handleSendPhoneChange(e164: string, isValid: boolean) {
+    setSendPhone(e164)
+    setSendPhoneValid(isValid)
+    if (e164.replace(/\D/g, '').length > 2) {
+      setSendPhoneError(isValid ? '' : 'Número inválido — verifique o DDD e os dígitos')
+    } else {
+      setSendPhoneError('')
+    }
+  }
+
+  function resetSendDialog() {
+    setSendingId(null)
+    setSendDispatchMode('send')
+    setSendPhone('')
+    setSendPhoneValid(false)
+    setSendPhoneError('')
+    setSendEmail('')
+    setSendViaWhatsapp(true)
+    setSendViaEmail(true)
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const canSendNow = (() => {
+    if (!sendViaWhatsapp && !sendViaEmail) return false
+    if (sendViaWhatsapp && !sendPhoneValid) return false
+    if (sendViaEmail && !emailRegex.test(sendEmail.trim())) return false
+    return true
+  })()
+
   async function handleSend(id: string) {
     try {
       await sendAnamnesis.mutateAsync({
@@ -150,6 +225,23 @@ export function AnamnesisTab({
     } catch {
       toast.error('Erro ao enviar. Tente novamente.')
     }
+  }
+
+  async function handleConfirmReview(id: string) {
+    try {
+      await confirmReview.mutateAsync({ id, resolutions: {} })
+      toast.success('Revisão confirmada — ficha assinada com sucesso.')
+    } catch {
+      toast.error('Erro ao confirmar revisão. Tente novamente.')
+    }
+  }
+
+  function handleOpenEditSigned(req: AnamnesisRequest) {
+    setEditingWasSigned(true)
+    setEditingReq(req)
+    setEditAnswers({})
+    setEditDirty(false)
+    setEditValidationError(null)
   }
 
   function buildDiffEntries(req: AnamnesisRequest) {
@@ -218,7 +310,9 @@ export function AnamnesisTab({
         </div>
       ) : (
         <div className="space-y-1.5">
-          {data.items.map((req) => (
+          {data.items.map((req) => {
+            // Para fichas client_submitted: apenas prefilled com respostas alteradas precisam de revisão
+            return (
             <div key={req.id} className="rounded-lg border bg-card p-2.5 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium truncate">{req.groupName}</p>
@@ -227,6 +321,7 @@ export function AnamnesisTab({
                     'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
                     ANAMNESIS_STATUS_COLORS[req.status] ?? 'bg-muted text-muted-foreground',
                   ].join(' ')}
+                  title={req.status === 'clinic_filled' ? 'Aguardando envio ao cliente para assinatura' : undefined}
                 >
                   {ANAMNESIS_STATUS_LABEL[req.status] ?? req.status}
                 </span>
@@ -257,21 +352,40 @@ export function AnamnesisTab({
                   </Button>
                 )}
 
+                {/* Editar respostas — apenas clinic_filled */}
+                {req.status === 'clinic_filled' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => {
+                      setEditingWasSigned(false)
+                      setEditingReq(req)
+                      setEditAnswers({})
+                      setEditDirty(false)
+                      setEditValidationError(null)
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Editar
+                  </Button>
+                )}
+
                 {/* Enviar ao cliente */}
                 {['draft', 'pending', 'clinic_filled'].includes(req.status) && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-[10px]"
-                    onClick={() => openSendDialog(req.id, req.mode)}
+                    onClick={() => openSendDialog(req.id)}
                   >
                     <Send className="h-3 w-3" />
                     Enviar ao cliente
                   </Button>
                 )}
 
-                {/* Revisar respostas */}
-                {req.status === 'client_submitted' && (
+                {/* Revisar fichas prefilled submetidas pelo cliente com alterações */}
+                {req.status === 'client_submitted' && req.mode === 'prefilled' && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -295,9 +409,23 @@ export function AnamnesisTab({
                     Cancelar
                   </Button>
                 )}
+
+                {/* Editar ficha assinada — abre form sem alterar status (reobre só ao confirmar) */}
+                {req.status === 'signed' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => handleOpenEditSigned(req)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Editar
+                  </Button>
+                )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -311,7 +439,7 @@ export function AnamnesisTab({
         />
       )}
 
-      {/* Dialog "O que fazer com a ficha?" */}
+      {/* Dialog de despacho — O que fazer com a ficha? */}
       {sendingId && (
         <Dialog open onClose={resetSendDialog}>
           <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
@@ -320,65 +448,73 @@ export function AnamnesisTab({
           </div>
           <div className="p-4 space-y-5">
             <p className="text-sm text-muted-foreground">
-              Paciente: <strong>{customerName}</strong>
+              Paciente: <strong>{_customerName}</strong>
             </p>
+
             <div className="space-y-3">
-              {/* Enviar ao cliente agora */}
+              {/* Opção: Enviar ao cliente agora */}
               <label className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 transition-colors">
                 <input
                   type="radio"
                   name="tab-dispatch-mode"
                   value="send"
-                  checked={dispatchMode === 'send'}
-                  onChange={() => setDispatchMode('send')}
+                  checked={sendDispatchMode === 'send'}
+                  onChange={() => setSendDispatchMode('send')}
                   className="mt-0.5 shrink-0"
                 />
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   <p className="text-sm font-medium">Enviar ao cliente agora</p>
                   <p className="text-xs text-muted-foreground">Gera um link seguro e notifica via WhatsApp ou e-mail.</p>
                 </div>
               </label>
 
-              {dispatchMode === 'send' && (
+              {/* Canais de envio */}
+              {sendDispatchMode === 'send' && (
                 <div className="ml-6 space-y-3 rounded-lg border p-4">
                   <p className="text-xs font-medium text-muted-foreground">Enviar por</p>
 
                   {/* WhatsApp */}
                   <div className="flex items-center gap-3">
                     <Checkbox
-                      id="tab-dispatch-whatsapp"
+                      id="tab-send-via-whatsapp"
                       checked={sendViaWhatsapp}
                       onCheckedChange={(v) => setSendViaWhatsapp(Boolean(v))}
                     />
-                    <label htmlFor="tab-dispatch-whatsapp" className="flex items-center gap-2 cursor-pointer select-none">
+                    <label htmlFor="tab-send-via-whatsapp" className="flex items-center gap-2 cursor-pointer select-none">
                       <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
                       <span className="text-sm font-medium">WhatsApp</span>
                     </label>
                   </div>
                   {sendViaWhatsapp && (
                     <div className="ml-7 space-y-1.5">
-                      <PhoneInput id="tab-dispatch-phone" value={sendPhone} onChange={handleSendPhoneChange} />
-                      {sendPhoneError && <p className="text-xs text-red-500">{sendPhoneError}</p>}
+                      <PhoneInput
+                        id="tab-send-phone"
+                        value={sendPhone}
+                        onChange={handleSendPhoneChange}
+                      />
+                      {sendPhoneError && (
+                        <p className="text-xs text-red-500">{sendPhoneError}</p>
+                      )}
                     </div>
                   )}
 
                   {/* E-mail */}
                   <div className="flex items-center gap-3">
                     <Checkbox
-                      id="tab-dispatch-email"
+                      id="tab-send-via-email"
                       checked={sendViaEmail}
                       onCheckedChange={(v) => setSendViaEmail(Boolean(v))}
                     />
-                    <label htmlFor="tab-dispatch-email" className="flex items-center gap-2 cursor-pointer select-none">
+                    <label htmlFor="tab-send-via-email" className="flex items-center gap-2 cursor-pointer select-none">
                       <Mail className="h-4 w-4 text-violet-600 shrink-0" />
                       <span className="text-sm font-medium">E-mail</span>
                     </label>
                   </div>
                   {sendViaEmail && (
                     <div className="ml-7 space-y-1.5">
-                      <Label htmlFor="tab-dispatch-email-input">E-mail do cliente</Label>
+                      <Label htmlFor="tab-send-email">E-mail do cliente</Label>
                       <Input
-                        id="tab-dispatch-email-input"
+                        id="tab-send-email"
                         type="email"
                         placeholder="cliente@exemplo.com"
                         value={sendEmail}
@@ -398,40 +534,29 @@ export function AnamnesisTab({
                 </div>
               )}
 
-              {/* Salvar para enviar depois */}
-              <label
-                className={[
-                  'flex items-start gap-3 rounded-lg border p-3 transition-colors',
-                  sendingMode === 'blank'
-                    ? 'cursor-not-allowed opacity-50'
-                    : 'cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5',
-                ].join(' ')}
-              >
+              {/* Opção: Salvar para enviar depois */}
+              <label className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 transition-colors">
                 <input
                   type="radio"
                   name="tab-dispatch-mode"
                   value="save"
-                  checked={dispatchMode === 'save'}
-                  onChange={() => setDispatchMode('save')}
-                  disabled={sendingMode === 'blank'}
+                  checked={sendDispatchMode === 'save'}
+                  onChange={() => setSendDispatchMode('save')}
                   className="mt-0.5 shrink-0"
                 />
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   <p className="text-sm font-medium">Salvar para enviar depois</p>
-                  <p className="text-xs text-muted-foreground">
-                    {sendingMode === 'blank'
-                      ? 'Disponível apenas no modo pré-preenchido.'
-                      : 'Mantém a ficha salva com status "Preenchida pela clínica".'}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Mantém a ficha salva com status "Preenchida pela clínica".</p>
                 </div>
               </label>
             </div>
           </div>
-          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
+
+          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-between gap-2 rounded-b-xl">
             <Button type="button" variant="outline" size="sm" onClick={resetSendDialog}>
-              Cancelar
+              Recomeçar
             </Button>
-            {dispatchMode === 'send' ? (
+            {sendDispatchMode === 'send' ? (
               <Button
                 type="button"
                 size="sm"
@@ -446,7 +571,11 @@ export function AnamnesisTab({
                 Enviar ao cliente
               </Button>
             ) : (
-              <Button type="button" size="sm" onClick={() => { resetSendDialog(); toast.success('Ficha salva. Envie ao cliente quando quiser.') }}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={resetSendDialog}
+              >
                 <Save className="h-3.5 w-3.5 mr-1.5" />
                 Salvar ficha
               </Button>
@@ -487,6 +616,159 @@ export function AnamnesisTab({
         </Dialog>
       )}
 
+      {/* Dialog de edição de respostas — clinic_filled / signed reaberta */}
+      {editingReq && (
+        <Dialog open onClose={closeEditDialog} isDirty={editDirty}>
+          <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+            <DialogTitle className="mb-0 text-sm">Editar respostas — {editingReq.groupName}</DialogTitle>
+          </div>
+          <div className="p-4 overflow-y-auto max-h-[65vh]">
+            {editingLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {((editingReqFull?.questionsSnapshot ?? []) as Array<{ id: string; text: string; type: string; required?: boolean; options?: string[]; optionImages?: string[]; selectOptions?: Array<{ label: string; imageUrl?: string; withDescription?: boolean }> }>)
+                  .filter((q) => q.type !== 'separator')
+                  .map((q) => (
+                    <div key={q.id} className="space-y-1.5">
+                      <label className="text-xs font-medium">
+                        {q.text}
+                        {q.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      {q.type === 'yesno' ? (
+                        <div className="flex gap-2">
+                          {['Sim', 'Não'].map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => { setEditDirty(true); setEditAnswers((p) => ({ ...p, [q.id]: opt })) }}                              className={[
+                                'rounded-full px-3 py-1 text-xs border transition-colors',
+                                editAnswers[q.id] === opt
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-background hover:bg-muted/50',
+                              ].join(' ')}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      ) : q.type === 'multiple' && q.options ? (
+                        <div className="space-y-1">
+                          {(q.options ?? []).map((opt, idx) => (
+                            <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <Checkbox
+                                id={`edit-q-${q.id}-${opt}`}
+                                checked={(editAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(opt)}
+                                onCheckedChange={(checked) => {
+                                  const current = (editAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+                                  const next = checked ? [...current, opt] : current.filter((s) => s !== opt)
+                                  setEditDirty(true)
+                                  setEditAnswers((p) => ({ ...p, [q.id]: next.join(', ') }))
+                                }}
+                              />
+                              {(q.optionImages ?? [])[idx] && (
+                                <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                              )}
+                              <label htmlFor={`edit-q-${q.id}-${opt}`} className="text-sm cursor-pointer">{opt}</label>
+                            </label>
+                          ))}
+                        </div>
+                      ) : q.type === 'select' ? (
+                        <div className="space-y-2">
+                          {(q.selectOptions ?? []).map((opt) => (
+                            <div key={opt.label} className="space-y-1">
+                              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`edit-select-${q.id}`}
+                                  value={opt.label}
+                                  checked={editAnswers[q.id] === opt.label}
+                                  onChange={() => { setEditDirty(true); setEditAnswers((p) => ({ ...p, [q.id]: opt.label })) }}                                />
+                                {opt.imageUrl && (
+                                  <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                                )}
+                                {opt.label}
+                              </label>
+                              {opt.withDescription && editAnswers[q.id] === opt.label && (
+                                <textarea
+                                  value={editAnswers[q.id + '__desc'] ?? ''}
+                                  onChange={(e) => { setEditDirty(true); setEditAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value })) }}
+                                  rows={2}
+                                  placeholder="Descreva…"
+                                  className="ml-6 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 py-1 text-sm resize-none"
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <input
+                          type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
+                          value={editAnswers[q.id] ?? ''}
+                          onChange={(e) => { setEditDirty(true); setEditAnswers((p) => ({ ...p, [q.id]: e.target.value })) }}
+                          className="w-full rounded-md border bg-background px-2 py-2 text-sm"
+                        />
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
+            {editValidationError && (
+              <p className="text-xs text-red-500 flex-1 self-center">{editValidationError}</p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={closeEditDialog}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={updateAnamnesis.isPending || editingLoading}
+              onClick={() => void handleSaveEdit(editingReq.id)}
+            >
+              {updateAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Salvar alterações
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog de confirmação de alteração em ficha assinada */}
+      {signedEditConfirmOpen && editingReq && (
+        <Dialog open onClose={() => setSignedEditConfirmOpen(false)}>
+          <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+            <DialogTitle className="mb-0 text-sm">Confirmar alteração</DialogTitle>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Esta ficha está <strong>assinada</strong>. Ao confirmar, a assinatura atual será removida e o cliente precisará assinar novamente após o reenvio.
+            </p>
+          </div>
+          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
+            <Button type="button" variant="outline" size="sm" onClick={() => setSignedEditConfirmOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={reopenAnamnesis.isPending || updateAnamnesis.isPending}
+              onClick={() => void handleConfirmSignedEdit(editingReq.id)}
+            >
+              {(reopenAnamnesis.isPending || updateAnamnesis.isPending) && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Confirmar alteração
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
       {/* Dialog de revisão de diff */}
       {diffReq && (
         <Dialog open onClose={() => setDiffReq(null)}>
@@ -494,14 +776,14 @@ export function AnamnesisTab({
             <DialogTitle className="mb-0 text-sm">Revisar respostas — {diffReq.groupName}</DialogTitle>
           </div>
           <div className="p-4 overflow-y-auto max-h-[70vh]">
-            {diffLoading ? (
+            {diffReqLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : (
               <AnamnesisDiffViewer
                 anamnesisId={diffReq.id}
-                entries={diffReqFull ? buildDiffEntries(diffReqFull) : []}
+                entries={buildDiffEntries(diffReqFull ?? diffReq)}
                 onResolved={() => setDiffReq(null)}
                 onCancel={() => setDiffReq(null)}
               />

@@ -2,17 +2,31 @@ import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { appConfig } from '../../config/app.config'
 import { prisma } from '../../database/prisma/client'
-import { uploadBuffer } from '../../integrations/r2/r2.service'
+import { uploadBuffer, generatePresignedGetUrl } from '../../integrations/r2/r2.service'
 import { ConflictError, GoneError, NotFoundError, ValidationError } from '../../shared/errors/app-error'
 import { createDomainEvent } from '../../shared/events/domain-event'
 import { eventBus } from '../../shared/events/event-bus'
 import { logger } from '../../shared/logger/logger'
 import { NotificationsService } from '../notifications/notifications.service'
-import type { CreateAnamnesisRequestDto, ListAnamnesisRequestsQuery, ResendAnamnesisDto, ResolveDiffDto } from './anamnesis.dto'
+import type { CreateAnamnesisRequestDto, ListAnamnesisRequestsQuery, ResendAnamnesisDto, ResolveDiffDto, UpdateAnamnesisStaffAnswersDto } from './anamnesis.dto'
 import { AnamnesisRepository } from './anamnesis.repository'
 
 // RN10: token expira em 7 dias
 const TTL_DAYS = 7
+
+/** Compara respostas do cliente com respostas da clínica (modo prefilled).
+ *  Trata chaves ausentes como string vazia. Retorna true se idênticas. */
+function areAnswersIdentical(
+  staffAnswers: Record<string, unknown> | null,
+  clientAnswers: Record<string, unknown>,
+): boolean {
+  if (!staffAnswers) return false
+  const allKeys = new Set([...Object.keys(staffAnswers), ...Object.keys(clientAnswers)])
+  for (const key of allKeys) {
+    if (String(staffAnswers[key] ?? '') !== String(clientAnswers[key] ?? '')) return false
+  }
+  return true
+}
 
 /** SEC2 — select seguro para retorno da API (nunca vaza signToken, signatureUrl, consentText, ipAddress, userAgent) */
 const safeAnamnesisSelect = {
@@ -106,6 +120,15 @@ export class AnamnesisService {
     const request = await this.repo.findById(clinicId, id)
     if (!request) throw new NotFoundError('AnamnesisRequest')
     return request
+  }
+
+  /** Gera presigned GET URL temporária (1h) para a assinatura armazenada no R2. */
+  async getSignatureUrl(clinicId: string, id: string) {
+    const request = await this.repo.findById(clinicId, id)
+    if (!request) throw new NotFoundError('AnamnesisRequest')
+    const storageKey = (request as { signatureUrl?: string | null }).signatureUrl
+    if (!storageKey) throw new NotFoundError('Signature')
+    return generatePresignedGetUrl(storageKey, 3600)
   }
 
   /** Endpoint público — retorna informações sem dados sensíveis do paciente para renderização do formulário. */
@@ -209,6 +232,17 @@ export class AnamnesisService {
       throw err
     })
 
+    // RN: blank → assina direto (sem diff); prefilled sem alterações → assina direto; prefilled com alterações → aguarda revisão
+    const targetStatus: 'signed' | 'client_submitted' =
+      request.mode === 'blank' ||
+      (request.mode === 'prefilled' &&
+        areAnswersIdentical(
+          request.staffAnswers as Record<string, unknown> | null,
+          data.clientAnswers,
+        ))
+        ? 'signed'
+        : 'client_submitted'
+
     const count = await this.repo.submitSignature(signToken, {
       clientAnswers: data.clientAnswers,
       signatureUrl: signatureStorageKey,
@@ -218,6 +252,7 @@ export class AnamnesisService {
       signedAt: now,
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
+      status: targetStatus,
     })
 
     if (count === 0) {
@@ -225,7 +260,7 @@ export class AnamnesisService {
       throw new ConflictError('Esta anamnese já foi assinada ou não está mais disponível.')
     }
 
-    logger.info({ clinicId: request.clinicId, requestId: request.id }, 'Anamnese assinada')
+    logger.info({ clinicId: request.clinicId, requestId: request.id, targetStatus }, 'Anamnese assinada')
 
     // RN21: Registrar auditLog da submissão pública (best-effort — não bloqueia resposta)
     prisma.auditLog.create({
@@ -238,16 +273,18 @@ export class AnamnesisService {
       },
     }).catch((err) => logger.error({ err, requestId: request.id }, 'Falha ao criar auditLog de submit'))
 
-    // Publicar evento para criação automática do prontuário
-    eventBus.publish(
-      createDomainEvent('anamnesis.signed', request.clinicId, {
-        anamnesisRequestId: request.id,
-        clinicId: request.clinicId,
-        customerId: request.customer.id,
-        groupName: request.groupName,
-        signedAt: now.toISOString(),
-      }),
-    )
+    // Publicar evento apenas se foi direto para assinado (prontuário criado automaticamente)
+    if (targetStatus === 'signed') {
+      eventBus.publish(
+        createDomainEvent('anamnesis.signed', request.clinicId, {
+          anamnesisRequestId: request.id,
+          clinicId: request.clinicId,
+          customerId: request.customer.id,
+          groupName: request.groupName,
+          signedAt: now.toISOString(),
+        }),
+      )
+    }
 
     return { success: true }
   }
@@ -329,7 +366,7 @@ export class AnamnesisService {
     const result = await prisma.$transaction(async (tx) => {
       const anamnesis = await tx.anamnesisRequest.findFirst({
         where: { id, deletedAt: null },
-        select: { id: true, status: true, clinicId: true },
+        select: { id: true, status: true, clinicId: true, staffAnswers: true, clientAnswers: true },
       })
       if (!anamnesis) throw new NotFoundError('AnamnesisRequest')
       if (anamnesis.clinicId !== clinicId) throw new NotFoundError('AnamnesisRequest')
@@ -346,9 +383,18 @@ export class AnamnesisService {
         throw new ValidationError('Apenas anamneses com status "Aguardando revisão" podem ser resolvidas.')
       }
 
+      // Mescla respostas: para cada questão, aplica a escolha da clínica ou do cliente
+      const staff = (anamnesis.staffAnswers ?? {}) as Record<string, unknown>
+      const client = (anamnesis.clientAnswers ?? {}) as Record<string, unknown>
+      const mergedAnswers: Record<string, unknown> = { ...staff }
+      for (const [questionId, source] of Object.entries(dto.resolutions)) {
+        mergedAnswers[questionId] = source === 'client' ? client[questionId] : staff[questionId]
+      }
+
       const updated = await tx.anamnesisRequest.update({
         where: { id },
         data: {
+          staffAnswers: mergedAnswers as Prisma.InputJsonValue,
           diffResolution: dto.resolutions,
           status: 'signed',
           signedAt: new Date(),
@@ -370,6 +416,69 @@ export class AnamnesisService {
     })
 
     logger.info({ clinicId, requestId: id }, 'Anamnese resolve-diff concluído')
+    return result
+  }
+
+  /** Atualiza respostas da clínica em fichas com status clinic_filled. */
+  async updateStaffAnswers(clinicId: string, id: string, dto: UpdateAnamnesisStaffAnswersDto) {
+    const existing = await this.repo.findById(clinicId, id)
+    if (!existing) throw new NotFoundError('AnamnesisRequest')
+    if (existing.status !== 'clinic_filled') {
+      throw new ValidationError('Apenas fichas com status "Preenchida pela clínica" podem ter respostas editadas.')
+    }
+    logger.info({ action: 'anamnesis_staff_answers_updated', resourceId: id, clinicId }, 'Respostas da clínica atualizadas')
+    return this.repo.updateStaffAnswers(clinicId, id, dto.staffAnswers as Record<string, unknown>)
+  }
+
+  /**
+   * reopen — reabre uma ficha assinada para edição.
+   * Transiciona signed → clinic_filled, limpa dados do cliente e assinatura.
+   * Atomicamente registra auditLog.
+   */
+  async reopen(clinicId: string, id: string, userId: string) {
+    const result = await prisma.$transaction(async (tx) => {
+      const anamnesis = await tx.anamnesisRequest.findFirst({
+        where: { id, clinicId, deletedAt: null },
+        select: { id: true, status: true, clinicId: true },
+      })
+      if (!anamnesis) throw new NotFoundError('AnamnesisRequest')
+
+      if (anamnesis.status !== 'signed') {
+        throw new ValidationError('Apenas fichas assinadas podem ser reabertas para edição.')
+      }
+
+      const updated = await tx.anamnesisRequest.update({
+        where: { id, clinicId },
+        data: {
+          status: 'clinic_filled',
+          clientAnswers: Prisma.DbNull,
+          diffResolution: Prisma.DbNull,
+          signedAt: null,
+          signature: null,
+          signatureHash: null,
+          signatureUrl: null,
+          consentGivenAt: null,
+          consentText: null,
+          ipAddress: null,
+          userAgent: null,
+        },
+        select: safeAnamnesisSelect,
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: 'anamnesis.reopen',
+          entityId: id,
+          clinicId,
+          userId,
+          metadata: { previousStatus: 'signed' } as Prisma.InputJsonValue,
+        },
+      })
+
+      return updated
+    })
+
+    logger.info({ clinicId, requestId: id, userId }, 'Anamnese reaberta para edição')
     return result
   }
 
@@ -509,11 +618,20 @@ export async function handleAnamnesisSignedEvent(payload: {
     })
     if (!request) return
 
-    // Verificar se já existe um ClinicalRecord linkado (idempotência)
+    // Verificar se já existe um ClinicalRecord linkado (reabertura → atualizar conteúdo)
     const existing = await tx.clinicalRecord.findFirst({
       where: { anamnesisRequestId: request.id },
     })
-    if (existing) return
+    if (existing) {
+      await tx.clinicalRecord.update({
+        where: { id: existing.id },
+        data: {
+          content: JSON.stringify(buildClinicalRecordContent(request)),
+          performedAt: new Date(payload.signedAt),
+        },
+      })
+      return
+    }
 
     await tx.clinicalRecord.create({
       data: {

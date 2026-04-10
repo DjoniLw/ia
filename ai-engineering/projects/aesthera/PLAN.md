@@ -401,6 +401,25 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 
 ## Histórico de Atualizações
 
+### [2026-04-09] — fix(#155): Code Review PR #155 — 6 bloqueantes e 3 sugestões corrigidos
+- **Módulo:** Anamnesis (correções pós-code-review PR #155)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/components/anamnesis/SendAnamnesisDialog.tsx` *(encoding BOM removido + todas as strings PT-BR corrompidas corrigidas + `<button>` nativo → `<Button variant="ghost" size="icon">` + label "Enviar por" sem uppercase)*
+  - `aesthera/apps/web/components/anamnesis/AnamnesisTab.tsx` *(isDirty + Checkbox do design system + reset dirty em onClose/Cancelar)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.repository.ts` *(IDOR corrigido: `update({where:{id}})` → `updateMany({where:{id,clinicId}})` + select restrito ao necessário)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.dto.ts` *(UpdateAnamnesisStaffAnswersDto com limites de tamanho — max 500 campos, max 10.000 chars por valor)*
+  - `aesthera/apps/api/src/modules/anamnesis/anamnesis.service.ts` *(log de auditoria `logger.info` em updateStaffAnswers)*
+- **O que foi feito:**
+  - **[BLOQUEANTE-1]** Encoding UTF-8 com BOM removido; todas as 11 strings corrompidas corrigidas (acentos incorretos como `Ã§`, `Ã©`, `â€"` → caracteres corretos)
+  - **[BLOQUEANTE-2]** IDOR corrigido em `updateStaffAnswers`: substituído `prisma.update({ where: { id } })` por `prisma.updateMany({ where: { id, clinicId, deletedAt: null } })` — eliminando TOCTOU
+  - **[BLOQUEANTE-3]** `isDirty` adicionado ao dialog de edição de respostas — guard de perda de dados ao fechar acidentalmente
+  - **[BLOQUEANTE-4]** `<input type="checkbox">` nativo → `<Checkbox>` do design system com `id`/`htmlFor` e `onCheckedChange`
+  - **[BLOQUEANTE-5]** `<button>` nativo no "Voltar" → `<Button variant="ghost" size="icon">`
+  - **[SUGESTÃO-1]** Select do `updateStaffAnswers` restrito (removidos `clientAnswers`, `signatureHash`, `questionsSnapshot`)
+  - **[SUGESTÃO-2]** `UpdateAnamnesisStaffAnswersDto` com limites explícitos no `z.record`
+  - **[SUGESTÃO-3]** Log de auditoria `logger.info` em `updateStaffAnswers`
+- **Commits:** `edd9eb2` (pré-review) + commit desta correção
+
 ### [2026-04-08] — feat(#145): Ficha de Anamnese Digital — implementação completa (PR #149)
 - **Módulo:** AnamnesisRequest (novo) + ClinicalRecord (extensão) + Notifications (reutilização)
 - **Arquivo(s) afetado(s):**
