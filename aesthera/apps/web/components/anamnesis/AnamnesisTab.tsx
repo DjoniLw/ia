@@ -91,12 +91,13 @@ export function AnamnesisTab({
   const { data: editingReqFull, isLoading: editingLoading } = useAnamnesisRequestById(editingReq?.id ?? null)
 
   // Sincroniza respostas quando os dados completos carregam (list items não têm staffAnswers)
+  // Depende de editingReq?.id também para re-executar quando o mesmo registro é reaberto (cache hit)
   useEffect(() => {
-    if (editingReqFull && !editDirty) {
+    if (editingReqFull && editingReqFull.id === editingReq?.id && !editDirty) {
       setEditAnswers((editingReqFull.staffAnswers ?? {}) as Record<string, string>)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingReqFull?.id])
+  }, [editingReq?.id, editingReqFull?.id])
 
   function openSendDialog(id: string) {
     setSendingId(id)
