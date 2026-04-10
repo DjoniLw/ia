@@ -366,7 +366,7 @@ export class AnamnesisService {
     const result = await prisma.$transaction(async (tx) => {
       const anamnesis = await tx.anamnesisRequest.findFirst({
         where: { id, deletedAt: null },
-        select: { id: true, status: true, clinicId: true },
+        select: { id: true, status: true, clinicId: true, staffAnswers: true, clientAnswers: true },
       })
       if (!anamnesis) throw new NotFoundError('AnamnesisRequest')
       if (anamnesis.clinicId !== clinicId) throw new NotFoundError('AnamnesisRequest')
@@ -383,9 +383,18 @@ export class AnamnesisService {
         throw new ValidationError('Apenas anamneses com status "Aguardando revisão" podem ser resolvidas.')
       }
 
+      // Mescla respostas: para cada questão, aplica a escolha da clínica ou do cliente
+      const staff = (anamnesis.staffAnswers ?? {}) as Record<string, unknown>
+      const client = (anamnesis.clientAnswers ?? {}) as Record<string, unknown>
+      const mergedAnswers: Record<string, unknown> = { ...staff }
+      for (const [questionId, source] of Object.entries(dto.resolutions)) {
+        mergedAnswers[questionId] = source === 'client' ? client[questionId] : staff[questionId]
+      }
+
       const updated = await tx.anamnesisRequest.update({
         where: { id },
         data: {
+          staffAnswers: mergedAnswers as Prisma.InputJsonValue,
           diffResolution: dto.resolutions,
           status: 'signed',
           signedAt: new Date(),
