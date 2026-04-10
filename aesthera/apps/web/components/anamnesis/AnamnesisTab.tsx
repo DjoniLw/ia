@@ -1,10 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Ban, ClipboardList, Eye, Loader2, Pencil, Plus, Send } from 'lucide-react'
+import { Ban, ClipboardList, Eye, Loader2, Mail, MessageCircle, Pencil, Plus, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { DataPagination } from '@/components/ui/data-pagination'
 import {
   type AnamnesisRequest,
@@ -56,7 +59,11 @@ export function AnamnesisTab({
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
+  const [sendPhoneValid, setSendPhoneValid] = useState(false)
+  const [sendPhoneError, setSendPhoneError] = useState('')
   const [sendEmail, setSendEmail] = useState('')
+  const [sendViaWhatsapp, setSendViaWhatsapp] = useState(true)
+  const [sendViaEmail, setSendViaEmail] = useState(true)
 
   const role = useRole()
   const pageSize = 10
@@ -106,13 +113,43 @@ export function AnamnesisTab({
     }
   }
 
+  function handleSendPhoneChange(e164: string, isValid: boolean) {
+    setSendPhone(e164)
+    setSendPhoneValid(isValid)
+    if (e164.replace(/\D/g, '').length > 2) {
+      setSendPhoneError(isValid ? '' : 'Número inválido — verifique o DDD e os dígitos')
+    } else {
+      setSendPhoneError('')
+    }
+  }
+
+  function resetSendDialog() {
+    setSendingId(null)
+    setSendPhone('')
+    setSendPhoneValid(false)
+    setSendPhoneError('')
+    setSendEmail('')
+    setSendViaWhatsapp(true)
+    setSendViaEmail(true)
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const canSendNow = (() => {
+    if (!sendViaWhatsapp && !sendViaEmail) return false
+    if (sendViaWhatsapp && !sendPhoneValid) return false
+    if (sendViaEmail && !emailRegex.test(sendEmail.trim())) return false
+    return true
+  })()
+
   async function handleSend(id: string) {
     try {
-      await sendAnamnesis.mutateAsync({ id, phone: sendPhone || undefined, email: sendEmail || undefined })
+      await sendAnamnesis.mutateAsync({
+        id,
+        phone: sendViaWhatsapp ? sendPhone : undefined,
+        email: sendViaEmail ? sendEmail.trim() : undefined,
+      })
       toast.success('Ficha enviada ao cliente.')
-      setSendingId(null)
-      setSendPhone('')
-      setSendEmail('')
+      resetSendDialog()
     } catch {
       toast.error('Erro ao enviar. Tente novamente.')
     }
@@ -247,7 +284,15 @@ export function AnamnesisTab({
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-[10px]"
-                    onClick={() => { setSendingId(req.id); setSendPhone(defaultPhone ?? ''); setSendEmail(defaultEmail ?? '') }}
+                    onClick={() => {
+                      setSendingId(req.id)
+                      setSendPhone(defaultPhone ?? '')
+                      setSendPhoneValid(false)
+                      setSendPhoneError('')
+                      setSendEmail(defaultEmail ?? '')
+                      setSendViaWhatsapp(Boolean(defaultPhone))
+                      setSendViaEmail(Boolean(defaultEmail))
+                    }}
                   >
                     <Send className="h-3 w-3" />
                     Enviar ao cliente
@@ -297,52 +342,90 @@ export function AnamnesisTab({
 
       {/* Dialog de envio ao cliente */}
       {sendingId && (
-        <Dialog open onClose={() => { setSendingId(null); setSendPhone(''); setSendEmail('') }}>
+        <Dialog open onClose={resetSendDialog}>
           <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
             <DialogTitle className="mb-0 text-sm">Enviar ficha ao cliente</DialogTitle>
           </div>
-          <div className="p-4 space-y-3">
+          <div className="p-4 space-y-4">
             <p className="text-xs text-muted-foreground">
               Gere um link seguro e envie ao cliente via WhatsApp ou e-mail.
             </p>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">WhatsApp (opcional)</label>
-              <input
-                type="tel"
-                value={sendPhone}
-                onChange={(e) => setSendPhone(e.target.value)}
-                placeholder="+55 11 99999-9999"
-                className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">E-mail (opcional)</label>
-              <input
-                type="email"
-                value={sendEmail}
-                onChange={(e) => setSendEmail(e.target.value)}
-                placeholder="cliente@email.com"
-                className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
-              />
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <p className="text-xs font-medium text-muted-foreground">Enviar por</p>
+
+              {/* WhatsApp */}
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="tab-send-via-whatsapp"
+                  checked={sendViaWhatsapp}
+                  onCheckedChange={(v) => setSendViaWhatsapp(Boolean(v))}
+                />
+                <label htmlFor="tab-send-via-whatsapp" className="flex items-center gap-2 cursor-pointer select-none">
+                  <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
+                  <span className="text-sm font-medium">WhatsApp</span>
+                </label>
+              </div>
+              {sendViaWhatsapp && (
+                <div className="ml-7 space-y-1.5">
+                  <PhoneInput
+                    id="tab-send-phone"
+                    value={sendPhone}
+                    onChange={handleSendPhoneChange}
+                  />
+                  {sendPhoneError && (
+                    <p className="text-xs text-red-500">{sendPhoneError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* E-mail */}
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="tab-send-via-email"
+                  checked={sendViaEmail}
+                  onCheckedChange={(v) => setSendViaEmail(Boolean(v))}
+                />
+                <label htmlFor="tab-send-via-email" className="flex items-center gap-2 cursor-pointer select-none">
+                  <Mail className="h-4 w-4 text-violet-600 shrink-0" />
+                  <span className="text-sm font-medium">E-mail</span>
+                </label>
+              </div>
+              {sendViaEmail && (
+                <div className="ml-7 space-y-1.5">
+                  <Label htmlFor="tab-send-email">E-mail do cliente</Label>
+                  <Input
+                    id="tab-send-email"
+                    type="email"
+                    placeholder="cliente@exemplo.com"
+                    value={sendEmail}
+                    onChange={(e) => setSendEmail(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+              )}
+
+              {!sendViaWhatsapp && !sendViaEmail && (
+                <p className="text-xs text-red-500">Selecione ao menos um canal de envio.</p>
+              )}
             </div>
           </div>
           <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => { setSendingId(null); setSendPhone(''); setSendEmail('') }}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={resetSendDialog}>
               Cancelar
             </Button>
             <Button
               type="button"
               size="sm"
               onClick={() => void handleSend(sendingId)}
-              disabled={sendAnamnesis.isPending}
+              disabled={sendAnamnesis.isPending || !canSendNow}
             >
-              {sendAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-              Enviar
+              {sendAnamnesis.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : (
+                <Send className="h-3 w-3 mr-1" />
+              )}
+              Enviar link
             </Button>
           </div>
         </Dialog>
