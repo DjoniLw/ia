@@ -90,11 +90,13 @@ export function AnamnesisTab({
   // Carrega o registro completo (com questionsSnapshot) quando o dialog de edição abre
   const { data: editingReqFull, isLoading: editingLoading } = useAnamnesisRequestById(editingReq?.id ?? null)
 
-  // Sincroniza respostas quando os dados completos carregam (list items não têm staffAnswers)
+  // Sincroniza respostas quando os dados completos carregam (list items não têm staffAnswers/clientAnswers)
   // Depende de editingReq?.id também para re-executar quando o mesmo registro é reaberto (cache hit)
   useEffect(() => {
     if (editingReqFull && editingReqFull.id === editingReq?.id && !editDirty) {
-      setEditAnswers((editingReqFull.staffAnswers ?? {}) as Record<string, string>)
+      // Fichas preenchidas pelo paciente têm respostas em clientAnswers; fichas da clínica em staffAnswers
+      const answers = (editingReqFull.staffAnswers ?? editingReqFull.clientAnswers ?? {}) as Record<string, string>
+      setEditAnswers(answers)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingReq?.id, editingReqFull?.id])
