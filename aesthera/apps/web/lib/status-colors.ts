@@ -12,24 +12,24 @@ export const ANAMNESIS_STATUS_LABEL: Record<string, string> = {
 
 /** @deprecated Use ANAMNESIS_STATUS_COLORS */
 export const ANAMNESIS_STATUS_COLOR: Record<string, string> = {
-  draft: 'bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300',
-  clinic_filled: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
-  sent_to_client: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
-  client_submitted: 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300',
-  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  signed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-  expired: 'bg-muted text-muted-foreground',
-  correction_requested: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
-  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400',
+  draft:                'bg-slate-500 text-white dark:bg-slate-600',
+  clinic_filled:        'bg-teal-600 text-white dark:bg-teal-700',
+  sent_to_client:       'bg-indigo-600 text-white dark:bg-indigo-700',
+  client_submitted:     'bg-amber-700 text-white dark:bg-amber-800',
+  pending:              'bg-slate-500 text-white dark:bg-slate-600',
+  signed:               'bg-emerald-600 text-white dark:bg-emerald-700',
+  expired:              'bg-slate-500 text-white dark:bg-slate-600',
+  correction_requested: 'bg-orange-700 text-white dark:bg-orange-800',
+  cancelled:            'bg-rose-600 text-white dark:bg-rose-700',
 }
 
 /** Constante canônica para cores de status de anamnese */
 export const ANAMNESIS_STATUS_COLORS = ANAMNESIS_STATUS_COLOR
 
 export const PROMOTION_STATUS_COLOR: Record<string, string> = {
-  active: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  inactive: 'bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground',
-  expired: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+  active:   'bg-emerald-600 text-white dark:bg-emerald-700',
+  inactive: 'bg-slate-500 text-white dark:bg-slate-600',
+  expired:  'bg-rose-600 text-white dark:bg-rose-700',
 }
 
 export const BILLING_SOURCE_TYPE_LABEL: Record<string, string> = {
@@ -42,12 +42,12 @@ export const BILLING_SOURCE_TYPE_LABEL: Record<string, string> = {
 }
 
 export const BILLING_SOURCE_TYPE_COLOR: Record<string, string> = {
-  APPOINTMENT:     'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  PRESALE:         'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  MANUAL:          'bg-muted text-muted-foreground',
-  PACKAGE_SALE:    'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-  PRODUCT_SALE:    'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200',
-  WALLET_PURCHASE: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  APPOINTMENT:     'bg-blue-600 text-white dark:bg-blue-700',
+  PRESALE:         'bg-violet-600 text-white dark:bg-violet-700',
+  MANUAL:          'bg-slate-500 text-white dark:bg-slate-600',
+  PACKAGE_SALE:    'bg-amber-700 text-white dark:bg-amber-800',
+  PRODUCT_SALE:    'bg-teal-600 text-white dark:bg-teal-700',
+  WALLET_PURCHASE: 'bg-emerald-600 text-white dark:bg-emerald-700',
 }
 
 export const BILLING_STATUS_LABEL: Record<string, string> = {
@@ -58,10 +58,10 @@ export const BILLING_STATUS_LABEL: Record<string, string> = {
 }
 
 export const BILLING_STATUS_COLOR: Record<string, string> = {
-  pending:   'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200',
-  paid:      'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  overdue:   'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
-  cancelled: 'bg-muted text-muted-foreground',
+  pending:   'bg-amber-700 text-white dark:bg-amber-800',
+  paid:      'bg-emerald-600 text-white dark:bg-emerald-700',
+  overdue:   'bg-rose-600 text-white dark:bg-rose-700',
+  cancelled: 'bg-slate-500 text-white dark:bg-slate-600',
 }
 
 export const SESSION_STATUS_STYLE: Record<string, string> = {
@@ -89,10 +89,10 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
 }
 
 export const PAYMENT_METHOD_BADGE_COLORS: Record<string, string> = {
-  cash:           'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-  pix:            'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
-  card:           'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
-  transfer:       'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  wallet_credit:  'bg-amber-200 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
-  wallet_voucher: 'bg-orange-200 text-orange-900 dark:bg-orange-900/40 dark:text-orange-200',
+  cash:           'bg-emerald-600 text-white dark:bg-emerald-700',
+  pix:            'bg-sky-600 text-white dark:bg-sky-700',
+  card:           'bg-violet-600 text-white dark:bg-violet-700',
+  transfer:       'bg-blue-600 text-white dark:bg-blue-700',
+  wallet_credit:  'bg-amber-700 text-white dark:bg-amber-800',
+  wallet_voucher: 'bg-orange-700 text-white dark:bg-orange-800',
 }

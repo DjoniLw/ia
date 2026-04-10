@@ -1,13 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { Ban, ClipboardList, Eye, Loader2, Plus, Send } from 'lucide-react'
+import { Ban, ClipboardList, Eye, Loader2, Mail, MessageCircle, Plus, Save, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { DataPagination } from '@/components/ui/data-pagination'
 import {
   type AnamnesisRequest,
   type AnamnesisRequestStatus,
+  useAnamnesisRequestById,
   useAnamnesisRequests,
   useCancelAnamnesis,
   useFinalizeAnamnesis,
@@ -38,7 +43,7 @@ interface Props {
 
 export function AnamnesisTab({
   customerId,
-  customerName: _customerName,
+  customerName,
   defaultPhone,
   defaultEmail,
   onCreateNew,
@@ -48,9 +53,15 @@ export function AnamnesisTab({
   const [statusFilter, setStatusFilter] = useState<AnamnesisRequestStatus | ''>('')
   const [diffReq, setDiffReq] = useState<AnamnesisRequest | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
+  const [sendingMode, setSendingMode] = useState<'blank' | 'prefilled'>('blank')
+  const [dispatchMode, setDispatchMode] = useState<'send' | 'save'>('send')
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
+  const [sendPhoneValid, setSendPhoneValid] = useState(false)
+  const [sendPhoneError, setSendPhoneError] = useState('')
   const [sendEmail, setSendEmail] = useState('')
+  const [sendViaWhatsapp, setSendViaWhatsapp] = useState(true)
+  const [sendViaEmail, setSendViaEmail] = useState(true)
 
   const role = useRole()
   const pageSize = 10
@@ -65,6 +76,49 @@ export function AnamnesisTab({
   const cancelAnamnesis = useCancelAnamnesis()
   const finalizeAnamnesis = useFinalizeAnamnesis()
   const sendAnamnesis = useSendAnamnesis()
+
+  // Carrega o registro completo ao abrir o diff (list items não têm questionsSnapshot/staffAnswers/clientAnswers)
+  const { data: diffReqFull, isLoading: diffLoading } = useAnamnesisRequestById(diffReq?.id ?? null)
+
+  function openSendDialog(id: string, mode: 'blank' | 'prefilled') {
+    setSendingId(id)
+    setSendingMode(mode)
+    setDispatchMode('send')
+    setSendPhone(defaultPhone ?? '')
+    setSendPhoneValid(false)
+    setSendPhoneError('')
+    setSendEmail(defaultEmail ?? '')
+    setSendViaWhatsapp(Boolean(defaultPhone))
+    setSendViaEmail(Boolean(defaultEmail))
+  }
+
+  function resetSendDialog() {
+    setSendingId(null)
+    setSendPhone('')
+    setSendPhoneValid(false)
+    setSendPhoneError('')
+    setSendEmail('')
+    setSendViaWhatsapp(true)
+    setSendViaEmail(true)
+  }
+
+  function handleSendPhoneChange(e164: string, isValid: boolean) {
+    setSendPhone(e164)
+    setSendPhoneValid(isValid)
+    if (e164.replace(/\D/g, '').length > 2) {
+      setSendPhoneError(isValid ? '' : 'Número inválido — verifique o DDD e os dígitos')
+    } else {
+      setSendPhoneError('')
+    }
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const canSendNow = (() => {
+    if (!sendViaWhatsapp && !sendViaEmail) return false
+    if (sendViaWhatsapp && !sendPhoneValid) return false
+    if (sendViaEmail && !emailRegex.test(sendEmail.trim())) return false
+    return true
+  })()
 
   async function handleCancel(id: string) {
     try {
@@ -86,11 +140,13 @@ export function AnamnesisTab({
 
   async function handleSend(id: string) {
     try {
-      await sendAnamnesis.mutateAsync({ id, phone: sendPhone || undefined, email: sendEmail || undefined })
+      await sendAnamnesis.mutateAsync({
+        id,
+        phone: sendViaWhatsapp ? sendPhone : undefined,
+        email: sendViaEmail ? sendEmail.trim() : undefined,
+      })
       toast.success('Ficha enviada ao cliente.')
-      setSendingId(null)
-      setSendPhone('')
-      setSendEmail('')
+      resetSendDialog()
     } catch {
       toast.error('Erro ao enviar. Tente novamente.')
     }
@@ -207,7 +263,7 @@ export function AnamnesisTab({
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-[10px]"
-                    onClick={() => { setSendingId(req.id); setSendPhone(defaultPhone ?? ''); setSendEmail(defaultEmail ?? '') }}
+                    onClick={() => openSendDialog(req.id, req.mode)}
                   >
                     <Send className="h-3 w-3" />
                     Enviar ao cliente
@@ -255,55 +311,146 @@ export function AnamnesisTab({
         />
       )}
 
-      {/* Dialog de envio ao cliente */}
+      {/* Dialog "O que fazer com a ficha?" */}
       {sendingId && (
-        <Dialog open onClose={() => { setSendingId(null); setSendPhone(''); setSendEmail('') }}>
+        <Dialog open onClose={resetSendDialog}>
           <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
-            <DialogTitle className="mb-0 text-sm">Enviar ficha ao cliente</DialogTitle>
+            <DialogTitle className="mb-0 text-sm">O que fazer com a ficha?</DialogTitle>
+            <span className="text-[10px] text-muted-foreground">Etapa 2 de 2</span>
           </div>
-          <div className="p-4 space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Gere um link seguro e envie ao cliente via WhatsApp ou e-mail.
+          <div className="p-4 space-y-5">
+            <p className="text-sm text-muted-foreground">
+              Paciente: <strong>{customerName}</strong>
             </p>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">WhatsApp (opcional)</label>
-              <input
-                type="tel"
-                value={sendPhone}
-                onChange={(e) => setSendPhone(e.target.value)}
-                placeholder="+55 11 99999-9999"
-                className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">E-mail (opcional)</label>
-              <input
-                type="email"
-                value={sendEmail}
-                onChange={(e) => setSendEmail(e.target.value)}
-                placeholder="cliente@email.com"
-                className="w-full rounded-md border bg-background px-2 py-1.5 text-xs"
-              />
+            <div className="space-y-3">
+              {/* Enviar ao cliente agora */}
+              <label className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 transition-colors">
+                <input
+                  type="radio"
+                  name="tab-dispatch-mode"
+                  value="send"
+                  checked={dispatchMode === 'send'}
+                  onChange={() => setDispatchMode('send')}
+                  className="mt-0.5 shrink-0"
+                />
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">Enviar ao cliente agora</p>
+                  <p className="text-xs text-muted-foreground">Gera um link seguro e notifica via WhatsApp ou e-mail.</p>
+                </div>
+              </label>
+
+              {dispatchMode === 'send' && (
+                <div className="ml-6 space-y-3 rounded-lg border p-4">
+                  <p className="text-xs font-medium text-muted-foreground">Enviar por</p>
+
+                  {/* WhatsApp */}
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      id="tab-dispatch-whatsapp"
+                      checked={sendViaWhatsapp}
+                      onCheckedChange={(v) => setSendViaWhatsapp(Boolean(v))}
+                    />
+                    <label htmlFor="tab-dispatch-whatsapp" className="flex items-center gap-2 cursor-pointer select-none">
+                      <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
+                      <span className="text-sm font-medium">WhatsApp</span>
+                    </label>
+                  </div>
+                  {sendViaWhatsapp && (
+                    <div className="ml-7 space-y-1.5">
+                      <PhoneInput id="tab-dispatch-phone" value={sendPhone} onChange={handleSendPhoneChange} />
+                      {sendPhoneError && <p className="text-xs text-red-500">{sendPhoneError}</p>}
+                    </div>
+                  )}
+
+                  {/* E-mail */}
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      id="tab-dispatch-email"
+                      checked={sendViaEmail}
+                      onCheckedChange={(v) => setSendViaEmail(Boolean(v))}
+                    />
+                    <label htmlFor="tab-dispatch-email" className="flex items-center gap-2 cursor-pointer select-none">
+                      <Mail className="h-4 w-4 text-violet-600 shrink-0" />
+                      <span className="text-sm font-medium">E-mail</span>
+                    </label>
+                  </div>
+                  {sendViaEmail && (
+                    <div className="ml-7 space-y-1.5">
+                      <Label htmlFor="tab-dispatch-email-input">E-mail do cliente</Label>
+                      <Input
+                        id="tab-dispatch-email-input"
+                        type="email"
+                        placeholder="cliente@exemplo.com"
+                        value={sendEmail}
+                        onChange={(e) => setSendEmail(e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                  )}
+
+                  {!sendViaWhatsapp && !sendViaEmail && (
+                    <p className="text-xs text-red-500">Selecione ao menos um canal de envio.</p>
+                  )}
+
+                  <p className="text-xs text-muted-foreground pt-1">
+                    O link expira em 7 dias. Você pode reenviar depois se necessário.
+                  </p>
+                </div>
+              )}
+
+              {/* Salvar para enviar depois */}
+              <label
+                className={[
+                  'flex items-start gap-3 rounded-lg border p-3 transition-colors',
+                  sendingMode === 'blank'
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5',
+                ].join(' ')}
+              >
+                <input
+                  type="radio"
+                  name="tab-dispatch-mode"
+                  value="save"
+                  checked={dispatchMode === 'save'}
+                  onChange={() => setDispatchMode('save')}
+                  disabled={sendingMode === 'blank'}
+                  className="mt-0.5 shrink-0"
+                />
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">Salvar para enviar depois</p>
+                  <p className="text-xs text-muted-foreground">
+                    {sendingMode === 'blank'
+                      ? 'Disponível apenas no modo pré-preenchido.'
+                      : 'Mantém a ficha salva com status "Preenchida pela clínica".'}
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
           <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => { setSendingId(null); setSendPhone(''); setSendEmail('') }}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={resetSendDialog}>
               Cancelar
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void handleSend(sendingId)}
-              disabled={sendAnamnesis.isPending}
-            >
-              {sendAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-              Enviar
-            </Button>
+            {dispatchMode === 'send' ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void handleSend(sendingId)}
+                disabled={sendAnamnesis.isPending || !canSendNow}
+              >
+                {sendAnamnesis.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <Send className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Enviar ao cliente
+              </Button>
+            ) : (
+              <Button type="button" size="sm" onClick={() => { resetSendDialog(); toast.success('Ficha salva. Envie ao cliente quando quiser.') }}>
+                <Save className="h-3.5 w-3.5 mr-1.5" />
+                Salvar ficha
+              </Button>
+            )}
           </div>
         </Dialog>
       )}
@@ -347,12 +494,18 @@ export function AnamnesisTab({
             <DialogTitle className="mb-0 text-sm">Revisar respostas — {diffReq.groupName}</DialogTitle>
           </div>
           <div className="p-4 overflow-y-auto max-h-[70vh]">
-            <AnamnesisDiffViewer
-              anamnesisId={diffReq.id}
-              entries={buildDiffEntries(diffReq)}
-              onResolved={() => setDiffReq(null)}
-              onCancel={() => setDiffReq(null)}
-            />
+            {diffLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <AnamnesisDiffViewer
+                anamnesisId={diffReq.id}
+                entries={diffReqFull ? buildDiffEntries(diffReqFull) : []}
+                onResolved={() => setDiffReq(null)}
+                onCancel={() => setDiffReq(null)}
+              />
+            )}
           </div>
         </Dialog>
       )}
