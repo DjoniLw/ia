@@ -55,16 +55,18 @@ export type ResendAnamnesisDto = z.infer<typeof ResendAnamnesisDto>
 
 /** DTO para atualização das respostas da clínica em fichas clinic_filled */
 export const UpdateAnamnesisStaffAnswersDto = z.object({
-  staffAnswers: z.record(
-    z.string().max(100),
-    z.union([
-      z.string().max(10_000),
-      z.number(),
-      z.boolean(),
-      z.null(),
-      z.array(z.string().max(1_000)).max(100),
-    ]),
-  ).max(500),
+  staffAnswers: z
+    .record(
+      z.string().max(100),
+      z.union([
+        z.string().max(10_000),
+        z.number(),
+        z.boolean(),
+        z.null(),
+        z.array(z.string().max(1_000)).max(100),
+      ]),
+    )
+    .refine((obj) => Object.keys(obj).length <= 500, { message: 'Máximo de 500 campos excedido' }),
 })
 export type UpdateAnamnesisStaffAnswersDto = z.infer<typeof UpdateAnamnesisStaffAnswersDto>
 
