@@ -91,6 +91,9 @@ export function AnamnesisTab({
   // Carrega o registro completo (com questionsSnapshot) quando o dialog de edição abre
   const { data: editingReqFull, isLoading: editingLoading } = useAnamnesisRequestById(editingReq?.id ?? null)
 
+  // Carrega o registro completo para o diff viewer (list items não têm staffAnswers/clientAnswers)
+  const { data: diffReqFull, isLoading: diffReqLoading } = useAnamnesisRequestById(diffReq?.id ?? null)
+
   // Sincroniza respostas quando os dados completos carregam (list items não têm staffAnswers/clientAnswers)
   // Depende de editingReq?.id também para re-executar quando o mesmo registro é reaberto (cache hit)
   useEffect(() => {
@@ -785,12 +788,18 @@ export function AnamnesisTab({
             <DialogTitle className="mb-0 text-sm">Revisar respostas — {diffReq.groupName}</DialogTitle>
           </div>
           <div className="p-4 overflow-y-auto max-h-[70vh]">
-            <AnamnesisDiffViewer
-              anamnesisId={diffReq.id}
-              entries={buildDiffEntries(diffReq)}
-              onResolved={() => setDiffReq(null)}
-              onCancel={() => setDiffReq(null)}
-            />
+            {diffReqLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <AnamnesisDiffViewer
+                anamnesisId={diffReq.id}
+                entries={buildDiffEntries(diffReqFull ?? diffReq)}
+                onResolved={() => setDiffReq(null)}
+                onCancel={() => setDiffReq(null)}
+              />
+            )}
           </div>
         </Dialog>
       )}
