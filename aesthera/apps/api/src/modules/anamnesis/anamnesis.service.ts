@@ -14,6 +14,20 @@ import { AnamnesisRepository } from './anamnesis.repository'
 // RN10: token expira em 7 dias
 const TTL_DAYS = 7
 
+/** Compara respostas do cliente com respostas da clínica (modo prefilled).
+ *  Trata chaves ausentes como string vazia. Retorna true se idênticas. */
+function areAnswersIdentical(
+  staffAnswers: Record<string, unknown> | null,
+  clientAnswers: Record<string, unknown>,
+): boolean {
+  if (!staffAnswers) return false
+  const allKeys = new Set([...Object.keys(staffAnswers), ...Object.keys(clientAnswers)])
+  for (const key of allKeys) {
+    if (String(staffAnswers[key] ?? '') !== String(clientAnswers[key] ?? '')) return false
+  }
+  return true
+}
+
 /** SEC2 — select seguro para retorno da API (nunca vaza signToken, signatureUrl, consentText, ipAddress, userAgent) */
 const safeAnamnesisSelect = {
   id: true,
@@ -216,6 +230,16 @@ export class AnamnesisService {
       throw err
     })
 
+    // RN-NEW: modo prefilled sem alterações → assina direto; com alterações → aguarda revisão
+    const targetStatus: 'signed' | 'client_submitted' =
+      request.mode === 'prefilled' &&
+      areAnswersIdentical(
+        request.staffAnswers as Record<string, unknown> | null,
+        data.clientAnswers,
+      )
+        ? 'signed'
+        : 'client_submitted'
+
     const count = await this.repo.submitSignature(signToken, {
       clientAnswers: data.clientAnswers,
       signatureUrl: signatureStorageKey,
@@ -225,6 +249,7 @@ export class AnamnesisService {
       signedAt: now,
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
+      status: targetStatus,
     })
 
     if (count === 0) {
@@ -232,7 +257,7 @@ export class AnamnesisService {
       throw new ConflictError('Esta anamnese já foi assinada ou não está mais disponível.')
     }
 
-    logger.info({ clinicId: request.clinicId, requestId: request.id }, 'Anamnese assinada')
+    logger.info({ clinicId: request.clinicId, requestId: request.id, targetStatus }, 'Anamnese assinada')
 
     // RN21: Registrar auditLog da submissão pública (best-effort — não bloqueia resposta)
     prisma.auditLog.create({
@@ -245,16 +270,18 @@ export class AnamnesisService {
       },
     }).catch((err) => logger.error({ err, requestId: request.id }, 'Falha ao criar auditLog de submit'))
 
-    // Publicar evento para criação automática do prontuário
-    eventBus.publish(
-      createDomainEvent('anamnesis.signed', request.clinicId, {
-        anamnesisRequestId: request.id,
-        clinicId: request.clinicId,
-        customerId: request.customer.id,
-        groupName: request.groupName,
-        signedAt: now.toISOString(),
-      }),
-    )
+    // Publicar evento apenas se foi direto para assinado (prontuário criado automaticamente)
+    if (targetStatus === 'signed') {
+      eventBus.publish(
+        createDomainEvent('anamnesis.signed', request.clinicId, {
+          anamnesisRequestId: request.id,
+          clinicId: request.clinicId,
+          customerId: request.customer.id,
+          groupName: request.groupName,
+          signedAt: now.toISOString(),
+        }),
+      )
+    }
 
     return { success: true }
   }

@@ -306,6 +306,7 @@ export class AnamnesisRepository {
       signedAt: Date
       ipAddress: string | null
       userAgent: string | null
+      status: 'client_submitted' | 'signed'
     },
   ) {
     const result = await prisma.anamnesisRequest.updateMany({
@@ -323,7 +324,7 @@ export class AnamnesisRepository {
         signedAt: data.signedAt,
         ipAddress: data.ipAddress,
         userAgent: data.userAgent,
-        status: 'client_submitted',
+        status: data.status,
       },
     })
     return result.count
