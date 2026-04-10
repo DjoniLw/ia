@@ -378,7 +378,8 @@ export class AnamnesisService {
     if (existing.status !== 'clinic_filled') {
       throw new ValidationError('Apenas fichas com status "Preenchida pela clínica" podem ter respostas editadas.')
     }
-    return this.repo.updateStaffAnswers(clinicId, id, dto.staffAnswers)
+    logger.info({ action: 'anamnesis_staff_answers_updated', resourceId: id, clinicId }, 'Respostas da clínica atualizadas')
+    return this.repo.updateStaffAnswers(clinicId, id, dto.staffAnswers as Record<string, unknown>)
   }
 
   async requestCorrection(signToken: string) {

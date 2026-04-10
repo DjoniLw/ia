@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import { ArrowLeft, ChevronRight, Loader2, Mail, MessageCircle, Save, Send, X } from 'lucide-react'
@@ -78,7 +78,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
     setPhone(e164)
     setPhoneValid(isValid)
     if (e164.replace(/\D/g, '').length > 2) {
-      setPhoneError(isValid ? '' : 'NÃºmero invÃ¡lido â€” verifique o DDD e os dÃ­gitos')
+      setPhoneError(isValid ? '' : 'Número inválido — verifique o DDD e os dígitos')
     } else {
       setPhoneError('')
     }
@@ -102,7 +102,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
       onSuccess()
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setError(msg ?? 'Erro ao criar solicitaÃ§Ã£o. Tente novamente.')
+      setError(msg ?? 'Erro ao criar solicitação. Tente novamente.')
     }
   }
 
@@ -118,10 +118,10 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
         groupName: selectedGroup.name,
         questionsSnapshot: selectedGroup.questions.map((q) => ({ ...q })) as Record<string, unknown>[],
         staffAnswers: staffAnswers,
-        // sem phone/email â€” sem envio imediato
+        // sem phone/email — sem envio imediato
       })
       await finalizeAnamnesis.mutateAsync(anamnesis.id)
-      toast.success('Ficha salva. VocÃª pode enviÃ¡-la ao cliente a qualquer momento.')
+      toast.success('Ficha salva. Você pode enviá-la ao cliente a qualquer momento.')
       onSuccess()
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -144,14 +144,14 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
       <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
         <div className="flex items-center gap-2">
           {step === 'dispatch' && (
-            <button
-              type="button"
-              onClick={() => { setStep('create'); setError(null) }}
-              className="text-muted-foreground hover:text-foreground"
+            <Button
+              variant="ghost"
+              size="icon"
               aria-label="Voltar"
+              onClick={() => { setStep('create'); setError(null) }}
             >
               <ArrowLeft className="h-4 w-4" />
-            </button>
+            </Button>
           )}
           <DialogTitle className="mb-0 text-sm">
             {step === 'create' ? 'Nova ficha de anamnese' : 'O que fazer com a ficha?'}
@@ -177,7 +177,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
         ) : !groups?.length ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             Nenhum grupo de anamnese configurado. Configure em{' '}
-            <strong>ConfiguraÃ§Ãµes â†’ Anamnese</strong>.
+            <strong>Configurações → Anamnese</strong>
           </p>
         ) : step === 'create' ? (
           /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -227,7 +227,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                         : 'bg-background text-muted-foreground hover:bg-muted/50',
                     ].join(' ')}
                   >
-                    {m === 'blank' ? 'Paciente preenche' : 'PrÃ©-preenchido pela clÃ­nica'}
+                    {m === 'blank' ? 'Paciente preenche' : 'Pré-preenchido pela clínica'}
                   </button>
                 ))}
               </div>
@@ -273,7 +273,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
             {/* Canais de envio â€” visÃ­veis apenas quando dispatchMode = send */}
             {dispatchMode === 'send' && (
               <div className="ml-6 space-y-3 rounded-lg border p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Enviar por</p>
+                <p className="text-xs font-medium text-muted-foreground">Enviar por</p>
 
                 {/* WhatsApp */}
                 <div className="flex items-center gap-3">
@@ -331,7 +331,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                 )}
 
                 <p className="text-xs text-muted-foreground pt-1">
-                  O link expira em 7 dias. VocÃª pode reenviar depois se necessÃ¡rio.
+                  O link expira em 7 dias. Você pode reenviar depois se necessário.
                 </p>
               </div>
             )}
@@ -342,7 +342,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                 'flex items-start gap-3 rounded-lg border p-3 transition-colors',
                 mode === 'blank' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5',
               ].join(' ')}
-              title={mode === 'blank' ? 'NÃ£o Ã© possÃ­vel salvar uma ficha em branco sem enviar ao cliente.' : undefined}
+              title={mode === 'blank' ? 'Não é possível salvar uma ficha em branco sem enviar ao cliente.' : undefined}
             >
               <input
                 type="radio"
@@ -357,8 +357,8 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                 <p className="text-sm font-medium">Salvar para enviar depois</p>
                 <p className="text-xs text-muted-foreground">
                   {mode === 'blank'
-                    ? 'DisponÃ­vel apenas no modo prÃ©-preenchido.'
-                    : 'MantÃ©m a ficha salva com status "Preenchida pela clÃ­nica".'}
+                    ? 'Disponível apenas no modo pré-preenchido.'
+                    : 'Mantém a ficha salva com status "Preenchida pela clínica".'}
                 </p>
               </div>
             </label>
@@ -374,7 +374,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
       {groups && groups.length > 0 && (
         <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-between gap-2 rounded-b-xl">
           <Button variant="outline" size="sm" onClick={step === 'create' ? onClose : handleReset} disabled={isPending}>
-            {step === 'create' ? 'Cancelar' : 'RecomeÃ§ar'}
+            {step === 'create' ? 'Cancelar' : 'Recomeçar'}
           </Button>
           <div className="flex gap-2">
             {step === 'create' ? (
@@ -383,7 +383,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                 onClick={() => setStep('dispatch')}
                 disabled={!isStepOneValid}
               >
-                AvanÃ§ar
+                Avançar
                 <ChevronRight className="h-3.5 w-3.5 ml-1" />
               </Button>
             ) : dispatchMode === 'send' ? (

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Ban, ClipboardList, Eye, Loader2, Pencil, Plus, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { DataPagination } from '@/components/ui/data-pagination'
 import {
   type AnamnesisRequest,
@@ -51,6 +52,7 @@ export function AnamnesisTab({
   const [diffReq, setDiffReq] = useState<AnamnesisRequest | null>(null)
   const [editingReq, setEditingReq] = useState<AnamnesisRequest | null>(null)
   const [editAnswers, setEditAnswers] = useState<Record<string, string>>({})
+  const [editDirty, setEditDirty] = useState(false)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
@@ -98,6 +100,7 @@ export function AnamnesisTab({
       toast.success('Respostas atualizadas.')
       setEditingReq(null)
       setEditAnswers({})
+      setEditDirty(false)
     } catch {
       toast.error('Erro ao salvar. Tente novamente.')
     }
@@ -230,6 +233,7 @@ export function AnamnesisTab({
                     onClick={() => {
                       setEditingReq(req)
                       setEditAnswers((req.staffAnswers ?? {}) as Record<string, string>)
+                      setEditDirty(false)
                     }}
                   >
                     <Pencil className="h-3 w-3" />
@@ -378,7 +382,7 @@ export function AnamnesisTab({
 
       {/* Dialog de edição de respostas — clinic_filled */}
       {editingReq && (
-        <Dialog open onClose={() => { setEditingReq(null); setEditAnswers({}) }}>
+        <Dialog open onClose={() => { setEditingReq(null); setEditAnswers({}); setEditDirty(false) }} isDirty={editDirty}>
           <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
             <DialogTitle className="mb-0 text-sm">Editar respostas — {editingReq.groupName}</DialogTitle>
           </div>
@@ -403,8 +407,7 @@ export function AnamnesisTab({
                             <button
                               key={opt}
                               type="button"
-                              onClick={() => setEditAnswers((p) => ({ ...p, [q.id]: opt }))}
-                              className={[
+                              onClick={() => { setEditDirty(true); setEditAnswers((p) => ({ ...p, [q.id]: opt })) }}                              className={[
                                 'rounded-full px-3 py-1 text-xs border transition-colors',
                                 editAnswers[q.id] === opt
                                   ? 'bg-primary text-primary-foreground border-primary'
@@ -419,19 +422,20 @@ export function AnamnesisTab({
                         <div className="space-y-1">
                           {(q.options ?? []).map((opt, idx) => (
                             <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                              <input
-                                type="checkbox"
+                              <Checkbox
+                                id={`edit-q-${q.id}-${opt}`}
                                 checked={(editAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(opt)}
-                                onChange={(e) => {
+                                onCheckedChange={(checked) => {
                                   const current = (editAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-                                  const next = e.target.checked ? [...current, opt] : current.filter((s) => s !== opt)
+                                  const next = checked ? [...current, opt] : current.filter((s) => s !== opt)
+                                  setEditDirty(true)
                                   setEditAnswers((p) => ({ ...p, [q.id]: next.join(', ') }))
                                 }}
                               />
                               {(q.optionImages ?? [])[idx] && (
                                 <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
                               )}
-                              {opt}
+                              <label htmlFor={`edit-q-${q.id}-${opt}`} className="text-sm cursor-pointer">{opt}</label>
                             </label>
                           ))}
                         </div>
@@ -445,8 +449,7 @@ export function AnamnesisTab({
                                   name={`edit-select-${q.id}`}
                                   value={opt.label}
                                   checked={editAnswers[q.id] === opt.label}
-                                  onChange={() => setEditAnswers((p) => ({ ...p, [q.id]: opt.label }))}
-                                />
+                                  onChange={() => { setEditDirty(true); setEditAnswers((p) => ({ ...p, [q.id]: opt.label })) }}                                />
                                 {opt.imageUrl && (
                                   <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
                                 )}
@@ -455,7 +458,7 @@ export function AnamnesisTab({
                               {opt.withDescription && editAnswers[q.id] === opt.label && (
                                 <textarea
                                   value={editAnswers[q.id + '__desc'] ?? ''}
-                                  onChange={(e) => setEditAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value }))}
+                                  onChange={(e) => { setEditDirty(true); setEditAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value })) }}
                                   rows={2}
                                   placeholder="Descreva…"
                                   className="ml-6 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 py-1 text-sm resize-none"
@@ -468,7 +471,7 @@ export function AnamnesisTab({
                         <input
                           type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
                           value={editAnswers[q.id] ?? ''}
-                          onChange={(e) => setEditAnswers((p) => ({ ...p, [q.id]: e.target.value }))}
+                          onChange={(e) => { setEditDirty(true); setEditAnswers((p) => ({ ...p, [q.id]: e.target.value })) }}
                           className="w-full rounded-md border bg-background px-2 py-2 text-sm"
                         />
                       )}
@@ -482,7 +485,7 @@ export function AnamnesisTab({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => { setEditingReq(null); setEditAnswers({}) }}
+              onClick={() => { setEditingReq(null); setEditAnswers({}); setEditDirty(false) }}
             >
               Cancelar
             </Button>
