@@ -9,6 +9,7 @@ import {
   ResendAnamnesisDto,
   ResolveDiffSchema,
   SendAnamnesisDto,
+  UpdateAnamnesisStaffAnswersDto,
 } from './anamnesis.dto'
 import { AnamnesisService } from './anamnesis.service'
 
@@ -123,6 +124,20 @@ export async function anamnesisRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string }
       const dto = SendAnamnesisDto.parse(req.body)
       return reply.send(await svc.sendToClient(req.clinicId, id, dto))
+    },
+  )
+
+  /**
+   * PATCH /anamnesis-requests/:id
+   * Atualiza as respostas da clínica em fichas com status clinic_filled.
+   */
+  app.patch(
+    '/anamnesis-requests/:id',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const dto = UpdateAnamnesisStaffAnswersDto.parse(req.body)
+      return reply.send(await svc.updateStaffAnswers(req.clinicId, id, dto))
     },
   )
 

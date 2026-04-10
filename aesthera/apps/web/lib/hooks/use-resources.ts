@@ -1011,6 +1011,15 @@ export function useCreateAnamnesisRequest() {
   })
 }
 
+export function useUpdateAnamnesisRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, staffAnswers }: { id: string; staffAnswers: Record<string, unknown> }) =>
+      api.patch(`/anamnesis-requests/${id}`, { staffAnswers }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
 export function useResendAnamnesis() {
   const qc = useQueryClient()
   return useMutation({

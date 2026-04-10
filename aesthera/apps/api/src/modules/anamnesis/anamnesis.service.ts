@@ -8,7 +8,7 @@ import { createDomainEvent } from '../../shared/events/domain-event'
 import { eventBus } from '../../shared/events/event-bus'
 import { logger } from '../../shared/logger/logger'
 import { NotificationsService } from '../notifications/notifications.service'
-import type { CreateAnamnesisRequestDto, ListAnamnesisRequestsQuery, ResendAnamnesisDto, ResolveDiffDto } from './anamnesis.dto'
+import type { CreateAnamnesisRequestDto, ListAnamnesisRequestsQuery, ResendAnamnesisDto, ResolveDiffDto, UpdateAnamnesisStaffAnswersDto } from './anamnesis.dto'
 import { AnamnesisRepository } from './anamnesis.repository'
 
 // RN10: token expira em 7 dias
@@ -369,6 +369,16 @@ export class AnamnesisService {
 
     logger.info({ clinicId, requestId: id }, 'Anamnese resolve-diff concluído')
     return result
+  }
+
+  /** Atualiza respostas da clínica em fichas com status clinic_filled. */
+  async updateStaffAnswers(clinicId: string, id: string, dto: UpdateAnamnesisStaffAnswersDto) {
+    const existing = await this.repo.findById(clinicId, id)
+    if (!existing) throw new NotFoundError('AnamnesisRequest')
+    if (existing.status !== 'clinic_filled') {
+      throw new ValidationError('Apenas fichas com status "Preenchida pela clínica" podem ter respostas editadas.')
+    }
+    return this.repo.updateStaffAnswers(clinicId, id, dto.staffAnswers)
   }
 
   async requestCorrection(signToken: string) {

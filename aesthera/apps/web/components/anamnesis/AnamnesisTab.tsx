@@ -1,17 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { Ban, ClipboardList, Eye, Loader2, Plus, Send } from 'lucide-react'
+import { Ban, ClipboardList, Eye, Loader2, Pencil, Plus, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { DataPagination } from '@/components/ui/data-pagination'
 import {
   type AnamnesisRequest,
   type AnamnesisRequestStatus,
+  useAnamnesisRequestById,
   useAnamnesisRequests,
   useCancelAnamnesis,
   useFinalizeAnamnesis,
   useSendAnamnesis,
+  useUpdateAnamnesisRequest,
 } from '@/lib/hooks/use-resources'
 import { ANAMNESIS_STATUS_COLORS, ANAMNESIS_STATUS_LABEL } from '@/lib/status-colors'
 import { useRole } from '@/lib/hooks/use-role'
@@ -47,6 +49,8 @@ export function AnamnesisTab({
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<AnamnesisRequestStatus | ''>('')
   const [diffReq, setDiffReq] = useState<AnamnesisRequest | null>(null)
+  const [editingReq, setEditingReq] = useState<AnamnesisRequest | null>(null)
+  const [editAnswers, setEditAnswers] = useState<Record<string, string>>({})
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
@@ -65,6 +69,10 @@ export function AnamnesisTab({
   const cancelAnamnesis = useCancelAnamnesis()
   const finalizeAnamnesis = useFinalizeAnamnesis()
   const sendAnamnesis = useSendAnamnesis()
+  const updateAnamnesis = useUpdateAnamnesisRequest()
+
+  // Carrega o registro completo (com questionsSnapshot) quando o dialog de edição abre
+  const { data: editingReqFull, isLoading: editingLoading } = useAnamnesisRequestById(editingReq?.id ?? null)
 
   async function handleCancel(id: string) {
     try {
@@ -81,6 +89,17 @@ export function AnamnesisTab({
       toast.success('Ficha finalizada.')
     } catch {
       toast.error('Erro ao finalizar. Tente novamente.')
+    }
+  }
+
+  async function handleSaveEdit(id: string) {
+    try {
+      await updateAnamnesis.mutateAsync({ id, staffAnswers: editAnswers as Record<string, unknown> })
+      toast.success('Respostas atualizadas.')
+      setEditingReq(null)
+      setEditAnswers({})
+    } catch {
+      toast.error('Erro ao salvar. Tente novamente.')
     }
   }
 
@@ -171,6 +190,7 @@ export function AnamnesisTab({
                     'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
                     ANAMNESIS_STATUS_COLORS[req.status] ?? 'bg-muted text-muted-foreground',
                   ].join(' ')}
+                  title={req.status === 'clinic_filled' ? 'Aguardando envio ao cliente para assinatura' : undefined}
                 >
                   {ANAMNESIS_STATUS_LABEL[req.status] ?? req.status}
                 </span>
@@ -198,6 +218,22 @@ export function AnamnesisTab({
                     onClick={() => void handleFinalize(req.id)}
                   >
                     Finalizar rascunho
+                  </Button>
+                )}
+
+                {/* Editar respostas — apenas clinic_filled */}
+                {req.status === 'clinic_filled' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => {
+                      setEditingReq(req)
+                      setEditAnswers((req.staffAnswers ?? {}) as Record<string, string>)
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Editar
                   </Button>
                 )}
 
@@ -335,6 +371,129 @@ export function AnamnesisTab({
             >
               {cancelAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
               Confirmar cancelamento
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog de edição de respostas — clinic_filled */}
+      {editingReq && (
+        <Dialog open onClose={() => { setEditingReq(null); setEditAnswers({}) }}>
+          <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+            <DialogTitle className="mb-0 text-sm">Editar respostas — {editingReq.groupName}</DialogTitle>
+          </div>
+          <div className="p-4 overflow-y-auto max-h-[65vh]">
+            {editingLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {((editingReqFull?.questionsSnapshot ?? []) as Array<{ id: string; text: string; type: string; required?: boolean; options?: string[]; optionImages?: string[]; selectOptions?: Array<{ label: string; imageUrl?: string; withDescription?: boolean }> }>)
+                  .filter((q) => q.type !== 'separator')
+                  .map((q) => (
+                    <div key={q.id} className="space-y-1.5">
+                      <label className="text-xs font-medium">
+                        {q.text}
+                        {q.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      {q.type === 'yesno' ? (
+                        <div className="flex gap-2">
+                          {['Sim', 'Não'].map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => setEditAnswers((p) => ({ ...p, [q.id]: opt }))}
+                              className={[
+                                'rounded-full px-3 py-1 text-xs border transition-colors',
+                                editAnswers[q.id] === opt
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-background hover:bg-muted/50',
+                              ].join(' ')}
+                            >
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      ) : q.type === 'multiple' && q.options ? (
+                        <div className="space-y-1">
+                          {(q.options ?? []).map((opt, idx) => (
+                            <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={(editAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(opt)}
+                                onChange={(e) => {
+                                  const current = (editAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+                                  const next = e.target.checked ? [...current, opt] : current.filter((s) => s !== opt)
+                                  setEditAnswers((p) => ({ ...p, [q.id]: next.join(', ') }))
+                                }}
+                              />
+                              {(q.optionImages ?? [])[idx] && (
+                                <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                              )}
+                              {opt}
+                            </label>
+                          ))}
+                        </div>
+                      ) : q.type === 'select' ? (
+                        <div className="space-y-2">
+                          {(q.selectOptions ?? []).map((opt) => (
+                            <div key={opt.label} className="space-y-1">
+                              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`edit-select-${q.id}`}
+                                  value={opt.label}
+                                  checked={editAnswers[q.id] === opt.label}
+                                  onChange={() => setEditAnswers((p) => ({ ...p, [q.id]: opt.label }))}
+                                />
+                                {opt.imageUrl && (
+                                  <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                                )}
+                                {opt.label}
+                              </label>
+                              {opt.withDescription && editAnswers[q.id] === opt.label && (
+                                <textarea
+                                  value={editAnswers[q.id + '__desc'] ?? ''}
+                                  onChange={(e) => setEditAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value }))}
+                                  rows={2}
+                                  placeholder="Descreva…"
+                                  className="ml-6 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 py-1 text-sm resize-none"
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <input
+                          type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
+                          value={editAnswers[q.id] ?? ''}
+                          onChange={(e) => setEditAnswers((p) => ({ ...p, [q.id]: e.target.value }))}
+                          className="w-full rounded-md border bg-background px-2 py-2 text-sm"
+                        />
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => { setEditingReq(null); setEditAnswers({}) }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={updateAnamnesis.isPending || editingLoading}
+              onClick={() => void handleSaveEdit(editingReq.id)}
+            >
+              {updateAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Salvar alterações
             </Button>
           </div>
         </Dialog>

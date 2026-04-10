@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
-import { Loader2, Mail, MessageCircle, Send, X } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Loader2, Mail, MessageCircle, Save, Send } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -9,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { useAnamnesisGroups, type AnamnesisQuestion } from '@/lib/hooks/use-settings'
-import { useCreateAnamnesisRequest } from '@/lib/hooks/use-resources'
+import { useCreateAnamnesisRequest, useFinalizeAnamnesis } from '@/lib/hooks/use-resources'
 
 interface Props {
   customerId: string
@@ -23,11 +24,16 @@ interface Props {
 export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, defaultEmail, onClose, onSuccess }: Props) {
   const { data: groups, isLoading: groupsLoading } = useAnamnesisGroups()
 
+  // â”€â”€ Etapa â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const [step, setStep] = useState<'create' | 'dispatch'>('create')
+
+  // â”€â”€ Etapa 1 â€” criar ficha â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   const [mode, setMode] = useState<'blank' | 'prefilled'>('blank')
   const [staffAnswers, setStaffAnswers] = useState<Record<string, string>>({})
 
-  // ── Canais de envio (mesmo padrão do contrato) ─────────────────────────────
+  // â”€â”€ Etapa 2 â€” destino â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const [dispatchMode, setDispatchMode] = useState<'send' | 'save'>('send')
   const [sendViaWhatsapp, setSendViaWhatsapp] = useState(true)
   const [sendViaEmail, setSendViaEmail] = useState(true)
   const [phone, setPhone] = useState(defaultPhone ?? '')
@@ -36,7 +42,6 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
   const [email, setEmail] = useState(defaultEmail ?? '')
 
   const [error, setError] = useState<string | null>(null)
-  const [showPrefillForm, setShowPrefillForm] = useState(false)
 
   const selectedGroup = groups?.find((g) => g.id === selectedGroupId) ?? groups?.[0] ?? null
   const questions = (selectedGroup?.questions ?? []).filter(
@@ -44,19 +49,21 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
   )
 
   const createRequest = useCreateAnamnesisRequest()
+  const finalizeAnamnesis = useFinalizeAnamnesis()
+
+  const isPending = createRequest.isPending || finalizeAnamnesis.isPending
+
+  // â”€â”€ ValidaÃ§Ãµes Etapa 1 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const requiredUnanswered = questions.filter(
+    (q) => q.required && (staffAnswers[q.id] ?? '').toString().trim() === '',
+  )
+  const isStepOneValid = Boolean(
+    selectedGroup && (mode === 'blank' || (mode === 'prefilled' && requiredUnanswered.length === 0)),
+  )
 
   const answeredCount = questions.filter((q) => (staffAnswers[q.id] ?? '').toString().trim() !== '').length
 
-  function handlePhoneChange(e164: string, isValid: boolean) {
-    setPhone(e164)
-    setPhoneValid(isValid)
-    if (e164.replace(/\D/g, '').length > 2) {
-      setPhoneError(isValid ? '' : 'Número inválido — verifique o DDD e os dígitos')
-    } else {
-      setPhoneError('')
-    }
-  }
-
+  // â”€â”€ ValidaÃ§Ãµes Etapa 2 (envio) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   const canSend = (() => {
     if (!selectedGroup) return false
@@ -66,6 +73,17 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
     return true
   })()
 
+  function handlePhoneChange(e164: string, isValid: boolean) {
+    setPhone(e164)
+    setPhoneValid(isValid)
+    if (e164.replace(/\D/g, '').length > 2) {
+      setPhoneError(isValid ? '' : 'NÃºmero invÃ¡lido â€” verifique o DDD e os dÃ­gitos')
+    } else {
+      setPhoneError('')
+    }
+  }
+
+  // â”€â”€ AÃ§Ã£o: enviar ao cliente â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function handleSend() {
     if (!selectedGroup || !canSend) return
     setError(null)
@@ -83,19 +101,69 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
       onSuccess()
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setError(msg ?? 'Erro ao criar solicitação. Tente novamente.')
+      setError(msg ?? 'Erro ao criar solicitaÃ§Ã£o. Tente novamente.')
     }
   }
 
-  const isPending = createRequest.isPending
+  // â”€â”€ AÃ§Ã£o: salvar sem enviar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  async function handleSave() {
+    if (!selectedGroup) return
+    setError(null)
+    try {
+      const anamnesis = await createRequest.mutateAsync({
+        customerId,
+        mode: 'prefilled',
+        groupId: selectedGroup.id,
+        groupName: selectedGroup.name,
+        questionsSnapshot: selectedGroup.questions.map((q) => ({ ...q })) as Record<string, unknown>[],
+        staffAnswers: staffAnswers,
+        // sem phone/email â€” sem envio imediato
+      })
+      await finalizeAnamnesis.mutateAsync(anamnesis.id)
+      toast.success('Ficha salva. VocÃª pode enviÃ¡-la ao cliente a qualquer momento.')
+      onSuccess()
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setError(msg ?? 'Erro ao salvar ficha. Tente novamente.')
+    }
+  }
+
+  function handleReset() {
+    setStep('create')
+    setSelectedGroupId('')
+    setMode('blank')
+    setStaffAnswers({})
+    setDispatchMode('send')
+    setError(null)
+  }
 
   return (
-    <>
     <Dialog open onClose={onClose}>
-      <DialogTitle>Enviar Anamnese</DialogTitle>
-      <div className="space-y-5 mt-4">
+      <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+        <div className="flex items-center gap-2">
+          {step === 'dispatch' && (
+            <button
+              type="button"
+              onClick={() => { setStep('create'); setError(null) }}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Voltar"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
+          <DialogTitle className="mb-0 text-sm">
+            {step === 'create' ? 'Nova ficha de anamnese' : 'O que fazer com a ficha?'}
+          </DialogTitle>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Indicador de etapa */}
+          <span className="text-[10px] text-muted-foreground">
+            Etapa {step === 'create' ? '1' : '2'} de 2
+          </span>
+        </div>
+      </div>
 
-        {/* Customer info */}
+      <div className="p-4 space-y-5">
         <p className="text-sm text-muted-foreground">
           Paciente: <strong>{customerName}</strong>
         </p>
@@ -107,9 +175,12 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
         ) : !groups?.length ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             Nenhum grupo de anamnese configurado. Configure em{' '}
-            <strong>Configurações → Anamnese</strong>.
+            <strong>ConfiguraÃ§Ãµes â†’ Anamnese</strong>.
           </p>
-        ) : (
+        ) : step === 'create' ? (
+          /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+             ETAPA 1 â€” Criar ficha
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
           <>
             {/* Grupo */}
             {groups.length > 1 && (
@@ -154,242 +225,288 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                         : 'bg-background text-muted-foreground hover:bg-muted/50',
                     ].join(' ')}
                   >
-                    {m === 'blank' ? 'Paciente preenche' : 'Pré-preenchido'}
+                    {m === 'blank' ? 'Paciente preenche' : 'PrÃ©-preenchido pela clÃ­nica'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Pré-preenchimento — abre modal separado */}
+            {/* FormulÃ¡rio de prÃ©-preenchimento â€” inline, sem scroll aninhado */}
             {mode === 'prefilled' && questions.length > 0 && (
-              <div className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2.5">
-                <div>
-                  <p className="text-xs font-medium">Respostas pré-preenchidas</p>
+              <div className="space-y-4 rounded-lg border bg-muted/10 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium">
+                    Respostas da clÃ­nica
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    {answeredCount} de {questions.length} pergunta{questions.length !== 1 ? 's' : ''} respondida{questions.length !== 1 ? 's' : ''}
+                    {answeredCount}/{questions.length} respondida{questions.length !== 1 ? 's' : ''}
                   </p>
                 </div>
-                <Button size="sm" variant="outline" type="button" onClick={() => setShowPrefillForm(true)}>
-                  Preencher respostas
-                </Button>
+                {questions.map((q) => (
+                  <div key={q.id} className="space-y-1.5">
+                    <label className="text-xs font-medium">
+                      {q.text}
+                      {q.required && <span className="text-red-500 ml-0.5">*</span>}
+                    </label>
+                    {q.type === 'yesno' ? (
+                      <div className="flex gap-2">
+                        {['Sim', 'NÃ£o'].map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setStaffAnswers((p) => ({ ...p, [q.id]: opt }))}
+                            className={[
+                              'rounded-full px-3 py-1 text-xs border transition-colors',
+                              staffAnswers[q.id] === opt
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-background hover:bg-muted/50',
+                            ].join(' ')}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    ) : q.type === 'multiple' && q.options ? (
+                      <div className="space-y-1">
+                        {(q.options ?? []).map((opt, idx) => (
+                          <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(opt)}
+                              onChange={(e) => {
+                                const current = (staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+                                const next = e.target.checked ? [...current, opt] : current.filter((s) => s !== opt)
+                                setStaffAnswers((p) => ({ ...p, [q.id]: next.join(', ') }))
+                              }}
+                            />
+                            {(q.optionImages ?? [])[idx] && (
+                              <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                            )}
+                            {opt}
+                          </label>
+                        ))}
+                        {(q.options ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                        )}
+                      </div>
+                    ) : q.type === 'select' ? (
+                      <div className="space-y-2">
+                        {(q.selectOptions ?? []).map((opt) => (
+                          <div key={opt.label} className="space-y-1">
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`prefill-select-${q.id}`}
+                                value={opt.label}
+                                checked={staffAnswers[q.id] === opt.label}
+                                onChange={() => {
+                                  setStaffAnswers((p) => {
+                                    const next = { ...p, [q.id]: opt.label }
+                                    if (!opt.withDescription) delete next[q.id + '__desc']
+                                    return next
+                                  })
+                                }}
+                              />
+                              {opt.imageUrl && (
+                                <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
+                              )}
+                              {opt.label}
+                            </label>
+                            {opt.withDescription && staffAnswers[q.id] === opt.label && (
+                              <textarea
+                                value={staffAnswers[q.id + '__desc'] ?? ''}
+                                onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value }))}
+                                rows={2}
+                                placeholder="Descrevaâ€¦"
+                                className="ml-6 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 py-1 text-sm resize-none"
+                              />
+                            )}
+                          </div>
+                        ))}
+                        {(q.selectOptions ?? []).length === 0 && (
+                          <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <input
+                        type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
+                        value={staffAnswers[q.id] ?? ''}
+                        onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id]: e.target.value }))}
+                        className="w-full rounded-md border bg-background px-2 py-2 text-sm"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+             ETAPA 2 â€” O que fazer com a ficha?
+          â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+          <div className="space-y-3">
+            {/* OpÃ§Ã£o: Enviar ao cliente agora */}
+            <label className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5 transition-colors">
+              <input
+                type="radio"
+                name="dispatchMode"
+                value="send"
+                checked={dispatchMode === 'send'}
+                onChange={() => setDispatchMode('send')}
+                className="mt-0.5 shrink-0"
+              />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Enviar ao cliente agora</p>
+                <p className="text-xs text-muted-foreground">Gera um link seguro e notifica via WhatsApp ou e-mail.</p>
+              </div>
+            </label>
+
+            {/* Canais de envio â€” visÃ­veis apenas quando dispatchMode = send */}
+            {dispatchMode === 'send' && (
+              <div className="ml-6 space-y-3 rounded-lg border p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Enviar por</p>
+
+                {/* WhatsApp */}
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="anamnesis-send-via-whatsapp"
+                    checked={sendViaWhatsapp}
+                    onCheckedChange={setSendViaWhatsapp}
+                  />
+                  <label htmlFor="anamnesis-send-via-whatsapp" className="flex items-center gap-2 cursor-pointer select-none">
+                    <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
+                    <span className="text-sm font-medium">WhatsApp</span>
+                  </label>
+                </div>
+                {sendViaWhatsapp && (
+                  <div className="ml-7 space-y-1.5">
+                    <PhoneInput
+                      id="anamnesis-send-phone"
+                      value={phone}
+                      onChange={handlePhoneChange}
+                    />
+                    {phoneError && (
+                      <p className="text-xs text-red-500">{phoneError}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* E-mail */}
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    id="anamnesis-send-via-email"
+                    checked={sendViaEmail}
+                    onCheckedChange={setSendViaEmail}
+                  />
+                  <label htmlFor="anamnesis-send-via-email" className="flex items-center gap-2 cursor-pointer select-none">
+                    <Mail className="h-4 w-4 text-violet-600 shrink-0" />
+                    <span className="text-sm font-medium">E-mail</span>
+                  </label>
+                </div>
+                {sendViaEmail && (
+                  <div className="ml-7 space-y-1.5">
+                    <Label htmlFor="anamnesis-send-email">E-mail do cliente</Label>
+                    <Input
+                      id="anamnesis-send-email"
+                      type="email"
+                      placeholder="cliente@exemplo.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                )}
+
+                {!sendViaWhatsapp && !sendViaEmail && (
+                  <p className="text-xs text-red-500">Selecione ao menos um canal de envio.</p>
+                )}
+
+                <p className="text-xs text-muted-foreground pt-1">
+                  O link expira em 7 dias. VocÃª pode reenviar depois se necessÃ¡rio.
+                </p>
               </div>
             )}
 
-            {/* Canal de envio (mesmo padrão do contrato) */}
-            <div className="space-y-3 rounded-lg border p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Enviar por</p>
-
-              {/* WhatsApp */}
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="anamnesis-send-via-whatsapp"
-                  checked={sendViaWhatsapp}
-                  onCheckedChange={setSendViaWhatsapp}
-                />
-                <label htmlFor="anamnesis-send-via-whatsapp" className="flex items-center gap-2 cursor-pointer select-none">
-                  <MessageCircle className="h-4 w-4 text-green-600 shrink-0" />
-                  <span className="text-sm font-medium">WhatsApp</span>
-                </label>
+            {/* OpÃ§Ã£o: Salvar para enviar depois */}
+            <label
+              className={[
+                'flex items-start gap-3 rounded-lg border p-3 transition-colors',
+                mode === 'blank' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5',
+              ].join(' ')}
+              title={mode === 'blank' ? 'NÃ£o Ã© possÃ­vel salvar uma ficha em branco sem enviar ao cliente.' : undefined}
+            >
+              <input
+                type="radio"
+                name="dispatchMode"
+                value="save"
+                checked={dispatchMode === 'save'}
+                onChange={() => setDispatchMode('save')}
+                disabled={mode === 'blank'}
+                className="mt-0.5 shrink-0"
+              />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Salvar para enviar depois</p>
+                <p className="text-xs text-muted-foreground">
+                  {mode === 'blank'
+                    ? 'DisponÃ­vel apenas no modo prÃ©-preenchido.'
+                    : 'MantÃ©m a ficha salva com status "Preenchida pela clÃ­nica".'}
+                </p>
               </div>
-
-              {sendViaWhatsapp && (
-                <div className="ml-7 space-y-1.5">
-                  <PhoneInput
-                    id="anamnesis-send-phone"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                  />
-                  {phoneError && (
-                    <p className="text-xs text-red-500">{phoneError}</p>
-                  )}
-                </div>
-              )}
-
-              {/* E-mail */}
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id="anamnesis-send-via-email"
-                  checked={sendViaEmail}
-                  onCheckedChange={setSendViaEmail}
-                />
-                <label htmlFor="anamnesis-send-via-email" className="flex items-center gap-2 cursor-pointer select-none">
-                  <Mail className="h-4 w-4 text-violet-600 shrink-0" />
-                  <span className="text-sm font-medium">E-mail</span>
-                </label>
-              </div>
-
-              {sendViaEmail && (
-                <div className="ml-7 space-y-1.5">
-                  <Label htmlFor="anamnesis-send-email">E-mail do cliente</Label>
-                  <Input
-                    id="anamnesis-send-email"
-                    type="email"
-                    placeholder="cliente@exemplo.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-9 text-sm"
-                  />
-                </div>
-              )}
-
-              {!sendViaWhatsapp && !sendViaEmail && (
-                <p className="text-xs text-red-500">Selecione ao menos um canal de envio.</p>
-              )}
-
-              <p className="text-xs text-muted-foreground pt-1">
-                O link expira em 7 dias. Você pode reenviar depois se necessário.
-              </p>
-            </div>
+            </label>
 
             {error && (
               <p className="text-xs text-red-500">{error}</p>
             )}
+          </div>
+        )}
+      </div>
 
-            {/* Ações */}
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" size="sm" onClick={onClose} disabled={isPending}>
-                Cancelar
+      {/* â”€â”€ RodapÃ© com aÃ§Ãµes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {groups && groups.length > 0 && (
+        <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-between gap-2 rounded-b-xl">
+          <Button variant="outline" size="sm" onClick={step === 'create' ? onClose : handleReset} disabled={isPending}>
+            {step === 'create' ? 'Cancelar' : 'RecomeÃ§ar'}
+          </Button>
+          <div className="flex gap-2">
+            {step === 'create' ? (
+              <Button
+                size="sm"
+                onClick={() => setStep('dispatch')}
+                disabled={!isStepOneValid}
+              >
+                AvanÃ§ar
+                <ChevronRight className="h-3.5 w-3.5 ml-1" />
               </Button>
+            ) : dispatchMode === 'send' ? (
               <Button
                 size="sm"
                 onClick={handleSend}
-                disabled={!selectedGroup || !canSend || isPending}
+                disabled={!canSend || isPending}
               >
                 {isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
                 ) : (
                   <Send className="h-3.5 w-3.5 mr-1.5" />
                 )}
-                Criar solicitação
+                Enviar ao cliente
               </Button>
-            </div>
-          </>
-        )}
-      </div>
+            ) : (
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={isPending}
+              >
+                {isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <Save className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Salvar ficha
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
     </Dialog>
-
-    {/* ── Modal de pré-preenchimento ─────────────────────────────── */}
-    {showPrefillForm && (
-      <Dialog open onClose={() => setShowPrefillForm(false)}>
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm font-semibold">
-            Pré-preencher — {selectedGroup?.name ?? 'Grupo'}
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowPrefillForm(false)}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Fechar"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="space-y-4 overflow-y-auto max-h-[65vh] pb-2 pr-1">
-          {questions.map((q) => (
-            <div key={q.id} className="space-y-1.5">
-              <label className="text-xs font-medium">
-                {q.text}
-                {q.required && <span className="text-red-500 ml-0.5">*</span>}
-              </label>
-              {q.type === 'yesno' ? (
-                <div className="flex gap-2">
-                  {['Sim', 'Não'].map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setStaffAnswers((p) => ({ ...p, [q.id]: opt }))}
-                      className={[
-                        'rounded-full px-3 py-1 text-xs border transition-colors',
-                        staffAnswers[q.id] === opt
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background hover:bg-muted/50',
-                      ].join(' ')}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              ) : q.type === 'multiple' && q.options ? (
-                <div className="space-y-1">
-                  {(q.options ?? []).map((opt, idx) => (
-                    <label key={opt} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={(staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean).includes(opt)}
-                        onChange={(e) => {
-                          const current = (staffAnswers[q.id] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-                          const next = e.target.checked ? [...current, opt] : current.filter((s) => s !== opt)
-                          setStaffAnswers((p) => ({ ...p, [q.id]: next.join(', ') }))
-                        }}
-                      />
-                      {(q.optionImages ?? [])[idx] && (
-                        <img src={(q.optionImages ?? [])[idx]!} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
-                      )}
-                      {opt}
-                    </label>
-                  ))}
-                  {(q.options ?? []).length === 0 && (
-                    <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
-                  )}
-                </div>
-              ) : q.type === 'select' ? (
-                <div className="space-y-2">
-                  {(q.selectOptions ?? []).map((opt) => (
-                    <div key={opt.label} className="space-y-1">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`prefill-select-${q.id}`}
-                          value={opt.label}
-                          checked={staffAnswers[q.id] === opt.label}
-                          onChange={() => {
-                            setStaffAnswers((p) => {
-                              const next = { ...p, [q.id]: opt.label }
-                              if (!opt.withDescription) delete next[q.id + '__desc']
-                              return next
-                            })
-                          }}
-                        />
-                        {opt.imageUrl && (
-                          <img src={opt.imageUrl} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
-                        )}
-                        {opt.label}
-                      </label>
-                      {opt.withDescription && staffAnswers[q.id] === opt.label && (
-                        <textarea
-                          value={staffAnswers[q.id + '__desc'] ?? ''}
-                          onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id + '__desc']: e.target.value }))}
-                          rows={2}
-                          placeholder="Descreva…"
-                          className="ml-6 w-[calc(100%-1.5rem)] rounded-md border bg-background px-2 py-1 text-sm resize-none"
-                        />
-                      )}
-                    </div>
-                  ))}
-                  {(q.selectOptions ?? []).length === 0 && (
-                    <p className="text-xs text-muted-foreground italic">Nenhuma alternativa configurada.</p>
-                  )}
-                </div>
-              ) : (
-                <input
-                  type={q.type === 'numeric' ? 'number' : q.type === 'date' ? 'date' : 'text'}
-                  value={staffAnswers[q.id] ?? ''}
-                  onChange={(e) => setStaffAnswers((p) => ({ ...p, [q.id]: e.target.value }))}
-                  className="w-full rounded-md border bg-background px-2 py-2 text-sm"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="flex justify-end pt-4 border-t mt-4">
-          <Button size="sm" onClick={() => setShowPrefillForm(false)}>
-            Confirmar respostas
-          </Button>
-        </div>
-      </Dialog>
-    )}
-  </>
   )
 }

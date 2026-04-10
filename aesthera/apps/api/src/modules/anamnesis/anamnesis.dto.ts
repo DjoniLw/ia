@@ -53,6 +53,12 @@ export const ResendAnamnesisDto = z.object({
 })
 export type ResendAnamnesisDto = z.infer<typeof ResendAnamnesisDto>
 
+/** DTO para atualização das respostas da clínica em fichas clinic_filled */
+export const UpdateAnamnesisStaffAnswersDto = z.object({
+  staffAnswers: z.record(z.unknown()),
+})
+export type UpdateAnamnesisStaffAnswersDto = z.infer<typeof UpdateAnamnesisStaffAnswersDto>
+
 /** DTO para envio da ficha ao cliente (canais de notificação) */
 export const SendAnamnesisDto = z
   .object({
