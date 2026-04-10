@@ -12,6 +12,7 @@ import { DataPagination } from '@/components/ui/data-pagination'
 import {
   type AnamnesisRequest,
   type AnamnesisRequestStatus,
+  useAnamnesisRequestById,
   useAnamnesisRequests,
   useCancelAnamnesis,
   useFinalizeAnamnesis,
@@ -75,6 +76,9 @@ export function AnamnesisTab({
   const cancelAnamnesis = useCancelAnamnesis()
   const finalizeAnamnesis = useFinalizeAnamnesis()
   const sendAnamnesis = useSendAnamnesis()
+
+  // Carrega o registro completo ao abrir o diff (list items não têm questionsSnapshot/staffAnswers/clientAnswers)
+  const { data: diffReqFull, isLoading: diffLoading } = useAnamnesisRequestById(diffReq?.id ?? null)
 
   function openSendDialog(id: string, mode: 'blank' | 'prefilled') {
     setSendingId(id)
@@ -490,12 +494,18 @@ export function AnamnesisTab({
             <DialogTitle className="mb-0 text-sm">Revisar respostas — {diffReq.groupName}</DialogTitle>
           </div>
           <div className="p-4 overflow-y-auto max-h-[70vh]">
-            <AnamnesisDiffViewer
-              anamnesisId={diffReq.id}
-              entries={buildDiffEntries(diffReq)}
-              onResolved={() => setDiffReq(null)}
-              onCancel={() => setDiffReq(null)}
-            />
+            {diffLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <AnamnesisDiffViewer
+                anamnesisId={diffReq.id}
+                entries={diffReqFull ? buildDiffEntries(diffReqFull) : []}
+                onResolved={() => setDiffReq(null)}
+                onCancel={() => setDiffReq(null)}
+              />
+            )}
           </div>
         </Dialog>
       )}
