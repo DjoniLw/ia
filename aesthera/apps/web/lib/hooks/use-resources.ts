@@ -1074,3 +1074,12 @@ export function useResolveAnamnesisDiff() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
   })
 }
+
+export function useReopenAnamnesis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/anamnesis-requests/${id}/reopen`).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}

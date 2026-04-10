@@ -391,6 +391,58 @@ export class AnamnesisService {
     return this.repo.updateStaffAnswers(clinicId, id, dto.staffAnswers as Record<string, unknown>)
   }
 
+  /**
+   * reopen — reabre uma ficha assinada para edição.
+   * Transiciona signed → clinic_filled, limpa dados do cliente e assinatura.
+   * Atomicamente registra auditLog.
+   */
+  async reopen(clinicId: string, id: string, userId: string) {
+    const result = await prisma.$transaction(async (tx) => {
+      const anamnesis = await tx.anamnesisRequest.findFirst({
+        where: { id, clinicId, deletedAt: null },
+        select: { id: true, status: true, clinicId: true },
+      })
+      if (!anamnesis) throw new NotFoundError('AnamnesisRequest')
+
+      if (anamnesis.status !== 'signed') {
+        throw new ValidationError('Apenas fichas assinadas podem ser reabertas para edição.')
+      }
+
+      const updated = await tx.anamnesisRequest.update({
+        where: { id, clinicId },
+        data: {
+          status: 'clinic_filled',
+          clientAnswers: Prisma.DbNull,
+          diffResolution: Prisma.DbNull,
+          signedAt: null,
+          signature: null,
+          signatureHash: null,
+          signatureUrl: null,
+          consentGivenAt: null,
+          consentText: null,
+          ipAddress: null,
+          userAgent: null,
+        },
+        select: safeAnamnesisSelect,
+      })
+
+      await tx.auditLog.create({
+        data: {
+          action: 'anamnesis.reopen',
+          entityId: id,
+          clinicId,
+          userId,
+          metadata: { previousStatus: 'signed' } as Prisma.InputJsonValue,
+        },
+      })
+
+      return updated
+    })
+
+    logger.info({ clinicId, requestId: id, userId }, 'Anamnese reaberta para edição')
+    return result
+  }
+
   async requestCorrection(signToken: string) {
     const request = await this.repo.findByToken(signToken)
     if (!request) throw new NotFoundError('AnamnesisRequest')
@@ -527,11 +579,20 @@ export async function handleAnamnesisSignedEvent(payload: {
     })
     if (!request) return
 
-    // Verificar se já existe um ClinicalRecord linkado (idempotência)
+    // Verificar se já existe um ClinicalRecord linkado (reabertura → atualizar conteúdo)
     const existing = await tx.clinicalRecord.findFirst({
       where: { anamnesisRequestId: request.id },
     })
-    if (existing) return
+    if (existing) {
+      await tx.clinicalRecord.update({
+        where: { id: existing.id },
+        data: {
+          content: JSON.stringify(buildClinicalRecordContent(request)),
+          performedAt: new Date(payload.signedAt),
+        },
+      })
+      return
+    }
 
     await tx.clinicalRecord.create({
       data: {

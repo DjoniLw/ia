@@ -16,6 +16,8 @@ import {
   useAnamnesisRequests,
   useCancelAnamnesis,
   useFinalizeAnamnesis,
+  useResolveAnamnesisDiff,
+  useReopenAnamnesis,
   useSendAnamnesis,
   useUpdateAnamnesisRequest,
 } from '@/lib/hooks/use-resources'
@@ -58,6 +60,7 @@ export function AnamnesisTab({
   const [editDirty, setEditDirty] = useState(false)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
+  const [reopenConfirmId, setReopenConfirmId] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
   const [sendPhoneValid, setSendPhoneValid] = useState(false)
   const [sendPhoneError, setSendPhoneError] = useState('')
@@ -79,6 +82,8 @@ export function AnamnesisTab({
   const finalizeAnamnesis = useFinalizeAnamnesis()
   const sendAnamnesis = useSendAnamnesis()
   const updateAnamnesis = useUpdateAnamnesisRequest()
+  const confirmReview = useResolveAnamnesisDiff()
+  const reopenAnamnesis = useReopenAnamnesis()
 
   // Carrega o registro completo (com questionsSnapshot) quando o dialog de edição abre
   const { data: editingReqFull, isLoading: editingLoading } = useAnamnesisRequestById(editingReq?.id ?? null)
@@ -155,6 +160,25 @@ export function AnamnesisTab({
     }
   }
 
+  async function handleConfirmReview(id: string) {
+    try {
+      await confirmReview.mutateAsync({ id, resolutions: {} })
+      toast.success('Revisão confirmada — ficha assinada com sucesso.')
+    } catch {
+      toast.error('Erro ao confirmar revisão. Tente novamente.')
+    }
+  }
+
+  async function handleReopen(id: string) {
+    try {
+      await reopenAnamnesis.mutateAsync(id)
+      setReopenConfirmId(null)
+      toast.success('Ficha reaberta para edição.')
+    } catch {
+      toast.error('Erro ao reabrir ficha. Tente novamente.')
+    }
+  }
+
   function buildDiffEntries(req: AnamnesisRequest) {
     const questions = (req.questionsSnapshot as Array<{ id: string; text: string; type: string }>) ?? []
     const staff = (req.staffAnswers ?? {}) as Record<string, string>
@@ -221,7 +245,10 @@ export function AnamnesisTab({
         </div>
       ) : (
         <div className="space-y-1.5">
-          {data.items.map((req) => (
+          {data.items.map((req) => {
+            // Para fichas client_submitted: prefilled → revisar diff; blank → confirmar direto
+            const needsDiffReview = req.mode === 'prefilled' && req.status === 'client_submitted'
+            return (
             <div key={req.id} className="rounded-lg border bg-card p-2.5 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium truncate">{req.groupName}</p>
@@ -299,8 +326,8 @@ export function AnamnesisTab({
                   </Button>
                 )}
 
-                {/* Revisar respostas */}
-                {req.status === 'client_submitted' && (
+                {/* Revisar / confirmar fichas submetidas pelo cliente */}
+                {req.status === 'client_submitted' && (needsDiffReview ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -309,7 +336,18 @@ export function AnamnesisTab({
                   >
                     Revisar respostas
                   </Button>
-                )}
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    disabled={confirmReview.isPending}
+                    onClick={() => void handleConfirmReview(req.id)}
+                  >
+                    {confirmReview.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                    Confirmar revisão
+                  </Button>
+                ))}
 
                 {/* Cancelar — apenas admin */}
                 {role === 'admin' && ['pending', 'sent_to_client', 'draft', 'clinic_filled', 'correction_requested'].includes(req.status) && (
@@ -324,9 +362,22 @@ export function AnamnesisTab({
                     Cancelar
                   </Button>
                 )}
+
+                {/* Reabrir para edição — apenas fichas assinadas */}
+                {req.status === 'signed' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                    onClick={() => setReopenConfirmId(req.id)}
+                  >
+                    Reabrir para edição
+                  </Button>
+                )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -458,6 +509,34 @@ export function AnamnesisTab({
             >
               {cancelAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
               Confirmar cancelamento
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog de confirmação — reabrir ficha assinada */}
+      {reopenConfirmId && (
+        <Dialog open onClose={() => setReopenConfirmId(null)}>
+          <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+            <DialogTitle className="mb-0 text-sm">Reabrir ficha para edição</DialogTitle>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              A ficha voltará ao status <strong>Preenchida pela clínica</strong>. A assinatura atual será removida e o cliente precisará assinar novamente após o reenvio.
+            </p>
+          </div>
+          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
+            <Button type="button" variant="outline" size="sm" onClick={() => setReopenConfirmId(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={reopenAnamnesis.isPending}
+              onClick={() => void handleReopen(reopenConfirmId)}
+            >
+              {reopenAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              Reabrir para edição
             </Button>
           </div>
         </Dialog>

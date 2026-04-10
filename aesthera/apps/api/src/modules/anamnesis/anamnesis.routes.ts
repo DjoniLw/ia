@@ -169,6 +169,20 @@ export async function anamnesisRoutes(app: FastifyInstance) {
     },
   )
 
+  /**
+   * POST /anamnesis-requests/:id/reopen
+   * Reabre uma ficha assinada para edição (signed → clinic_filled).
+   * Limpa dados do cliente e assinatura. Apenas admin e staff.
+   */
+  app.post(
+    '/anamnesis-requests/:id/reopen',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      return reply.send(await svc.reopen(req.clinicId, id, req.user.sub))
+    },
+  )
+
   // ── Público ──────────────────────────────────────────────────────────────────
 
   /**
