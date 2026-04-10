@@ -58,6 +58,8 @@ export function AnamnesisTab({
   const [editingReq, setEditingReq] = useState<AnamnesisRequest | null>(null)
   const [editAnswers, setEditAnswers] = useState<Record<string, string>>({})
   const [editDirty, setEditDirty] = useState(false)
+  const [editingWasSigned, setEditingWasSigned] = useState(false)
+  const [signedEditConfirmOpen, setSignedEditConfirmOpen] = useState(false)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
   const [editValidationError, setEditValidationError] = useState<string | null>(null)
@@ -124,7 +126,21 @@ export function AnamnesisTab({
     }
   }
 
+  function closeEditDialog() {
+    setEditingReq(null)
+    setEditAnswers({})
+    setEditDirty(false)
+    setEditValidationError(null)
+    setEditingWasSigned(false)
+    setSignedEditConfirmOpen(false)
+  }
+
   async function handleSaveEdit(id: string) {
+    // Sem alterações: fechar silenciosamente
+    if (!editDirty) {
+      closeEditDialog()
+      return
+    }
     const questions = (editingReqFull?.questionsSnapshot ?? []) as Array<{ id: string; type: string; required?: boolean }>
     const requiredEmpty = questions.filter((q) => q.type !== 'separator' && q.required && !editAnswers[q.id]?.trim())
     setEditValidationError(null)
@@ -132,19 +148,31 @@ export function AnamnesisTab({
       setEditValidationError(`${requiredEmpty.length} campo(s) obrigatório(s) não preenchido(s).`)
       return
     }
+    // Ficha assinada com alterações: pede confirmação antes
+    if (editingWasSigned) {
+      setSignedEditConfirmOpen(true)
+      return
+    }
+    // Ficha não assinada: salva e abre dialog de envio
     try {
-      const wasDirty = editDirty
       await updateAnamnesis.mutateAsync({ id, staffAnswers: editAnswers as Record<string, unknown> })
       toast.success('Respostas atualizadas.')
-      setEditingReq(null)
-      setEditAnswers({})
-      setEditDirty(false)
-      setEditValidationError(null)
-      if (wasDirty) {
-        openSendDialog(id)
-      }
+      closeEditDialog()
+      openSendDialog(id)
     } catch {
       toast.error('Erro ao salvar. Tente novamente.')
+    }
+  }
+
+  async function handleConfirmSignedEdit(id: string) {
+    try {
+      await reopenAnamnesis.mutateAsync(id)
+      await updateAnamnesis.mutateAsync({ id, staffAnswers: editAnswers as Record<string, unknown> })
+      toast.success('Ficha atualizada e reaberta para envio.')
+      closeEditDialog()
+      openSendDialog(id)
+    } catch {
+      toast.error('Erro ao salvar alterações. Tente novamente.')
     }
   }
 
@@ -199,15 +227,12 @@ export function AnamnesisTab({
     }
   }
 
-  async function handleReopenAndEdit(req: AnamnesisRequest) {
-    try {
-      await reopenAnamnesis.mutateAsync(req.id)
-      setEditingReq(req)
-      setEditAnswers({})
-      setEditDirty(false)
-    } catch {
-      toast.error('Erro ao reabrir ficha. Tente novamente.')
-    }
+  function handleOpenEditSigned(req: AnamnesisRequest) {
+    setEditingWasSigned(true)
+    setEditingReq(req)
+    setEditAnswers({})
+    setEditDirty(false)
+    setEditValidationError(null)
   }
 
   function buildDiffEntries(req: AnamnesisRequest) {
@@ -326,9 +351,11 @@ export function AnamnesisTab({
                     size="sm"
                     className="h-6 px-2 text-[10px]"
                     onClick={() => {
+                      setEditingWasSigned(false)
                       setEditingReq(req)
                       setEditAnswers({})
                       setEditDirty(false)
+                      setEditValidationError(null)
                     }}
                   >
                     <Pencil className="h-3 w-3" />
@@ -386,16 +413,15 @@ export function AnamnesisTab({
                   </Button>
                 )}
 
-                {/* Editar ficha assinada — reabre silenciosamente e abre o form de edição */}
+                {/* Editar ficha assinada — abre form sem alterar status (reobre só ao confirmar) */}
                 {req.status === 'signed' && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-[10px]"
-                    disabled={reopenAnamnesis.isPending}
-                    onClick={() => void handleReopenAndEdit(req)}
+                    onClick={() => handleOpenEditSigned(req)}
                   >
-                    {reopenAnamnesis.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pencil className="h-3 w-3" />}
+                    <Pencil className="h-3 w-3" />
                     Editar
                   </Button>
                 )}
@@ -541,7 +567,7 @@ export function AnamnesisTab({
 
       {/* Dialog de edição de respostas — clinic_filled / signed reaberta */}
       {editingReq && (
-        <Dialog open onClose={() => { setEditingReq(null); setEditAnswers({}); setEditDirty(false); setEditValidationError(null) }} isDirty={editDirty}>
+        <Dialog open onClose={closeEditDialog} isDirty={editDirty}>
           <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
             <DialogTitle className="mb-0 text-sm">Editar respostas — {editingReq.groupName}</DialogTitle>
           </div>
@@ -647,7 +673,7 @@ export function AnamnesisTab({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => { setEditingReq(null); setEditAnswers({}); setEditDirty(false); setEditValidationError(null) }}
+              onClick={closeEditDialog}
             >
               Cancelar
             </Button>
@@ -659,6 +685,34 @@ export function AnamnesisTab({
             >
               {updateAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
               Salvar alterações
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Dialog de confirmação de alteração em ficha assinada */}
+      {signedEditConfirmOpen && editingReq && (
+        <Dialog open onClose={() => setSignedEditConfirmOpen(false)}>
+          <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
+            <DialogTitle className="mb-0 text-sm">Confirmar alteração</DialogTitle>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Esta ficha está <strong>assinada</strong>. Ao confirmar, a assinatura atual será removida e o cliente precisará assinar novamente após o reenvio.
+            </p>
+          </div>
+          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
+            <Button type="button" variant="outline" size="sm" onClick={() => setSignedEditConfirmOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={reopenAnamnesis.isPending || updateAnamnesis.isPending}
+              onClick={() => void handleConfirmSignedEdit(editingReq.id)}
+            >
+              {(reopenAnamnesis.isPending || updateAnamnesis.isPending) && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Confirmar alteração
             </Button>
           </div>
         </Dialog>
