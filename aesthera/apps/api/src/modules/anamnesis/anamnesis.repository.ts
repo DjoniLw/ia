@@ -10,7 +10,7 @@ export class AnamnesisRepository {
   async create(
     clinicId: string,
     createdByUserId: string,
-    data: CreateAnamnesisRequestDto & { signToken: string; expiresAt: Date },
+    data: CreateAnamnesisRequestDto & { signToken: string; expiresAt: Date; status?: string },
   ) {
     return prisma.anamnesisRequest.create({
       data: {
@@ -24,6 +24,7 @@ export class AnamnesisRepository {
         staffAnswers: data.staffAnswers != null ? (data.staffAnswers as Prisma.InputJsonValue) : Prisma.JsonNull,
         signToken: data.signToken,
         expiresAt: data.expiresAt,
+        ...(data.status ? { status: data.status as never } : {}),
       },
       // SEC2: select explícito — signToken, signatureUrl, consentText, ipAddress, userAgent NUNCA retornados
       select: {

@@ -75,15 +75,17 @@ export class AnamnesisService {
   async create(clinicId: string, userId: string, data: CreateAnamnesisRequestDto) {
     const signToken = generateSignToken()
     const expiresAt = buildExpiresAt()
+    const willSend = Boolean(data.phone || data.email)
 
     const request = await this.repo.create(clinicId, userId, {
       ...data,
       signToken,
       expiresAt,
+      status: willSend ? 'sent_to_client' : undefined,
     })
 
     // Envio assíncrono — não bloqueia a resposta
-    if (data.phone || data.email) {
+    if (willSend) {
       // SEC2: signToken passado da variável local — não vem do objeto `request` (que não o expõe)
       this.#sendNotification(clinicId, { ...request, signToken }, { phone: data.phone, email: data.email }).catch((err) =>
         logger.error({ err, requestId: request.id }, 'Falha ao enviar notificação de anamnese'),
