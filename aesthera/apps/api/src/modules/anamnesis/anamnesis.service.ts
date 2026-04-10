@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { appConfig } from '../../config/app.config'
 import { prisma } from '../../database/prisma/client'
-import { uploadBuffer } from '../../integrations/r2/r2.service'
+import { uploadBuffer, generatePresignedGetUrl } from '../../integrations/r2/r2.service'
 import { ConflictError, GoneError, NotFoundError, ValidationError } from '../../shared/errors/app-error'
 import { createDomainEvent } from '../../shared/events/domain-event'
 import { eventBus } from '../../shared/events/event-bus'
@@ -104,6 +104,15 @@ export class AnamnesisService {
     const request = await this.repo.findById(clinicId, id)
     if (!request) throw new NotFoundError('AnamnesisRequest')
     return request
+  }
+
+  /** Gera presigned GET URL temporária (1h) para a assinatura armazenada no R2. */
+  async getSignatureUrl(clinicId: string, id: string) {
+    const request = await this.repo.findById(clinicId, id)
+    if (!request) throw new NotFoundError('AnamnesisRequest')
+    const storageKey = (request as { signatureUrl?: string | null }).signatureUrl
+    if (!storageKey) throw new NotFoundError('Signature')
+    return generatePresignedGetUrl(storageKey, 3600)
   }
 
   /** Endpoint público — retorna informações sem dados sensíveis do paciente para renderização do formulário. */

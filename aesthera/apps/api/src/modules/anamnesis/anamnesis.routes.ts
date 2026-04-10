@@ -59,6 +59,20 @@ export async function anamnesisRoutes(app: FastifyInstance) {
   )
 
   /**
+   * GET /anamnesis-requests/:id/signature
+   * Gera uma presigned GET URL temporária (1h) para visualização da assinatura.
+   */
+  app.get(
+    '/anamnesis-requests/:id/signature',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const url = await svc.getSignatureUrl(req.clinicId, id)
+      return reply.send({ url })
+    },
+  )
+
+  /**
    * POST /anamnesis-requests/:id/resend
    * Gera novo token e reenvia o link ao paciente.
    */

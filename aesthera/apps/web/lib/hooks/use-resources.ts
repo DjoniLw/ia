@@ -1002,6 +1002,16 @@ export function useAnamnesisRequestById(id: string | null) {
   })
 }
 
+export function useAnamnesisSignatureUrl(id: string | null) {
+  return useQuery<string>({
+    queryKey: ['anamnesis-signature', id],
+    queryFn: () => api.get(`/anamnesis-requests/${id}/signature`).then((r) => r.data.url),
+    enabled: !!id,
+    staleTime: 50 * 60 * 1000, // 50min — URL expira em 1h
+    gcTime: 55 * 60 * 1000,
+  })
+}
+
 export function useCreateAnamnesisRequest() {
   const qc = useQueryClient()
   return useMutation({
