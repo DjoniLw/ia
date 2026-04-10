@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Ban, ClipboardList, Eye, Loader2, Mail, MessageCircle, Pencil, Plus, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -60,7 +60,7 @@ export function AnamnesisTab({
   const [editDirty, setEditDirty] = useState(false)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [cancelConfirmId, setCancelConfirmId] = useState<string | null>(null)
-  const [reopenConfirmId, setReopenConfirmId] = useState<string | null>(null)
+  const [editValidationError, setEditValidationError] = useState<string | null>(null)
   const [sendPhone, setSendPhone] = useState('')
   const [sendPhoneValid, setSendPhoneValid] = useState(false)
   const [sendPhoneError, setSendPhoneError] = useState('')
@@ -88,6 +88,24 @@ export function AnamnesisTab({
   // Carrega o registro completo (com questionsSnapshot) quando o dialog de edição abre
   const { data: editingReqFull, isLoading: editingLoading } = useAnamnesisRequestById(editingReq?.id ?? null)
 
+  // Sincroniza respostas quando os dados completos carregam (list items não têm staffAnswers)
+  useEffect(() => {
+    if (editingReqFull && !editDirty) {
+      setEditAnswers((editingReqFull.staffAnswers ?? {}) as Record<string, string>)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingReqFull?.id])
+
+  function openSendDialog(id: string) {
+    setSendingId(id)
+    setSendPhone(defaultPhone ?? '')
+    setSendPhoneValid(false)
+    setSendPhoneError('')
+    setSendEmail(defaultEmail ?? '')
+    setSendViaWhatsapp(Boolean(defaultPhone))
+    setSendViaEmail(Boolean(defaultEmail))
+  }
+
   async function handleCancel(id: string) {
     try {
       await cancelAnamnesis.mutateAsync(id)
@@ -107,12 +125,24 @@ export function AnamnesisTab({
   }
 
   async function handleSaveEdit(id: string) {
+    const questions = (editingReqFull?.questionsSnapshot ?? []) as Array<{ id: string; type: string; required?: boolean }>
+    const requiredEmpty = questions.filter((q) => q.type !== 'separator' && q.required && !editAnswers[q.id]?.trim())
+    setEditValidationError(null)
+    if (requiredEmpty.length > 0) {
+      setEditValidationError(`${requiredEmpty.length} campo(s) obrigatório(s) não preenchido(s).`)
+      return
+    }
     try {
+      const wasDirty = editDirty
       await updateAnamnesis.mutateAsync({ id, staffAnswers: editAnswers as Record<string, unknown> })
       toast.success('Respostas atualizadas.')
       setEditingReq(null)
       setEditAnswers({})
       setEditDirty(false)
+      setEditValidationError(null)
+      if (wasDirty) {
+        openSendDialog(id)
+      }
     } catch {
       toast.error('Erro ao salvar. Tente novamente.')
     }
@@ -169,11 +199,12 @@ export function AnamnesisTab({
     }
   }
 
-  async function handleReopen(id: string) {
+  async function handleReopenAndEdit(req: AnamnesisRequest) {
     try {
-      await reopenAnamnesis.mutateAsync(id)
-      setReopenConfirmId(null)
-      toast.success('Ficha reaberta para edição.')
+      await reopenAnamnesis.mutateAsync(req.id)
+      setEditingReq(req)
+      setEditAnswers({})
+      setEditDirty(false)
     } catch {
       toast.error('Erro ao reabrir ficha. Tente novamente.')
     }
@@ -296,7 +327,7 @@ export function AnamnesisTab({
                     className="h-6 px-2 text-[10px]"
                     onClick={() => {
                       setEditingReq(req)
-                      setEditAnswers((req.staffAnswers ?? {}) as Record<string, string>)
+                      setEditAnswers({})
                       setEditDirty(false)
                     }}
                   >
@@ -311,15 +342,7 @@ export function AnamnesisTab({
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-[10px]"
-                    onClick={() => {
-                      setSendingId(req.id)
-                      setSendPhone(defaultPhone ?? '')
-                      setSendPhoneValid(false)
-                      setSendPhoneError('')
-                      setSendEmail(defaultEmail ?? '')
-                      setSendViaWhatsapp(Boolean(defaultPhone))
-                      setSendViaEmail(Boolean(defaultEmail))
-                    }}
+                    onClick={() => openSendDialog(req.id)}
                   >
                     <Send className="h-3 w-3" />
                     Enviar ao cliente
@@ -363,15 +386,17 @@ export function AnamnesisTab({
                   </Button>
                 )}
 
-                {/* Reabrir para edição — apenas fichas assinadas */}
+                {/* Editar ficha assinada — reabre silenciosamente e abre o form de edição */}
                 {req.status === 'signed' && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                    onClick={() => setReopenConfirmId(req.id)}
+                    className="h-6 px-2 text-[10px]"
+                    disabled={reopenAnamnesis.isPending}
+                    onClick={() => void handleReopenAndEdit(req)}
                   >
-                    Reabrir para edição
+                    {reopenAnamnesis.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pencil className="h-3 w-3" />}
+                    Editar
                   </Button>
                 )}
               </div>
@@ -514,37 +539,9 @@ export function AnamnesisTab({
         </Dialog>
       )}
 
-      {/* Dialog de confirmação — reabrir ficha assinada */}
-      {reopenConfirmId && (
-        <Dialog open onClose={() => setReopenConfirmId(null)}>
-          <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
-            <DialogTitle className="mb-0 text-sm">Reabrir ficha para edição</DialogTitle>
-          </div>
-          <div className="p-4 space-y-3">
-            <p className="text-xs text-muted-foreground">
-              A ficha voltará ao status <strong>Preenchida pela clínica</strong>. A assinatura atual será removida e o cliente precisará assinar novamente após o reenvio.
-            </p>
-          </div>
-          <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
-            <Button type="button" variant="outline" size="sm" onClick={() => setReopenConfirmId(null)}>
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={reopenAnamnesis.isPending}
-              onClick={() => void handleReopen(reopenConfirmId)}
-            >
-              {reopenAnamnesis.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-              Reabrir para edição
-            </Button>
-          </div>
-        </Dialog>
-      )}
-
-      {/* Dialog de edição de respostas — clinic_filled */}
+      {/* Dialog de edição de respostas — clinic_filled / signed reaberta */}
       {editingReq && (
-        <Dialog open onClose={() => { setEditingReq(null); setEditAnswers({}); setEditDirty(false) }} isDirty={editDirty}>
+        <Dialog open onClose={() => { setEditingReq(null); setEditAnswers({}); setEditDirty(false); setEditValidationError(null) }} isDirty={editDirty}>
           <div className="sticky top-0 bg-card border-b px-4 py-3 flex items-center justify-between rounded-t-xl z-10">
             <DialogTitle className="mb-0 text-sm">Editar respostas — {editingReq.groupName}</DialogTitle>
           </div>
@@ -643,11 +640,14 @@ export function AnamnesisTab({
             )}
           </div>
           <div className="sticky bottom-0 bg-card border-t px-4 py-3 flex justify-end gap-2 rounded-b-xl">
+            {editValidationError && (
+              <p className="text-xs text-red-500 flex-1 self-center">{editValidationError}</p>
+            )}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => { setEditingReq(null); setEditAnswers({}); setEditDirty(false) }}
+              onClick={() => { setEditingReq(null); setEditAnswers({}); setEditDirty(false); setEditValidationError(null) }}
             >
               Cancelar
             </Button>
