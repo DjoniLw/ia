@@ -311,8 +311,7 @@ export function AnamnesisTab({
       ) : (
         <div className="space-y-1.5">
           {data.items.map((req) => {
-            // Para fichas client_submitted: prefilled → revisar diff; blank → confirmar direto
-            const needsDiffReview = req.mode === 'prefilled' && req.status === 'client_submitted'
+            // Para fichas client_submitted: apenas prefilled com respostas alteradas precisam de revisão
             return (
             <div key={req.id} className="rounded-lg border bg-card p-2.5 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
@@ -385,8 +384,8 @@ export function AnamnesisTab({
                   </Button>
                 )}
 
-                {/* Revisar / confirmar fichas submetidas pelo cliente */}
-                {req.status === 'client_submitted' && (needsDiffReview ? (
+                {/* Revisar fichas prefilled submetidas pelo cliente com alterações */}
+                {req.status === 'client_submitted' && req.mode === 'prefilled' && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -395,18 +394,7 @@ export function AnamnesisTab({
                   >
                     Revisar respostas
                   </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 px-2 text-[10px]"
-                    disabled={confirmReview.isPending}
-                    onClick={() => void handleConfirmReview(req.id)}
-                  >
-                    {confirmReview.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-                    Confirmar revisão
-                  </Button>
-                ))}
+                )}
 
                 {/* Cancelar — apenas admin */}
                 {role === 'admin' && ['pending', 'sent_to_client', 'draft', 'clinic_filled', 'correction_requested'].includes(req.status) && (

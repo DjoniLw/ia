@@ -232,13 +232,14 @@ export class AnamnesisService {
       throw err
     })
 
-    // RN-NEW: modo prefilled sem alterações → assina direto; com alterações → aguarda revisão
+    // RN: blank → assina direto (sem diff); prefilled sem alterações → assina direto; prefilled com alterações → aguarda revisão
     const targetStatus: 'signed' | 'client_submitted' =
-      request.mode === 'prefilled' &&
-      areAnswersIdentical(
-        request.staffAnswers as Record<string, unknown> | null,
-        data.clientAnswers,
-      )
+      request.mode === 'blank' ||
+      (request.mode === 'prefilled' &&
+        areAnswersIdentical(
+          request.staffAnswers as Record<string, unknown> | null,
+          data.clientAnswers,
+        ))
         ? 'signed'
         : 'client_submitted'
 
