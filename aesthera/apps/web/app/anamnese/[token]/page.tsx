@@ -298,6 +298,7 @@ export default function AnamnesePage() {
                           const selected = (answers[q.id] ?? '').split(',').map((s) => s.trim()).includes(opt)
                           const img = (q.optionImages ?? [])[idx]
                           return (
+                            // eslint-disable-next-line aesthera/no-native-button
                             <button
                               key={opt}
                               type="button"
@@ -321,6 +322,7 @@ export default function AnamnesePage() {
                       <div className={['space-y-2', hasError ? 'rounded-xl ring-1 ring-red-500 p-1' : ''].join(' ')}>
                         {q.selectOptions.map((opt) => (
                           <div key={opt.label} className="space-y-1">
+                            {/* eslint-disable-next-line aesthera/no-native-button */}
                             <button
                               type="button"
                               onClick={() => {

@@ -261,7 +261,6 @@ export function AnamnesisTab({
       {/* Filtros por status */}
       <div className="flex flex-wrap gap-1.5">
         {STATUS_FILTER_OPTIONS.map((opt) => (
-          // eslint-disable-next-line aesthera/no-native-button
           <button
             key={opt.value}
             type="button"
@@ -630,7 +629,6 @@ export function AnamnesisTab({
                       {q.type === 'yesno' ? (
                         <div className="flex gap-2">
                           {['Sim', 'Não'].map((opt) => (
-                            // eslint-disable-next-line aesthera/no-native-button
                             <button
                               key={opt}
                               type="button"

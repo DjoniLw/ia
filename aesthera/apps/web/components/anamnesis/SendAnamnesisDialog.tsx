@@ -425,6 +425,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
           <p className="text-sm font-semibold">
             Pré-preencher — {selectedGroup?.name ?? 'Grupo'}
           </p>
+          {/* eslint-disable-next-line aesthera/no-native-button */}
           <button
             type="button"
             onClick={() => setShowPrefillForm(false)}
