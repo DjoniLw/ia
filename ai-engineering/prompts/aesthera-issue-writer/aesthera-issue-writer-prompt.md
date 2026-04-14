@@ -209,7 +209,7 @@ Exemplos:
 - `[TREINAMENTO-AGENTES] — Registrar padrão correto de tradução PT-BR para status de agendamento`
 - `[TREINAMENTO-AGENTES] — Registrar violação de multi-tenancy: ausência de clinicId em queries`
 
-> ⚠️ A issue de treinamento **não é executada pelo implementador** — ela é destinada exclusivamente ao `treinador-agent`. Deixar isso claro no corpo da issue.
+> ⚠️ A issue de treinamento **não é executada pelo implementador** — ela é destinada exclusivamente ao `guardiao-ecossistema`. Deixar isso claro no corpo da issue.
 
 ---
 
@@ -629,7 +629,7 @@ Registrar o padrão/anti-padrão identificado no arquivo de padrões correto (em
 
 ## O que fazer
 
-- Solicitar ao `treinador-agent` que registre o seguinte aprendizado no arquivo de padrões correto do implementador:
+- Solicitar ao `guardiao-ecossistema` que registre o seguinte aprendizado no arquivo de padrões correto do implementador:
 
 ### Anti-padrão / Padrão identificado
 
@@ -643,8 +643,8 @@ Registrar o padrão/anti-padrão identificado no arquivo de padrões correto (em
 
 ## Destinatário
 
-> ⚠️ Esta issue é destinada exclusivamente ao `treinador-agent`. **Não deve ser executada pelo implementador.**
-> O treinador-agent é o único autorizado a modificar arquivos de prompt e learnings neste repositório.
+> ⚠️ Esta issue é destinada exclusivamente ao `guardiao-ecossistema`. **Não deve ser executada pelo implementador.**
+> O guardiao-ecossistema é o único autorizado a modificar arquivos de prompt e learnings neste repositório.
 
 ## Critérios de Aceitação
 

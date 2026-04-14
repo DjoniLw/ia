@@ -1,5 +1,5 @@
 ---
-name: backend-implementador
+name: ⚙️ backend-implementador
 description: "Use when: implementing backend features for Aesthera — endpoints, services, repositories, Prisma queries, migrations, DTOs, guards, domain events. Invoked by aesthera-implementador orchestrator after planning phase."
 tools: [read, edit, search, execute, 'github/*', todo]
 model: Claude Sonnet 4.6

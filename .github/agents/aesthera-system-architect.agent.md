@@ -1,5 +1,5 @@
 ---
-name: aesthera-system-architect
+name: 🏛️ aesthera-system-architect
 description: "Use when: designing architecture for Aesthera, making design decisions, reviewing system design, planning modules, defining data models, API contracts, integration patterns, or reviewing architecture for the Aesthera ERP."
 tools: [read, agent, edit, search, web, browser, todo]
 model: Claude Sonnet 4.6

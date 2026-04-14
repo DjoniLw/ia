@@ -85,7 +85,7 @@ Never implement against an undefined or stale specification.
 
 **Only the `aesthera-implementador` agent may write or modify system code** (files under `aesthera/`).
 
-All other agents — including `code-reviewer`, `ux-reviewer`, `security-auditor`, `aesthera-system-architect`, `aesthera-product-owner`, `aesthera-issue-writer`, `aesthera-consolidador`, and `aesthera-pipeline` — must **only generate documents** describing what needs to be done or corrected, targeting the implementador agent.
+All other agents — including `code-reviewer`, `ux-reviewer`, `security-auditor`, `aesthera-system-architect`, `aesthera-product-owner`, `aesthera-issue-writer`, `aesthera-consolidador`, and `aesthera-discovery` — must **only generate documents** describing what needs to be done or corrected, targeting the implementador agent.
 
 Exception: `test-guardian` may create or modify test files (`*.test.ts`, `*.spec.ts`) exclusively.
 

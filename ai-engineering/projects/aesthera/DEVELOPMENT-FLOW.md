@@ -5,15 +5,15 @@
 
 ---
 
-## ⚡ Ponto de Entrada — `aesthera-pipeline`
+## ⚡ Ponto de Entrada — `aesthera-discovery`
 
-O agente **`aesthera-pipeline`** é o ponto de entrada único para qualquer nova feature.
+O agente **`aesthera-discovery`** é o ponto de entrada único para qualquer nova feature.
 Você passa a ideia, ele classifica o trilho, executa todos os agentes em sequência e entrega a issue pronta.
 
 ```
 Você: "Quero um módulo de fidelidade com pontuação por atendimento"
   ↓
-aesthera-pipeline → classifica → executa o fluxo correto → entrega issue #XYZ
+aesthera-discovery → classifica → executa o fluxo correto → entrega issue #XYZ
 ```
 
 Use os agentes individuais apenas quando precisar de uma etapa específica isolada.

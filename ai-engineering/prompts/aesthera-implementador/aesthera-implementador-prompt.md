@@ -626,7 +626,7 @@ Toda vez que a **Etapa 4** produzir itens classificados como **ÚTIL** — indep
   - 📅 Aprendido em: {data} — PR #{número}
 ```
 
-4. Se o domínio não estiver coberto por nenhum arquivo existente, **acionar o treinador-agent** para criar o fragmento correto
+4. Se o domínio não estiver coberto por nenhum arquivo existente, **acionar o `guardiao-ecossistema`** para criar o fragmento correto
 5. Se o mesmo padrão já existir mas como item diferente, consolide em vez de duplicar
 
 ### O que NÃO registrar

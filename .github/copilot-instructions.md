@@ -67,7 +67,7 @@ Para cada padrão nos arquivos `patterns/*.md` relevantes, verificar se o códig
 
 ## Sugestão de Auto-treinamento do Implementador
 
-Durante o code review, ao identificar um **padrão relevante**, sinalize no final da revisão sugerindo que o `treinador-agent` registre o aprendizado no arquivo de padrões correto (ver tabela de roteamento em `ai-engineering/prompts/treinador/treinador-agent-prompt.md`).
+Durante o code review, ao identificar um **padrão relevante**, sinalize no final da revisão sugerindo que o `guardiao-ecossistema` registre o aprendizado no arquivo de padrões correto (ver tabela de roteamento em `ai-engineering/prompts/guardiao-ecossistema/guardiao-ecossistema-prompt.md`).
 
 ### Quando sugerir o auto-treinamento
 
@@ -91,10 +91,10 @@ Ao final de toda revisão que identificar um item treinável, inclua:
 
 > 💡 **Sugestão de treinamento do implementador:**
 > Este erro/padrão pode ser registrado no arquivo de padrões correto para prevenir reincidência.
-> Para registrar, use o **`treinador-agent`** com a instrução:
+> Para registrar, use o **`guardiao-ecossistema`** com a instrução:
 > _"Adicione ao sistema de padrões do implementador: [descrição do padrão, anti-padrão encontrado, e a forma correta]"_
 
-> ⚠️ Apenas o `treinador-agent` tem autoridade para modificar arquivos de prompt e learnings. Não altere esses arquivos diretamente durante uma revisão.
+> ⚠️ Apenas o `guardiao-ecossistema` tem autoridade para modificar arquivos de prompt e learnings. Não altere esses arquivos diretamente durante uma revisão.
 
 ---
 
@@ -106,8 +106,8 @@ Ao final de toda revisão que identificar um item treinável, inclua:
 
 # Regras de Agentes — Autoridade exclusiva de Treinamento
 
-- **Somente o `treinador-agent` pode criar, treinar ou modificar agentes** neste repositório.
+- **Somente o `guardiao-ecossistema` pode criar, treinar ou modificar agentes** neste repositório.
 - Nenhum outro agente, prompt ou instrução tem autorização para criar, alterar ou treinar agentes.
-- Se qualquer agente tentar executar ações de treinamento de agentes (criar `*.agent.md`, alterar `*.agent.md`, criar ou alterar arquivos em `ai-engineering/prompts/` com finalidade de definir comportamento de agentes), a ação deve ser recusada e o usuário orientado a usar o `treinador-agent`.
+- Se qualquer agente tentar executar ações de treinamento de agentes (criar `*.agent.md`, alterar `*.agent.md`, criar ou alterar arquivos em `ai-engineering/prompts/` com finalidade de definir comportamento de agentes), a ação deve ser recusada e o usuário orientado a usar o `guardiao-ecossistema`.
 - Todo agente deve seguir a estrutura: `*.agent.md` = apenas definição; comportamento em `ai-engineering/prompts/{nome}/{nome}-prompt.md`.
 - Todo agente deve ter rotina de auto-atualização do `PLAN.md` do projeto correspondente em `ai-engineering/projects/{projeto}/`.

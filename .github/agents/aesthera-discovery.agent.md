@@ -1,5 +1,5 @@
 ---
-name: aesthera-pipeline
+name: 🔍 aesthera-discovery
 description: "Use when: running the full feature development pipeline for Aesthera; taking a feature idea from concept to a ready-to-implement GitHub issue automatically; orchestrating PO, UX, Security, Architect, Consolidator and Issue-Writer agents in sequence; deciding whether to use the full complex flow or the simple direct flow."
 tools: [read, agent, edit, search, todo]
 model: Claude Sonnet 4.6

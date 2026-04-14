@@ -401,6 +401,11 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 
 ## Histórico de Atualizações
 
+### [2026-04-14] — agente: criação do Pipeline de Entrega (SDD) — spec-tecnica + aesthera-delivery
+- **Arquivo(s) afetado(s):** `.github/agents/spec-tecnica.agent.md`, `ai-engineering/prompts/spec-tecnica/spec-tecnica-prompt.md`, `.github/agents/aesthera-delivery.agent.md`, `ai-engineering/prompts/aesthera-delivery-pipeline/aesthera-delivery-pipeline-prompt.md`
+- **O que foi feito:** Criado o Pipeline de Entrega (SDD — Spec-Driven Development) separando responsabilidades entre descoberta (`aesthera-discovery`) e entrega (`aesthera-delivery`). Dois novos agentes: `spec-tecnica` (gera spec técnica de implementação a partir de issue) e `aesthera-delivery` (orquestra as 7 fases: spec → refinamento → implementação → checklist → testes → documentação → code review).
+- **Impacto:** Todo ciclo de entrega de features passa agora por um fluxo estruturado com checkpoint humano antes da implementação.
+
 ### [2026-04-13] — Pipeline: Fichas de Avaliação Expandidas
 - **Módulo:** MeasurementSheets (expansão)
 - **O que foi feito:** Pipeline complexo executado completo: revisão UX + Security + Arquitetura → consolidação → 3 issues geradas

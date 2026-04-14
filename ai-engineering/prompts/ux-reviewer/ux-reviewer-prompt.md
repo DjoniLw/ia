@@ -414,7 +414,7 @@ Após **toda** revisão que produza saída relevante para o projeto, você deve:
 
 ## Sugestão de Auto-treinamento do UX Reviewer
 
-Durante toda revisão de UX, ao identificar um **padrão relevante não documentado**, sinalize no final da revisão sugerindo que o `treinador-agent` registre o aprendizado no arquivo `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md`.
+Durante toda revisão de UX, ao identificar um **padrão relevante não documentado**, sinalize no final da revisão sugerindo que o `guardiao-ecossistema` registre o aprendizado no arquivo `ai-engineering/prompts/ux-reviewer/ux-reviewer-learnings.md`.
 
 ### Quando sugerir o auto-treinamento
 
@@ -437,7 +437,7 @@ Ao final de toda revisão que identificar um item treinável, inclua:
 
 > 💡 **Sugestão de treinamento do UX Reviewer:**
 > Este padrão pode ser registrado no `ux-reviewer-learnings.md` para prevenir reincidência em revisões futuras.
-> Para registrar, use o **`treinador-agent`** com a instrução:
+> Para registrar, use o **`guardiao-ecossistema`** com a instrução:
 > _"Adicione ao `ux-reviewer-learnings.md`: [descrição do padrão, anti-padrão encontrado e a forma correta]"_
 
-> ⚠️ Apenas o `treinador-agent` tem autoridade para modificar arquivos de prompt e learnings. Não altere esses arquivos diretamente durante uma revisão.
+> ⚠️ Apenas o `guardiao-ecossistema` tem autoridade para modificar arquivos de prompt e learnings. Não altere esses arquivos diretamente durante uma revisão.
