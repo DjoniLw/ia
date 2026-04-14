@@ -2,14 +2,16 @@
 
 **Issue:** #157
 **Data:** 14/04/2026
-**Módulo(s):** `measurement-sheets`, `measurement-sessions`, `appointments`
+**Módulo(s):** `measurement-sheets`, `measurement-sessions`, `appointments` (modificação mínima)
 **Tipo:** Backend
 
 ---
 
 ## 1. Contexto
 
-O módulo `measurement-sheets` existe e está em produção, servindo fichas de avaliação do tipo `SIMPLE` e `TABULAR` com escopo implícito de medidas corporais. Todos os registros atuais têm `category=CORPORAL` e `scope=SYSTEM` implicitamente — nenhum dado existente será perdido. Esta issue expande o modelo para suportar 6 categorias de avaliação (`MeasurementCategory`), fichas de escopo por cliente (`MeasurementScope=CUSTOMER`), uma biblioteca de 6 templates pré-definidos e autorização granular por role/scope. A listagem de sessões passa a incluir o campo `categories` de forma computada, sem alteração no schema de `MeasurementSession`.
+O módulo `measurement-sheets` existe e serve exclusivamente fichas corporais (`SIMPLE` e `TABULAR`). Todos os `MeasurementSheet` têm implicitamente `category=CORPORAL` e `scope=SYSTEM`. Esta issue adiciona 2 novos enums (`MeasurementCategory`, `MeasurementScope`), 4 novos campos ao model, migration não-destrutiva, biblioteca de templates como constante de código, 2 novos endpoints, autorização granular por role/scope e o campo computado `categories` na response de sessões.
+
+> ⚠️ **Discrepância de nomenclatura:** A issue menciona `measurement-sheets.controller.ts`, mas a convenção do codebase usa `measurement-sheets.routes.ts`. Utilizar sempre `routes.ts`.
 
 ---
 
@@ -20,305 +22,58 @@ O módulo `measurement-sheets` existe e está em produção, servindo fichas de 
 **Arquivos a CRIAR:**
 ```
 aesthera/apps/api/src/modules/measurement-sheets/measurement-templates.ts
-  — Constante MEASUREMENT_TEMPLATES com os 6 modelos pré-definidos (separado do service, sem lógica de negócio)
+  — Constante MEASUREMENT_TEMPLATES com 6 templates pré-configurados
 
-aesthera/apps/api/prisma/migrations/{timestamp}_add-measurement-category-scope/migration.sql
-  — Migration não-destrutiva: 2 enums + 4 campos + 2 índices + substituição da constraint de nome
+aesthera/apps/api/prisma/migrations/{timestamp}_add-measurement-category-scope/
+  — Migration gerada por `prisma migrate dev`
 ```
 
 **Arquivos a MODIFICAR:**
 ```
 aesthera/apps/api/prisma/schema.prisma
-  — 2 novos enums (MeasurementCategory, MeasurementScope) + 4 campos em MeasurementSheet
-    + 2 novas relações (customer, createdBy) + substituição do @@unique por índices parciais (SQL raw)
-    + relação measurementSheets adicionada ao User e ao Customer
+  — Adicionar enums MeasurementCategory e MeasurementScope;
+    adicionar 4 campos + 2 relações + 2 índices a MeasurementSheet
 
 aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.dto.ts
-  — CreateSheetDto: +category, +scope, +customerId, +createdByUserId + .refine() para scope=CUSTOMER
-  — UpdateSheetDto: +category; campo type explicitamente AUSENTE (nunca permitido no PATCH)
-  — ListSheetsQuery: +scope, +category, +customerId
-  — SheetResponseDto: tipagem de retorno inclui category, scope, customerId
-
-aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.repository.ts
-  — listSheets(): novo parâmetro { scope?, category?, customerId? } no where
-  — countActiveSheets(): novo parâmetro scope + customerId para diferenciar limite SYSTEM×CUSTOMER
-  — createSheet(): persistir category, scope, customerId, createdByUserId
-  — updateSheet(): persistir category quando presente no DTO
-  — findSheetByName(): scope-aware para checagem de duplicidade (SYSTEM vs CUSTOMER/customerId)
-  — NOVO: existsConfirmedAppointment() — NÃO adicionar aqui; ver appointments.repository.ts
+  — Expandir CreateSheetDto, UpdateSheetDto, ListSheetsQuery
 
 aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.service.ts
-  — createSheet(): lógica de autorização scope×role; verificação de vínculo de agendamento para professional
-  — updateSheet(): autorização por scope e createdByUserId
-  — listSheets(): repassar filtros scope, category, customerId
-  — NOVO: listTemplates() + copyTemplate()
+  — Expandir createSheet, updateSheet, listSheets com nova autorização, filtros e lógica de scope
+
+aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.repository.ts
+  — Atualizar createSheet e listSheets; adicionar countActiveCustomerSheets,
+    findSheetByNameForCustomer, copyTemplateAsSheet
 
 aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.routes.ts
-  — NOVOS: GET /measurement-sheets/templates + POST /measurement-sheets/templates/:id/copy
-  — MODIF: GET /measurement-sheets (novos query params: scope, category, customerId)
-  — MODIF: POST /measurement-sheets (guard de role movido para service; route mantém apenas JwtClinicGuard)
-  — MODIF: PATCH /measurement-sheets/:id (guard de role removido da route; service cuida da autorização)
-  — ⚠️ ORDEM OBRIGATÓRIA: /templates e /templates/:id/copy registradas ANTES de /:id
-
-aesthera/apps/api/src/modules/appointments/appointments.repository.ts
-  — NOVO método: existsConfirmedAppointment({ clinicId, professionalId, customerId, statusIn }) → boolean
-
-aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.repository.ts
-  — SESSION_INCLUDE: incluir category na seleção de sheet (select: { id, name, category })
-  — listSessions() / createSession() / updateSession(): campo categories computado na transformação do retorno
+  — Adicionar endpoints GET /templates e POST /templates/:id/copy (antes de /:id);
+    atualizar POST e PATCH para passar userId e role ao service
 
 aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.test.ts
-  — Novos casos de teste (ver seção DoD Checklist)
+  — Adicionar cenários de teste para os novos comportamentos
+
+aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.service.ts
+  — Computar e retornar campo categories: MeasurementCategory[] em listSessions
+
+aesthera/apps/api/src/modules/appointments/appointments.repository.ts
+  — Adicionar método existsConfirmed() (query READ-ONLY; justificativa: RN-10 da spec
+    exige verificação de vínculo no service layer de measurement-sheets — sem essa query
+    não é possível implementar a regra sem acoplar diretamente ao Prisma no service)
 ```
 
 **Nenhuma alteração necessária em:**
 ```
-aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.dto.ts
-  — Não alterar schema de sessão; categories é campo computado no retorno do service/repository
-aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.service.ts
-  — Apenas a query de include precisa de ajuste no repository; service não muda
-aesthera/apps/api/prisma/schema.prisma (modelos MeasurementSession, MeasurementSheetRecord,
-  MeasurementValue, MeasurementTabularValue) — sem alteração nesses modelos
-Módulos billing, appointments (além do método existsConfirmedAppointment), anamnese, contratos
+measurement-sessions.repository.ts — SESSION_INCLUDE já inclui sheet; categories é computado no service
+measurement-sessions.dto.ts        — nenhum campo de input muda
+measurement-sessions.routes.ts     — assinatura das rotas permanece igual
 ```
 
 ### 2.2 Banco de Dados
 
-**Migração necessária:** Sim — não-destrutiva
-
-A migration deve:
-1. Criar os 2 enums (`MeasurementCategory`, `MeasurementScope`)
-2. Adicionar as 4 colunas com `DEFAULT` para preservar dados existentes
-3. Adicionar as 2 FK columns (`customer_id`, `created_by_user_id`) como nullable
-4. Remover o índice/constraint `@@unique([clinicId, name])` existente
-5. Criar dois índices parciais via SQL raw (não suportados pelo Prisma schema diretamente):
-   - `CREATE UNIQUE INDEX measurement_sheets_clinic_name_system_unique ON measurement_sheets (clinic_id, name) WHERE scope = 'SYSTEM';`
-   - `CREATE UNIQUE INDEX measurement_sheets_clinic_customer_name_unique ON measurement_sheets (clinic_id, customer_id, name) WHERE scope = 'CUSTOMER';`
-6. Criar os 2 novos índices compostos de performance
-
-```sql
--- Pseudocode da migration (gerado por prisma migrate dev + customização manual):
-
--- 1. Criar enums
-CREATE TYPE "MeasurementCategory" AS ENUM (
-  'CORPORAL', 'FACIAL', 'DERMATO_FUNCIONAL', 'NUTRICIONAL', 'POSTURAL', 'PERSONALIZADA'
-);
-CREATE TYPE "MeasurementScope" AS ENUM ('SYSTEM', 'CUSTOMER');
-
--- 2. Adicionar colunas com defaults (não-destrutivo)
-ALTER TABLE "measurement_sheets"
-  ADD COLUMN "category" "MeasurementCategory" NOT NULL DEFAULT 'CORPORAL',
-  ADD COLUMN "scope" "MeasurementScope" NOT NULL DEFAULT 'SYSTEM',
-  ADD COLUMN "customer_id" TEXT,
-  ADD COLUMN "created_by_user_id" TEXT;
-
--- 3. Remover constraint de unicidade existente
-DROP INDEX "measurement_sheets_clinic_id_name_key";  -- nome gerado pelo Prisma
-
--- 4. Criar índices parciais de unicidade por scope
-CREATE UNIQUE INDEX "measurement_sheets_clinic_name_system_unique"
-  ON "measurement_sheets" ("clinic_id", "name")
-  WHERE scope = 'SYSTEM';
-
-CREATE UNIQUE INDEX "measurement_sheets_clinic_customer_name_unique"
-  ON "measurement_sheets" ("clinic_id", "customer_id", "name")
-  WHERE scope = 'CUSTOMER';
-
--- 5. Índices de performance
-CREATE INDEX "measurement_sheets_clinic_scope_active" ON "measurement_sheets" ("clinic_id", "scope", "active");
-CREATE INDEX "measurement_sheets_clinic_customer" ON "measurement_sheets" ("clinic_id", "customer_id");
-
--- 6. FKs
-ALTER TABLE "measurement_sheets"
-  ADD CONSTRAINT "measurement_sheets_customer_id_fkey"
-    FOREIGN KEY ("customer_id") REFERENCES "customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "measurement_sheets"
-  ADD CONSTRAINT "measurement_sheets_created_by_user_id_fkey"
-    FOREIGN KEY ("created_by_user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-```
-
-> ⚠️ **Atenção ao nome exato do índice:** O Prisma gera automaticamente o nome da constraint `@@unique` como `{tabela}_{campo1}_{campo2}_key`. Verificar no banco antes de gerar a migration para usar o nome exato no `DROP INDEX`.
-
-> ⚠️ **Partial indexes no Prisma schema:** Não usar `@@unique` no schema para esses índices — usar apenas `@@index` para os índices de performance. Os índices parciais de unicidade residem exclusivamente na migration SQL. O Prisma não sabe sobre eles; a proteção de race condition é garantida pelo banco.
-
----
-
-## 3. Contratos de API
-
-### 3.1 GET /measurement-sheets
-
-```
-GET /measurement-sheets
-
-Query Params:
-  includeInactive: boolean (opcional, default false)
-  scope: 'SYSTEM' | 'CUSTOMER' (opcional)
-  category: 'CORPORAL' | 'FACIAL' | 'DERMATO_FUNCIONAL' | 'NUTRICIONAL' | 'POSTURAL' | 'PERSONALIZADA' (opcional)
-  customerId: string UUID (opcional; obrigatório quando scope=CUSTOMER)
-
-Response (200):
-  Array<{
-    id: string
-    clinicId: string
-    name: string
-    type: 'SIMPLE' | 'TABULAR'
-    category: MeasurementCategory
-    scope: MeasurementScope
-    customerId: string | null
-    active: boolean
-    order: number
-    createdAt: string (ISO)
-    updatedAt: string (ISO)
-    columns: MeasurementSheetColumn[]
-    fields: MeasurementField[]
-  }>
-
-Erros:
-  401 — não autenticado
-  403 — clinicId diferente do JWT (CROSS_TENANT_VIOLATION)
-
-Auth: Obrigatório (JwtClinicGuard)
-Role: qualquer usuário autenticado da clínica
-Guard de tenant (clinic_id): Sim — extraído do JWT, NUNCA do body/query
-```
-
-> ⚠️ O `clinicId` é sempre o do JWT. O `customerId` no query é apenas um filtro adicional — nunca permite acessar fichas de outra clínica.
-
----
-
-### 3.2 POST /measurement-sheets
-
-```
-POST /measurement-sheets
-
-Request Body:
-  name: string (min 1, max 100) — obrigatório
-  type: 'SIMPLE' | 'TABULAR' — opcional, default 'SIMPLE'
-  category: MeasurementCategory — opcional, default 'CORPORAL'
-  scope: MeasurementScope — opcional, default 'SYSTEM'
-  customerId: string UUID — obrigatório quando scope='CUSTOMER'
-  order: number int ≥ 0 — opcional
-
-Validação Zod (.refine()):
-  scope='CUSTOMER' → customerId NOT NULL
-  Mensagem: 'customerId é obrigatório para fichas personalizadas'
-  Path: ['customerId']
-
-Response (201): MeasurementSheet (mesmo formato de GET, sem fields/columns ainda)
-
-Erros:
-  400 — scope=CUSTOMER sem customerId
-  403 — scope=SYSTEM por role não-admin
-  403 — scope=CUSTOMER por professional sem agendamento confirmado com o customerId
-  409 — nome duplicado na clínica (para o mesmo scope/customerId)
-  422 — limite de fichas ativas atingido (MAX_ACTIVE_SHEETS=20 para SYSTEM, 10 para CUSTOMER)
-
-Auth: Obrigatório (JwtClinicGuard)
-Role: admin para scope=SYSTEM; admin|staff|professional para scope=CUSTOMER
-       (diferença de autorização tratada no SERVICE, não na route)
-Guard de tenant (clinic_id): Sim
-```
-
----
-
-### 3.3 PATCH /measurement-sheets/:id
-
-```
-PATCH /measurement-sheets/:id
-
-Request Body:
-  name: string (min 1, max 100) — opcional
-  category: MeasurementCategory — opcional (mutável a qualquer momento)
-  order: number int ≥ 0 — opcional
-  active: boolean — opcional
-  ⛔ type: AUSENTE do schema Zod (omitir — nunca permitir alteração de type pós-criação)
-
-Response (200): MeasurementSheet completa (com fields e columns)
-
-Erros:
-  400 — type enviado no body → rejeitar (z.never() ou .strip() + warning); ou simplesmente omitir do schema (automaticamente ignorado pelo Zod z.object())
-  403 — scope=SYSTEM por role não-admin
-  403 — scope=CUSTOMER por usuário que não é o criador (createdByUserId) nem admin
-  404 — id não encontrado
-  409 — nome duplicado
-
-Auth: Obrigatório (JwtClinicGuard)
-Role: verificação de scope×createdByUserId no service
-Guard de tenant (clinic_id): Sim
-```
-
-> **Nota sobre `type`:** A abordagem mais segura é simplesmente **não incluir `type` no UpdateSheetDto** (Zod descarta campos desconhecidos por padrão com `.strip()`). Não é necessário `z.never()`.
-
----
-
-### 3.4 GET /measurement-sheets/templates
-
-```
-GET /measurement-sheets/templates
-
-Response (200):
-  Array<{
-    id: string                          — identificador do template (ex: 'tpl-perimetria')
-    name: string                        — nome localizado em PT-BR
-    category: MeasurementCategory
-    type: 'SIMPLE' | 'TABULAR'
-    fields?: string[]                   — apenas para type=SIMPLE (nomes dos campos)
-    rows?: string[]                     — apenas para type=TABULAR (linhas)
-    columns?: string[]                  — apenas para type=TABULAR (colunas/cabeçalhos)
-  }>
-
-Erros:
-  401 — não autenticado
-
-Auth: Obrigatório (JwtClinicGuard)
-Role: qualquer usuário autenticado
-Guard de tenant (clinic_id): Não — templates são globais ao sistema
-```
-
-> Resposta derivada diretamente da constante `MEASUREMENT_TEMPLATES`; sem query ao banco.
-
----
-
-### 3.5 POST /measurement-sheets/templates/:id/copy
-
-```
-POST /measurement-sheets/templates/:id/copy
-
-Path Params:
-  id: string — identificador do template (ex: 'tpl-perimetria')
-
-Request Body: vazio (clinicId extraído do JWT, NUNCA do body)
-
-Response (201):
-  {
-    sheet: MeasurementSheet (com fields e columns)
-    name: string               — nome final (pode ter sufixo numérico se houve duplicidade)
-    copiedFromTemplateId: string
-  }
-
-Erros:
-  403 — role não-admin
-  404 — templateId não encontrado na constante MEASUREMENT_TEMPLATES
-  422 — limite de 20 fichas SYSTEM ativas atingido
-
-Auth: Obrigatório (JwtClinicGuard + RoleGuard(['admin']))
-Role: admin
-Guard de tenant (clinic_id): Sim — extraído do JWT
-```
-
-**Lógica de deduplicação de nome:**
-- Verificar se já existe ficha com `scope=SYSTEM` e `name=template.name` na clínica
-- Se existir: tentar `name + ' 2'`, depois `' 3'`, etc. (até encontrar disponível ou limite razoável de 99)
-- Toda a operação em `prisma.$transaction()`
-
----
-
-## 4. Modelo de Dados
-
-### 4.1 Schema Prisma atualizado (MeasurementSheet)
+**Migração necessária:** Sim — **não-destrutiva**
 
 ```prisma
-// Novos enums — adicionar antes do model MeasurementSheet
+-- Novos enums adicionados ao schema.prisma:
+
 enum MeasurementCategory {
   CORPORAL
   FACIAL
@@ -329,174 +84,182 @@ enum MeasurementCategory {
 }
 
 enum MeasurementScope {
-  SYSTEM    // visível para todos os clientes da clínica
-  CUSTOMER  // visível somente para um cliente específico
+  SYSTEM    -- visível a todos os clientes da clínica
+  CUSTOMER  -- visível apenas ao cliente vinculado
 }
 
-model MeasurementSheet {
-  id        String               @id @default(uuid())
-  clinicId  String               @map("clinic_id")
-  name      String
-  type      MeasurementSheetType @default(SIMPLE)
-  category  MeasurementCategory  @default(CORPORAL) @map("category")
-  scope     MeasurementScope     @default(SYSTEM)   @map("scope")
-  customerId      String?  @map("customer_id")
-  createdByUserId String?  @map("created_by_user_id")
-  active    Boolean              @default(true)
-  order     Int                  @default(0)
-  createdAt DateTime             @default(now()) @map("created_at")
-  updatedAt DateTime             @updatedAt @map("updated_at")
+-- Campos adicionados ao model MeasurementSheet (após campo `order`):
 
-  clinic       Clinic                   @relation(fields: [clinicId], references: [id])
-  customer     Customer?                @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  createdBy    User?                    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
-  fields       MeasurementField[]
-  columns      MeasurementSheetColumn[]
-  sheetRecords MeasurementSheetRecord[]
+category          MeasurementCategory  @default(CORPORAL)    @map("category")
+scope             MeasurementScope     @default(SYSTEM)      @map("scope")
+customerId        String?              @map("customer_id")
+createdByUserId   String?              @map("created_by_user_id")
 
-  // @@unique([clinicId, name]) — REMOVIDO; substituído por índices parciais na migration SQL
-  @@index([clinicId, active, order])       // existente — mantido
-  @@index([clinicId, scope, active])       // NOVO — performance em listagens por scope
-  @@index([clinicId, customerId])          // NOVO — performance em fichas por cliente
-  @@map("measurement_sheets")
-}
+-- Relações adicionadas ao model MeasurementSheet:
+
+customer    Customer?  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+createdBy   User?      @relation(fields: [createdByUserId], references: [id])
+
+-- Índices adicionados ao model MeasurementSheet (manter o @@unique existente):
+
+@@index([clinicId, scope, active])
+@@index([clinicId, customerId])
 ```
 
-> ⚠️ **Relações inversas obrigatórias:** Os modelos `User` e `Customer` precisam das relações inversas para o Prisma gerar os tipos corretamente:
->
-> ```prisma
-> // Em model User — adicionar:
-> measurementSheets  MeasurementSheet[] @relation("CreatedByUser")
->
-> // Em model Customer — adicionar:
-> measurementSheets  MeasurementSheet[]
-> ```
->
-> Usar `@relation("CreatedByUser")` no `MeasurementSheet.createdBy` e `User.measurementSheets` para evitar ambiguidade, pois `User` já tem outras relações.
+Todos os `MeasurementSheet` existentes recebem `category=CORPORAL` e `scope=SYSTEM` pelos defaults — **zero downtime**.
 
-### 4.2 Impacto em dados existentes
-
-| Campo | Comportamento nos registros existentes |
-|-------|---------------------------------------|
-| `category` | Todos recebem `CORPORAL` (default da migration) |
-| `scope` | Todos recebem `SYSTEM` (default da migration) |
-| `customerId` | NULL (nullable — sem FK obrigatória) |
-| `createdByUserId` | NULL (nullable — não retroativo) |
-
-**Migration é 100% não-destrutiva**: nenhum dado é perdido, nenhuma query existente quebra.
+Gerar com:
+```
+prisma migrate dev --name add-measurement-category-scope
+```
 
 ---
 
-## 5. Autorização
+## 3. Contratos de API
 
-### 5.1 Matriz de autorização por endpoint
+### 3.1 GET /measurement-sheets
 
-| Endpoint | admin | staff | professional | Observação |
-|----------|-------|-------|--------------|------------|
-| `GET /measurement-sheets/templates` | ✅ | ✅ | ✅ | Sem verificação de role |
-| `POST /measurement-sheets/templates/:id/copy` | ✅ | ❌ | ❌ | RoleGuard na route |
-| `GET /measurement-sheets` | ✅ | ✅ | ✅ | Filtros scope/category/customerId disponíveis |
-| `POST /measurement-sheets` com `scope=SYSTEM` | ✅ | ❌ | ❌ | Verificação no service |
-| `POST /measurement-sheets` com `scope=CUSTOMER` | ✅ | ✅ | ⚠️ | professional: verificar agendamento no service |
-| `PATCH /measurement-sheets/:id` com `scope=SYSTEM` | ✅ | ❌ | ❌ | Verificação no service |
-| `PATCH /measurement-sheets/:id` com `scope=CUSTOMER` | ✅ | ⚠️ | ⚠️ | Apenas criador (`createdByUserId`) ou admin |
-| `DELETE /measurement-sheets/:id` | ✅ | ❌ | ❌ | Comportamento existente mantido |
+Filtros adicionados à query string (todos opcionais):
 
-### 5.2 Verificação de vínculo de agendamento (professional + scope=CUSTOMER)
+```
+GET /measurement-sheets?scope=SYSTEM&category=CORPORAL&customerId=uuid&includeInactive=false
 
-Implementar no `MeasurementSheetsService.createSheet()`, chamando `AppointmentsRepository.existsConfirmedAppointment()`:
+Query params novos:
+  scope       : 'SYSTEM' | 'CUSTOMER'   — opcional
+  category    : MeasurementCategory      — opcional
+  customerId  : string (UUID)            — obrigatório quando scope=CUSTOMER
 
-```typescript
-// AppointmentsRepository — novo método:
-async existsConfirmedAppointment(params: {
-  clinicId: string
-  professionalId: string
-  customerId: string
-  statusIn: AppointmentStatus[]
-}): Promise<boolean> {
-  const count = await prisma.appointment.count({
-    where: {
-      clinicId: params.clinicId,
-      professionalId: params.professionalId,
-      customerId: params.customerId,
-      status: { in: params.statusIn },
-    },
-  })
-  return count > 0
-}
+Response (200): MeasurementSheet[] (schema inalterado + campos category, scope, customerId)
 
-// MeasurementSheetsService.createSheet() — trecho da lógica:
-if (dto.scope === 'CUSTOMER' && userRole === 'professional') {
-  const hasAppointment = await this.appointmentsRepo.existsConfirmedAppointment({
-    clinicId,
-    professionalId: authenticatedUserId,
-    customerId: dto.customerId!,
-    statusIn: ['confirmed', 'in_progress', 'completed'],
-  })
-  if (!hasAppointment) {
-    throw new ForbiddenError('Você não tem agendamento confirmado com este cliente.')
-  }
-}
+Auth: Obrigatório (JwtClinicGuard)
+Role: any (clinicId do JWT sempre no where)
+Guard de tenant (clinicId): Sim — sempre extraído do JWT
 ```
 
-> ⚠️ O `MeasurementSheetsService` precisará receber `AppointmentsRepository` como dependência (injeção manual no construtor ou importação direta — consistente com o padrão atual do projeto onde services instanciam repositories diretamente).
+### 3.2 POST /measurement-sheets
 
-### 5.3 Regras de autorização no update (scope=CUSTOMER)
+```
+POST /measurement-sheets
 
-```typescript
-// MeasurementSheetsService.updateSheet():
-if (sheet.scope === 'SYSTEM' && userRole !== 'admin') {
-  throw new ForbiddenError('Apenas administradores podem editar fichas do sistema.')
-}
-if (sheet.scope === 'CUSTOMER' && userRole !== 'admin' && sheet.createdByUserId !== authenticatedUserId) {
-  throw new ForbiddenError('Você só pode editar fichas criadas por você.')
-}
+Request Body:
+  name            : string (1–100)       — obrigatório
+  type            : 'SIMPLE' | 'TABULAR' — default SIMPLE
+  category        : MeasurementCategory  — default CORPORAL
+  scope           : 'SYSTEM' | 'CUSTOMER'— default SYSTEM
+  customerId      : UUID                 — obrigatório quando scope=CUSTOMER
+  order           : number               — opcional
+
+Response (201): MeasurementSheet com todos os campos
+
+Errors:
+  400 — scope=CUSTOMER sem customerId
+  403 — profissional sem agendamento confirmado com o cliente
+  403 — staff tentando criar scope=SYSTEM (role guard no route, verificação no service)
+  409 — nome duplicado na clínica (ou no cliente, para scope=CUSTOMER)
+  422 — MAX_SHEETS_REACHED (scope=SYSTEM, limit 20) ou MAX_CUSTOMER_SHEETS_REACHED (scope=CUSTOMER, limit 10)
+
+Auth: Obrigatório (JwtClinicGuard)
+Role:
+  scope=SYSTEM  → apenas admin (roleGuard no route)
+  scope=CUSTOMER → admin, staff, professional (verificação de vínculo no service para professional)
+Guard de tenant (clinicId): Sim — extraído do JWT, nunca do body
 ```
 
-### 5.4 Limites de fichas ativas
+> ⚠️ O `roleGuard(['admin'])` existente na rota POST deve ser REMOVIDO. A verificação de role passa a ser feita no **service**, pois o critério varia pelo campo `scope` do DTO.
 
-| Tipo | Limite | Escopo |
-|------|--------|--------|
-| `scope=SYSTEM` | 20 fichas ativas | por clínica |
-| `scope=CUSTOMER` | 10 fichas ativas | por cliente por clínica |
+### 3.3 PATCH /measurement-sheets/:id
 
-O `countActiveSheets()` no repository precisa ser atualizado para aceitar `{ clinicId, scope, customerId? }`.
+```
+PATCH /measurement-sheets/:id
+
+Request Body:
+  name     : string (1–100) — opcional
+  category : MeasurementCategory — opcional (campo NOVO mutável)
+  order    : number       — opcional
+  active   : boolean      — opcional
+  -- campo `type` AUSENTE do schema Zod (nunca permitido no PATCH)
+
+Response (200): MeasurementSheet atualizado
+
+Errors:
+  403 — scope=SYSTEM por não-admin
+  403 — scope=CUSTOMER por usuário que não é criador nem admin
+  404 — ficha não encontrada / cross-tenant
+
+Auth: Obrigatório (JwtClinicGuard)
+Role: verificado no service conforme scope da ficha
+Guard de tenant (clinicId): Sim
+```
+
+### 3.4 GET /measurement-sheets/templates ← NOVO
+
+```
+GET /measurement-sheets/templates
+
+Response (200): Array de templates da constante MEASUREMENT_TEMPLATES
+  [
+    {
+      id       : string
+      name     : string
+      category : MeasurementCategory
+      type     : 'SIMPLE' | 'TABULAR'
+      fields?  : string[]    -- para type=SIMPLE
+      rows?    : string[]    -- para type=TABULAR
+      columns? : string[]    -- para type=TABULAR
+    }
+  ]
+
+Sem consulta ao banco — retorna MEASUREMENT_TEMPLATES diretamente.
+
+Auth: Obrigatório (JwtClinicGuard)
+Role: any
+Guard de tenant (clinicId): Não necessário (templates são globais/read-only)
+```
+
+### 3.5 POST /measurement-sheets/templates/:id/copy ← NOVO
+
+```
+POST /measurement-sheets/templates/:id/copy
+
+Params:
+  id: ID do template (ex: 'tpl-perimetria')
+
+Request Body: vazio
+
+Response (201): MeasurementSheet criada na clínica do JWT (com fields/columns incluídos)
+
+Errors:
+  404 — templateId não encontrado em MEASUREMENT_TEMPLATES
+  403 — role !== 'admin'
+  422 — MAX_SHEETS_REACHED (se limite de 20 atingido)
+
+Lógica de nome duplicado:
+  Se nome já existe na clínica: tentar `{nome} 2`, `{nome} 3`, ... até nome livre (máx 99)
+  Se não encontrar nome livre: retornar 409
+
+Auth: Obrigatório (JwtClinicGuard + roleGuard(['admin']))
+Role: admin
+Guard de tenant (clinicId): Sim — extraído do JWT
+Transação: Sim — prisma.$transaction() para criar sheet + fields/columns atomicamente
+```
 
 ---
 
-## 6. Templates
+## 4. Detalhamento de Implementação
 
-### 6.1 Arquivo measurement-templates.ts
+### 4.1 measurement-templates.ts (NOVO)
 
-```
-Localização: aesthera/apps/api/src/modules/measurement-sheets/measurement-templates.ts
-```
-
-O arquivo deve exportar:
-- A constante `MEASUREMENT_TEMPLATES` (array `as const`)
-- Um tipo `MeasurementTemplate` derivado do array
-- Uma função helper `findTemplateById(id: string): MeasurementTemplate | undefined`
-
-### 6.2 Templates a implementar
-
-| id | name | category | type | fields | rows | columns |
-|----|------|----------|------|--------|------|---------|
-| `tpl-perimetria` | Perimetria | CORPORAL | SIMPLE | Cintura, Abdome, Quadril, Braço D, Braço E, Coxa D, Coxa E | — | — |
-| `tpl-bioimpedancia` | Bioimpedância | CORPORAL | SIMPLE | Peso, Altura, % Gordura, Massa Muscular, Massa Óssea, Água Corporal | — | — |
-| `tpl-condicao-estetica` | Condição Estética | DERMATO_FUNCIONAL | TABULAR | — | Braços, Costas, Axilares, Flancos, Abdome, Glúteos, Culotes | FEG I, FEG II, FEG III, Adiposidade, Dura/Mole, Flacidez Muscular/Tissular, Estrias Brancas, Estrias Vermelhas, Varicose |
-| `tpl-firmeza-tissular` | Firmeza Tissular | DERMATO_FUNCIONAL | TABULAR | — | Braços, Abdome, Flancos, Glúteos, Coxas | Grau 1, Grau 2, Grau 3, Grau 4 |
-| `tpl-avaliacao-facial` | Avaliação Facial | FACIAL | SIMPLE | Fototipo Fitzpatrick, Tipo de Pele, Oleosidade, Sensibilidade, Manchas, Rugas | — | — |
-| `tpl-postural` | Avaliação Postural | POSTURAL | SIMPLE | Joelhos (valgo/varo), Coluna, Ombros, Quadril, Pelve | — | — |
-
-### 6.3 Estrutura discriminada do tipo de template
+Criar `src/modules/measurement-sheets/measurement-templates.ts`:
 
 ```typescript
+import { MeasurementCategory } from '@prisma/client'
+
 type SimpleTemplate = {
   id: string
   name: string
   category: MeasurementCategory
   type: 'SIMPLE'
-  fields: readonly string[]
+  fields: string[]
 }
 
 type TabularTemplate = {
@@ -504,295 +267,640 @@ type TabularTemplate = {
   name: string
   category: MeasurementCategory
   type: 'TABULAR'
-  rows: readonly string[]
-  columns: readonly string[]
+  rows: string[]
+  columns: string[]
 }
 
-type MeasurementTemplate = SimpleTemplate | TabularTemplate
+export type MeasurementTemplate = SimpleTemplate | TabularTemplate
+
+export const MEASUREMENT_TEMPLATES: readonly MeasurementTemplate[] = [
+  {
+    id: 'tpl-perimetria',
+    name: 'Perimetria',
+    category: 'CORPORAL',
+    type: 'SIMPLE',
+    fields: ['Cintura', 'Abdome', 'Quadril', 'Braço D', 'Braço E', 'Coxa D', 'Coxa E'],
+  },
+  {
+    id: 'tpl-bioimpedancia',
+    name: 'Bioimpedância',
+    category: 'CORPORAL',
+    type: 'SIMPLE',
+    fields: ['Peso', 'Altura', '% Gordura', 'Massa Muscular', 'Massa Óssea', 'Água Corporal'],
+  },
+  {
+    id: 'tpl-condicao-estetica',
+    name: 'Condição Estética',
+    category: 'DERMATO_FUNCIONAL',
+    type: 'TABULAR',
+    rows: ['Braços', 'Costas', 'Axilares', 'Flancos', 'Abdome', 'Glúteos', 'Culotes'],
+    columns: ['FEG I', 'FEG II', 'FEG III', 'Adiposidade', 'Dura/Mole', 'Flacidez Muscular/Tissular', 'Estrias Brancas', 'Estrias Vermelhas', 'Varicose'],
+  },
+  {
+    id: 'tpl-firmeza-tissular',
+    name: 'Firmeza Tissular',
+    category: 'DERMATO_FUNCIONAL',
+    type: 'TABULAR',
+    rows: ['Braços', 'Abdome', 'Flancos', 'Glúteos', 'Coxas'],
+    columns: ['Grau 1', 'Grau 2', 'Grau 3', 'Grau 4'],
+  },
+  {
+    id: 'tpl-avaliacao-facial',
+    name: 'Avaliação Facial',
+    category: 'FACIAL',
+    type: 'SIMPLE',
+    fields: ['Fototipo Fitzpatrick', 'Tipo de Pele', 'Oleosidade', 'Sensibilidade', 'Manchas', 'Rugas'],
+  },
+  {
+    id: 'tpl-postural',
+    name: 'Avaliação Postural',
+    category: 'POSTURAL',
+    type: 'SIMPLE',
+    fields: ['Joelhos (valgo/varo)', 'Coluna', 'Ombros', 'Quadril', 'Pelve'],
+  },
+] as const
 ```
 
-### 6.4 Lógica de cópia de template (copyTemplate no service)
-
-```
-1. Localizar template por id → NotFoundException se não encontrado
-2. Verificar limite de 20 fichas SYSTEM ativas → ValidationError se atingido
-3. Identificar nome disponível:
-   a. Tentar template.name
-   b. Se existir: tentar `${name} 2`, `${name} 3`... até achar disponível (máx 99 tentativas)
-4. Em prisma.$transaction():
-   a. Criar MeasurementSheet com name disponível + category + type + scope=SYSTEM + clinicId do JWT
-   b. Se type=SIMPLE: criar MeasurementField[] para cada item de template.fields
-   c. Se type=TABULAR:
-      - Criar MeasurementField[] para cada item de template.rows
-      - Criar MeasurementSheetColumn[] para cada item de template.columns
-5. Retornar { sheet: MeasurementSheet (com fields e columns), name, copiedFromTemplateId }
-```
-
----
-
-## 7. Integração com Sessions
-
-### 7.1 Campo `categories` na response de listagem
-
-O campo `categories: MeasurementCategory[]` é **computado** a partir das fichas da sessão — não armazenado no banco.
-
-**Modificação necessária em `measurement-sessions.repository.ts`:**
+### 4.2 measurement-sheets.dto.ts — Mudanças
 
 ```typescript
-// SESSION_INCLUDE atualizado — incluir category na seleção de sheet:
-const SESSION_INCLUDE = {
-  sheetRecords: {
-    include: {
-      sheet: { select: { id: true, name: true, category: true } },  // ← adicionar category
-      // ... restante sem alteração
-    }
+// Enums a importar de @prisma/client
+import { MeasurementCategory, MeasurementScope } from '@prisma/client'
+
+// CreateSheetDto — SUBSTITUIR por:
+export const CreateSheetDto = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(['SIMPLE', 'TABULAR']).default('SIMPLE'),
+  category: z.nativeEnum(MeasurementCategory).optional().default('CORPORAL'),
+  scope: z.nativeEnum(MeasurementScope).optional().default('SYSTEM'),
+  customerId: z.string().uuid().optional(),
+  order: z.number().int().nonnegative().optional(),
+}).refine(
+  (data) => data.scope !== 'CUSTOMER' || !!data.customerId,
+  { message: 'customerId é obrigatório para fichas personalizadas', path: ['customerId'] },
+)
+
+// UpdateSheetDto — SUBSTITUIR por (campo `type` ausente — nunca permitido no PATCH):
+export const UpdateSheetDto = z.object({
+  name: z.string().min(1).max(100).optional(),
+  category: z.nativeEnum(MeasurementCategory).optional(),  // NOVO — mutável
+  order: z.number().int().nonnegative().optional(),
+  active: z.boolean().optional(),
+  // `type` deliberadamente ausente
+})
+
+// ListSheetsQuery — SUBSTITUIR por:
+export const ListSheetsQuery = z.object({
+  includeInactive: z.coerce.boolean().optional().default(false),
+  scope: z.nativeEnum(MeasurementScope).optional(),       // NOVO
+  category: z.nativeEnum(MeasurementCategory).optional(), // NOVO
+  customerId: z.string().uuid().optional(),               // NOVO (obrigatório quando scope=CUSTOMER)
+})
+
+// Nova constante de limite (adicionar ao bloco de constantes):
+export const MAX_ACTIVE_CUSTOMER_SHEETS = 10
+```
+
+### 4.3 measurement-sheets.service.ts — Mudanças
+
+**Assinatura de `listSheets()` — atualizar:**
+```typescript
+async listSheets(clinicId: string, q: ListSheetsQuery) {
+  return this.repo.listSheets(clinicId, {
+    activeOnly: !q.includeInactive,
+    scope: q.scope,
+    category: q.category,
+    customerId: q.customerId,
+  })
+}
+```
+
+**Assinatura de `createSheet()` — adicionar parâmetros de contexto:**
+```typescript
+async createSheet(
+  clinicId: string,
+  userId: string,    // NOVO — request.user.sub
+  role: string,      // NOVO — request.user.role
+  dto: CreateSheetDto,
+) {
+  // scope=SYSTEM: apenas admin
+  if (dto.scope === 'SYSTEM' && role !== 'admin') {
+    throw new ForbiddenError('Apenas administradores podem criar fichas do sistema')
   }
-  // ...
+
+  // scope=CUSTOMER: validações extras
+  if (dto.scope === 'CUSTOMER') {
+    // customerId garantido pelo refine do DTO — aqui só assertion
+    // Verificar limite de fichas personalizadas por cliente
+    const customerCount = await this.repo.countActiveCustomerSheets(clinicId, dto.customerId!)
+    if (customerCount >= MAX_ACTIVE_CUSTOMER_SHEETS) {
+      throw new ValidationError('MAX_CUSTOMER_SHEETS_REACHED')
+    }
+
+    // Profissional: exigir agendamento confirmado
+    if (role === 'professional') {
+      const hasAppointment = await this.appointmentsRepo.existsConfirmed({
+        clinicId,
+        professionalId: userId,
+        customerId: dto.customerId!,
+      })
+      if (!hasAppointment) {
+        throw new ForbiddenError('Você não tem agendamento confirmado com este cliente.')
+      }
+    }
+
+    // Unicidade de nome por cliente (além da verificação global)
+    const existingCustomer = await this.repo.findSheetByNameForCustomer(
+      clinicId, dto.customerId!, dto.name,
+    )
+    if (existingCustomer) {
+      throw new ConflictError('Nome de ficha já existe para este cliente')
+    }
+  } else {
+    // scope=SYSTEM: verificar limite global (lógica existente)
+    const count = await this.repo.countActiveSheets(clinicId)
+    if (count >= MAX_ACTIVE_SHEETS) throw new ValidationError('MAX_SHEETS_REACHED')
+
+    const existing = await this.repo.findSheetByName(clinicId, dto.name)
+    if (existing) throw new ConflictError('Nome de ficha já existe nesta clínica')
+  }
+
+  return this.repo.createSheet(clinicId, userId, dto)
 }
 ```
 
-**Transformação no retorno do repository (ou service):**
-
+**`updateSheet()` — adicionar verificação de scope:**
 ```typescript
-// Função utilitária a ser aplicada em listSessions/createSession/updateSession:
-function mapSessionWithCategories(session: SessionWithIncludes) {
-  const categories = [
-    ...new Set(session.sheetRecords.map((sr) => sr.sheet.category))
-  ] as MeasurementCategory[]
+async updateSheet(id: string, clinicId: string, userId: string, role: string, dto: UpdateSheetDto) {
+  const sheet = await this.repo.findSheetById(id, clinicId)
+  if (!sheet) throw new NotFoundError('MeasurementSheet')
+  if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
-  return { ...session, categories }
+  // Autorização por scope
+  if (sheet.scope === 'SYSTEM' && role !== 'admin') {
+    throw new ForbiddenError('Apenas administradores podem editar fichas do sistema')
+  }
+  if (sheet.scope === 'CUSTOMER' && role !== 'admin' && sheet.createdByUserId !== userId) {
+    throw new ForbiddenError('Você não tem permissão para editar esta ficha personalizada')
+  }
+
+  // ... lógica existente de nome único e limite de reativação ...
+  // (preservada sem alteração)
 }
 ```
 
-> ⚠️ **Não alterar o schema `MeasurementSession`** — `categories` é apenas um campo virtual na response. O schema Prisma não precisa mudar.
-
-### 7.2 Impacto em endpoints existentes de sessions
-
-| Endpoint | Mudança |
-|----------|---------|
-| `GET /measurement-sessions?customerId=X` | Passa a retornar `categories` em cada sessão |
-| `POST /measurement-sessions` | Retorno passa a incluir `categories` |
-| `PATCH /measurement-sessions/:id` | Retorno passa a incluir `categories` |
-
-> A adição de `categories` é **backward compatible** (campo novo na response — clientes existentes ignoram).
-
----
-
-## 8. Fluxo de Dados
-
-### 8.1 POST /measurement-sheets (scope=CUSTOMER, role=professional)
-
-```
-Professional faz POST /measurement-sheets
-  → JwtClinicGuard: extrai clinicId, userId, userRole do JWT
-  → MeasurementSheetsRoutes: parse DTO → CreateSheetDto.parse(req.body)
-  → MeasurementSheetsService.createSheet(clinicId, userId, userRole, dto):
-      1. Zod .refine(): scope=CUSTOMER → customerId NOT NULL
-      2. Limite CUSTOMER: countActiveSheets({ clinicId, scope: 'CUSTOMER', customerId }) < 10
-      3. Role check: scope=SYSTEM → role must be admin
-      4. Vínculo de agendamento: role=professional → existsConfirmedAppointment()
-      5. Nome único: findSheetByName(clinicId, dto.name, scope, customerId)
-      6. createSheet() no repository
-  ← 201 MeasurementSheet
-```
-
-### 8.2 POST /measurement-sheets/templates/:id/copy
-
-```
-Admin faz POST /measurement-sheets/templates/tpl-perimetria/copy
-  → JwtClinicGuard: extrai clinicId do JWT
-  → RoleGuard(['admin']): verifica role
-  → MeasurementSheetsRoutes: extrai templateId do path
-  → MeasurementSheetsService.copyTemplate(clinicId, templateId):
-      1. findTemplateById(templateId) → 404 se não encontrado
-      2. countActiveSheets({ clinicId, scope: 'SYSTEM' }) < 20
-      3. Encontrar nome disponível (loop de sufixo numérico)
-      4. prisma.$transaction(): criar sheet + fields/columns
-  ← 201 { sheet, name, copiedFromTemplateId }
-```
-
----
-
-## 9. Dependências e Riscos
-
-### Dependências
-
-- `AppointmentsRepository` deve existir e ser acessível ao `MeasurementSheetsService` (já existe em `appointments.repository.ts`)
-- O enum `AppointmentStatus` do Prisma deve incluir os valores `confirmed`, `in_progress`, `completed` (já existem no schema atual)
-- O modelo `Customer` deve existir com FK para `MeasurementSheet` (Customer já existe; a relação inversa é nova)
-- O modelo `User` deve aceitar a relação inversa `measurementSheets` (User já existe)
-
-### Riscos identificados
-
-| Risco | Impacto | Mitigação |
-|-------|---------|-----------|
-| `@@unique([clinicId, name])` existente quebra a migration | Alto — migration falha | Verificar nome exato da constraint no banco antes de gerar migration; `DROP INDEX` com nome correto |
-| Índices parciais não declarados no schema Prisma | Médio — Prisma desconhece e pode tentar recriar em future migrations | Documentar na migration com comentário; adicionar `@@ignore` ou anotar no prisma.schema |
-| `countActiveSheets` filtrando scope=SYSTEM não considera fichas CUSTOMER | Médio — limite errado aplicado | Atualizar `countActiveSheets` para receber `{ scope, customerId? }` como parâmetro |
-| `SESSION_INCLUDE` quebra compilação TypeScript após adicionar `category` | Baixo — erro de tipo | Atualizar tipo do include e ajustar mapeamento; garantir que `mapSessionWithCategories` não quebre sessions sem sheetRecords |
-| Race condition em insert duplicado de nome | Baixo — unique index parcial no banco | Os índices parciais da migration garantem integridade em nível de banco |
-| `professional` autentica via JWT diferente de `User` | A verificar — `ProfessionalAuth` é modelo separado | Confirmar se o JWT de professional inclui `professionalId` e como `MeasurementSheetsService` recebe esse ID para a query de agendamento |
-
-> ⚠️ **Risco crítico — autenticação de professional:** O modelo `Professional` tem `ProfessionalAuth` separado de `User`. Verificar se o `jwtClinicGuard` retorna `professionalId` ou `userId` no request, e ajustar a chamada de `existsConfirmedAppointment()` para usar o campo correto. Se o JWT de professional expõe `id` como `professionalId`, o campo no guard é diferente do `userId` de um `User`.
-
----
-
-## 10. DoD Checklist
-
-O `aesthera-implementador` deve marcar cada item ao concluir.
-
-### Schema e Migration
-
-- [ ] Enums `MeasurementCategory` e `MeasurementScope` criados no schema Prisma
-- [ ] 4 campos adicionados a `MeasurementSheet` com defaults corretos (`CORPORAL`, `SYSTEM`, null, null)
-- [ ] Relações `customer` e `createdBy` adicionadas a `MeasurementSheet`
-- [ ] Relações inversas adicionadas a `User` e `Customer`
-- [ ] `@@unique([clinicId, name])` removido do schema
-- [ ] Migration gerada com `prisma migrate dev --name add-measurement-category-scope`
-- [ ] Migration modificada manualmente para: `DROP INDEX` existente + 2 `CREATE UNIQUE INDEX ... WHERE`
-- [ ] Migration executada com sucesso em ambiente de dev
-- [ ] Verificado: nenhuma ficha existente perdida; todas com `category=CORPORAL`, `scope=SYSTEM`
-
-### DTOs
-
-- [ ] `CreateSheetDto` com campos `category`, `scope`, `customerId`, `createdByUserId`
-- [ ] `.refine()` implementado: `scope='CUSTOMER' → customerId NOT NULL`
-- [ ] `UpdateSheetDto` sem campo `type` (omitido do schema Zod)
-- [ ] `UpdateSheetDto` com campo `category` como mutável
-- [ ] `ListSheetsQuery` com filtros `scope`, `category`, `customerId`
-
-### Repository
-
-- [ ] `listSheets()` aplica filtros `scope`, `category`, `customerId` no where
-- [ ] `countActiveSheets()` atualizado para receber `scope` e `customerId`
-- [ ] `createSheet()` persiste `category`, `scope`, `customerId`, `createdByUserId`
-- [ ] `updateSheet()` persiste `category`
-- [ ] `findSheetByName()` scope-aware (diferencia SYSTEM vs CUSTOMER)
-- [ ] `AppointmentsRepository.existsConfirmedAppointment()` criado
-
-### Service
-
-- [ ] `createSheet()` verifica role para scope=SYSTEM (ForbiddenError se não-admin)
-- [ ] `createSheet()` chama `existsConfirmedAppointment` para professional + scope=CUSTOMER
-- [ ] `createSheet()` limite separado: 20 SYSTEM × 10 CUSTOMER
-- [ ] `createSheet()` armazena `createdByUserId = authenticatedUserId`
-- [ ] `updateSheet()` verifica scope=SYSTEM → role=admin
-- [ ] `updateSheet()` verifica scope=CUSTOMER → criador ou admin
-- [ ] `listTemplates()` retorna `MEASUREMENT_TEMPLATES` formatado
-- [ ] `copyTemplate()` implementado com deduplicação de nome e `prisma.$transaction()`
-
-### Routes
-
-- [ ] `GET /measurement-sheets/templates` registrado ANTES de `/:id`
-- [ ] `POST /measurement-sheets/templates/:id/copy` registrado ANTES de `/:id`
-- [ ] `GET /measurement-sheets` aceita query params `scope`, `category`, `customerId`
-- [ ] `POST /measurement-sheets` com `JwtClinicGuard` apenas (sem roleGuard na route — no service)
-- [ ] `PATCH /measurement-sheets/:id` com `JwtClinicGuard` apenas (sem roleGuard na route — no service)
-- [ ] Parâmetros `authenticatedUserId` e `userRole` extraídos do JWT e repassados ao service
-
-### Templates
-
-- [ ] `measurement-templates.ts` criado com 6 templates corretos
-- [ ] Tipos `SimpleTemplate`, `TabularTemplate`, `MeasurementTemplate` exportados
-- [ ] Helper `findTemplateById()` exportado
-- [ ] Templates TABULAR têm `rows` e `columns` (não `fields`)
-- [ ] Templates SIMPLE têm `fields` (não `rows`/`columns`)
-
-### Integração com Sessions
-
-- [ ] `SESSION_INCLUDE` inclui `category` na seleção de `sheet`
-- [ ] `mapSessionWithCategories()` (ou equivalente) aplicado em todas as responses de sessão
-- [ ] `GET /measurement-sessions` retorna `categories: MeasurementCategory[]` por sessão
-- [ ] `POST /measurement-sessions` retorna `categories` na sessão criada
-
-### Testes
-
-- [ ] `POST /measurement-sheets` com `scope=CUSTOMER` sem `customerId` → 400
-- [ ] `POST /measurement-sheets` com `scope=CUSTOMER` por professional sem agendamento → 403
-- [ ] `POST /measurement-sheets` com `scope=CUSTOMER` por professional com agendamento `confirmed` → 201
-- [ ] `POST /measurement-sheets` com `scope=SYSTEM` por staff → 403
-- [ ] `PATCH /measurement-sheets/:id` de ficha `scope=SYSTEM` por staff → 403
-- [ ] `PATCH /measurement-sheets/:id` de ficha `scope=CUSTOMER` pelo criador → 200
-- [ ] `PATCH /measurement-sheets/:id` de ficha `scope=CUSTOMER` por outro usuário não-admin → 403
-- [ ] `PATCH /measurement-sheets/:id` enviando campo `type` → campo ignorado (não modifica o type original)
-- [ ] `GET /measurement-sheets?scope=CUSTOMER&customerId=X` com clinicId de outra clínica → vazio
-- [ ] `POST /measurement-sheets/templates/:id/copy` por staff → 403
-- [ ] `POST /measurement-sheets/templates/:id/copy` por admin → 201 com `clinicId` do JWT (não do body)
-- [ ] Copiar mesmo template duas vezes → segundo com sufixo numérico no nome
-- [ ] Migration não-destrutiva: fichas existentes mantêm todos os dados + `category=CORPORAL`, `scope=SYSTEM`
-
-### Geral
-
-- [ ] Sem `console.log` ou debug no código
-- [ ] Sem `TODO` não resolvido
-- [ ] PLAN.md atualizado após conclusão
-
----
-
-## 11. Notas para o Implementador
-
-### 1. Ordem de registro de rotas no Fastify (crítico)
-
-O Fastify resolve rotas em ordem de registro. A rota `/templates` e `/templates/:id/copy` **devem ser registradas antes** de `/:id`, caso contrário o Fastify interpreta a string `"templates"` como um valor do parâmetro `id`.
-
+**`copyTemplate()` — NOVO método no service:**
 ```typescript
-// ✅ CORRETO — ordem de registro no routes.ts:
-app.get('/measurement-sheets/templates', ...)           // 1º
-app.post('/measurement-sheets/templates/:id/copy', ...) // 2º
-app.post('/measurement-sheets/reorder', ...)            // 3º — já existe; manter antes de /:id
-app.get('/measurement-sheets', ...)                     // 4º
-app.post('/measurement-sheets', ...)                    // 5º
-app.patch('/measurement-sheets/:id', ...)               // 6º
-app.delete('/measurement-sheets/:id', ...)              // 7º
+async copyTemplate(clinicId: string, templateId: string): Promise<MeasurementSheet> {
+  const template = MEASUREMENT_TEMPLATES.find((t) => t.id === templateId)
+  if (!template) throw new NotFoundError('Template')
+
+  // Verificar limite
+  const count = await this.repo.countActiveSheets(clinicId)
+  if (count >= MAX_ACTIVE_SHEETS) throw new ValidationError('MAX_SHEETS_REACHED')
+
+  // Encontrar nome disponível (evita duplicata)
+  const availableName = await this.resolveAvailableName(clinicId, template.name)
+
+  return this.repo.copyTemplateAsSheet(clinicId, template, availableName)
+}
+
+private async resolveAvailableName(clinicId: string, baseName: string): Promise<string> {
+  const existing = await this.repo.findSheetByName(clinicId, baseName)
+  if (!existing) return baseName
+
+  for (let i = 2; i <= 99; i++) {
+    const candidate = `${baseName} ${i}`
+    const found = await this.repo.findSheetByName(clinicId, candidate)
+    if (!found) return candidate
+  }
+  throw new ConflictError(`Não foi possível encontrar um nome disponível para "${baseName}"`)
+}
 ```
 
-### 2. Índices parciais e Prisma Migrate (crítico)
-
-O Prisma não tem suporte nativo a partial unique indexes no schema. Ao rodar `prisma migrate dev` após as mudanças no schema:
-- O Prisma vai gerar uma migration sem os índices parciais
-- É obrigatório **editar manualmente** o arquivo `migration.sql` gerado para:
-  1. Adicionar `DROP INDEX "measurement_sheets_clinic_id_name_key"` (nome exato do índice atual)
-  2. Adicionar os dois `CREATE UNIQUE INDEX ... WHERE scope = '...'`
-- O índice `@@unique([clinicId, name])` deve ser **removido do schema.prisma** para que o Prisma não tente recriá-lo em migrations futuras
-- Se o `prisma migrate dev` tentar recriar o índice em próximas migrations, usar `prisma migrate diff` para verificar e corrigir o `migration.sql` antes de aplicar
-
-### 3. Autenticação de professional vs user
-
-Verificar no `jwtClinicGuard` quais campos são adicionados ao `req` para profissionais. O `Professional` tem `ProfessionalAuth` separado de `User`. Se o JWT de professional não contém `userId` (mas sim `professionalId`), a query de `existsConfirmedAppointment()` deve usar `professionalId`. Verificar o payload exato do JWT em `auth.service.ts`.
-
-### 4. AppointmentsRepository como dependência do MeasurementSheetsService
-
-O padrão atual do projeto instancia repositories diretamente (ex.: `private repo = new MeasurementSheetsRepository()`). Seguir o mesmo padrão:
-
+**Injeção do `AppointmentsRepository`:**
 ```typescript
 import { AppointmentsRepository } from '../appointments/appointments.repository'
 
 export class MeasurementSheetsService {
   private repo = new MeasurementSheetsRepository()
-  private appointmentsRepo = new AppointmentsRepository()
+  private appointmentsRepo = new AppointmentsRepository()  // NOVO
   // ...
 }
 ```
 
-Não é necessário injeção de dependências para este projeto (sem IoC container).
+### 4.4 measurement-sheets.repository.ts — Mudanças
 
-### 5. Nomenclatura: routes vs controller
-
-O projeto usa Fastify com `*routes.ts` — não existe controller. A issue menciona `measurement-sheets.controller.ts` mas o arquivo real é `measurement-sheets.routes.ts`. Manter nomenclatura existente.
-
-### 6. Limite de fichas personalizadas (RN-08)
-
-O limite de 10 fichas `scope=CUSTOMER` é **por cliente por clínica** (não global). A query deve ser:
+**`createSheet()` — atualizar assinatura:**
 ```typescript
-prisma.measurementSheet.count({
-  where: { clinicId, scope: 'CUSTOMER', customerId: dto.customerId, active: true }
-})
+async createSheet(clinicId: string, createdByUserId: string, dto: CreateSheetDto) {
+  return prisma.measurementSheet.create({
+    data: {
+      clinicId,
+      name: dto.name,
+      type: dto.type,
+      category: dto.category ?? 'CORPORAL',
+      scope: dto.scope ?? 'SYSTEM',
+      customerId: dto.customerId ?? null,
+      createdByUserId,
+      order: dto.order ?? 0,
+    },
+    include: { columns: true, fields: true },
+  })
+}
 ```
 
-### 7. Deduplicação de nome em copyTemplate
+**`listSheets()` — atualizar para aceitar filtros:**
+```typescript
+async listSheets(
+  clinicId: string,
+  filters: {
+    activeOnly: boolean
+    scope?: MeasurementScope
+    category?: MeasurementCategory
+    customerId?: string
+  },
+) {
+  return prisma.measurementSheet.findMany({
+    where: {
+      clinicId,
+      ...(filters.activeOnly ? { active: true } : {}),
+      ...(filters.scope ? { scope: filters.scope } : {}),
+      ...(filters.category ? { category: filters.category } : {}),
+      ...(filters.customerId ? { customerId: filters.customerId } : {}),
+    },
+    orderBy: { order: 'asc' },
+    include: {
+      columns: { orderBy: { order: 'asc' } },
+      fields: {
+        ...(filters.activeOnly ? { where: { active: true } } : {}),
+        orderBy: { order: 'asc' },
+      },
+    },
+  })
+}
+```
 
-A lógica de sufixo incremental deve ser implementada no service (não no banco). Limite razoável de 99 para evitar loop infinito em casos extremos. Se não houver nome disponível até `${name} 99`, lançar `ConflictError`.
+**Novos métodos a adicionar:**
+```typescript
+// Contar fichas personalizadas ativas por cliente
+async countActiveCustomerSheets(clinicId: string, customerId: string): Promise<number> {
+  return prisma.measurementSheet.count({
+    where: { clinicId, customerId, scope: 'CUSTOMER', active: true },
+  })
+}
 
-### 8. Campo `categories` em sessions — performance
+// Verificar nome duplicado dentro de um cliente
+async findSheetByNameForCustomer(clinicId: string, customerId: string, name: string) {
+  return prisma.measurementSheet.findFirst({
+    where: {
+      clinicId,
+      customerId,
+      scope: 'CUSTOMER',
+      name: { equals: name, mode: 'insensitive' },
+    },
+  })
+}
 
-A derivação de `categories` usa dados já presentes no `SESSION_INCLUDE` — não gera queries adicionais. O `Set` garante deduplicação sem overhead relevante.
+// Copiar template como nova ficha (TABULAR ou SIMPLE) — transação atômica
+async copyTemplateAsSheet(
+  clinicId: string,
+  template: MeasurementTemplate,
+  name: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const sheet = await tx.measurementSheet.create({
+      data: {
+        clinicId,
+        name,
+        type: template.type,
+        category: template.category,
+        scope: 'SYSTEM',
+        order: 0,
+      },
+    })
+
+    if (template.type === 'SIMPLE') {
+      await tx.measurementField.createMany({
+        data: template.fields.map((fieldName, index) => ({
+          sheetId: sheet.id,
+          clinicId,
+          name: fieldName,
+          inputType: 'INPUT',
+          order: index,
+          active: true,
+        })),
+      })
+    } else {
+      // TABULAR: criar colunas e campos (linhas)
+      await tx.measurementSheetColumn.createMany({
+        data: template.columns.map((colName, index) => ({
+          sheetId: sheet.id,
+          name: colName,
+          inputType: 'INPUT',
+          order: index,
+        })),
+      })
+      await tx.measurementField.createMany({
+        data: template.rows.map((rowName, index) => ({
+          sheetId: sheet.id,
+          clinicId,
+          name: rowName,
+          inputType: 'INPUT',
+          order: index,
+          active: true,
+        })),
+      })
+    }
+
+    return tx.measurementSheet.findFirst({
+      where: { id: sheet.id },
+      include: {
+        columns: { orderBy: { order: 'asc' } },
+        fields: { orderBy: { order: 'asc' } },
+      },
+    })
+  })
+}
+```
+
+### 4.5 measurement-sheets.routes.ts — Mudanças
+
+**Ordem obrigatória de registro (Fastify):**
+As rotas estáticas `/templates` e `/templates/:id/copy` devem ser registradas **antes** da rota dinâmica `/:id`. Violação desta ordem faz o Fastify tratar `templates` como parâmetro `id`.
+
+```typescript
+// ─── Fichas ──────────────────────────────────────────────────────────────────
+
+// GET /measurement-sheets/templates — ANTES de /:id
+app.get('/measurement-sheets/templates', { preHandler: [jwtClinicGuard] }, ...)
+
+// POST /measurement-sheets/templates/:id/copy — ANTES de /:id
+app.post('/measurement-sheets/templates/:id/copy', { preHandler: [jwtClinicGuard, roleGuard(['admin'])] }, ...)
+
+// GET /measurement-sheets
+app.get('/measurement-sheets', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+  const q = ListSheetsQuery.parse(req.query)
+  return reply.send(await svc.listSheets(req.clinicId, q))
+})
+
+// POST /measurement-sheets — SEM roleGuard fixo (verificação é no service, baseada em scope)
+app.post('/measurement-sheets', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+  const dto = CreateSheetDto.parse(req.body)
+  return reply
+    .status(201)
+    .send(await svc.createSheet(req.clinicId, req.user.sub, req.user.role, dto))
+})
+
+// PATCH /measurement-sheets/:id — SEM roleGuard fixo (verificação é no service, baseada em scope)
+app.patch('/measurement-sheets/:id', { preHandler: [jwtClinicGuard] }, async (req, reply) => {
+  const { id } = req.params as { id: string }
+  const dto = UpdateSheetDto.parse(req.body)
+  return reply.send(await svc.updateSheet(id, req.clinicId, req.user.sub, req.user.role, dto))
+})
+
+// DELETE /measurement-sheets/:id — mantém roleGuard(['admin'])
+app.delete('/measurement-sheets/:id', { preHandler: [jwtClinicGuard, roleGuard(['admin'])] }, ...)
+```
+
+> ⚠️ O `roleGuard(['admin'])` que existia no `POST /measurement-sheets` e no `PATCH /measurement-sheets/:id` deve ser **removido** — a lógica passa ao service para suportar o critério variável por scope.
+
+### 4.6 measurement-sessions.service.ts — Campo `categories`
+
+Em `listSessions()`, após buscar os dados do repositório, mapear o campo `categories` a partir das fichas vinculadas:
+
+```typescript
+async listSessions(clinicId: string, q: ListSessionsQuery) {
+  const customer = await this.repo.findCustomerInClinic(q.customerId, clinicId)
+  if (!customer) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+  const result = await this.repo.listSessions(clinicId, q)
+
+  // Computar categories por sessão a partir das fichas vinculadas
+  const items = result.items.map((session) => {
+    const categories = [
+      ...new Set(
+        session.sheetRecords
+          .map((sr) => sr.sheet?.category)
+          .filter(Boolean),
+      ),
+    ]
+    return { ...session, categories }
+  })
+
+  return { ...result, items }
+}
+```
+
+> Nota: `SESSION_INCLUDE` já inclui `sheet: { select: { id, name } }` — precisará incluir também `category` no select. Adicionar `category: true` ao select do `sheet` em `SESSION_INCLUDE` no repository.
+
+**`SESSION_INCLUDE` — atualização mínima no repository:**
+```typescript
+sheet: { select: { id: true, name: true, category: true } },  // adicionar category: true
+```
+
+### 4.7 appointments.repository.ts — Método existsConfirmed (NOVO)
+
+Adicionar ao final da classe `AppointmentsRepository`:
+
+```typescript
+async existsConfirmed(params: {
+  clinicId: string
+  professionalId: string
+  customerId: string
+}): Promise<boolean> {
+  const count = await prisma.appointment.count({
+    where: {
+      clinicId: params.clinicId,
+      professionalId: params.professionalId,
+      customerId: params.customerId,
+      status: { in: ['confirmed', 'in_progress', 'completed'] },
+    },
+  })
+  return count > 0
+}
+```
+
+> Modificação mínima e READ-ONLY. Não altera nenhuma lógica existente de agendamentos.
+> Verificar o nome dos valores do enum `AppointmentStatus` no schema Prisma antes de implementar — garantir que os valores `confirmed`, `in_progress`, `completed` correspondem exatamente ao enum persistido.
+
+---
+
+## 5. Fluxo de Dados
+
+### Criar ficha do sistema (admin)
+```
+POST /measurement-sheets { scope: 'SYSTEM', category: 'FACIAL', ... }
+→ jwtClinicGuard valida JWT
+→ CreateSheetDto.parse() valida body (refine: scope=SYSTEM não exige customerId)
+→ MeasurementSheetsService.createSheet(clinicId, userId, role='admin', dto)
+→ role=SYSTEM + role='admin' → passa
+→ countActiveSheets() → < 20 → passa
+→ findSheetByName() → null → passa
+→ repo.createSheet() → Prisma INSERT
+→ 201 MeasurementSheet
+```
+
+### Criar ficha personalizada (profissional)
+```
+POST /measurement-sheets { scope: 'CUSTOMER', customerId: 'uuid', ... }
+→ jwtClinicGuard valida JWT (role='professional')
+→ CreateSheetDto.parse() valida body (refine: customerId obrigatório)
+→ MeasurementSheetsService.createSheet(clinicId, userId, role='professional', dto)
+→ scope=CUSTOMER + role='professional'
+  → countActiveCustomerSheets() → < 10 → passa
+  → appointmentsRepo.existsConfirmed() → true → passa
+→ findSheetByNameForCustomer() → null → passa
+→ repo.createSheet() → Prisma INSERT
+→ 201 MeasurementSheet
+```
+
+### Copiar template (admin)
+```
+POST /measurement-sheets/templates/tpl-perimetria/copy
+→ jwtClinicGuard + roleGuard(['admin'])
+→ MeasurementSheetsService.copyTemplate(clinicId, 'tpl-perimetria')
+→ MEASUREMENT_TEMPLATES.find('tpl-perimetria') → encontrado
+→ countActiveSheets() → < 20 → passa
+→ resolveAvailableName(): 'Perimetria' livre? findSheetByName() → null → usa 'Perimetria'
+→ repo.copyTemplateAsSheet() → prisma.$transaction(CREATE sheet + createMany fields)
+→ 201 MeasurementSheet (com fields incluídos)
+```
+
+### Listar sessões (com categories)
+```
+GET /measurement-sessions?customerId=uuid
+→ repo.listSessions() → retorna sessions com sheetRecords[].sheet.category
+→ service mapeia categories = [...new Set(sheetRecords.map(sr => sr.sheet.category))]
+→ { items: [..., { ...session, categories: ['DERMATO_FUNCIONAL', 'CORPORAL'] }], total, page, limit }
+```
+
+---
+
+## 6. Regras de Negócio
+
+- **RN-01**: `scope=CUSTOMER` exige `customerId` — validação dupla: Zod (`.refine`) + service
+- **RN-02**: Máximo de 20 fichas do sistema ativas por clínica (`scope=SYSTEM`)
+- **RN-03**: Máximo de 10 fichas personalizadas ativas por **cliente** por clínica (`scope=CUSTOMER`)
+- **RN-04**: Profissional só pode criar ficha personalizada para cliente com agendamento `confirmed | in_progress | completed` — verificação obrigatória no service (não apenas no frontend)
+- **RN-05**: `scope=SYSTEM` → somente admin pode criar ou editar
+- **RN-06**: `scope=CUSTOMER` → criador (`createdByUserId`) ou admin podem editar
+- **RN-07**: Campo `type` (`SIMPLE/TABULAR`) jamais mutável via PATCH — ausente do `UpdateSheetDto`
+- **RN-08**: `category` é mutável a qualquer momento pelo admin
+- **RN-09**: `clinicId` é sempre extraído do JWT — nunca aceito do body
+- **RN-10**: Copiar template com nome duplicado na clínica → sufixo numérico (`"Perimetria 2"`, `"Perimetria 3"`)
+- **RN-11**: Templates da biblioteca são globais e somente leitura (constante de código — sem persistência)
+- **RN-12**: `categories` na response de sessões é computado no service, **sem alterar o schema** de `MeasurementSession`
+- **RN-13**: `deleteSheet()` mantém comportamento existente — apenas admin, via `roleGuard` na rota (não precisa verificar scope)
+
+---
+
+## 7. Dependências e Riscos
+
+**Dependências:**
+- Schema Prisma deve ser atualizado (migration) antes de qualquer deploy
+- `AppointmentsRepository.existsConfirmed()` deve existir antes que `MeasurementSheetsService.createSheet()` com `scope=CUSTOMER` e `role=professional` seja chamado
+- Os valores corretos do enum `AppointmentStatus` no Prisma schema devem ser confirmados antes de implementar o filtro `status: { in: [...] }`
+
+**Riscos identificados:**
+
+| Risco | Impacto | Mitigação |
+|-------|---------|-----------|
+| Remoção do `roleGuard(['admin'])` do POST | Se não verificado no service, qualquer autenticado poderia criar fichas do sistema | Verificação explícita no service: `if (scope === 'SYSTEM' && role !== 'admin') throw ForbiddenError` |
+| Ordem das rotas em `routes.ts` | `GET /templates` interpretado como `GET /:id` com `id='templates'` | Registrar rotas estáticas obrigatoriamente antes de rotas dinâmicas (`/:id`) |
+| Race condition em `copyTemplate` com nome duplicado | Dois admins copiando o mesmo template simultaneamente podem gerar nome igual | `@@unique([clinicId, name])` no schema garante rejeição no banco como última linha de defesa; service retorna `ConflictError` tratável |
+| `existsConfirmed` sem índice para a tripla `(clinicId, professionalId, customerId, status)` | Query lenta em clínicas com alto volume | Verificar se índice existe; se não, adicionar `@@index([clinicId, professionalId, customerId])` ao model `Appointment` |
+| `SESSION_INCLUDE` sem `category` no select de `sheet` | `categories` seria `undefined` em todas as sessões | Adicionar `category: true` ao select do `sheet` em `SESSION_INCLUDE` (único ponto de mudança no repositório de sessões) |
+
+---
+
+## 8. Definition of Done — Checklist
+
+O `aesthera-implementador` deve marcar cada item ao concluir.
+
+### Prisma / Banco
+- [ ] Enums `MeasurementCategory` e `MeasurementScope` adicionados ao `schema.prisma`
+- [ ] 4 novos campos + 2 relações adicionados ao model `MeasurementSheet`
+- [ ] 2 novos índices adicionados ao model `MeasurementSheet`
+- [ ] Migration gerada com `prisma migrate dev --name add-measurement-category-scope`
+- [ ] Migration validada como não-destrutiva (fichas existentes preservam dados)
+- [ ] `prisma generate` executado após migration
+
+### DTOs
+- [ ] `CreateSheetDto` com `category`, `scope`, `customerId` e `.refine()` de validação cruzada
+- [ ] `UpdateSheetDto` com `category`; campo `type` **ausente**
+- [ ] `ListSheetsQuery` com `scope`, `category`, `customerId`
+- [ ] Constante `MAX_ACTIVE_CUSTOMER_SHEETS = 10` adicionada
+
+### Service
+- [ ] `listSheets()` repassa filtros de scope/category/customerId ao repository
+- [ ] `createSheet()` aceita `userId` e `role`; aplica regras de scope, limite por cliente e vínculo de agendamento
+- [ ] `updateSheet()` aceita `userId` e `role`; aplica verificação de scope na autorização
+- [ ] `copyTemplate()` implementado com resolução de nome e `prisma.$transaction`
+- [ ] `AppointmentsRepository` injetado no service (instância privada)
+
+### Repository
+- [ ] `createSheet()` persiste `category`, `scope`, `customerId`, `createdByUserId`
+- [ ] `listSheets()` aceita e aplica todos os novos filtros
+- [ ] `countActiveCustomerSheets()` implementado
+- [ ] `findSheetByNameForCustomer()` implementado
+- [ ] `copyTemplateAsSheet()` implementado com `prisma.$transaction`
+- [ ] `SESSION_INCLUDE` atualizado com `category: true` no select de `sheet`
+
+### Routes
+- [ ] `GET /measurement-sheets/templates` registrado **antes** de `/:id`
+- [ ] `POST /measurement-sheets/templates/:id/copy` registrado **antes** de `PATCH /:id`
+- [ ] `POST /measurement-sheets` sem `roleGuard(['admin'])` fixo (removido)
+- [ ] `PATCH /measurement-sheets/:id` sem `roleGuard(['admin'])` fixo (removido)
+- [ ] `POST` e `PATCH` passam `req.user.sub` e `req.user.role` ao service
+
+### Arquivo de templates
+- [ ] `measurement-templates.ts` criado com os 6 templates listados na spec
+- [ ] Tipagem discriminada por `type: 'SIMPLE' | 'TABULAR'` implementada
+
+### Appointments
+- [ ] `existsConfirmed()` adicionado ao `AppointmentsRepository`
+- [ ] Enum `AppointmentStatus` verificado no schema — valores `confirmed`, `in_progress`, `completed` confirmados
+
+### Sessions
+- [ ] `listSessions()` no service retorna `categories: MeasurementCategory[]` por sessão
+- [ ] `categories` computado via `Set` para deduplicar
+
+### Testes
+- [ ] `POST /measurement-sheets` com `scope=CUSTOMER` sem `customerId` → 400
+- [ ] `POST /measurement-sheets` com `scope=CUSTOMER` por profissional sem agendamento → 403
+- [ ] `POST /measurement-sheets` com `scope=CUSTOMER` por profissional com agendamento `confirmed` → 201
+- [ ] `PATCH /measurement-sheets/:id` com `scope=SYSTEM` por staff → 403
+- [ ] `PATCH /measurement-sheets/:id` com `scope=CUSTOMER` pelo criador → 200
+- [ ] `PATCH /measurement-sheets/:id` com `scope=CUSTOMER` por outro usuário não-admin → 403
+- [ ] `PATCH /measurement-sheets/:id` enviando campo `type` → ignorado (Zod descarta campo desconhecido)
+- [ ] `GET /measurement-sheets?scope=CUSTOMER&customerId=X` com clinicId de outra clínica → retorna vazio
+- [ ] `POST /measurement-sheets/templates/:id/copy` por staff → 403
+- [ ] `POST /measurement-sheets/templates/:id/copy` por admin → 201 com `clinicId` do JWT
+- [ ] Copiar mesmo template duas vezes → segundo com sufixo numérico no nome
+- [ ] `listSessions` retorna `categories` por sessão corretamente
+- [ ] Migration não-destrutiva verificada (fichas com category=CORPORAL, scope=SYSTEM)
+
+### Geral
+- [ ] Sem `console.log` ou `TODO` irresolvido
+- [ ] `PLAN.md` do projeto atualizado
+
+---
+
+## 9. Notas para o Implementador
+
+1. **`request.user.sub`** é o userId no JWT do Aesthera — usar `req.user.sub` para obter o ID do usuário autenticado nas rotas Fastify.
+
+2. **Verificar valores do enum `AppointmentStatus`** no `schema.prisma` antes de implementar `existsConfirmed()`. O Prisma rejeitará valores de enum que não existam no schema.
+
+3. **`UpdateSheetDto` e o campo `type`**: o Zod por padrão **ignora** campos desconhecidos (`strip` mode). Adicionar `.strict()` ao `UpdateSheetDto` se quiser rejeitar explicitamente com erro 400. A issue pede "ignorado/rejeitado (400)" — usar `.strict()` para rejeitar.
+
+4. **Remover `roleGuard(['admin'])` do `POST /measurement-sheets`**: esta mudança é intencional e necessária para suportar a criação de fichas personalizadas por profissionais. A verificação ocorre no service com mais granularidade.
+
+5. **`resolveAvailableName()` usa queries N+1**: para evitar lentidão, limitar o loop a 99 iterações e usar `findSheetByName()` que já existe. Em produção, um único query `LIKE 'Perimetria%'` seria mais eficiente, mas a implementação simples é adequada para o MVP.
+
+6. **Nomes das fichas personalizadas vs. do sistema**: a constraint `@@unique([clinicId, name])` atual cobre todo o `clinicId`, mas com `scope=CUSTOMER` o nome deve ser único apenas dentro do cliente. Avaliar se a constraint única atual precisa ser relaxada ou se a validação por software no service é suficiente (há risco de race condition — protegido pela constraint de DB em `scope=SYSTEM`; para `scope=CUSTOMER`, a constraint precisaria ser `@@unique([clinicId, customerId, name])` com valor de `customerId` não-null).
+
+   **Decisão recomendada:** manter `@@unique([clinicId, name])` para `scope=SYSTEM` e adicionar `@@unique([clinicId, customerId, name])` para `scope=CUSTOMER`. Como o Prisma não suporta constraint condicional, a validação de unicidade para `scope=CUSTOMER` fica no nível do service (camada de software).
+
+7. **Fixtures de teste**: usar o padrão existente de `makeSheet()` e adicionar `makeSheet({ scope: 'CUSTOMER', customerId: 'cust-1', createdByUserId: 'user-1' })` para os novos cenários.
