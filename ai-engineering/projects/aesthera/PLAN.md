@@ -401,6 +401,17 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 
 ## Histórico de Atualizações
 
+### [2026-04-13] — Pipeline: Fichas de Avaliação Expandidas
+- **Módulo:** MeasurementSheets (expansão)
+- **O que foi feito:** Pipeline complexo executado completo: revisão UX + Security + Arquitetura → consolidação → 3 issues geradas
+- **Spec final:** `outputs/consolidador/fichas-avaliacao-expandidas-spec-final.md`
+- **Issues geradas:**
+  - `outputs/tasks/issue-fichas-avaliacao-expandidas-1-backend.md` — Migration, enums, endpoints e autorização
+  - `outputs/tasks/issue-fichas-avaliacao-expandidas-2-settings-frontend.md` — Redesign aba Fichas de Avaliação em Configurações
+  - `outputs/tasks/issue-fichas-avaliacao-expandidas-3-customer-frontend.md` — Aba Avaliações no perfil do cliente
+- **Bloqueantes incorporados:** 10 (4 UX + 4 Security + 2 Arquitetura)
+- **Status:** ✅ Pronto para implementação
+
 ### [2026-04-09] — fix(#155): Code Review PR #155 — 6 bloqueantes e 3 sugestões corrigidos
 - **Módulo:** Anamnesis (correções pós-code-review PR #155)
 - **Arquivo(s) afetado(s):**
