@@ -16,7 +16,6 @@ import {
   useAnamnesisRequests,
   useCancelAnamnesis,
   useFinalizeAnamnesis,
-  useResolveAnamnesisDiff,
   useReopenAnamnesis,
   useSendAnamnesis,
   useUpdateAnamnesisRequest,
@@ -85,7 +84,6 @@ export function AnamnesisTab({
   const finalizeAnamnesis = useFinalizeAnamnesis()
   const sendAnamnesis = useSendAnamnesis()
   const updateAnamnesis = useUpdateAnamnesisRequest()
-  const confirmReview = useResolveAnamnesisDiff()
   const reopenAnamnesis = useReopenAnamnesis()
 
   // Carrega o registro completo (com questionsSnapshot) quando o dialog de edição abre
@@ -227,15 +225,6 @@ export function AnamnesisTab({
     }
   }
 
-  async function handleConfirmReview(id: string) {
-    try {
-      await confirmReview.mutateAsync({ id, resolutions: {} })
-      toast.success('Revisão confirmada — ficha assinada com sucesso.')
-    } catch {
-      toast.error('Erro ao confirmar revisão. Tente novamente.')
-    }
-  }
-
   function handleOpenEditSigned(req: AnamnesisRequest) {
     setEditingWasSigned(true)
     setEditingReq(req)
@@ -272,6 +261,7 @@ export function AnamnesisTab({
       {/* Filtros por status */}
       <div className="flex flex-wrap gap-1.5">
         {STATUS_FILTER_OPTIONS.map((opt) => (
+          // eslint-disable-next-line aesthera/no-native-button
           <button
             key={opt.value}
             type="button"
@@ -546,7 +536,7 @@ export function AnamnesisTab({
                 />
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Salvar para enviar depois</p>
-                  <p className="text-xs text-muted-foreground">Mantém a ficha salva com status "Preenchida pela clínica".</p>
+                  <p className="text-xs text-muted-foreground">Mantém a ficha salva com status &quot;Preenchida pela clínica&quot;.</p>
                 </div>
               </label>
             </div>
@@ -640,6 +630,7 @@ export function AnamnesisTab({
                       {q.type === 'yesno' ? (
                         <div className="flex gap-2">
                           {['Sim', 'Não'].map((opt) => (
+                            // eslint-disable-next-line aesthera/no-native-button
                             <button
                               key={opt}
                               type="button"
