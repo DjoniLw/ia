@@ -120,6 +120,7 @@ Para cada teste analisado:
 - Funcionalidade nova tem testes correspondentes?
 - Cenários críticos estão cobertos? (autenticação, multi-tenancy, cálculos financeiros, regras de agendamento)
 - Existe pelo menos um teste de erro para cada fluxo crítico?
+- PR contém `*.service.ts` novo ou modificado sem `*.test.ts` correspondente? → **BLOQUEAR** (ver Regra 5)
 
 ---
 
@@ -176,6 +177,32 @@ Se essa seção **não estiver presente**:
 Se um teste foi alterado para fazer um teste passar sem justificativa documentada:
 ➡️ **BLOQUEAR**
 ➡️ Não aceitar argumento de "ajuste técnico" — toda alteração de comportamento de teste é mudança de contrato
+
+---
+
+### Regra 5 — Bloqueio por Ausência de Testes em Novo Método de Serviço
+
+Se o PR introduzir qualquer um dos seguintes elementos **sem** arquivo `*.test.ts` correspondente:
+
+- Novo método em `*.service.ts` (ex: `reopen()`, `updateStaffAnswers()`, `submit()`)
+- Novo branch condicional em método existente que altera estado final (transição de status, cálculo de resultado, disparo de evento de domínio)
+
+➡️ **BLOQUEAR o PR imediatamente**
+➡️ Emitir:
+
+```
+❌ PR BLOQUEADO — Novo método/branch de lógica crítica sem cobertura de teste
+Arquivo: {caminho do *.service.ts}
+Método(s) sem cobertura: {lista de métodos novos ou branches novos}
+Cenários mínimos obrigatórios:
+- Caso feliz: {descrição}
+- Erro esperado / pré-condição não atendida: {descrição}
+- Edge case (branch alternativo): {descrição, se aplicável}
+```
+
+**Não aceitar justificativas de prazo** — a ausência de testes é sempre bloqueante para lógica de serviço. Exceção única: o método é puramente de leitura (`find*`, `get*`, `list*`) sem nenhuma mutação de estado ou side-effect.
+
+📅 13/04/2026
 
 ---
 

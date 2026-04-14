@@ -1,0 +1,106 @@
+#!/usr/bin/env sh
+# Aesthera — pre-commit hook
+# Verifica 3 compliance gates antes de qualquer commit:
+# 1. clinicId em todos os WHERE de updates (3ª reincidência IDOR)
+# 2. Encoding BOM em arquivos .tsx (3ª reincidência BOM encoding)
+# 3. Pastel badge (-100/-200) em lib/status-colors.ts (aprovado produto 09/04/2026)
+
+set -e
+
+echo "🔍 [pre-commit] Executando gates de compliance Aesthera..."
+
+########################################################################
+# GATE 1 — IDOR: .update({ sem clinicId/clinic_id no mesmo bloco
+# Detecta padrões como:  repo.update({ data: { ... } }) sem where clinicId
+# Verifica repositories/*.ts e services/*.ts
+########################################################################
+IDOR_VIOLATIONS=""
+while IFS= read -r -d '' file; do
+  # grep para .update({ seguido de where sem clinicId/clinic_id
+  if grep -qn "\.update({" "$file" 2>/dev/null; then
+    # Verifica se esse arquivo tem update sem where contendo clinicId
+    if grep -A5 "\.update({" "$file" 2>/dev/null | grep -v "clinicId\|clinic_id" | grep -q "where:"; then
+      IDOR_VIOLATIONS="$IDOR_VIOLATIONS\n  $file"
+    fi
+  fi
+done < <(find apps/api/src -name "*.repository.ts" -o -name "*.service.ts" -print0 2>/dev/null)
+
+if [ -n "$IDOR_VIOLATIONS" ]; then
+  echo ""
+  echo "⛔ [GATE 1 — IDOR] .update() detectado sem clinicId/clinic_id no where:"
+  echo -e "$IDOR_VIOLATIONS"
+  echo ""
+  echo "   Corrija todos os .update() para incluir clinicId no where antes de fazer commit."
+  echo "   Referência: ai-engineering/prompts/aesthera-implementador/patterns/backend-seguranca.md"
+  echo ""
+  exit 1
+fi
+
+echo "  ✅ GATE 1 — IDOR: nenhuma violação detectada"
+
+########################################################################
+# GATE 2 — BOM encoding: verifica se arquivos .tsx staged têm BOM (EF BB BF)
+# BOM = bytes 0xEF 0xBB 0xBF no início do arquivo
+########################################################################
+BOM_VIOLATIONS=""
+# Obtém apenas arquivos .tsx/.ts que estão staged
+STAGED_TSX=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E "\.(tsx|ts)$" || true)
+
+for file in $STAGED_TSX; do
+  if [ -f "$file" ]; then
+    # Verifica BOM: primeiros 3 bytes = EF BB BF
+    HEADER=$(head -c 3 "$file" | xxd -p 2>/dev/null || printf "")
+    if [ "$HEADER" = "efbbbf" ]; then
+      BOM_VIOLATIONS="$BOM_VIOLATIONS\n  $file"
+    fi
+  fi
+done
+
+if [ -n "$BOM_VIOLATIONS" ]; then
+  echo ""
+  echo "⛔ [GATE 2 — BOM ENCODING] Arquivo(s) com BOM encoding detectados:"
+  echo -e "$BOM_VIOLATIONS"
+  echo ""
+  echo "   Corrija: abra o arquivo no VS Code → clicar no indicador de encoding no rodapé → 'Salvar com Encoding' → UTF-8."
+  echo "   Referência: ai-engineering/prompts/aesthera-implementador/patterns/frontend-formularios.md"
+  echo ""
+  exit 1
+fi
+
+echo "  ✅ GATE 2 — BOM Encoding: nenhuma violação detectada"
+
+########################################################################
+# GATE 3 — PASTEL BADGE: proíbe shades -100 e -200 em lib/status-colors.ts
+# Padrão obrigatório: fundo sólido saturado + text-white (mín. -500 slate,
+# -600 emerald/teal/rose/indigo, -700 amber/orange).
+# Pastel (bg-*-100, bg-*-200) foi banido em 09/04/2026 — aprovação de produto.
+########################################################################
+STATUS_COLORS_FILE="apps/web/lib/status-colors.ts"
+PASTEL_VIOLATIONS=""
+
+if [ -f "$STATUS_COLORS_FILE" ]; then
+  # Detecta qualquer bg-*-100 ou bg-*-200 dentro do arquivo de constantes de cor
+  PASTEL_LINES=$(grep -n "bg-[a-z]*-[12]00" "$STATUS_COLORS_FILE" 2>/dev/null || true)
+  if [ -n "$PASTEL_LINES" ]; then
+    PASTEL_VIOLATIONS="$PASTEL_LINES"
+  fi
+fi
+
+if [ -n "$PASTEL_VIOLATIONS" ]; then
+  echo ""
+  echo "⛔ [GATE 3 — PASTEL BADGE] Shades pastel (-100 ou -200) detectados em $STATUS_COLORS_FILE:"
+  echo "$PASTEL_VIOLATIONS"
+  echo ""
+  echo "   Padrão obrigatório: fundo sólido saturado + text-white."
+  echo "   Shades mínimas: emerald/teal/green/rose/red/indigo/violet → -600"
+  echo "                   amber/orange/yellow → -700"
+  echo "                   slate/zinc/gray → -500"
+  echo "   Referência: ai-engineering/prompts/aesthera-implementador/patterns/frontend-cores-status.md"
+  echo ""
+  exit 1
+fi
+
+echo "  ✅ GATE 3 — Pastel Badge: nenhuma violação detectada"
+
+echo ""
+echo "✅ [pre-commit] Todos os gates de compliance passaram."

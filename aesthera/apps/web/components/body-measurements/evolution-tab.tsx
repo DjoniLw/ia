@@ -43,7 +43,6 @@ import {
 import {
   useMeasurementSheets,
   type MeasurementSheet,
-  type MeasurementField,
   type MeasurementSheetColumn,
 } from '@/lib/hooks/use-measurement-sheets'
 import {
@@ -1662,7 +1661,7 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {sessions.map((session, i) => {
+          {sessions.map((session, _i) => {
             const canEdit = isAdmin || isStaff || session.createdById === currentUserId
             return (
               <SessionCard

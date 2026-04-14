@@ -3,7 +3,7 @@
 import { AlertCircle, ClipboardList, Loader2, PenLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
-import { type AnamnesisRequest, useAnamnesisRequestById } from '@/lib/hooks/use-resources'
+import { type AnamnesisRequest, useAnamnesisRequestById, useAnamnesisSignatureUrl } from '@/lib/hooks/use-resources'
 import { ANAMNESIS_STATUS_LABEL, ANAMNESIS_STATUS_COLOR } from '@/lib/status-colors'
 
 interface QuestionEntry {
@@ -26,9 +26,15 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
   // Fetch full record (list endpoint omits questionsSnapshot/clientAnswers para perf)
   const { data: full, isLoading, isError, refetch } = useAnamnesisRequestById(request.id)
 
+  // Presigned URL para a assinatura — ativada apenas quando a ficha está assinada
+  const hasSignature = Boolean((full as { signatureUrl?: string | null } | undefined)?.signatureUrl)
+  const { data: signatureUrl } = useAnamnesisSignatureUrl(hasSignature ? request.id : null)
+
   // Questões e respostas vêm do full record; header usa request (sempre disponível)
   const questions = (full?.questionsSnapshot ?? []) as unknown as QuestionEntry[]
-  const answers = ((full?.clientAnswers ?? full?.staffAnswers ?? {}) as Record<string, unknown>)
+  // Fichas assinadas: staffAnswers contém respostas finais mescladas (após resolve-diff)
+  // Fichas do cliente (sem staffAnswers): usa clientAnswers
+  const answers = ((full?.staffAnswers ?? full?.clientAnswers ?? {}) as Record<string, unknown>)
   const signedDate = (full?.signedAt ?? request.signedAt)
     ? new Date((full?.signedAt ?? request.signedAt)!).toLocaleString('pt-BR', {
         day: '2-digit', month: 'long', year: 'numeric',
@@ -93,7 +99,7 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
         )}
 
         {/* Assinatura */}
-        {full?.signatureUrl && (
+        {signatureUrl && (
           <>
             <hr />
             <div className="space-y-2">
@@ -104,7 +110,7 @@ export function ViewAnamnesisModal({ request, onClose }: Props) {
               <div className="rounded-lg border bg-white p-2 flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={full.signatureUrl}
+                  src={signatureUrl}
                   alt="Assinatura do paciente"
                   className="max-h-24 object-contain"
                 />

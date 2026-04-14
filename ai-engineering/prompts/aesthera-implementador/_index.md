@@ -80,6 +80,7 @@ Iniciar pelo elemento 1? Aguardando confirmação.
 | Validação de regra de negócio no service | `patterns/backend-validacao.md` |
 | **Geral** | |
 | Arquivo de teste (`*.test.ts` / `*.spec.ts`) | `patterns/geral-testes.md` |
+| Novo método em `*.service.ts` (qualquer método) | `patterns/geral-testes.md` + `patterns/backend-validacao.md` |
 | PR (escopo, disciplina de mudança) | `patterns/geral-escopo-pr.md` |
 | Task de máscara / formatação pontual | `patterns/geral-escopo-pr.md` |
 

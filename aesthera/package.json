@@ -1,0 +1,14 @@
+{
+  "name": "aesthera",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aesthera — SaaS ERP multi-tenant para clínicas estéticas (monorepo root)",
+  "scripts": {
+    "prepare": "husky",
+    "dev:api": "cd apps/api && npm run dev",
+    "dev:web": "cd apps/web && npm run dev"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0"
+  }
+}

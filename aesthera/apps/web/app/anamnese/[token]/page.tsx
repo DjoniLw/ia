@@ -271,12 +271,7 @@ export default function AnamnesePage() {
                       {q.required && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
 
-                    {isPrefilled ? (
-                      <p className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                        {answers[q.id] || <span className="italic text-muted-foreground">Não preenchido</span>}
-                      </p>
-                    ) : (
-                      <>
+                    <>
                     {q.type === 'yesno' && (
                       <div className={['flex gap-2', hasError ? 'rounded-xl ring-1 ring-red-500 p-1' : ''].join(' ')}>
                         {['Sim', 'Não'].map((opt) => (
@@ -303,6 +298,7 @@ export default function AnamnesePage() {
                           const selected = (answers[q.id] ?? '').split(',').map((s) => s.trim()).includes(opt)
                           const img = (q.optionImages ?? [])[idx]
                           return (
+                            // eslint-disable-next-line aesthera/no-native-button
                             <button
                               key={opt}
                               type="button"
@@ -326,6 +322,7 @@ export default function AnamnesePage() {
                       <div className={['space-y-2', hasError ? 'rounded-xl ring-1 ring-red-500 p-1' : ''].join(' ')}>
                         {q.selectOptions.map((opt) => (
                           <div key={opt.label} className="space-y-1">
+                            {/* eslint-disable-next-line aesthera/no-native-button */}
                             <button
                               type="button"
                               onClick={() => {
@@ -364,8 +361,7 @@ export default function AnamnesePage() {
                         className={['w-full rounded-xl border px-3 py-2 text-sm focus:outline-none', hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-200 bg-white focus:border-primary'].join(' ')}
                       />
                     )}
-                      </>
-                    )}
+                    </>
                     {hasError && (
                       <p className="text-xs text-red-500">Campo obrigatório.</p>
                     )}

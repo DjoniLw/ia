@@ -1,0 +1,26 @@
+# .editorconfig — Aesthera
+# Regra: todo arquivo TypeScript/TSX deve ser UTF-8 sem BOM (3ª reincidência de BOM encoding)
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{ts,tsx,js,mjs}]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.json]
+charset = utf-8
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

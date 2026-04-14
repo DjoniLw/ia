@@ -105,3 +105,19 @@
   - 📌 Regra: "testar atomicidade" sem simular falha não testa atomicidade — apenas testa o happy path dentro de um callback.
   - 📌 O que verificar: existe pelo menos 1 teste onde o **último step** (`auditLog.create`, `billing.update`, etc.) lança e o service propaga o erro? Se não → a garantia de rollback está sem cobertura.
   - 📅 08/04/2026 — issue #152 (`resolveDiff` com `$transaction` testado apenas em sucesso; falha de `auditLog.create` não coberta)
+
+---
+
+- [ ] **Novo método de serviço ou novo branch de lógica crítica exige testes no mesmo PR — sem exceção**
+  - 🔴 Anti-padrão: introduzir métodos como `reopen()`, `updateStaffAnswers()` ou qualquer novo branch condicional com transição de status / cálculo de estado final sem testes — o comportamento fica sem proteção e pode regredir silenciosamente em futuros refactorings.
+  - ✅ Correto: todo novo método de serviço ou novo `if/else` que muda o estado final deve vir acompanhado no mesmo PR de, no mínimo:
+    - **Caso feliz** — entrada válida, saída esperada, efeitos colaterais verificados
+    - **Caso de erro esperado** — entrada inválida ou pré-condição não atendida (ex.: status inválido para a transição)
+    - **Edge case** — branch alternativo ou estado intermediário (ex.: `submit` com `prefilled = true` vs `prefilled = false`)
+  - 📌 Regra: se o PR inclui método novo em `*.service.ts` ou novo branch condicional em método existente → **testes são bloqueantes, não opcionais**.
+  - 📌 Exemplos de lógica crítica que disparam esta regra obrigatoriamente:
+    - Transições de status (`pending → submitted`, `submitted → reopened`)
+    - Cálculo de estado final com base em condições booleanas (`prefilled`, `allAnswered`, `isOverdue`)
+    - Métodos com side-effects críticos (disparo de evento de domínio, e-mail, cobrança)
+  - 📌 Sinal de alerta na revisão: PR com arquivo `*.service.ts` modificado ou criado sem nenhum arquivo `*.test.ts` correspondente.
+  - 📅 13/04/2026

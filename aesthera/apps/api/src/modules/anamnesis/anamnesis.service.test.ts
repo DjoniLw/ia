@@ -32,7 +32,7 @@ const mockAppConfig = vi.hoisted(() => ({
 
 const mockPrismaTx = vi.hoisted(() => ({
   anamnesisRequest: { findFirst: vi.fn(), update: vi.fn() },
-  clinicalRecord: { findFirst: vi.fn(), create: vi.fn() },
+  clinicalRecord: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   auditLog: { create: vi.fn() },
 }))
 
@@ -393,13 +393,28 @@ describe('handleAnamnesisSignedEvent()', () => {
     )
   })
 
-  it('nÃ£o deve criar ClinicalRecord duplicado se jÃ¡ existe (idempotÃªncia)', async () => {
+  it('nÃ£o deve criar ClinicalRecord duplicado se jÃ¡ existe â€" deve atualizar o existente (reabertura)', async () => {
     mockPrismaTx.anamnesisRequest.findFirst.mockResolvedValue(STORED_REQUEST)
     mockPrismaTx.clinicalRecord.findFirst.mockResolvedValue({ id: 'cr-existing' })
+    mockPrismaTx.clinicalRecord.update.mockResolvedValue({ id: 'cr-existing' })
 
     await handleAnamnesisSignedEvent(PAYLOAD)
 
     expect(mockPrismaTx.clinicalRecord.create).not.toHaveBeenCalled()
+    expect(mockPrismaTx.clinicalRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'cr-existing' },
+        data: expect.objectContaining({
+          content: JSON.stringify({
+            groupName: 'Anamnese Facial',
+            entries: [
+              { question: 'Tem alergias?', answer: 'Sim', type: 'yesno' },
+              { question: 'ObservaÃ§Ãµes', answer: 'Nenhuma', type: 'text' },
+            ],
+          }),
+        }),
+      }),
+    )
   })
 
   it('nÃ£o deve criar ClinicalRecord quando AnamnesisRequest nÃ£o Ã© encontrado', async () => {

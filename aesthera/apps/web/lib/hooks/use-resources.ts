@@ -427,7 +427,7 @@ export function useUpdateClinicalRecord(id: string) {
 export function useDeleteClinicalRecord() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, customerId }: { id: string; customerId: string }) =>
+    mutationFn: ({ id }: { id: string; customerId: string }) =>
       api.delete(`/clinical-records/${id}`).then((r) => r.data),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['clinical-records', vars.customerId] })
@@ -1002,11 +1002,30 @@ export function useAnamnesisRequestById(id: string | null) {
   })
 }
 
+export function useAnamnesisSignatureUrl(id: string | null) {
+  return useQuery<string>({
+    queryKey: ['anamnesis-signature', id],
+    queryFn: () => api.get(`/anamnesis-requests/${id}/signature`).then((r) => r.data.url),
+    enabled: !!id,
+    staleTime: 50 * 60 * 1000, // 50min — URL expira em 1h
+    gcTime: 55 * 60 * 1000,
+  })
+}
+
 export function useCreateAnamnesisRequest() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: CreateAnamnesisRequestInput) =>
       api.post('/anamnesis-requests', data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useUpdateAnamnesisRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, staffAnswers }: { id: string; staffAnswers: Record<string, unknown> }) =>
+      api.patch(`/anamnesis-requests/${id}`, { staffAnswers }).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
   })
 }
@@ -1052,6 +1071,15 @@ export function useResolveAnamnesisDiff() {
   return useMutation({
     mutationFn: ({ id, resolutions }: { id: string; resolutions: Record<string, 'clinic' | 'client'> }) =>
       api.post(`/anamnesis-requests/${id}/resolve-diff`, { resolutions }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
+  })
+}
+
+export function useReopenAnamnesis() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/anamnesis-requests/${id}/reopen`).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['anamnesis-requests'] }),
   })
 }

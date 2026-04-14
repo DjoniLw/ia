@@ -6,7 +6,7 @@
 
 ---
 
-## Estado do Produto (atualizado em: 22/03/2026)
+## Estado do Produto (atualizado em: 13/04/2026)
 
 ### Fase atual: MVP concluído (Fases 1–9 implementadas)
 
@@ -39,6 +39,7 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 | **Products** | ✅ Implementado | Catálogo de produtos vendidos (estoque, preço) |
 | **Contracts** | 🔲 Não implementado | Spec em `features/contracts.md`, código ausente |
 | **Clinical Records** | 🔲 Parcial | DTO e repository criados, `clinical.service.ts` ausente, tela não implementada |
+| **Fichas de Avaliação (Expandidas)** | 📋 Especificado | Categorias de avaliação + fichas por cliente + redesign da config. Spec: `outputs/po/fichas-avaliacao-expandidas-doc.md` |
 | **Sales** | 🔲 Parcial | Pasta `/sales` existe no frontend, página não implementada |
 
 ---
@@ -158,6 +159,7 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 | **Melhorias Modal de Agendamento** | **2026-04-07** | **`outputs/po/agendamento-melhorias-modal-doc.md`** |
 | **Agenda Inteligente (ex-Avançada)** | **2026-04-07** | **`outputs/po/agenda-inteligente-doc.md`** |
 | **Redesign Módulo de Anamnese** | **2026-04-08** | **`outputs/po/anamnese-redesign-doc.md`** |
+| **Fichas de Avaliação Expandidas** | **2026-04-13** | **`outputs/po/fichas-avaliacao-expandidas-doc.md`** |
 
 ---
 
@@ -223,6 +225,21 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 
 ---
 
+## Regras de Negócio — Fichas de Avaliação Expandidas (13/04/2026)
+
+- Aba "Evolução" no perfil do cliente renomeada para **"Avaliações"** — "Evolução Corporal" removido
+- `MeasurementSheet` ganha `category` (enum: CORPORAL, FACIAL, DERMATO_FUNCIONAL, NUTRICIONAL, POSTURAL, PERSONALIZADA) e `scope` (system | customer) + `customerId?`
+- Fichas existentes recebem `category = CORPORAL` e `scope = system` via migration não-destrutiva
+- **Fichas do sistema** (`scope=system`): max 20 ativas por clínica; visíveis para todos os clientes
+- **Fichas do cliente** (`scope=customer`): max 10 ativas por cliente; apenas na aba do cliente vinculado
+- Categoria da ficha é mutável; tipo (SIMPLE/TABULAR) continua imutável após criação
+- Toggle "D/E" na configuração = `subColumns = ["D","E"]` no banco (estrutura já existe)
+- Templates da biblioteca são constantes no código (não no banco); `POST /measurement-sheets/templates/:id/copy` cria cópia editável
+- Templates incluídos: Perimetria, Bioimpedância, Condição Estética, Firmeza Tissular, Avaliação Facial, Avaliação Postural
+- Professional pode criar ficha por cliente apenas se tiver agendamento confirmado com o cliente
+
+---
+
 ## Padrões de Filtros (obrigatório em specs)
 
 > Definido em: 25/03/2026 — revisão transversal de filtros (`outputs/ux/aesthera-ux-review-filtros-padronizacao-2026-03-25.md`)
@@ -248,6 +265,7 @@ Qualquer spec que descreva uma tela com filtros **DEVE especificar obrigatoriame
 |------|---------------|-----------------|--------|
 | 2026-03-24 | FASE 3 — Cliente e Relacionamento (itens 3, 10, 11, 20) | ai-engineering/projects/aesthera/features/fase3-cliente-relacionamento-doc.md | Especificado |
 | 2026-03-30 | Ficha de Anamnese Digital com Assinatura Eletrônica | outputs/po/anamnese-assinatura-digital-doc.md | Especificado |
+| 2026-04-13 | Fichas de Avaliação Expandidas (categorias + por cliente + redesign config) | outputs/po/fichas-avaliacao-expandidas-doc.md | Especificado |
 
 ---
 
@@ -268,3 +286,7 @@ Qualquer spec que descreva uma tela com filtros **DEVE especificar obrigatoriame
 | 2026-03-30 | **DP-08** Assinatura de anamnese segue exatamente o padrão de contratos (`/sign/[token]`) — nova rota `/anamnese/[token]` com `SignatureCanvas` reutilizado | Consistência UX; cliente já conhece o fluxo; componente compartilhável |
 | 2026-03-30 | **DP-09** AnamnesisRequest armazena snapshot das perguntas no momento do envio | Imutabilidade — alterações futuras no formulário da clínica não afetam fichas já enviadas |
 | 2026-03-30 | **DP-10** Criação do ClinicalRecord (type=anamnesis) deve ser atômica com a assinatura (transação Prisma) | Garantia de consistência: ficha nunca é marcada como assinada sem o registro clínico correspondente |
+| 2026-04-13 | **DP-11** Categoria DERMATO_FUNCIONAL separada de CORPORAL | Dermato é especialidade específica; permite ocultar a categoria para clínicas gerais |
+| 2026-04-13 | **DP-12** Fichas personalizadas participam do comparativo de sessões | Lógica existente por `sheetId` já funciona sem alteração |
+| 2026-04-13 | **DP-13** Sessão pode misturar fichas system e customer | Sessão é container neutro; separação apenas na UI de seleção |
+| 2026-04-13 | **DP-14** Templates da biblioteca em código (constante), não em seed SQL | Sempre typesafe, versionado com o código |
