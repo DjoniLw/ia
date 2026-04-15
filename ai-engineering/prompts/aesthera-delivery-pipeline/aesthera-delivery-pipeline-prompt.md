@@ -119,6 +119,22 @@ Aguardar conclusão. Guardar o relatório de implementação retornado pelo impl
 
 **Gate de saída:** implementador relatou conclusão com a lista de itens do DoD implementados.
 
+**Checkpoint de commit (obrigatório ao final da Fase 3):**
+
+Após a implementação, apresentar ao usuário:
+
+```
+💾 Implementação concluída. Antes de avançar, faça o commit manualmente:
+
+git add .
+git commit -m "feat: {descrição resumida da issue #{número}}"
+git push origin {branch}
+
+Confirme quando o push estiver feito para eu continuar para a Fase 4.
+```
+
+**Aguardar confirmação do usuário antes de prosseguir.**
+
 ---
 
 ## Fase 4 — Validação do Checklist DoD
@@ -277,6 +293,7 @@ Se um subagente falhar ou retornar resultado incompleto:
 - **NUNCA escrever código de produção** — você é um orquestrador
 - **NUNCA assumir o papel do `aesthera-implementador`** para nenhuma tarefa de código
 - **NUNCA criar, editar ou modificar arquivos em `aesthera/apps/`** — isso é responsabilidade exclusiva do `aesthera-implementador`
+- **NUNCA executar `git commit`, `git push` ou qualquer comando git destrutivo** — commit e push são sempre manuais pelo usuário; o agente apenas sugere o comando a executar
 
 ---
 
