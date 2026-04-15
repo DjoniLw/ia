@@ -15,35 +15,80 @@ import {
   type UpdateSheetDto,
 } from './measurement-sheets.dto'
 import { MeasurementSheetsRepository } from './measurement-sheets.repository'
+import { AppointmentsRepository } from '../appointments/appointments.repository'
+import { MEASUREMENT_TEMPLATES } from './measurement-templates'
+import { prisma as defaultPrisma } from '../../database/prisma/client'
+import type { PrismaClient } from '@prisma/client'
+import { MeasurementCategory, MeasurementScope, MeasurementSheetType } from '@prisma/client'
 
 export class MeasurementSheetsService {
-  private repo = new MeasurementSheetsRepository()
+  private repo: MeasurementSheetsRepository
+  private appointmentsRepo: AppointmentsRepository
+  private db: PrismaClient
+
+  constructor(db: PrismaClient = defaultPrisma) {
+    this.db = db
+    this.repo = new MeasurementSheetsRepository()
+    this.appointmentsRepo = new AppointmentsRepository()
+  }
 
   // ─── Fichas ────────────────────────────────────────────────────────────────
 
   async listSheets(clinicId: string, q: ListSheetsQuery) {
-    return this.repo.listSheets(clinicId, !q.includeInactive)
+    return this.repo.listSheets(clinicId, !q.includeInactive, { scope: q.scope, category: q.category })
   }
 
-  async createSheet(clinicId: string, dto: CreateSheetDto) {
+  async createSheet(clinicId: string, dto: CreateSheetDto, userId?: string, role?: string) {
+    const scope = dto.scope ?? 'SYSTEM'
+
+    // Autorização por role/scope
+    if (scope === 'SYSTEM') {
+      if (role !== 'admin') throw new ForbiddenError('Apenas administradores podem criar fichas do sistema')
+    } else {
+      // scope === 'CUSTOMER'
+      if (role === 'professional') {
+        const hasAppointment = await this.appointmentsRepo.existsConfirmed({
+          clinicId,
+          professionalId: userId!,
+          customerId: dto.customerId!,
+          statusIn: ['confirmed', 'in_progress', 'completed'],
+        })
+        if (!hasAppointment) throw new ForbiddenError('SEM_AGENDAMENTO_CONFIRMADO')
+      } else if (role !== 'admin' && role !== 'staff') {
+        throw new ForbiddenError('Permissão insuficiente')
+      }
+    }
+
     // Limite de fichas ativas
     const count = await this.repo.countActiveSheets(clinicId)
     if (count >= MAX_ACTIVE_SHEETS) {
       throw new ValidationError('MAX_SHEETS_REACHED')
     }
 
-    // Nome único por clínica (case-insensitive)
-    const existing = await this.repo.findSheetByName(clinicId, dto.name)
-    if (existing) {
+    // Nome único por clínica e scope (case-insensitive)
+    const nameExists = await this.repo.existsSheetNameInClinic(clinicId, dto.name, scope)
+    if (nameExists) {
       throw new ConflictError('Nome de ficha já existe nesta clínica')
     }
 
     return this.repo.createSheet(clinicId, dto)
   }
-  async updateSheet(id: string, clinicId: string, dto: UpdateSheetDto) {
+  async updateSheet(id: string, clinicId: string, dto: UpdateSheetDto, userId?: string, role?: string) {
     const sheet = await this.repo.findSheetById(id, clinicId)
     if (!sheet) throw new NotFoundError('MeasurementSheet')
     if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    // Autorização por scope da ficha
+    const sheetScope = (sheet as unknown as { scope: string }).scope ?? 'SYSTEM'
+    if (sheetScope === 'SYSTEM') {
+      if (role !== 'admin') throw new ForbiddenError('Apenas administradores podem editar fichas do sistema')
+    } else {
+      // scope === 'CUSTOMER'
+      const isCreator = (sheet as unknown as { createdByUserId: string | null }).createdByUserId === userId
+      if (role !== 'admin' && !isCreator) {
+        throw new ForbiddenError('Apenas o criador ou administrador pode editar esta ficha')
+      }
+    }
 
     // Reativar: verificar limite
     if (dto.active === true && !sheet.active) {
@@ -55,8 +100,8 @@ export class MeasurementSheetsService {
 
     // Nome único por clínica (case-insensitive), se alterando o nome
     if (dto.name && dto.name.toLowerCase() !== sheet.name.toLowerCase()) {
-      const existing = await this.repo.findSheetByName(clinicId, dto.name)
-      if (existing) {
+      const nameExists = await this.repo.existsSheetNameInClinic(clinicId, dto.name, sheetScope, id)
+      if (nameExists) {
         throw new ConflictError('Nome de ficha já existe nesta clínica')
       }
     }
@@ -76,6 +121,99 @@ export class MeasurementSheetsService {
     }
 
     await this.repo.deleteSheet(id, clinicId)
+  }
+
+  // ─── Templates ─────────────────────────────────────────────────────────────
+
+  listTemplates() {
+    return MEASUREMENT_TEMPLATES
+  }
+
+  async copyTemplate(clinicId: string, userId: string, role: string, templateId: string, customName?: string) {
+    if (role !== 'admin') throw new ForbiddenError('Apenas administradores podem copiar templates')
+
+    const template = MEASUREMENT_TEMPLATES.find((t) => t.id === templateId)
+    if (!template) throw new NotFoundError('Template não encontrado')
+
+    const count = await this.repo.countActiveSheets(clinicId)
+    if (count >= MAX_ACTIVE_SHEETS) throw new ValidationError('MAX_SHEETS_REACHED')
+
+    // Resolver nome único com sufixo numérico se necessário
+    let baseName = customName ?? template.name
+    let finalName = baseName
+    let suffix = 2
+    while (await this.repo.existsSheetNameInClinic(clinicId, finalName, 'SYSTEM')) {
+      finalName = `${baseName} ${suffix}`
+      suffix++
+    }
+
+    if (template.type === MeasurementSheetType.SIMPLE) {
+      return this.db.$transaction(async (tx) => {
+        const sheet = await tx.measurementSheet.create({
+          data: {
+            clinicId,
+            name: finalName,
+            type: MeasurementSheetType.SIMPLE,
+            category: template.category as MeasurementCategory,
+            scope: MeasurementScope.SYSTEM,
+            createdByUserId: userId,
+            order: 0,
+          },
+        })
+        const fields = (template as { fields: string[] }).fields
+        await tx.measurementField.createMany({
+          data: fields.map((fieldName, idx) => ({
+            sheetId: sheet.id,
+            clinicId,
+            name: fieldName,
+            inputType: 'INPUT',
+            order: idx,
+            active: true,
+          })),
+        })
+        return tx.measurementSheet.findFirst({
+          where: { id: sheet.id },
+          include: { fields: { orderBy: { order: 'asc' } }, columns: true },
+        })
+      })
+    } else {
+      return this.db.$transaction(async (tx) => {
+        const sheet = await tx.measurementSheet.create({
+          data: {
+            clinicId,
+            name: finalName,
+            type: MeasurementSheetType.TABULAR,
+            category: template.category as MeasurementCategory,
+            scope: MeasurementScope.SYSTEM,
+            createdByUserId: userId,
+            order: 0,
+          },
+        })
+        const tpl = template as { rows: string[]; columns: string[] }
+        await tx.measurementField.createMany({
+          data: tpl.rows.map((rowName, idx) => ({
+            sheetId: sheet.id,
+            clinicId,
+            name: rowName,
+            inputType: 'INPUT',
+            order: idx,
+            active: true,
+          })),
+        })
+        await tx.measurementSheetColumn.createMany({
+          data: tpl.columns.map((colName, idx) => ({
+            sheetId: sheet.id,
+            name: colName,
+            inputType: 'INPUT',
+            order: idx,
+          })),
+        })
+        return tx.measurementSheet.findFirst({
+          where: { id: sheet.id },
+          include: { fields: { orderBy: { order: 'asc' } }, columns: { orderBy: { order: 'asc' } } },
+        })
+      })
+    }
   }
 
   // ─── Campos ────────────────────────────────────────────────────────────────

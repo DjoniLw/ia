@@ -75,9 +75,9 @@ export class AppointmentsRepository {
     })
   }
 
-  async update(_clinicId: string, id: string, dto: UpdateAppointmentDto) {
-    return prisma.appointment.update({
-      where: { id },
+  async update(clinicId: string, id: string, dto: UpdateAppointmentDto) {
+    await prisma.appointment.updateMany({
+      where: { id, clinicId },
       data: {
         ...(dto.scheduledAt && { scheduledAt: new Date(dto.scheduledAt) }),
         ...(dto.notes !== undefined && { notes: dto.notes }),
@@ -85,21 +85,21 @@ export class AppointmentsRepository {
         ...(dto.roomId !== undefined && { roomId: dto.roomId }),
         updatedAt: new Date(),
       },
-      include: appointmentInclude,
     })
+    return prisma.appointment.findFirst({ where: { id, clinicId }, include: appointmentInclude })
   }
 
   async transition(
-    _clinicId: string,
+    clinicId: string,
     id: string,
     status: string,
     extra?: Partial<{ cancellationReason: string; completedAt: Date; cancelledAt: Date }>,
   ) {
-    return prisma.appointment.update({
-      where: { id },
+    await prisma.appointment.updateMany({
+      where: { id, clinicId },
       data: { status: status as never, ...extra, updatedAt: new Date() },
-      include: appointmentInclude,
     })
+    return prisma.appointment.findFirst({ where: { id, clinicId }, include: appointmentInclude })
   }
 
   // ── Availability ──────────────────────────────────────────────────────────────
@@ -238,5 +238,22 @@ export class AppointmentsRepository {
 
   async deleteBlockedSlot(clinicId: string, id: string) {
     return prisma.blockedSlot.deleteMany({ where: { id, clinicId } })
+  }
+
+  async existsConfirmed(params: {
+    clinicId: string
+    professionalId: string
+    customerId: string
+    statusIn: string[]
+  }): Promise<boolean> {
+    const count = await prisma.appointment.count({
+      where: {
+        clinicId: params.clinicId,
+        professionalId: params.professionalId,
+        customerId: params.customerId,
+        status: { in: params.statusIn as never[] },
+      },
+    })
+    return count > 0
   }
 }
