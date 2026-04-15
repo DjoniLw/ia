@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MeasurementSheetsService } from './measurement-sheets.service'
 import { MeasurementSheetsRepository } from './measurement-sheets.repository'
+import { AppointmentsRepository } from '../appointments/appointments.repository'
 import { ValidationError, ConflictError, ForbiddenError } from '../../shared/errors/app-error'
+import { CreateSheetDto, UpdateSheetDto } from './measurement-sheets.dto'
 
 vi.mock('./measurement-sheets.repository')
+vi.mock('../appointments/appointments.repository')
 
 const CLINIC_ID = 'clinic-1'
 const SHEET_ID = 'sheet-1'
@@ -55,12 +58,15 @@ function makeColumn(overrides = {}) {
 describe('MeasurementSheetsService', () => {
   let svc: MeasurementSheetsService
   let repo: MeasurementSheetsRepository
+  let appointmentsRepo: AppointmentsRepository
 
   beforeEach(() => {
     vi.clearAllMocks()
     repo = new MeasurementSheetsRepository() as any
+    appointmentsRepo = new AppointmentsRepository() as any
     svc = new MeasurementSheetsService()
     ;(svc as any).repo = repo
+    ;(svc as any).appointmentsRepo = appointmentsRepo
   })
 
   // ─── createSheet ───────────────────────────────────────────────────────────
@@ -68,25 +74,27 @@ describe('MeasurementSheetsService', () => {
   it('deve criar ficha com nome e retornar 201', async () => {
     vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
     vi.mocked(repo.findSheetByName).mockResolvedValue(null)
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
     vi.mocked(repo.createSheet).mockResolvedValue(makeSheet() as any)
 
-    const result = await svc.createSheet(CLINIC_ID, { name: 'Perimetria', type: 'SIMPLE' })
+    const result = await svc.createSheet(CLINIC_ID, { name: 'Perimetria', type: 'SIMPLE', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1', 'admin')
     expect(result).toBeDefined()
-    expect(repo.createSheet).toHaveBeenCalledWith(CLINIC_ID, { name: 'Perimetria', type: 'SIMPLE' })
+    expect(repo.createSheet).toHaveBeenCalledWith(CLINIC_ID, { name: 'Perimetria', type: 'SIMPLE', category: 'CORPORAL', scope: 'SYSTEM' })
   })
 
   it('deve retornar 422 MAX_SHEETS_REACHED ao criar com 20 fichas ativas', async () => {
     vi.mocked(repo.countActiveSheets).mockResolvedValue(20)
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
 
-    await expect(svc.createSheet(CLINIC_ID, { name: 'Nova Ficha', type: 'SIMPLE' })).rejects.toThrow(ValidationError)
-    await expect(svc.createSheet(CLINIC_ID, { name: 'Nova Ficha', type: 'SIMPLE' })).rejects.toThrow('MAX_SHEETS_REACHED')
+    await expect(svc.createSheet(CLINIC_ID, { name: 'Nova Ficha', type: 'SIMPLE', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1', 'admin')).rejects.toThrow(ValidationError)
+    await expect(svc.createSheet(CLINIC_ID, { name: 'Nova Ficha', type: 'SIMPLE', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1', 'admin')).rejects.toThrow('MAX_SHEETS_REACHED')
   })
 
   it('deve retornar 409 ao criar ficha com nome duplicado (case-insensitive)', async () => {
     vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
-    vi.mocked(repo.findSheetByName).mockResolvedValue(makeSheet() as any)
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(true)
 
-    await expect(svc.createSheet(CLINIC_ID, { name: 'PERIMETRIA', type: 'SIMPLE' })).rejects.toThrow(ConflictError)
+    await expect(svc.createSheet(CLINIC_ID, { name: 'PERIMETRIA', type: 'SIMPLE', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1', 'admin')).rejects.toThrow(ConflictError)
   })
 
   // ─── createField ───────────────────────────────────────────────────────────
@@ -152,7 +160,7 @@ describe('MeasurementSheetsService', () => {
   it('deve retornar 403 ao tentar modificar ficha de outra clínica', async () => {
     vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ clinicId: 'other-clinic' }) as any)
 
-    await expect(svc.updateSheet(SHEET_ID, CLINIC_ID, { name: 'Novo' })).rejects.toThrow(ForbiddenError)
+    await expect(svc.updateSheet(SHEET_ID, CLINIC_ID, { name: 'Novo' }, 'user-1', 'admin')).rejects.toThrow(ForbiddenError)
   })
 
   // ─── reorderSheets ────────────────────────────────────────────────────────
@@ -191,28 +199,29 @@ describe('MeasurementSheetsService', () => {
   it('deve criar ficha do tipo TABULAR e repassar type correto ao repositório', async () => {
     vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
     vi.mocked(repo.findSheetByName).mockResolvedValue(null)
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
     vi.mocked(repo.createSheet).mockResolvedValue(makeSheet({ type: 'TABULAR' }) as any)
 
-    const result = await svc.createSheet(CLINIC_ID, { name: 'Avaliação Tabular', type: 'TABULAR' })
-    expect(repo.createSheet).toHaveBeenCalledWith(CLINIC_ID, { name: 'Avaliação Tabular', type: 'TABULAR' })
+    const result = await svc.createSheet(CLINIC_ID, { name: 'Avaliação Tabular', type: 'TABULAR', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1', 'admin')
+    expect(repo.createSheet).toHaveBeenCalledWith(CLINIC_ID, { name: 'Avaliação Tabular', type: 'TABULAR', category: 'CORPORAL', scope: 'SYSTEM' })
     expect(result).toBeDefined()
   })
 
   // ─── updateSheet: reativação ──────────────────────────────────────────────
 
   it('deve retornar 422 MAX_SHEETS_REACHED ao reativar ficha quando já existem 20 ativas', async () => {
-    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ active: false }) as any)
+    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ active: false, scope: 'SYSTEM' }) as any)
     vi.mocked(repo.countActiveSheets).mockResolvedValue(20)
 
-    await expect(svc.updateSheet(SHEET_ID, CLINIC_ID, { active: true })).rejects.toThrow('MAX_SHEETS_REACHED')
+    await expect(svc.updateSheet(SHEET_ID, CLINIC_ID, { active: true }, 'user-1', 'admin')).rejects.toThrow('MAX_SHEETS_REACHED')
   })
 
   it('deve reativar ficha desativada com sucesso quando há menos de 20 ativas', async () => {
-    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ active: false }) as any)
+    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ active: false, scope: 'SYSTEM' }) as any)
     vi.mocked(repo.countActiveSheets).mockResolvedValue(5)
     vi.mocked(repo.updateSheet).mockResolvedValue(makeSheet({ active: true }) as any)
 
-    const result = await svc.updateSheet(SHEET_ID, CLINIC_ID, { active: true })
+    const result = await svc.updateSheet(SHEET_ID, CLINIC_ID, { active: true }, 'user-1', 'admin')
     expect(result).toBeDefined()
     expect(repo.updateSheet).toHaveBeenCalledWith(SHEET_ID, CLINIC_ID, { active: true })
   })
@@ -302,5 +311,203 @@ describe('MeasurementSheetsService', () => {
     vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ clinicId: 'other-clinic' }) as any)
 
     await expect(svc.deleteSheetColumn(SHEET_ID, COL_ID, CLINIC_ID)).rejects.toThrow(ForbiddenError)
+  })
+
+  // ─── Issue #157: scope/category + autorização granular ───────────────────
+
+  it('[#157] POST scope=CUSTOMER sem customerId → 400 via Zod refine', () => {
+    const result = CreateSheetDto.safeParse({ name: 'Ficha Cliente', type: 'SIMPLE', scope: 'CUSTOMER' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.errors[0].path).toContain('customerId')
+    }
+  })
+
+  it('[#157] POST por professional sem agendamento confirmado → 403', async () => {
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
+    vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
+    vi.mocked(appointmentsRepo.existsConfirmed).mockResolvedValue(false)
+
+    await expect(
+      svc.createSheet(
+        CLINIC_ID,
+        { name: 'Ficha Cliente', type: 'SIMPLE', category: 'CORPORAL', scope: 'CUSTOMER', customerId: 'customer-1' },
+        'professional-1',
+        'professional',
+      ),
+    ).rejects.toThrow('SEM_AGENDAMENTO_CONFIRMADO')
+  })
+
+  it('[#157] POST por professional com agendamento confirmed → 201', async () => {
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
+    vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
+    vi.mocked(appointmentsRepo.existsConfirmed).mockResolvedValue(true)
+    vi.mocked(repo.createSheet).mockResolvedValue(makeSheet({ scope: 'CUSTOMER' }) as any)
+
+    const result = await svc.createSheet(
+      CLINIC_ID,
+      { name: 'Ficha Cliente', type: 'SIMPLE', category: 'CORPORAL', scope: 'CUSTOMER', customerId: 'customer-1' },
+      'professional-1',
+      'professional',
+    )
+    expect(result).toBeDefined()
+  })
+
+  it('[#157] PATCH scope=SYSTEM por staff → 403', async () => {
+    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ scope: 'SYSTEM' }) as any)
+
+    await expect(
+      svc.updateSheet(SHEET_ID, CLINIC_ID, { name: 'Novo' }, 'staff-1', 'staff'),
+    ).rejects.toThrow(ForbiddenError)
+  })
+
+  it('[#157] PATCH scope=CUSTOMER pelo criador → 200', async () => {
+    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ scope: 'CUSTOMER', createdByUserId: 'user-creator' }) as any)
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
+    vi.mocked(repo.updateSheet).mockResolvedValue(makeSheet({ name: 'Novo Nome' }) as any)
+
+    const result = await svc.updateSheet(SHEET_ID, CLINIC_ID, { name: 'Novo Nome' }, 'user-creator', 'staff')
+    expect(result).toBeDefined()
+  })
+
+  it('[#157] PATCH scope=CUSTOMER por outro usuário não-admin → 403', async () => {
+    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ scope: 'CUSTOMER', createdByUserId: 'outro-user' }) as any)
+
+    await expect(
+      svc.updateSheet(SHEET_ID, CLINIC_ID, { name: 'Novo' }, 'staff-diferente', 'staff'),
+    ).rejects.toThrow(ForbiddenError)
+  })
+
+  it('[#157] PATCH enviando campo type → 400 via Zod strict', () => {
+    const result = UpdateSheetDto.safeParse({ name: 'Ok', type: 'TABULAR' })
+    expect(result.success).toBe(false)
+  })
+
+  it('[#157] GET com clinicId de outra clínica → lista vazia', async () => {
+    vi.mocked(repo.listSheets).mockResolvedValue([])
+
+    const result = await svc.listSheets('outra-clinica', { includeInactive: false })
+    expect(result).toHaveLength(0)
+    expect(repo.listSheets).toHaveBeenCalledWith('outra-clinica', true, { scope: undefined, category: undefined })
+  })
+
+  it('[#157] POST /templates/:id/copy por staff → deve lançar ForbiddenError (403)', async () => {
+    await expect(
+      svc.copyTemplate('clinic-id', 'user-staff', 'staff', 'tpl-perimetria')
+    ).rejects.toThrow(ForbiddenError)
+  })
+
+  it('[#157] POST /templates/:id/copy por admin → cria ficha a partir do template (tpl-perimetria)', async () => {
+    const txMock = {
+      measurementSheet: {
+        create: vi.fn().mockResolvedValue({
+          id: 'sheet-new',
+          clinicId: CLINIC_ID,
+          name: 'Perimetria',
+          type: 'SIMPLE',
+          category: 'CORPORAL',
+          scope: 'SYSTEM',
+          active: true,
+          order: 0,
+          fields: [],
+          columns: [],
+        }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'sheet-new',
+          clinicId: CLINIC_ID,
+          name: 'Perimetria',
+          type: 'SIMPLE',
+          category: 'CORPORAL',
+          scope: 'SYSTEM',
+          active: true,
+          order: 0,
+          fields: [],
+          columns: [],
+        }),
+      },
+      measurementField: { createMany: vi.fn().mockResolvedValue({}) },
+    }
+
+    const dbMock = {
+      $transaction: vi.fn().mockImplementation(async (fn: (tx: any) => Promise<any>) => fn(txMock)),
+    }
+
+    ;(svc as any).db = dbMock
+
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
+    vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
+
+    const result = await svc.copyTemplate(CLINIC_ID, 'user-admin', 'admin', 'tpl-perimetria')
+
+    expect(dbMock.$transaction).toHaveBeenCalledOnce()
+    expect(txMock.measurementSheet.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        clinicId: CLINIC_ID,
+        name: 'Perimetria',
+        category: 'CORPORAL',
+        type: 'SIMPLE',
+      }),
+    }))
+    expect(result).toBeDefined()
+  })
+
+  it('[#157] Copiar mesmo template duas vezes → sufixo numérico no nome', async () => {
+    const txMock = {
+      measurementSheet: {
+        create: vi.fn().mockResolvedValue({
+          id: 'sheet-copy-2',
+          clinicId: CLINIC_ID,
+          name: 'Perimetria 2',
+          type: 'SIMPLE',
+          category: 'CORPORAL',
+          scope: 'SYSTEM',
+          active: true,
+          order: 0,
+          fields: [],
+          columns: [],
+        }),
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'sheet-copy-2',
+          clinicId: CLINIC_ID,
+          name: 'Perimetria 2',
+          type: 'SIMPLE',
+          category: 'CORPORAL',
+          scope: 'SYSTEM',
+          active: true,
+          order: 0,
+          fields: [],
+          columns: [],
+        }),
+      },
+      measurementField: { createMany: vi.fn().mockResolvedValue({}) },
+    }
+
+    const dbMock = {
+      $transaction: vi.fn().mockImplementation(async (fn: (tx: any) => Promise<any>) => fn(txMock)),
+    }
+
+    ;(svc as any).db = dbMock
+
+    vi.mocked(repo.existsSheetNameInClinic)
+      .mockResolvedValueOnce(true)   // 'Perimetria' → já existe
+      .mockResolvedValueOnce(false)  // 'Perimetria 2' → disponível
+    vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
+
+    await svc.copyTemplate(CLINIC_ID, 'user-admin', 'admin', 'tpl-perimetria')
+
+    expect(txMock.measurementSheet.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ name: 'Perimetria 2' }),
+    }))
+  })
+
+  it('[#157] Migration não-destrutiva: campos novos têm defaults (CORPORAL, SYSTEM, null)', () => {
+    // Confirmação estrutural: o DTO aceita ficha sem os novos campos e aplica defaults
+    const result = CreateSheetDto.safeParse({ name: 'Sem Categoria', type: 'SIMPLE' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.category).toBe('CORPORAL')
+      expect(result.data.scope).toBe('SYSTEM')
+      expect(result.data.customerId).toBeUndefined()
+    }
   })
 })

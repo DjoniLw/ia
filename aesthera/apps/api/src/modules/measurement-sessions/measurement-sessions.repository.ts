@@ -4,7 +4,7 @@ import type { CreateSessionDto, ListSessionsQuery, UpdateSessionDto } from './me
 const SESSION_INCLUDE = {
   sheetRecords: {
     include: {
-      sheet: { select: { id: true, name: true } },
+      sheet: { select: { id: true, name: true, category: true } },
       values: {
         include: {
           field: { select: { id: true, name: true, unit: true, inputType: true, isTextual: true } },

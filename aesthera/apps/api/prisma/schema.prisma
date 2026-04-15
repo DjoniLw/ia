@@ -183,6 +183,20 @@ enum MeasurementInputType {
   CHECK
 }
 
+enum MeasurementCategory {
+  CORPORAL
+  FACIAL
+  DERMATO_FUNCIONAL
+  NUTRICIONAL
+  POSTURAL
+  PERSONALIZADA
+}
+
+enum MeasurementScope {
+  SYSTEM
+  CUSTOMER
+}
+
 enum RecurrenceType {
   none
   daily
@@ -382,8 +396,9 @@ model User {
   clinic              Clinic               @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   sourceTransfers     TransferToken[]      @relation("TransferSourceUser")
   targetTransfers     TransferToken[]      @relation("TransferTargetUser")
-  measurementSessions MeasurementSession[]
-  anamnesisRequests   AnamnesisRequest[]
+  measurementSessions  MeasurementSession[]
+  anamnesisRequests    AnamnesisRequest[]
+  measurementSheets    MeasurementSheet[]
 
   @@unique([clinicId, email])
   @@index([clinicId])
@@ -558,6 +573,7 @@ model Customer {
   measurementSessions    MeasurementSession[]
   customerContracts      CustomerContract[]
   anamnesisRequests      AnamnesisRequest[]
+  measurementSheets      MeasurementSheet[]
 
   @@unique([clinicId, email])
   @@unique([clinicId, document])
@@ -1406,16 +1422,24 @@ model MeasurementSheet {
   type      MeasurementSheetType @default(SIMPLE) // SIMPLE ou TABULAR
   active    Boolean              @default(true)
   order     Int                  @default(0)
+  category          MeasurementCategory @default(CORPORAL)  @map("category")
+  scope             MeasurementScope    @default(SYSTEM)    @map("scope")
+  customerId        String?             @map("customer_id")
+  createdByUserId   String?             @map("created_by_user_id")
   createdAt DateTime             @default(now()) @map("created_at")
   updatedAt DateTime             @updatedAt @map("updated_at")
 
   clinic       Clinic                   @relation(fields: [clinicId], references: [id])
+  customer     Customer?                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy    User?                    @relation(fields: [createdByUserId], references: [id])
   fields       MeasurementField[]
   columns      MeasurementSheetColumn[] // colunas da ficha TABULAR
   sheetRecords MeasurementSheetRecord[]
 
-  @@unique([clinicId, name])
+  // Unicidade de nome validada no service por scope
   @@index([clinicId, active, order])
+  @@index([clinicId, scope, active])
+  @@index([clinicId, customerId])
   @@map("measurement_sheets")
 }
 

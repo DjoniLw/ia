@@ -417,6 +417,29 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - **Bloqueantes incorporados:** 10 (4 UX + 4 Security + 2 Arquitetura)
 - **Status:** ✅ Pronto para implementação
 
+### [2026-04-14] — feat(#157): Fichas de Avaliação Expandidas — Backend 1/3
+- **Módulo:** MeasurementSheets (expansão)
+- **Issue:** [#157](https://github.com/DjoniLw/ia/issues/157) — Migration, enums, novos endpoints e autorização
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/prisma/schema.prisma` *(enums MeasurementCategory + MeasurementScope; 4 novos campos em MeasurementSheet: category, scope, customerId, createdByUserId; 2 relações; 2 índices)*
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.dto.ts` *(CreateSheetDto + UpdateSheetDto.strict() + ListSheetsQuery com novos filtros)*
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.service.ts` *(autorização granular por role/scope, copyTemplate com prisma injetável)*
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.routes.ts` *(GET /templates + POST /templates/:id/copy — rotas estáticas registradas antes de /:id)*
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.repository.ts` *(filtros scope/category em listSheets, existsSheetNameInClinic)*
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-templates.ts` *(NOVO — 6 templates: Perimetria, Bioimpedância, Condição Estética, Firmeza Tissular, Avaliação Facial, Avaliação Postural)*
+  - `aesthera/apps/api/src/modules/measurement-sheets/measurement-sheets.test.ts` *(12 novos cenários de autorização)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.service.ts` *(campo categories computado na response de listSessions)*
+  - `aesthera/apps/api/src/modules/appointments/appointments.repository.ts` *(existsConfirmed() adicionado)*
+- **O que foi feito:**
+  - Migration não-destrutiva: `category=CORPORAL` e `scope=SYSTEM` aplicados por default em fichas existentes
+  - Autorização granular: scope=SYSTEM apenas admin; scope=CUSTOMER — staff/admin livre, professional requer agendamento confirmado
+  - Biblioteca de templates: GET lista 6 templates pré-configurados; POST /copy cria ficha com sufixo numérico se nome duplicado
+  - Injeção de PrismaClient no service (testabilidade): construtor aceita `db` opcional para mocking em testes
+  - Campo `categories: MeasurementCategory[]` derivado das fichas da sessão na response de listSessions
+  - 38/38 testes passando (26 existentes + 12 novos)
+- **Spec técnica:** `outputs/spec-tecnica/fichas-avaliacao-expandidas-backend-spec-tecnica.md`
+- **⚠️ Pendente:** Executar `npx prisma migrate dev --name add-measurement-category-scope` no ambiente com banco
+
 ### [2026-04-09] — fix(#155): Code Review PR #155 — 6 bloqueantes e 3 sugestões corrigidos
 - **Módulo:** Anamnesis (correções pós-code-review PR #155)
 - **Arquivo(s) afetado(s):**
