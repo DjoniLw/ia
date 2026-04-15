@@ -1048,9 +1048,10 @@ export function MeasurementSheetsSettings() {
     setIsEditorCollapsibleOpen(true)
   }
 
-  function handleTemplateSheetCreated(sheetId: string) {
+  function handleTemplateSheetCreated(sheet: MeasurementSheet) {
     setIsTemplateDrawerOpen(false)
-    setSelectedSheetId(sheetId)
+    setSelectedCategory(sheet.category)
+    setSelectedSheetId(sheet.id)
     setIsEditorCollapsibleOpen(true)
   }
 

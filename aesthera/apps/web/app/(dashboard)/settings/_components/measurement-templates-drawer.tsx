@@ -8,10 +8,9 @@ import {
   useMeasurementTemplates,
   useCopyMeasurementTemplate,
   type MeasurementTemplate,
+  type MeasurementSheet,
 } from '@/lib/hooks/use-measurement-sheets'
 import { CATEGORY_LABELS, SHEET_TYPE_LABELS, CATEGORY_BADGE_COLOR } from '@/lib/measurement-categories'
-
-// ── Custom drawer (sheet.tsx não existe no projeto) ────────────────────────────
 
 function DrawerRoot({
   open,
@@ -43,8 +42,6 @@ function DrawerRoot({
   )
 }
 
-// ── Template card ──────────────────────────────────────────────────────────────
-
 function TemplateCard({
   template,
   onUse,
@@ -54,10 +51,9 @@ function TemplateCard({
   onUse: () => void
   isCopying: boolean
 }) {
-  const count = template.type === 'SIMPLE' ? template.fieldsCount : template.columnsCount
   const countLabel =
     template.type === 'SIMPLE'
-      ? `${count} campo${count !== 1 ? 's' : ''}`
+      ? `${template.fieldsCount} campo${template.fieldsCount !== 1 ? 's' : ''}`
       : `${template.fieldsCount} linha${template.fieldsCount !== 1 ? 's' : ''}, ${template.columnsCount} coluna${template.columnsCount !== 1 ? 's' : ''}`
 
   return (
@@ -103,12 +99,10 @@ function TemplateCard({
   )
 }
 
-// ── Main drawer component ──────────────────────────────────────────────────────
-
 interface MeasurementTemplatesDrawerProps {
   open: boolean
   onClose: () => void
-  onSheetCreated: (sheetId: string) => void
+  onSheetCreated: (sheet: MeasurementSheet) => void
 }
 
 export function MeasurementTemplatesDrawer({
@@ -123,7 +117,7 @@ export function MeasurementTemplatesDrawer({
     try {
       const sheet = await copyMutation.mutateAsync(template.id)
       toast.success(`Ficha "${sheet.name}" criada com sucesso`)
-      onSheetCreated(sheet.id)
+      onSheetCreated(sheet)
     } catch {
       toast.error('Erro ao copiar modelo. Tente novamente.')
     }
@@ -131,7 +125,6 @@ export function MeasurementTemplatesDrawer({
 
   return (
     <DrawerRoot open={open} onClose={onClose}>
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
         <div>
           <h2 className="text-base font-semibold">Biblioteca de modelos</h2>
@@ -144,7 +137,6 @@ export function MeasurementTemplatesDrawer({
         </Button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
         {isPending ? (
           <div className="flex justify-center py-12">
