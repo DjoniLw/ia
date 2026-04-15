@@ -1,6 +1,6 @@
 # Mapeamento de Telas — Aesthera
 
-**Última atualização:** 31/03/2026  
+**Última atualização:** 14/04/2026  
 **Fonte original:** Relatório UX — Mapeamento de Telas (`outputs/ux/aesthera-ux-mapeamento-telas-2026-03-31.md`)
 
 ---
@@ -323,7 +323,8 @@ Ações disponíveis: confirmar, cancelar, registrar pagamento, receber manualme
 ### Configurações `/settings`
 
 **Tipo:** Configuração  
-**Descrição:** Configurações gerais do sistema organizadas em abas. Cada aba é um formulário independente.
+**Descrição:** Configurações gerais do sistema organizadas em abas. Cada aba é um formulário independente.  
+**Última atualização:** 14/04/2026 — feat(#158)
 
 | Aba | O que configura |
 |-----|----------------|
@@ -334,7 +335,7 @@ Ações disponíveis: confirmar, cancelar, registrar pagamento, receber manualme
 | Integrações IA | Configuração de chaves de API para funcionalidades com IA |
 | WhatsApp | Integração com Evolution API para envio de notificações automáticas |
 | Anamnese | Grupos e perguntas de anamnese com drag-and-drop e toggle de obrigatoriedade |
-| Medidas Corporais | Fichas de medidas personalizadas com campos e colunas configuráveis |
+| Fichas de Avaliação | Redesign em três painéis: navegação lateral por 6 categorias (Corporal, Facial, Dermato-Funcional, Nutricional, Postural, Personalizada), lista de fichas com drag-and-drop por categoria, e painel de edição de campos (Simples ou Tabular). Biblioteca de modelos pré-configurados do sistema. |
 | Contratos | Upload de modelos de contrato LGPD em PDF |
 | E-mail | Configuração de SMTP ou provedor de e-mail |
 
@@ -393,3 +394,4 @@ Ações disponíveis: confirmar, cancelar, registrar pagamento, receber manualme
 | Data | Tela | Tipo de mudança | Responsável |
 |------|------|----------------|-------------|
 | 31/03/2026 | Todas | Criação inicial do arquivo | UX Review + Treinador |
+| 14/04/2026 | Configurações → Fichas de Avaliação | Renomeada aba "Medidas Corporais" → "Fichas de Avaliação"; redesign para layout de 3 painéis com 6 categorias, drag-and-drop e biblioteca de modelos pré-configurados | feat(#158) |
