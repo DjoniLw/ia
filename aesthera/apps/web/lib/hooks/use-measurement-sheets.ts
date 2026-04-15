@@ -5,6 +5,14 @@ import { api } from '@/lib/api'
 
 export type MeasurementSheetType = 'SIMPLE' | 'TABULAR'
 export type MeasurementInputType = 'INPUT' | 'CHECK'
+export type MeasurementCategory =
+  | 'CORPORAL'
+  | 'FACIAL'
+  | 'DERMATO_FUNCIONAL'
+  | 'NUTRICIONAL'
+  | 'POSTURAL'
+  | 'PERSONALIZADA'
+export type MeasurementScope = 'SYSTEM' | 'CUSTOMER'
 
 export interface MeasurementSheetColumn {
   id: string
@@ -36,6 +44,9 @@ export interface MeasurementSheet {
   clinicId: string
   name: string
   type: MeasurementSheetType
+  category: MeasurementCategory
+  scope: MeasurementScope
+  customerId: string | null
   active: boolean
   order: number
   createdAt: string
@@ -44,12 +55,23 @@ export interface MeasurementSheet {
   fields: MeasurementField[]
 }
 
+export interface MeasurementTemplate {
+  id: string
+  name: string
+  type: MeasurementSheetType
+  category: MeasurementCategory
+  fieldsCount: number
+  columnsCount: number
+}
+
 // ──── Input types ──────────────────────────────────────────────────────────────
 
 interface CreateSheetInput {
   name: string
   type: MeasurementSheetType
   order?: number
+  category?: MeasurementCategory
+  scope?: MeasurementScope
 }
 
 interface UpdateSheetInput {
@@ -57,6 +79,7 @@ interface UpdateSheetInput {
   name?: string
   order?: number
   active?: boolean
+  category?: MeasurementCategory
 }
 
 interface CreateFieldInput {
@@ -115,15 +138,54 @@ interface DeleteSheetColumnInput {
 
 // ──── Fichas (Sheets) ──────────────────────────────────────────────────────────
 
-export function useMeasurementSheets({ includeInactive = false } = {}) {
+interface UseMeasurementSheetsOptions {
+  includeInactive?: boolean
+  scope?: MeasurementScope
+  category?: MeasurementCategory
+}
+
+export function useMeasurementSheets({
+  includeInactive = false,
+  scope,
+  category,
+}: UseMeasurementSheetsOptions = {}) {
   return useQuery({
-    queryKey: ['measurement-sheets', { includeInactive }],
+    queryKey: ['measurement-sheets', { includeInactive, scope, category }],
     queryFn: async () => {
-      const url = includeInactive
-        ? '/measurement-sheets?includeInactive=true'
-        : '/measurement-sheets'
+      const params = new URLSearchParams()
+      if (includeInactive) params.set('includeInactive', 'true')
+      if (scope) params.set('scope', scope)
+      if (category) params.set('category', category)
+      const query = params.toString()
+      const url = query ? `/measurement-sheets?${query}` : '/measurement-sheets'
       const res = await api.get<MeasurementSheet[]>(url)
       return res.data
+    },
+  })
+}
+
+export function useMeasurementTemplates() {
+  return useQuery({
+    queryKey: ['measurement-templates'],
+    staleTime: Infinity,
+    queryFn: async () => {
+      const res = await api.get<MeasurementTemplate[]>('/measurement-sheets/templates')
+      return res.data
+    },
+  })
+}
+
+export function useCopyMeasurementTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (templateId: string) => {
+      const res = await api.post<MeasurementSheet>(
+        `/measurement-sheets/templates/${templateId}/copy`,
+      )
+      return res.data
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['measurement-sheets'] })
     },
   })
 }
