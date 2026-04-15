@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
 import {
+  CopyTemplateBodyDto,
   CreateFieldDto,
   CreateSheetColumnDto,
   CreateSheetDto,
@@ -35,8 +36,8 @@ export async function measurementSheetsRoutes(app: FastifyInstance) {
     { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
     async (req, reply) => {
       const { id } = req.params as { id: string }
-      const body = req.body as { name?: string } | undefined
-      return reply.status(201).send(await svc.copyTemplate(req.clinicId, req.user.sub, req.user.role, id, body?.name))
+      const body = CopyTemplateBodyDto.parse(req.body ?? {})
+      return reply.status(201).send(await svc.copyTemplate(req.clinicId, req.user.sub, req.user.role, id, body.name))
     },
   )
 
@@ -73,13 +74,13 @@ export async function measurementSheetsRoutes(app: FastifyInstance) {
     },
   )
 
-  /** DELETE /measurement-sheets/:id — exclui ficha (admin only) */
+  /** DELETE /measurement-sheets/:id — exclui ficha (admin ou criador) */
   app.delete(
     '/measurement-sheets/:id',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    { preHandler: [jwtClinicGuard] },
     async (req, reply) => {
       const { id } = req.params as { id: string }
-      await svc.deleteSheet(id, req.clinicId)
+      await svc.deleteSheet(id, req.clinicId, req.user.sub, req.user.role)
       return reply.status(204).send()
     },
   )

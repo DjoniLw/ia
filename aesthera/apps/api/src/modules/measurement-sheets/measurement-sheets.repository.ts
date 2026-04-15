@@ -50,7 +50,7 @@ export class MeasurementSheetsRepository {
     })
   }
 
-  async createSheet(clinicId: string, dto: CreateSheetDto) {
+  async createSheet(clinicId: string, dto: CreateSheetDto, createdByUserId?: string) {
     return prisma.measurementSheet.create({
       data: {
         clinicId,
@@ -60,7 +60,7 @@ export class MeasurementSheetsRepository {
         category: dto.category as MeasurementCategory ?? 'CORPORAL',
         scope: dto.scope as MeasurementScope ?? 'SYSTEM',
         customerId: dto.customerId ?? null,
-        createdByUserId: dto.createdByUserId ?? null,
+        createdByUserId: createdByUserId ?? null,
       },
       include: { columns: true, fields: true },
     })

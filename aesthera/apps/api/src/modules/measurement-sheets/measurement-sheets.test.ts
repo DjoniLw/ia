@@ -79,7 +79,7 @@ describe('MeasurementSheetsService', () => {
 
     const result = await svc.createSheet(CLINIC_ID, { name: 'Perimetria', type: 'SIMPLE', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1', 'admin')
     expect(result).toBeDefined()
-    expect(repo.createSheet).toHaveBeenCalledWith(CLINIC_ID, { name: 'Perimetria', type: 'SIMPLE', category: 'CORPORAL', scope: 'SYSTEM' })
+    expect(repo.createSheet).toHaveBeenCalledWith(CLINIC_ID, { name: 'Perimetria', type: 'SIMPLE', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1')
   })
 
   it('deve retornar 422 MAX_SHEETS_REACHED ao criar com 20 fichas ativas', async () => {
@@ -140,18 +140,18 @@ describe('MeasurementSheetsService', () => {
   // ─── deleteSheet ───────────────────────────────────────────────────────────
 
   it('deve retornar 422 HAS_HISTORY se existir MeasurementSheetRecord', async () => {
-    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet() as any)
+    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ scope: 'SYSTEM' }) as any)
     vi.mocked(repo.sheetHasHistory).mockResolvedValue(true)
 
-    await expect(svc.deleteSheet(SHEET_ID, CLINIC_ID)).rejects.toThrow('HAS_HISTORY')
+    await expect(svc.deleteSheet(SHEET_ID, CLINIC_ID, 'admin-user', 'admin')).rejects.toThrow('HAS_HISTORY')
   })
 
   it('deve hard-delete sheet sem histórico', async () => {
-    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet() as any)
+    vi.mocked(repo.findSheetById).mockResolvedValue(makeSheet({ scope: 'SYSTEM' }) as any)
     vi.mocked(repo.sheetHasHistory).mockResolvedValue(false)
     vi.mocked(repo.deleteSheet).mockResolvedValue(undefined as any)
 
-    await expect(svc.deleteSheet(SHEET_ID, CLINIC_ID)).resolves.toBeUndefined()
+    await expect(svc.deleteSheet(SHEET_ID, CLINIC_ID, 'admin-user', 'admin')).resolves.toBeUndefined()
     expect(repo.deleteSheet).toHaveBeenCalledWith(SHEET_ID, CLINIC_ID)
   })
 
@@ -203,7 +203,7 @@ describe('MeasurementSheetsService', () => {
     vi.mocked(repo.createSheet).mockResolvedValue(makeSheet({ type: 'TABULAR' }) as any)
 
     const result = await svc.createSheet(CLINIC_ID, { name: 'Avaliação Tabular', type: 'TABULAR', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1', 'admin')
-    expect(repo.createSheet).toHaveBeenCalledWith(CLINIC_ID, { name: 'Avaliação Tabular', type: 'TABULAR', category: 'CORPORAL', scope: 'SYSTEM' })
+    expect(repo.createSheet).toHaveBeenCalledWith(CLINIC_ID, { name: 'Avaliação Tabular', type: 'TABULAR', category: 'CORPORAL', scope: 'SYSTEM' }, 'user-1')
     expect(result).toBeDefined()
   })
 
@@ -343,6 +343,9 @@ describe('MeasurementSheetsService', () => {
     vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
     vi.mocked(appointmentsRepo.existsConfirmed).mockResolvedValue(true)
     vi.mocked(repo.createSheet).mockResolvedValue(makeSheet({ scope: 'CUSTOMER' }) as any)
+    ;(svc as any).db = {
+      customer: { findFirst: vi.fn().mockResolvedValue({ id: 'customer-1', clinicId: CLINIC_ID }) },
+    }
 
     const result = await svc.createSheet(
       CLINIC_ID,

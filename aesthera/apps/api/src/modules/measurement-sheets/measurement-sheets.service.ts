@@ -65,13 +65,19 @@ export class MeasurementSheetsService {
       throw new ValidationError('MAX_SHEETS_REACHED')
     }
 
+    // Validar que customerId pertence à clinicId (cross-tenant)
+    if (scope === 'CUSTOMER' && dto.customerId) {
+      const customer = await this.db.customer.findFirst({ where: { id: dto.customerId, clinicId } })
+      if (!customer) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+    }
+
     // Nome único por clínica e scope (case-insensitive)
     const nameExists = await this.repo.existsSheetNameInClinic(clinicId, dto.name, scope)
     if (nameExists) {
       throw new ConflictError('Nome de ficha já existe nesta clínica')
     }
 
-    return this.repo.createSheet(clinicId, dto)
+    return this.repo.createSheet(clinicId, dto, userId)
   }
   async updateSheet(id: string, clinicId: string, dto: UpdateSheetDto, userId?: string, role?: string) {
     const sheet = await this.repo.findSheetById(id, clinicId)
@@ -109,10 +115,21 @@ export class MeasurementSheetsService {
     return this.repo.updateSheet(id, clinicId, dto)
   }
 
-  async deleteSheet(id: string, clinicId: string) {
+  async deleteSheet(id: string, clinicId: string, userId?: string, role?: string) {
     const sheet = await this.repo.findSheetById(id, clinicId)
     if (!sheet) throw new NotFoundError('MeasurementSheet')
     if (sheet.clinicId !== clinicId) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
+
+    // Autorização por scope da ficha
+    const sheetScope = (sheet as unknown as { scope: string }).scope ?? 'SYSTEM'
+    if (sheetScope === 'SYSTEM') {
+      if (role !== 'admin') throw new ForbiddenError('Apenas administradores podem excluir fichas do sistema')
+    } else {
+      const isCreator = (sheet as unknown as { createdByUserId: string | null }).createdByUserId === userId
+      if (role !== 'admin' && !isCreator) {
+        throw new ForbiddenError('Apenas o criador ou administrador pode excluir esta ficha')
+      }
+    }
 
     // Se houver histórico: apenas desativar (soft-disable)
     const hasHistory = await this.repo.sheetHasHistory(id)
@@ -129,11 +146,11 @@ export class MeasurementSheetsService {
     return MEASUREMENT_TEMPLATES
   }
 
-  async copyTemplate(clinicId: string, userId: string, role: string, templateId: string, customName?: string) {
+  async copyTemplate(clinicId: string, userId: string, role: string, templateId: string, customName?: string | null) {
     if (role !== 'admin') throw new ForbiddenError('Apenas administradores podem copiar templates')
 
     const template = MEASUREMENT_TEMPLATES.find((t) => t.id === templateId)
-    if (!template) throw new NotFoundError('Template não encontrado')
+    if (!template) throw new NotFoundError('MeasurementTemplate')
 
     const count = await this.repo.countActiveSheets(clinicId)
     if (count >= MAX_ACTIVE_SHEETS) throw new ValidationError('MAX_SHEETS_REACHED')

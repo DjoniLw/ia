@@ -9,7 +9,6 @@ export const CreateSheetDto = z.object({
   category: z.enum(['CORPORAL', 'FACIAL', 'DERMATO_FUNCIONAL', 'NUTRICIONAL', 'POSTURAL', 'PERSONALIZADA']).default('CORPORAL'),
   scope: z.enum(['SYSTEM', 'CUSTOMER']).default('SYSTEM'),
   customerId: z.string().uuid().optional(),
-  createdByUserId: z.string().uuid().optional(),
 }).refine(
   (data) => data.scope !== 'CUSTOMER' || !!data.customerId,
   { message: 'customerId é obrigatório quando scope=CUSTOMER', path: ['customerId'] },
@@ -30,6 +29,11 @@ export const ListSheetsQuery = z.object({
   category: z.enum(['CORPORAL', 'FACIAL', 'DERMATO_FUNCIONAL', 'NUTRICIONAL', 'POSTURAL', 'PERSONALIZADA']).optional(),
 })
 export type ListSheetsQuery = z.infer<typeof ListSheetsQuery>
+
+export const CopyTemplateBodyDto = z.object({
+  name: z.string().min(1).max(100).optional(),
+})
+export type CopyTemplateBodyDto = z.infer<typeof CopyTemplateBodyDto>
 
 // ─── Colunas (fichas TABULAR) ─────────────────────────────────────────────────
 
