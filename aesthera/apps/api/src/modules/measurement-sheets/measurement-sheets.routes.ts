@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
 import {
+  CopyTemplateBodyDto,
   CreateFieldDto,
   CreateSheetColumnDto,
   CreateSheetDto,
@@ -18,6 +19,28 @@ import { MeasurementSheetsService } from './measurement-sheets.service'
 export async function measurementSheetsRoutes(app: FastifyInstance) {
   const svc = new MeasurementSheetsService()
 
+  // ─── Templates (rotas estáticas ANTES de /:id) ───────────────────────────────
+
+  /** GET /measurement-sheets/templates — lista templates disponíveis */
+  app.get(
+    '/measurement-sheets/templates',
+    { preHandler: [jwtClinicGuard] },
+    async (_req, reply) => {
+      return reply.send(svc.listTemplates())
+    },
+  )
+
+  /** POST /measurement-sheets/templates/:id/copy — copia template para a clínica (admin only) */
+  app.post(
+    '/measurement-sheets/templates/:id/copy',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const body = CopyTemplateBodyDto.parse(req.body ?? {})
+      return reply.status(201).send(await svc.copyTemplate(req.clinicId, req.user.sub, req.user.role, id, body.name))
+    },
+  )
+
   // ─── Fichas ──────────────────────────────────────────────────────────────────
 
   /** GET /measurement-sheets — lista fichas da clínica */
@@ -30,34 +53,34 @@ export async function measurementSheetsRoutes(app: FastifyInstance) {
     },
   )
 
-  /** POST /measurement-sheets — cria nova ficha (admin only) */
+  /** POST /measurement-sheets — cria nova ficha */
   app.post(
     '/measurement-sheets',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    { preHandler: [jwtClinicGuard] },
     async (req, reply) => {
       const dto = CreateSheetDto.parse(req.body)
-      return reply.status(201).send(await svc.createSheet(req.clinicId, dto))
+      return reply.status(201).send(await svc.createSheet(req.clinicId, dto, req.user.sub, req.user.role))
     },
   )
 
-  /** PATCH /measurement-sheets/:id — atualiza ficha (admin only) */
+  /** PATCH /measurement-sheets/:id — atualiza ficha */
   app.patch(
     '/measurement-sheets/:id',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    { preHandler: [jwtClinicGuard] },
     async (req, reply) => {
       const { id } = req.params as { id: string }
       const dto = UpdateSheetDto.parse(req.body)
-      return reply.send(await svc.updateSheet(id, req.clinicId, dto))
+      return reply.send(await svc.updateSheet(id, req.clinicId, dto, req.user.sub, req.user.role))
     },
   )
 
-  /** DELETE /measurement-sheets/:id — exclui ficha (admin only) */
+  /** DELETE /measurement-sheets/:id — exclui ficha (admin ou criador) */
   app.delete(
     '/measurement-sheets/:id',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin'])] },
+    { preHandler: [jwtClinicGuard] },
     async (req, reply) => {
       const { id } = req.params as { id: string }
-      await svc.deleteSheet(id, req.clinicId)
+      await svc.deleteSheet(id, req.clinicId, req.user.sub, req.user.role)
       return reply.status(204).send()
     },
   )

@@ -15,7 +15,18 @@ export class MeasurementSessionsService {
     const customer = await this.repo.findCustomerInClinic(q.customerId, clinicId)
     if (!customer) throw new ForbiddenError('CROSS_TENANT_VIOLATION')
 
-    return this.repo.listSessions(clinicId, q)
+    const result = await this.repo.listSessions(clinicId, q)
+    const sessions = result.items.map((session) => ({
+      ...session,
+      categories: [
+        ...new Set(
+          session.sheetRecords
+            .map((sr: any) => sr.sheet?.category)
+            .filter(Boolean),
+        ),
+      ],
+    }))
+    return { ...result, items: sessions }
   }
 
   async createSession(

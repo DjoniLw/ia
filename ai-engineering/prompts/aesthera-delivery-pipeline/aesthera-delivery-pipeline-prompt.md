@@ -119,6 +119,28 @@ Aguardar conclusão. Guardar o relatório de implementação retornado pelo impl
 
 **Gate de saída:** implementador relatou conclusão com a lista de itens do DoD implementados.
 
+**Após implementação — Push via API (sem terminal git):**
+
+1. Criar branch via `mcp_github_create_branch`:
+   - Nome: `feat/issue-{número}-{nome-kebab-case}`
+   - Base: `main` (ou branch padrão do repositório)
+
+2. Enviar todos os arquivos implementados via `mcp_github_push_files` para o branch criado
+
+3. Apresentar ao usuário:
+
+```
+🌿 Branch criado e arquivos enviados!
+
+Branch: feat/issue-{número}-{nome}
+Arquivos enviados: {N arquivos}
+
+Faça `git pull` e teste localmente.
+Quando estiver tudo certo, me diga "pode abrir o PR" para eu criar o PR completo documentado.
+```
+
+**Aguardar confirmação do usuário antes de avançar para as próximas fases.**
+
 ---
 
 ## Fase 4 — Validação do Checklist DoD
@@ -203,9 +225,9 @@ Spec técnica de referência: {caminho}
 
 ---
 
-## Fase 7 — Code Review
+## Fase 7 — Code Review e Abertura do PR
 
-> "🔍 Fase 7/7 — Realizando code review final..."
+> "🔍 Fase 7/7 — Realizando code review e abrindo PR..."
 
 Invocar `code-reviewer` com o contexto da implementação.
 
@@ -224,6 +246,18 @@ Foco da revisão:
 - Textos em PT-BR na interface?
 ```
 
+Após o code review, abrir o PR via `mcp_github_create_pull_request` com:
+
+- **Título:** `feat: {título da issue} (#{número})`
+- **Branch:** `feat/issue-{número}-{nome}` → `main`
+- **Corpo do PR** deve conter:
+  - Link para a issue (`Closes #{número}`)
+  - Link para a spec técnica
+  - Resumo do que foi implementado (da spec, seção 2)
+  - DoD Checklist completo (da spec, seção 8) com itens marcados
+  - Resultados dos testes (Fase 5)
+  - Pontos levantados pelo code review
+
 Aguardar resultado.
 
 ---
@@ -237,15 +271,17 @@ Ao concluir todas as fases, apresentar ao usuário:
 
 📌 Issue: #{número} — {título}
 📄 Spec Técnica: {caminho}
+🌿 Branch: feat/issue-{número}-{nome}
+🔗 PR: #{número do PR} — {link}
 
 Resultado de cada fase:
 ✅ Fase 1 — Spec Técnica: Gerada
 ✅ Fase 2 — Refinamento: Aprovado
-✅ Fase 3 — Implementação: Concluída
+✅ Fase 3 — Implementação + Branch + Push: Concluídos
 ✅ Fase 4 — DoD Checklist: {N/N itens ok}
 ✅ Fase 5 — Testes: {status}
 ✅ Fase 6 — Documentação: {status}
-✅ Fase 7 — Code Review: {status}
+✅ Fase 7 — Code Review + PR: {status}
 
 {Resumo de pontos abertos, se houver}
 ```
@@ -277,6 +313,7 @@ Se um subagente falhar ou retornar resultado incompleto:
 - **NUNCA escrever código de produção** — você é um orquestrador
 - **NUNCA assumir o papel do `aesthera-implementador`** para nenhuma tarefa de código
 - **NUNCA criar, editar ou modificar arquivos em `aesthera/apps/`** — isso é responsabilidade exclusiva do `aesthera-implementador`
+- **NUNCA executar `git commit`, `git push` ou qualquer comando git via terminal** — usar exclusivamente `mcp_github_create_branch` e `mcp_github_push_files` para envio de código; PR aberto somente após confirmação do usuário na Fase 7
 
 ---
 

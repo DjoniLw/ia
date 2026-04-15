@@ -396,6 +396,7 @@ export class AppointmentsService {
     const completed = await this.repo.transition(clinicId, id, 'completed', {
       completedAt: new Date(),
     })
+    if (!completed) throw new NotFoundError('Appointment')
 
     // RN-PA02 — PackageSession: resgata sessão, sem billing, nenhum modal
     const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)

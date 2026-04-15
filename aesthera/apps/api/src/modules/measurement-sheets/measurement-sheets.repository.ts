@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma/client'
-import { MeasurementInputType } from '@prisma/client'
+import { MeasurementCategory, MeasurementInputType, MeasurementScope } from '@prisma/client'
 import type {
   CreateFieldDto,
   CreateSheetColumnDto,
@@ -21,9 +21,14 @@ export class MeasurementSheetsRepository {
     })
   }
 
-  async listSheets(clinicId: string, activeOnly: boolean) {
+  async listSheets(clinicId: string, activeOnly: boolean, filters?: { scope?: string; category?: string }) {
     return prisma.measurementSheet.findMany({
-      where: { clinicId, ...(activeOnly ? { active: true } : {}) },
+      where: {
+        clinicId,
+        ...(activeOnly ? { active: true } : {}),
+        ...(filters?.scope ? { scope: filters.scope as MeasurementScope } : {}),
+        ...(filters?.category ? { category: filters.category as MeasurementCategory } : {}),
+      },
       orderBy: { order: 'asc' },
       include: {
         columns: { orderBy: { order: 'asc' } },
@@ -45,9 +50,18 @@ export class MeasurementSheetsRepository {
     })
   }
 
-  async createSheet(clinicId: string, dto: CreateSheetDto) {
+  async createSheet(clinicId: string, dto: CreateSheetDto, createdByUserId?: string) {
     return prisma.measurementSheet.create({
-      data: { clinicId, name: dto.name, type: dto.type, order: dto.order ?? 0 },
+      data: {
+        clinicId,
+        name: dto.name,
+        type: dto.type,
+        order: dto.order ?? 0,
+        category: dto.category as MeasurementCategory ?? 'CORPORAL',
+        scope: dto.scope as MeasurementScope ?? 'SYSTEM',
+        customerId: dto.customerId ?? null,
+        createdByUserId: createdByUserId ?? null,
+      },
       include: { columns: true, fields: true },
     })
   }
@@ -55,7 +69,12 @@ export class MeasurementSheetsRepository {
   async updateSheet(id: string, clinicId: string, dto: UpdateSheetDto) {
     await prisma.measurementSheet.updateMany({
       where: { id, clinicId },
-      data: { ...(dto.name !== undefined && { name: dto.name }), ...(dto.order !== undefined && { order: dto.order }), ...(dto.active !== undefined && { active: dto.active }) },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.order !== undefined && { order: dto.order }),
+        ...(dto.active !== undefined && { active: dto.active }),
+        ...(dto.category !== undefined && { category: dto.category as MeasurementCategory }),
+      },
     })
     return prisma.measurementSheet.findFirst({
       where: { id, clinicId },
@@ -251,5 +270,27 @@ export class MeasurementSheetsRepository {
       where: { id: { in: sheetIds }, clinicId },
     })
     return count === sheetIds.length
+  }
+
+  async findSheetByNameAndScope(clinicId: string, name: string, scope: string) {
+    return prisma.measurementSheet.findFirst({
+      where: {
+        clinicId,
+        scope: scope as MeasurementScope,
+        name: { equals: name, mode: 'insensitive' },
+      },
+    })
+  }
+
+  async existsSheetNameInClinic(clinicId: string, name: string, scope: string, excludeId?: string): Promise<boolean> {
+    const count = await prisma.measurementSheet.count({
+      where: {
+        clinicId,
+        scope: scope as MeasurementScope,
+        name: { equals: name, mode: 'insensitive' },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+    })
+    return count > 0
   }
 }

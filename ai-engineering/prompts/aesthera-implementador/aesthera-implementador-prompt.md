@@ -481,6 +481,54 @@ O roteiro precisa ter:
 
 ---
 
+## Entrega Final — Branch, Push e PR
+
+Após o Gate Pré-Commit estar 100% ✅, seguir este fluxo **sempre via API do GitHub — nunca via terminal git**:
+
+### 1. Criar branch
+
+Usar `mcp_github_create_branch`:
+- Nome: `feat/issue-{número}-{nome-kebab-case}` (se houver issue)
+- Nome: `fix/{descrição-kebab-case}` (se for bugfix sem issue)
+- Base: `main`
+
+### 2. Enviar arquivos
+
+Usar `mcp_github_push_files` para enviar todos os arquivos implementados para o branch criado.
+
+### 3. Avisar o usuário para testar
+
+```
+🌿 Branch criado e arquivos enviados!
+
+Branch: {nome do branch}
+Arquivos enviados: {N arquivos}
+
+Faça `git pull` e teste localmente.
+Quando estiver tudo ok, me diga "pode abrir o PR".
+```
+
+**Aguardar confirmação do usuário antes de abrir o PR.**
+
+### 4. Abrir o PR (somente após confirmação)
+
+Usar `mcp_github_create_pull_request` com:
+- **Título:** `feat: {título da issue} (#{número})` ou `fix: {descrição}`
+- **Branch:** `{branch criado}` → `main`
+- **Corpo do PR** deve conter:
+  - `Closes #{número}` (se houver issue)
+  - Resumo do que foi implementado
+  - DoD / critérios de aceitação atendidos (checklist)
+  - Seção `## Test Change Justification` (se houver testes no diff)
+
+### 5. Postar roteiro de testes manuais como comentário
+
+Usar `mcp_github_add_issue_comment` no PR recém-criado com o roteiro preparado no Gate Pré-Commit.
+
+> ⚠️ **NUNCA usar `git commit`, `git push` ou qualquer comando git via terminal.** Usar exclusivamente `mcp_github_push_files` e `mcp_github_create_branch`. O terminal git trava com autenticação interativa em pipelines autônomos.
+
+---
+
 Após cada implementação, reportar:
 
 ### O que foi alterado em `aesthera/`
