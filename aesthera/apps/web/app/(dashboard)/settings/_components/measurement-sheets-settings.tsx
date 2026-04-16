@@ -652,14 +652,15 @@ function SortableFieldRow({
               type="button"
               onClick={onToggleDirEsq}
               className={cn(
-                'shrink-0 rounded border px-1.5 py-0.5 text-xs transition-colors',
+                'shrink-0 rounded border px-1.5 py-0.5 text-xs transition-colors whitespace-nowrap',
                 hasDirEsq
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border text-muted-foreground hover:border-primary/40',
               )}
-              title={hasDirEsq ? 'Desativar Direito/Esquerdo' : 'Ativar Direito/Esquerdo'}
+              title={hasDirEsq ? 'Desativar split Direito/Esquerdo' : 'Ativar split Direito/Esquerdo'}
+              aria-label={hasDirEsq ? 'Desativar Direito/Esquerdo' : 'Ativar Direito/Esquerdo'}
             >
-              D/E
+              Direito/Esquerdo
             </button>
           )}
           {!isReadonly && (
@@ -1046,9 +1047,10 @@ export function MeasurementSheetsSettings() {
     setIsEditorCollapsibleOpen(true)
   }
 
-  function handleTemplateSheetCreated(sheetId: string) {
+  function handleTemplateSheetCreated(sheet: MeasurementSheet) {
     setIsTemplateDrawerOpen(false)
-    setSelectedSheetId(sheetId)
+    setSelectedCategory(sheet.category)
+    setSelectedSheetId(sheet.id)
     setIsEditorCollapsibleOpen(true)
   }
 
