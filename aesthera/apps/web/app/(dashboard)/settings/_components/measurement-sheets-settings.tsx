@@ -37,7 +37,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -179,10 +179,9 @@ function NewSheetDialog({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="max-w-sm">
-        <DialogTitle>Nova ficha — {CATEGORY_LABELS[category]}</DialogTitle>
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <Dialog open onClose={onClose} className="max-w-sm">
+      <DialogTitle>Nova ficha — {CATEGORY_LABELS[category]}</DialogTitle>
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="new-sheet-name">Nome *</Label>
           <Input
@@ -262,7 +261,6 @@ function NewSheetDialog({
           </Button>
         </div>
       </form>
-      </DialogContent>
     </Dialog>
   )
 }
