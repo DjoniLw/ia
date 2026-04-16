@@ -1692,6 +1692,11 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
   const isProfessional = role === 'professional'
   const currentUserId = getCurrentUserId()
 
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingSession, setEditingSession] = useState<MeasurementSession | undefined>()
+  const [customSheetOpen, setCustomSheetOpen] = useState(false)
+  const [categoryFilter, setCategoryFilter] = useState<MeasurementCategory | 'all'>('all')
+
   const { data: sessionsPage, isLoading: loadingSessions, error, refetch } = useMeasurementSessions(
     customer.id,
     { limit: 50, category: categoryFilter !== 'all' ? categoryFilter : undefined },
@@ -1713,11 +1718,6 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
   })
   const hasConfirmedAppointment = (confirmedAppts?.total ?? 0) > 0 || (confirmedAppts?.items.length ?? 0) > 0
   const isProfessionalWithoutAppointment = isProfessional && !hasConfirmedAppointment
-
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingSession, setEditingSession] = useState<MeasurementSession | undefined>()
-  const [customSheetOpen, setCustomSheetOpen] = useState(false)
-  const [categoryFilter, setCategoryFilter] = useState<MeasurementCategory | 'all'>('all')
 
   const sessions = sessionsPage?.items ?? []
   const isLoading = loadingSessions
