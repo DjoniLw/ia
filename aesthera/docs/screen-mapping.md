@@ -1,6 +1,6 @@
 # Mapeamento de Telas — Aesthera
 
-**Última atualização:** 14/04/2026  
+**Última atualização:** 15/04/2026  
 **Fonte original:** Relatório UX — Mapeamento de Telas (`outputs/ux/aesthera-ux-mapeamento-telas-2026-03-31.md`)
 
 ---
@@ -88,7 +88,7 @@ Todo agente que atuar em criação, alteração ou remoção de telas **deve**:
 | Carteira | Sub-abas: **Carteira** (vouchers/créditos ativos, saldo, extrato de transações) e **Pacotes** (pacotes comprados e sessões restantes) |
 | Prontuário | Lançamentos clínicos classificados por tipo: Anamnese, Exame, Observação, Procedimento, Prescrição |
 | Contratos | Contratos do cliente com status de assinatura e ações de assinar/enviar |
-| Evolução | Registros de medidas corporais nas fichas configuradas no sistema |
+| Avaliações | Histórico clínico completo com filtro por categoria (Corporal, Facial, Dermato-funcional, Nutricional, Postural, Personalizada), badges de categoria por sessão e fichas personalizadas por cliente |
 
 ---
 
@@ -395,3 +395,4 @@ Ações disponíveis: confirmar, cancelar, registrar pagamento, receber manualme
 |------|------|----------------|-------------|
 | 31/03/2026 | Todas | Criação inicial do arquivo | UX Review + Treinador |
 | 14/04/2026 | Configurações → Fichas de Avaliação | Renomeada aba "Medidas Corporais" → "Fichas de Avaliação"; redesign para layout de 3 painéis com 6 categorias, drag-and-drop e biblioteca de modelos pré-configurados | feat(#158) |
+| 15/04/2026 | Clientes → aba Avaliações | Renomeada aba "Evolução" → "Avaliações"; filtro de categoria por pills, badges de categoria por sessão, modal de seleção de fichas agrupado (Clínica / Cliente), botão "Nova ficha deste cliente" com autorização por role | feat(#159) |
