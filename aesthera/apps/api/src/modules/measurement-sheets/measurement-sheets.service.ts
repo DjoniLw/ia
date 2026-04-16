@@ -35,7 +35,7 @@ export class MeasurementSheetsService {
   // ─── Fichas ────────────────────────────────────────────────────────────────
 
   async listSheets(clinicId: string, q: ListSheetsQuery) {
-    return this.repo.listSheets(clinicId, !q.includeInactive, { scope: q.scope, category: q.category })
+    return this.repo.listSheets(clinicId, !q.includeInactive, { scope: q.scope, category: q.category, customerId: q.customerId })
   }
 
   async createSheet(clinicId: string, dto: CreateSheetDto, userId?: string, role?: string) {
@@ -143,7 +143,20 @@ export class MeasurementSheetsService {
   // ─── Templates ─────────────────────────────────────────────────────────────
 
   listTemplates() {
-    return MEASUREMENT_TEMPLATES
+    return MEASUREMENT_TEMPLATES.map((t) => ({
+      id: t.id,
+      name: t.name,
+      category: t.category,
+      type: t.type,
+      fieldsCount:
+        t.type === MeasurementSheetType.SIMPLE
+          ? (t as { fields: string[] }).fields.length
+          : (t as { rows: string[] }).rows.length,
+      columnsCount:
+        t.type === MeasurementSheetType.TABULAR
+          ? (t as { columns: string[] }).columns.length
+          : 0,
+    }))
   }
 
   async copyTemplate(clinicId: string, userId: string, role: string, templateId: string, customName?: string | null) {

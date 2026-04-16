@@ -1,4 +1,4 @@
-import type { MeasurementCategory, MeasurementSheetType } from '@/lib/hooks/use-measurement-sheets'
+import type { MeasurementCategory, MeasurementSheetType, MeasurementInputType } from '@/lib/hooks/use-measurement-sheets'
 import {
   Dumbbell,
   Sparkles,
@@ -42,10 +42,20 @@ export const CATEGORY_ICON: Record<MeasurementCategory, LucideIcon> = {
 }
 
 export const CATEGORY_BADGE_COLOR: Record<MeasurementCategory, string> = {
-  CORPORAL: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  FACIAL: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400',
-  DERMATO_FUNCIONAL: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  NUTRICIONAL: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  POSTURAL: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  PERSONALIZADA: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  CORPORAL:          'bg-sky-600 text-white dark:bg-sky-700',
+  FACIAL:            'bg-rose-500 text-white dark:bg-rose-600',
+  DERMATO_FUNCIONAL: 'bg-violet-600 text-white dark:bg-violet-700',
+  NUTRICIONAL:       'bg-emerald-600 text-white dark:bg-emerald-700',
+  POSTURAL:          'bg-amber-700 text-white dark:bg-amber-800',
+  PERSONALIZADA:     'bg-slate-500 text-white dark:bg-slate-600',
+}
+
+export const SHEET_TYPE_BADGE_COLOR: Record<MeasurementSheetType, string> = {
+  TABULAR: 'bg-violet-600 text-white dark:bg-violet-700',
+  SIMPLE:  'bg-slate-500 text-white dark:bg-slate-600',
+}
+
+export const FIELD_INPUT_TYPE_BADGE_COLOR: Record<MeasurementInputType, string> = {
+  INPUT: 'bg-sky-600 text-white dark:bg-sky-700',
+  CHECK: 'bg-emerald-600 text-white dark:bg-emerald-700',
 }

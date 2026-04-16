@@ -37,7 +37,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -65,6 +65,8 @@ import {
   SHEET_TYPE_LABELS,
   MEASUREMENT_CATEGORIES_ORDER,
   CATEGORY_ICON,
+  SHEET_TYPE_BADGE_COLOR,
+  FIELD_INPUT_TYPE_BADGE_COLOR,
 } from '@/lib/measurement-categories'
 import { MeasurementTemplatesDrawer } from './measurement-templates-drawer'
 import { cn } from '@/lib/utils'
@@ -114,9 +116,7 @@ function SortableSheetItem({
       <span
         className={cn(
           'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shrink-0',
-          sheet.type === 'TABULAR'
-            ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
-            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+          SHEET_TYPE_BADGE_COLOR[sheet.type],
         )}
       >
         {sheet.type === 'TABULAR' ? (
@@ -179,9 +179,10 @@ function NewSheetDialog({
   }
 
   return (
-    <Dialog open onClose={onClose} className="max-w-sm">
-      <DialogTitle>Nova ficha — {CATEGORY_LABELS[category]}</DialogTitle>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-sm">
+        <DialogTitle>Nova ficha — {CATEGORY_LABELS[category]}</DialogTitle>
+        <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="new-sheet-name">Nome *</Label>
           <Input
@@ -261,6 +262,7 @@ function NewSheetDialog({
           </Button>
         </div>
       </form>
+      </DialogContent>
     </Dialog>
   )
 }
@@ -636,9 +638,7 @@ function SortableFieldRow({
             <span
               className={cn(
                 'inline-flex rounded-full px-1.5 py-0.5 text-xs font-medium shrink-0',
-                field.inputType === 'INPUT'
-                  ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400'
-                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                FIELD_INPUT_TYPE_BADGE_COLOR[field.inputType],
               )}
             >
               {field.inputType === 'INPUT' ? 'Digitação' : 'Marcação'}
@@ -975,7 +975,7 @@ function SheetEditorPanel({ sheet, isReadonly }: { sheet: MeasurementSheet; isRe
       <div className="flex items-center gap-2 px-4 py-3 border-b">
         {sheet.type === 'TABULAR' ? <Table2 className="h-4 w-4 text-muted-foreground" /> : <List className="h-4 w-4 text-muted-foreground" />}
         <span className="text-sm font-medium truncate flex-1">{sheet.name}</span>
-        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shrink-0', sheet.type === 'TABULAR' ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300')}>
+        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shrink-0', SHEET_TYPE_BADGE_COLOR[sheet.type])}>
           {SHEET_TYPE_LABELS[sheet.type]}
         </span>
       </div>

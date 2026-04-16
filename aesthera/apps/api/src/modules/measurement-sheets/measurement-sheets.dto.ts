@@ -27,6 +27,7 @@ export const ListSheetsQuery = z.object({
   includeInactive: z.coerce.boolean().optional().default(false),
   scope: z.enum(['SYSTEM', 'CUSTOMER']).optional(),
   category: z.enum(['CORPORAL', 'FACIAL', 'DERMATO_FUNCIONAL', 'NUTRICIONAL', 'POSTURAL', 'PERSONALIZADA']).optional(),
+  customerId: z.string().uuid().optional(),
 })
 export type ListSheetsQuery = z.infer<typeof ListSheetsQuery>
 
