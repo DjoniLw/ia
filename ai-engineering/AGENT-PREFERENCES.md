@@ -33,7 +33,7 @@ ai-engineering/prompts/{nome}/{nome}-prompt.md          ← todo o comportamento
 | Agente | Papel |
 |---|---|
 | `🔍 aesthera-discovery` | Ideia → Issue (pipeline de descoberta) |
-| `🚀 aesthera-delivery` | Issue → Código entregue (pipeline de entrega / SDD) |
+| `🚀 aesthera-specifier` | Issue → Spec técnica aprovada (gera e refina spec antes da implementação) |
 | `📋 spec-tecnica` | Gera spec técnica de implementação a partir de issue |
 | `🏗️ aesthera-implementador` | Orquestra implementação de código no Aesthera |
 | `⚙️ backend-implementador` | Subagente de backend (invocado pelo implementador) |
@@ -55,7 +55,7 @@ ai-engineering/prompts/{nome}/{nome}-prompt.md          ← todo o comportamento
 Todo ciclo de entrega de feature segue dois pipelines sequenciais conectados pelo número da issue:
 
 ```
-Ideia → [aesthera-discovery] → Issue → [aesthera-delivery] → Código entregue
+Ideia → [aesthera-discovery] → Issue → [aesthera-specifier] → Spec aprovada → [aesthera-implementador] → Código entregue
 ```
 
 ### Pipeline de Descoberta — `🔍 aesthera-discovery`
@@ -63,14 +63,19 @@ Ideia → [aesthera-discovery] → Issue → [aesthera-delivery] → Código ent
 - **Saída:** issue criada no GitHub
 - Orquestra: PO → UX + Security + Arquiteto → Consolidador → Issue-Writer
 
-### Pipeline de Entrega — `🚀 aesthera-delivery`
+### Preparador de Spec — `🚀 aesthera-specifier`
 - **Entrada:** número da issue do GitHub
-- **Saída:** código implementado, testado, documentado e revisado
-- **7 fases:** Spec Técnica → Refinamento (checkpoint humano) → Implementação → Checklist DoD → Testes → Documentação → Code Review
-- **Regra:** para obrigatoriamente na Fase 2 para aprovação do usuário antes de implementar
+- **Saída:** arquivo de spec técnica aprovado em `outputs/spec-tecnica/{nome}-spec-tecnica.md`
+- **3 fases:** Gerar Spec → Refinar (checkpoint humano) → Sugerir implementador
+- **Regra:** para obrigatoriamente na Fase 2 para aprovação do usuário
+- Ao final, sugere: `@aesthera-implementador implementa a spec outputs/spec-tecnica/{nome}-spec-tecnica.md`
+
+### Implementador — `🏗️ aesthera-implementador`
+- **Entrada:** spec técnica (preferencialmente) ou issue direta (com aviso)
+- Se receber issue sem spec → questiona se quer gerar a spec primeiro via `@aesthera-specifier`
+- Ao final: sugere `@code-reviewer` e `@test-guardian`, pergunta sobre commit e PR
 
 ### Agente de Spec Técnica — `📋 spec-tecnica`
-- Fase 1 do `aesthera-delivery`
 - Produz: contratos de API, escopo de arquivos, estrutura de componentes, DoD checklist
 - Salva em: `outputs/spec-tecnica/{nome}-spec-tecnica.md`
 - Nunca implementa código — apenas especifica
