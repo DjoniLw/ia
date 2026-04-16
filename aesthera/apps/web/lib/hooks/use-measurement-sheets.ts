@@ -167,7 +167,6 @@ export function useMeasurementSheets({
 export function useMeasurementTemplates() {
   return useQuery({
     queryKey: ['measurement-templates'],
-    staleTime: Infinity,
     queryFn: async () => {
       const res = await api.get<MeasurementTemplate[]>('/measurement-sheets/templates')
       return res.data

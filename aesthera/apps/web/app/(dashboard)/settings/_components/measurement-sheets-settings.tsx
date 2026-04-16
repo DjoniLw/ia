@@ -54,7 +54,6 @@ import {
   useCreateSheetColumn,
   useUpdateSheetColumn,
   useDeleteSheetColumn,
-  useReorderSheetColumns,
   type MeasurementSheet,
   type MeasurementField,
   type MeasurementSheetType,
@@ -532,7 +531,7 @@ function SortableFieldRow({
   isEditing: boolean
   editName: string
   editUnit: string
-  editInputRef?: React.RefObject<HTMLInputElement>
+  editInputRef?: React.RefObject<HTMLInputElement | null>
   isReadonly: boolean
   onStartEdit: () => void
   onConfirmEdit: () => void
@@ -705,7 +704,6 @@ function TabularSheetEditor({
   const createColumn = useCreateSheetColumn()
   const updateColumn = useUpdateSheetColumn()
   const deleteColumn = useDeleteSheetColumn()
-  const reorderColumns = useReorderSheetColumns()
 
   const rowSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -915,7 +913,7 @@ function SortableTabularRow({
   field: MeasurementField
   isEditing: boolean
   editName: string
-  editRef?: React.RefObject<HTMLInputElement>
+  editRef?: React.RefObject<HTMLInputElement | null>
   isReadonly: boolean
   onStartEdit: () => void
   onConfirm: () => void
@@ -1048,10 +1046,9 @@ export function MeasurementSheetsSettings() {
     setIsEditorCollapsibleOpen(true)
   }
 
-  function handleTemplateSheetCreated(sheet: MeasurementSheet) {
+  function handleTemplateSheetCreated(sheetId: string) {
     setIsTemplateDrawerOpen(false)
-    setSelectedCategory(sheet.category)
-    setSelectedSheetId(sheet.id)
+    setSelectedSheetId(sheetId)
     setIsEditorCollapsibleOpen(true)
   }
 
