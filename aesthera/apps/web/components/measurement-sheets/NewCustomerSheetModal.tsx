@@ -66,14 +66,16 @@ export function NewCustomerSheetModal({ customerId, onClose }: NewCustomerSheetM
     <Dialog open onClose={onClose} isDirty={isDirty} className="max-w-md p-0">
       <div className="sticky top-0 bg-card border-b px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
         <DialogTitle className="mb-0">Nova ficha deste cliente</DialogTitle>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={onClose}
-          className="text-muted-foreground hover:text-foreground"
+          className="h-7 w-7 text-muted-foreground"
           aria-label="Fechar modal"
         >
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
 
       <form onSubmit={onSubmit}>
@@ -103,12 +105,13 @@ export function NewCustomerSheetModal({ customerId, onClose }: NewCustomerSheetM
                   { value: 'TABULAR', label: 'Tabela', description: 'Grade de linhas × colunas' },
                 ] as const
               ).map((opt) => (
-                <button
+                <Button
                   key={opt.value}
                   type="button"
+                  variant="ghost"
                   onClick={() => setSelectedType(opt.value)}
                   className={[
-                    'rounded-lg border p-3 text-left transition-colors',
+                    'h-auto w-full flex-col items-start whitespace-normal rounded-lg border p-3 text-left transition-colors',
                     selectedType === opt.value
                       ? 'border-primary bg-primary/5 ring-1 ring-primary'
                       : 'border-border hover:bg-muted/40',
@@ -116,7 +119,7 @@ export function NewCustomerSheetModal({ customerId, onClose }: NewCustomerSheetM
                 >
                   <p className="text-sm font-medium">{opt.label}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{opt.description}</p>
-                </button>
+                </Button>
               ))}
             </div>
           </div>

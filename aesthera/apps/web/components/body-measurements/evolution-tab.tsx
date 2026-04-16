@@ -4,7 +4,6 @@ import { useRef, useState, useEffect } from 'react'
 import {
   AlertCircle,
   ArrowLeftRight,
-  BarChart2,
   ChevronDown,
   ChevronUp,
   ClipboardList,
@@ -115,18 +114,6 @@ function getCurrentUserId(): string | null {
   if (!token) return null
   const payload = decodeJwtPayload<{ sub?: string }>(token)
   return payload?.sub ?? null
-}
-
-function hasAnyValue(state: FormState): boolean {
-  for (const sheet of Object.values(state)) {
-    if (Object.values(sheet.simpleValues).some((v) => v !== '')) return true
-    if (Object.values(sheet.textualValues ?? {}).some((v) => v !== '')) return true
-    for (const cols of Object.values(sheet.tabularValues)) {
-      if (Object.values(cols).some((v) => v !== '')) return true
-    }
-    if (Object.values(sheet.checkValues ?? {}).some((v) => v)) return true
-  }
-  return false
 }
 
 // ──── Upload area ──────────────────────────────────────────────────────────────
