@@ -2267,7 +2267,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['anamnese', 'Anamnese'], ['contracts', 'Contratos'], ['evolucao', 'Avaliação']] as const).map(([id, label]) => (
+        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['anamnese', 'Anamnese'], ['contracts', 'Contratos'], ['evolucao', 'Avaliações']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"

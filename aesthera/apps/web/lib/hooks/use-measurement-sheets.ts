@@ -72,6 +72,7 @@ interface CreateSheetInput {
   order?: number
   category?: MeasurementCategory
   scope?: MeasurementScope
+  customerId?: string
 }
 
 interface UpdateSheetInput {
@@ -142,25 +143,29 @@ interface UseMeasurementSheetsOptions {
   includeInactive?: boolean
   scope?: MeasurementScope
   category?: MeasurementCategory
+  customerId?: string
 }
 
 export function useMeasurementSheets({
   includeInactive = false,
   scope,
   category,
+  customerId,
 }: UseMeasurementSheetsOptions = {}) {
   return useQuery({
-    queryKey: ['measurement-sheets', { includeInactive, scope, category }],
+    queryKey: ['measurement-sheets', { includeInactive, scope, category, customerId }],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (includeInactive) params.set('includeInactive', 'true')
       if (scope) params.set('scope', scope)
       if (category) params.set('category', category)
+      if (customerId) params.set('customerId', customerId)
       const query = params.toString()
       const url = query ? `/measurement-sheets?${query}` : '/measurement-sheets'
       const res = await api.get<MeasurementSheet[]>(url)
       return res.data
     },
+    enabled: scope !== 'CUSTOMER' || !!customerId,
   })
 }
 
