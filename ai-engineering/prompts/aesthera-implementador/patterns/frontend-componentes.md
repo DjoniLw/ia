@@ -138,3 +138,15 @@
   - ✅ Correto: `<TotalsPanel />` (ou cards de KPI) → `<DataTable />` → `<DataPagination />`.
   - 📌 Totais financeiros são dados de alto valor — devem estar visíveis no viewport inicial.
   - 📅 04/04/2026
+
+---
+
+- [ ] **Componente criado mas não importado/registrado na página de destino (BLOQUEANTE)**
+  - 🔴 Anti-padrão: implementar um novo componente (ex: `<MeasurementSheetsSettings />`) e não importá-lo nem usá-lo no `page.tsx` ou na aba de destino — componente existe mas nunca é renderizado.
+  - ✅ Correto: ao criar qualquer componente vinculado a uma rota, aba ou seção, verificar obrigatoriamente:
+    1. O `page.tsx` ou layout de destino importa o componente?
+    2. O componente é usado/renderizado no JSX da página?
+    3. Se for uma aba: a aba correspondente existe e aponta para o componente?
+  - 📌 Checklist pós-implementação: buscar o nome do componente em todos os arquivos do módulo — se não houver nenhum `import` fora do próprio arquivo, é um sinal de alerta.
+  - 📌 Aplica-se a: componentes de settings, abas de configuração, seções de página, modais registrados via rota.
+  - 📅 15/04/2026

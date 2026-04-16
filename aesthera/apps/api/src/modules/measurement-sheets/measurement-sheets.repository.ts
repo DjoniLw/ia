@@ -21,13 +21,14 @@ export class MeasurementSheetsRepository {
     })
   }
 
-  async listSheets(clinicId: string, activeOnly: boolean, filters?: { scope?: string; category?: string }) {
+  async listSheets(clinicId: string, activeOnly: boolean, filters?: { scope?: string; category?: string; customerId?: string }) {
     return prisma.measurementSheet.findMany({
       where: {
         clinicId,
         ...(activeOnly ? { active: true } : {}),
         ...(filters?.scope ? { scope: filters.scope as MeasurementScope } : {}),
         ...(filters?.category ? { category: filters.category as MeasurementCategory } : {}),
+        ...(filters?.customerId ? { customerId: filters.customerId } : {}),
       },
       orderBy: { order: 'asc' },
       include: {

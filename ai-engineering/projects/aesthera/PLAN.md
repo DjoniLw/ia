@@ -440,6 +440,29 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - **Spec técnica:** `outputs/spec-tecnica/fichas-avaliacao-expandidas-backend-spec-tecnica.md`
 - **⚠️ Pendente:** Executar `npx prisma migrate dev --name add-measurement-category-scope` no ambiente com banco
 
+### [2026-04-14] — feat(#158): Fichas de Avaliação Expandidas — Frontend Settings 2/3
+- **Módulo:** MeasurementSheets — Frontend Configurações
+- **Issue:** [#158](https://github.com/DjoniLw/ia/issues/158) — Redesign da aba Fichas de Avaliação em Configurações
+- **Branch:** `feat/issue-158-fichas-avaliacao-settings-frontend`
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/lib/measurement-categories.ts` *(NOVO — constantes de apresentação: CATEGORY_LABELS, SHEET_TYPE_LABELS, MEASUREMENT_CATEGORIES_ORDER, CATEGORY_ICON)*
+  - `aesthera/apps/web/app/(dashboard)/settings/_components/measurement-sheets-settings.tsx` *(REDESIGN COMPLETO — layout 3 painéis, sidebar de categorias, DnD, editor SIMPLE/TABULAR, toggles inline, viewport < 1280px collapsible)*
+  - `aesthera/apps/web/app/(dashboard)/settings/_components/measurement-templates-drawer.tsx` *(NOVO — drawer "Usar modelo" com 6 cards de templates, loading state, feedback de erro)*
+  - `aesthera/apps/web/app/(dashboard)/settings/page.tsx` *(aba renomeada "Medidas Corporais" → "Fichas de Avaliação")*
+  - `aesthera/apps/web/lib/hooks/use-measurement-sheets.ts` *(EXPANDIDO — tipos MeasurementCategory, MeasurementScope, MeasurementTemplate; hooks useMeasurementTemplates, useCopyMeasurementTemplate; parâmetros scope/category em useMeasurementSheets)*
+  - `aesthera/docs/screen-mapping.md` *(aba Configurações atualizada)*
+- **O que foi feito:**
+  - Layout 3 painéis: sidebar com 6 categorias + contagem, lista de fichas por categoria, editor ao vivo
+  - Categoria "Personalizada" → readonly; exibe fichas `scope=CUSTOMER`; sem botão "Nova ficha"
+  - Editor SIMPLE: campos editáveis inline, confirmação Enter/Escape, toggle "Direito/Esquerdo" em campos numéricos, DnD + fallback ▲▼ para touch
+  - Editor TABULAR: colunas como chips editáveis, campos como linhas com DnD
+  - Drawer "Usar modelo": grid de templates com loading state explícito por botão; ao concluir, seleciona ficha na categoria correspondente
+  - Dialog "Nova ficha": seleção visual de formato (Lista/Tabela) + validação nome obrigatório
+  - Viewport < 1280px: painel de preview colapsa via Collapsible (oculto por padrão)
+  - Fix TypeScript React 19: `RefObject<HTMLInputElement | null>` nos props editRef/editInputRef
+  - Todos os labels em PT-BR; nenhum enum exposto na UI
+- **Closes:** #158
+
 ### [2026-04-09] — fix(#155): Code Review PR #155 — 6 bloqueantes e 3 sugestões corrigidos
 - **Módulo:** Anamnesis (correções pós-code-review PR #155)
 - **Arquivo(s) afetado(s):**

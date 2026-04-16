@@ -32,7 +32,7 @@ import { BusinessHoursTab } from './_components/business-hours-tab'
 import { ClinicTab } from './_components/clinic-tab'
 import { PaymentMethodsTab } from './_components/payment-methods-tab'
 import { UsersTab } from './_components/users-tab'
-import { BodyMeasurementsTab } from './_components/body-measurements-tab'
+import { MeasurementSheetsSettings } from './_components/measurement-sheets-settings'
 import { ContractTemplatesTab } from './_components/contract-templates-tab'
 import { EmailTab } from './_components/email-tab'
 import { WhatsAppTab } from './_components/whatsapp-tab'
@@ -1316,7 +1316,7 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="body-measurements">
-          <BodyMeasurementsTab />
+          <MeasurementSheetsSettings />
         </TabsContent>
 
         <TabsContent value="contracts">
