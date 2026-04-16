@@ -110,14 +110,14 @@ export interface UpdateSessionInput {
 
 export function useMeasurementSessions(
   customerId: string,
-  options?: { page?: number; limit?: number; enabled?: boolean },
+  options?: { page?: number; limit?: number; category?: string; enabled?: boolean },
 ) {
-  const { page = 1, limit = 20, enabled = true } = options ?? {}
+  const { page = 1, limit = 20, category, enabled = true } = options ?? {}
   return useQuery({
-    queryKey: ['measurement-sessions', customerId, { page, limit }],
+    queryKey: ['measurement-sessions', customerId, { page, limit, category }],
     queryFn: async () => {
       const res = await api.get<Paginated<MeasurementSession>>('/measurement-sessions', {
-        params: { customerId, page, limit },
+        params: { customerId, page, limit, ...(category ? { category } : {}) },
       })
       return res.data
     },

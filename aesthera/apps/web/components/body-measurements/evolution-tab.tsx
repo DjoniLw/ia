@@ -571,6 +571,9 @@ function SessionFormModal({
   const loadingSheets = loadingSystem || loadingCustomer
 
   // ── Seleção de fichas ─────────────────────────────────────────────────────
+  const initialSelectedIdsRef = useRef(
+    sessionToEdit ? new Set(sessionToEdit.sheetRecords.map((sr) => sr.sheetId)) : new Set<string>(),
+  )
   const [selectedSheetIds, setSelectedSheetIds] = useState<Set<string>>(() => {
     if (sessionToEdit) return new Set(sessionToEdit.sheetRecords.map((sr) => sr.sheetId))
     return new Set()
@@ -647,7 +650,12 @@ function SessionFormModal({
     },
   })
 
-  const hasUnsaved = metaDirty || selectedSheetIds.size > 0 || pendingFiles.length > 0
+  const hasUnsaved = metaDirty || (() => {
+    const init = initialSelectedIdsRef.current
+    if (init.size !== selectedSheetIds.size) return true
+    for (const id of init) if (!selectedSheetIds.has(id)) return true
+    return false
+  })() || pendingFiles.length > 0
 
   const doUploadFiles = async (): Promise<string[]> => {
     const confirmedIds: string[] = []
@@ -1686,7 +1694,7 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
 
   const { data: sessionsPage, isLoading: loadingSessions, error, refetch } = useMeasurementSessions(
     customer.id,
-    { limit: 50 },
+    { limit: 50, category: categoryFilter !== 'all' ? categoryFilter : undefined },
   )
   const deleteSession = useDeleteMeasurementSession()
 
@@ -1713,12 +1721,9 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
 
   const sessions = sessionsPage?.items ?? []
   const isLoading = loadingSessions
+  const canCreate = isAdmin || isStaff
 
-  const filteredSessions = categoryFilter === 'all'
-    ? sessions
-    : sessions.filter((s) =>
-        s.sheetRecords.some((sr) => sr.sheet.category === categoryFilter),
-      )
+  // Filtro é server-side — sessions já chegam filtrados por categoria
 
   const handleDelete = async (session: MeasurementSession) => {
     try {
@@ -1757,15 +1762,17 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
       {/* Header com botões */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex gap-2 flex-wrap">
-          {/* Botão nova avaliação */}
-          <Button
-            size="sm"
-            onClick={() => { setEditingSession(undefined); setModalOpen(true) }}
-            disabled={isLoading}
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Nova avaliação
-          </Button>
+          {/* Botão nova avaliação — apenas admin e staff */}
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => { setEditingSession(undefined); setModalOpen(true) }}
+              disabled={isLoading}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Nova avaliação
+            </Button>
+          )}
 
           {/* Botão nova ficha deste cliente */}
           <Button
@@ -1791,19 +1798,21 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
         <div className="flex justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-      ) : sessions.length === 0 ? (
-        /* Empty state */
+      ) : sessions.length === 0 && categoryFilter === 'all' ? (
+        /* Empty state principal — sem registros */
         <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
           <ClipboardList className="mx-auto mb-2 h-8 w-8 opacity-30" />
           <p className="text-sm">Nenhuma avaliação registrada.</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => { setEditingSession(undefined); setModalOpen(true) }}
-          >
-            Nova avaliação
-          </Button>
+          {canCreate && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => { setEditingSession(undefined); setModalOpen(true) }}
+            >
+              Nova avaliação
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -1826,20 +1835,22 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
             ))}
           </div>
 
-          {/* Lista de sessões filtradas */}
-          {filteredSessions.length === 0 ? (
+          {/* Lista de sessões (já filtradas server-side pela categoria) */}
+          {sessions.length === 0 ? (
+            /* Empty state de categoria — sem registros para o filtro atual */
             <div className="rounded-lg border bg-card py-10 text-center text-muted-foreground">
               <p className="text-sm">Nenhuma avaliação nesta categoria.</p>
-              <button
-                type="button"
-                className="mt-2 text-xs text-primary underline"
+              <Button
+                variant="link"
+                size="sm"
+                className="mt-2 h-auto p-0 text-xs"
                 onClick={() => setCategoryFilter('all')}
               >
                 Ver todas
-              </button>
+              </Button>
             </div>
           ) : (
-            filteredSessions.map((session) => {
+            sessions.map((session) => {
               const canEdit = isAdmin || isStaff || session.createdById === currentUserId
               return (
                 <SessionCard

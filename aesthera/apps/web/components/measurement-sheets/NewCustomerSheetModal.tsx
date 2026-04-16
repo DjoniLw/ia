@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { InfoBanner } from '@/components/ui/info-banner'
 import { useCreateMeasurementSheet } from '@/lib/hooks/use-measurement-sheets'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -17,7 +18,6 @@ import { useQueryClient } from '@tanstack/react-query'
 
 const schema = z.object({
   name: z.string().min(1, 'Nome obrigatório'),
-  type: z.enum(['SIMPLE', 'TABULAR']),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -39,10 +39,11 @@ export function NewCustomerSheetModal({ customerId, onClose }: NewCustomerSheetM
   const {
     register,
     handleSubmit,
-    formState: { errors, isDirty },
+    formState: { errors, isDirty, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', type: 'SIMPLE' },
+    defaultValues: { name: '' },
+    mode: 'onChange',
   })
 
   const onSubmit = handleSubmit(async (data) => {
@@ -125,10 +126,10 @@ export function NewCustomerSheetModal({ customerId, onClose }: NewCustomerSheetM
           </div>
 
           {/* Info */}
-          <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+          <InfoBanner variant="info">
             Esta ficha será criada na categoria <strong>Personalizada</strong> e ficará disponível
             apenas para este cliente.
-          </div>
+          </InfoBanner>
         </div>
 
         <div className="sticky bottom-0 bg-card border-t px-6 py-4 flex justify-end gap-2 rounded-b-xl">
@@ -141,7 +142,7 @@ export function NewCustomerSheetModal({ customerId, onClose }: NewCustomerSheetM
           >
             Cancelar
           </Button>
-          <Button type="submit" size="sm" disabled={createSheet.isPending}>
+          <Button type="submit" size="sm" disabled={createSheet.isPending || !isValid}>
             {createSheet.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
             Criar ficha
           </Button>

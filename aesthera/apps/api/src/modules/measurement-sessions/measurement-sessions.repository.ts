@@ -34,16 +34,19 @@ const SESSION_INCLUDE = {
 export class MeasurementSessionsRepository {
   async listSessions(clinicId: string, q: ListSessionsQuery) {
     const skip = (q.page - 1) * q.limit
+    const categoryFilter = q.category
+      ? { sheetRecords: { some: { sheet: { category: q.category } } } }
+      : {}
     const [items, total] = await Promise.all([
       prisma.measurementSession.findMany({
-        where: { clinicId, customerId: q.customerId },
+        where: { clinicId, customerId: q.customerId, ...categoryFilter },
         orderBy: { recordedAt: 'desc' },
         skip,
         take: q.limit,
         include: SESSION_INCLUDE,
       }),
       prisma.measurementSession.count({
-        where: { clinicId, customerId: q.customerId },
+        where: { clinicId, customerId: q.customerId, ...categoryFilter },
       }),
     ])
     return { items, total, page: q.page, limit: q.limit }
