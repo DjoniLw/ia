@@ -36,6 +36,7 @@ import { measurementSheetsRoutes } from './modules/measurement-sheets/measuremen
 import { measurementSessionsRoutes } from './modules/measurement-sessions/measurement-sessions.routes'
 import { contractsRoutes } from './modules/contracts/contracts.routes'
 import { anamnesisRoutes } from './modules/anamnesis/anamnesis.routes'
+import { customerPhotosRoutes } from './modules/customer-photos/customer-photos.controller'
 import { PUBLIC_ROUTES } from './shared/constants/public-routes'
 import './domain-event-handlers'
 
@@ -155,6 +156,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await measurementSessionsRoutes(app)
   await contractsRoutes(app)
   await anamnesisRoutes(app)
+  await customerPhotosRoutes(app)
 
   return app
 }

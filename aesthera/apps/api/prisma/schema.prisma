@@ -157,6 +157,8 @@ enum NotificationType {
 enum FileCategory {
   BEFORE_PHOTO
   AFTER_PHOTO
+  PROGRESS_PHOTO
+  GALLERY_PHOTO
   MEASUREMENT
   EXAM
   OTHER
@@ -454,6 +456,7 @@ model Professional {
   appointments    Appointment[]
   blockedSlots    BlockedSlot[]
   clinicalRecords ClinicalRecord[]
+  uploadedPhotos  CustomerFile[]            @relation("PhotoUploadedByProfessional")
 
   @@unique([clinicId, email])
   @@index([clinicId])
@@ -1327,29 +1330,40 @@ model ManualReceiptLine {
 // Soft-delete via deletedAt — NUNCA hard-delete.
 
 model CustomerFile {
-  id                   String           @id @default(uuid())
-  clinicId             String           @map("clinic_id")
-  customerId           String           @map("customer_id")
-  recordId             String?          @map("record_id") // FK → BodyMeasurementRecord (legado)
-  measurementSessionId String?          @map("measurement_session_id") // FK → MeasurementSession (novo)
-  name                 String
-  mimeType             String           @map("mime_type")
-  size                 Int
-  storageKey           String           @unique @map("storage_key")
-  category             FileCategory
-  status               FileUploadStatus @default(CONFIRMED)
-  deletedAt            DateTime?        @map("deleted_at") // soft-delete — NUNCA Boolean deleted
-  uploadedAt           DateTime         @default(now()) @map("uploaded_at")
-  uploadedById         String           @map("uploaded_by_id") // FK → User (rastreabilidade)
+  id                       String           @id @default(uuid())
+  clinicId                 String           @map("clinic_id")
+  customerId               String           @map("customer_id")
+  recordId                 String?          @map("record_id") // FK → BodyMeasurementRecord (legado)
+  measurementSessionId     String?          @map("measurement_session_id") // FK → MeasurementSession (novo)
+  name                     String
+  mimeType                 String           @map("mime_type")
+  size                     Int
+  storageKey               String           @unique @map("storage_key")
+  category                 FileCategory
+  status                   FileUploadStatus @default(CONFIRMED)
+  deletedAt                DateTime?        @map("deleted_at") // soft-delete — NUNCA Boolean deleted
+  uploadedAt               DateTime         @default(now()) @map("uploaded_at")
+  uploadedById             String           @map("uploaded_by_id") // FK → User (rastreabilidade)
+  // Campos da galeria de fotos (Fase 1 — Issue #163)
+  takenAt                  DateTime?        @map("taken_at")
+  bodyRegion               String?          @map("body_region") // max 100 chars
+  notes                    String?          // max 500 chars
+  deletedByUserId          String?          @map("deleted_by_user_id")
+  deletionReason           String?          @map("deletion_reason")
+  storageDeletedAt         DateTime?        @map("storage_deleted_at")
+  uploadedByProfessionalId String?          @map("uploaded_by_professional_id")
 
-  clinic             Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  customer           Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  record             BodyMeasurementRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
-  measurementSession MeasurementSession?    @relation(fields: [measurementSessionId], references: [id], onDelete: SetNull)
+  clinic                 Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer               Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  record                 BodyMeasurementRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  measurementSession     MeasurementSession?    @relation(fields: [measurementSessionId], references: [id], onDelete: SetNull)
+  uploadedByProfessional Professional?          @relation("PhotoUploadedByProfessional", fields: [uploadedByProfessionalId], references: [id], onDelete: SetNull)
 
   @@index([clinicId, customerId])
   @@index([clinicId, recordId])
   @@index([clinicId, measurementSessionId])
+  @@index([clinicId, customerId, deletedAt])
+  @@index([clinicId, customerId, takenAt])
   @@map("customer_files")
 }
 
