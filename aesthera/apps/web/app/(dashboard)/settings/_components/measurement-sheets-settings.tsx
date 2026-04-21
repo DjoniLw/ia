@@ -37,7 +37,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Collapsible,
@@ -1122,7 +1122,7 @@ function SheetEditorPanel({
           <p className="text-sm text-muted-foreground mt-1">
             Esta ação não pode ser desfeita. Se a ficha tiver avaliações registradas, não será possível excluí-la — desative-a em vez disso.
           </p>
-          <DialogFooter className="mt-4">
+          <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" size="sm" onClick={() => setIsDeleteConfirmOpen(false)} disabled={deleteSheet.isPending}>
               Cancelar
             </Button>
@@ -1130,7 +1130,7 @@ function SheetEditorPanel({
               {deleteSheet.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
               Excluir
             </Button>
-          </DialogFooter>
+          </div>
         </Dialog>
       )}
     </div>
