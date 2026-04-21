@@ -73,6 +73,7 @@ interface CreateSheetInput {
   category?: MeasurementCategory
   scope?: MeasurementScope
   customerId?: string
+  sourceSheetId?: string
 }
 
 interface UpdateSheetInput {

@@ -77,6 +77,69 @@ export class MeasurementSheetsService {
       throw new ConflictError('Nome de ficha já existe nesta clínica')
     }
 
+    // Se sourceSheetId fornecido: clonar campos e colunas da ficha de origem
+    if (dto.sourceSheetId) {
+      const sourceSheet = await this.repo.findSheetById(dto.sourceSheetId, clinicId)
+      if (!sourceSheet) throw new NotFoundError('MeasurementSheet')
+
+      return this.db.$transaction(async (tx) => {
+        const newSheet = await tx.measurementSheet.create({
+          data: {
+            clinicId,
+            name: dto.name,
+            type: sourceSheet.type,
+            category: dto.category ?? sourceSheet.category,
+            scope: scope as 'SYSTEM' | 'CUSTOMER',
+            customerId: dto.customerId ?? null,
+            createdByUserId: userId ?? null,
+            order: 0,
+          },
+        })
+
+        // Clonar colunas (fichas TABULAR)
+        if (sourceSheet.columns && sourceSheet.columns.length > 0) {
+          await tx.measurementSheetColumn.createMany({
+            data: sourceSheet.columns.map((col) => ({
+              sheetId: newSheet.id,
+              name: col.name,
+              inputType: col.inputType,
+              unit: col.unit ?? null,
+              isTextual: col.isTextual,
+              defaultValue: col.defaultValue ?? null,
+              order: col.order,
+            })),
+          })
+        }
+
+        // Clonar campos/linhas
+        const activeFields = sourceSheet.fields.filter((f) => f.active)
+        if (activeFields.length > 0) {
+          await tx.measurementField.createMany({
+            data: activeFields.map((field) => ({
+              sheetId: newSheet.id,
+              clinicId,
+              name: field.name,
+              inputType: field.inputType,
+              unit: field.unit ?? null,
+              isTextual: field.isTextual,
+              defaultValue: field.defaultValue ?? null,
+              subColumns: field.subColumns ?? [],
+              order: field.order,
+              active: true,
+            })),
+          })
+        }
+
+        return tx.measurementSheet.findFirst({
+          where: { id: newSheet.id },
+          include: {
+            columns: { orderBy: { order: 'asc' } },
+            fields: { orderBy: { order: 'asc' } },
+          },
+        })
+      })
+    }
+
     return this.repo.createSheet(clinicId, dto, userId)
   }
   async updateSheet(id: string, clinicId: string, dto: UpdateSheetDto, userId?: string, role?: string) {

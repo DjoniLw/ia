@@ -60,6 +60,7 @@ import {
 } from '@/lib/hooks/use-measurement-sessions'
 import { useAppointments } from '@/lib/hooks/use-appointments'
 import { NewCustomerSheetModal } from '@/components/measurement-sheets/NewCustomerSheetModal'
+import { CustomerSheetEditorDrawer } from '@/components/measurement-sheets/CustomerSheetEditorDrawer'
 
 // ──── Types ────────────────────────────────────────────────────────────────────
 
@@ -1695,6 +1696,7 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingSession, setEditingSession] = useState<MeasurementSession | undefined>()
   const [customSheetOpen, setCustomSheetOpen] = useState(false)
+  const [editingCustomerSheetId, setEditingCustomerSheetId] = useState<string | null>(null)
   const [categoryFilter, setCategoryFilter] = useState<MeasurementCategory | 'all'>('all')
 
   const { data: sessionsPage, isLoading: loadingSessions, error, refetch } = useMeasurementSessions(
@@ -1889,6 +1891,16 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
         <NewCustomerSheetModal
           customerId={customer.id}
           onClose={() => setCustomSheetOpen(false)}
+          onCreated={(sheetId) => { setCustomSheetOpen(false); setEditingCustomerSheetId(sheetId) }}
+        />
+      )}
+
+      {/* Editor de ficha personalizada após criação */}
+      {editingCustomerSheetId && (
+        <CustomerSheetEditorDrawer
+          customerId={customer.id}
+          sheetId={editingCustomerSheetId}
+          onClose={() => setEditingCustomerSheetId(null)}
         />
       )}
     </div>

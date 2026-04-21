@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import {
   GripVertical,
-  Eye,
   Plus,
   Loader2,
   ClipboardList,
@@ -17,6 +16,7 @@ import {
   X,
   ArrowUp,
   ArrowDown,
+  Pencil,
 } from 'lucide-react'
 import {
   DndContext,
@@ -37,7 +37,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -46,6 +47,8 @@ import {
 import {
   useMeasurementSheets,
   useCreateMeasurementSheet,
+  useUpdateMeasurementSheet,
+  useDeleteMeasurementSheet,
   useReorderMeasurementSheets,
   useCreateMeasurementField,
   useUpdateMeasurementField,
@@ -94,8 +97,9 @@ function SortableSheetItem({
     <div
       ref={setNodeRef}
       style={style}
+      onClick={onSelect}
       className={cn(
-        'flex items-center gap-2 px-3 py-2.5 text-sm transition-colors',
+        'flex items-center gap-2 px-3 py-2.5 text-sm transition-colors cursor-pointer hover:bg-muted/50',
         selected && 'bg-primary/5',
       )}
     >
@@ -104,6 +108,7 @@ function SortableSheetItem({
           type="button"
           {...attributes}
           {...listeners}
+          onClick={(e) => e.stopPropagation()}
           className="cursor-grab active:cursor-grabbing shrink-0 touch-none focus:outline-none"
           aria-label="Reordenar"
         >
@@ -126,15 +131,6 @@ function SortableSheetItem({
         )}
         {SHEET_TYPE_LABELS[sheet.type]}
       </span>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 shrink-0"
-        onClick={onSelect}
-        aria-label="Visualizar ficha"
-      >
-        <Eye className={cn('h-3.5 w-3.5', selected && 'text-primary')} />
-      </Button>
     </div>
   )
 }
@@ -265,7 +261,7 @@ function NewSheetDialog({
   )
 }
 
-function SimpleSheetEditor({
+export function SimpleSheetEditor({
   sheet,
   isReadonly,
 }: {
@@ -678,7 +674,7 @@ function SortableFieldRow({
   )
 }
 
-function TabularSheetEditor({
+export function TabularSheetEditor({
   sheet,
   isReadonly,
 }: {
@@ -689,6 +685,7 @@ function TabularSheetEditor({
   const [editColName, setEditColName] = useState('')
   const [editingRowId, setEditingRowId] = useState<string | null>(null)
   const [editRowName, setEditRowName] = useState('')
+  const [editRowDefaultValue, setEditRowDefaultValue] = useState('')
   const [isAddingCol, setIsAddingCol] = useState(false)
   const [newColName, setNewColName] = useState('')
   const [isAddingRow, setIsAddingRow] = useState(false)
@@ -753,7 +750,12 @@ function TabularSheetEditor({
   async function confirmRowEdit(fieldId: string) {
     if (!editRowName.trim()) return
     try {
-      await updateField.mutateAsync({ sheetId: sheet.id, fieldId, name: editRowName.trim() })
+      await updateField.mutateAsync({
+        sheetId: sheet.id,
+        fieldId,
+        name: editRowName.trim(),
+        defaultValue: editRowDefaultValue.trim() || null,
+      })
       setEditingRowId(null)
     } catch { toast.error('Erro ao atualizar campo') }
   }
@@ -859,12 +861,14 @@ function TabularSheetEditor({
                   field={field}
                   isEditing={editingRowId === field.id}
                   editName={editRowName}
+                  editDefaultValue={editRowDefaultValue}
                   editRef={editingRowId === field.id ? rowEditRef : undefined}
                   isReadonly={isReadonly}
-                  onStartEdit={() => { setEditingRowId(field.id); setEditRowName(field.name) }}
+                  onStartEdit={() => { setEditingRowId(field.id); setEditRowName(field.name); setEditRowDefaultValue(field.defaultValue ?? '') }}
                   onConfirm={() => confirmRowEdit(field.id)}
                   onCancel={() => setEditingRowId(null)}
                   onNameChange={setEditRowName}
+                  onDefaultValueChange={setEditRowDefaultValue}
                   onDelete={() => handleDeleteRow(field.id)}
                 />
               ))}
@@ -901,23 +905,27 @@ function SortableTabularRow({
   field,
   isEditing,
   editName,
+  editDefaultValue,
   editRef,
   isReadonly,
   onStartEdit,
   onConfirm,
   onCancel,
   onNameChange,
+  onDefaultValueChange,
   onDelete,
 }: {
   field: MeasurementField
   isEditing: boolean
   editName: string
+  editDefaultValue: string
   editRef?: React.RefObject<HTMLInputElement | null>
   isReadonly: boolean
   onStartEdit: () => void
   onConfirm: () => void
   onCancel: () => void
   onNameChange: (v: string) => void
+  onDefaultValueChange: (v: string) => void
   onDelete: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
@@ -927,59 +935,204 @@ function SortableTabularRow({
   const style = { transform: CSS.Transform.toString(transform), transition }
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 rounded border bg-card px-2.5 py-1.5 text-sm">
-      {!isReadonly && (
-        <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing shrink-0 touch-none focus:outline-none" aria-label="Arrastar">
-          <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40" />
-        </button>
-      )}
-      {isEditing ? (
-        <>
-          <input
-            ref={editRef}
-            value={editName}
-            onChange={(e) => onNameChange(e.target.value)}
-            className="flex-1 min-w-0 text-sm border-none bg-transparent focus:outline-none"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); onConfirm() }
-              if (e.key === 'Escape') onCancel()
-              if (e.key === 'Tab') { e.preventDefault(); onConfirm() }
-            }}
-            onBlur={onConfirm}
-          />
-          <button type="button" onClick={onCancel} className="shrink-0 text-muted-foreground hover:text-foreground">
-            <X className="h-3.5 w-3.5" />
+    <div ref={setNodeRef} style={style} className="rounded border bg-card px-2.5 py-1.5 text-sm">
+      <div className="flex items-center gap-2">
+        {!isReadonly && (
+          <button type="button" {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing shrink-0 touch-none focus:outline-none" aria-label="Arrastar">
+            <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40" />
           </button>
-        </>
-      ) : (
-        <>
-          <span className={cn('flex-1 text-sm', !isReadonly && 'cursor-pointer hover:text-primary')} onClick={!isReadonly ? onStartEdit : undefined}>
-            {field.name}
-          </span>
-          {!isReadonly && (
-            <button type="button" onClick={onDelete} className="shrink-0 text-muted-foreground hover:text-destructive" aria-label="Remover">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </>
-      )}
+        )}
+        {isEditing ? (
+          <>
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <input
+                ref={editRef}
+                value={editName}
+                onChange={(e) => onNameChange(e.target.value)}
+                className="w-full text-sm border-none bg-transparent focus:outline-none font-medium"
+                placeholder="Nome do campo"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); onConfirm() }
+                  if (e.key === 'Escape') onCancel()
+                  if (e.key === 'Tab') { e.preventDefault(); onConfirm() }
+                }}
+              />
+              <Input
+                value={editDefaultValue}
+                onChange={(e) => onDefaultValueChange(e.target.value)}
+                placeholder="Valor padrão nesta linha (opcional)"
+                className="h-6 text-xs"
+                maxLength={500}
+              />
+            </div>
+            <div className="flex gap-1 shrink-0">
+              <Button type="button" size="sm" className="h-6 px-2 text-xs" onClick={onConfirm}>
+                <Check className="h-3 w-3" />
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onCancel}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex-1 min-w-0">
+              <span className={cn('text-sm font-medium', !isReadonly && 'cursor-pointer hover:text-primary')} onClick={!isReadonly ? onStartEdit : undefined}>
+                {field.name}
+              </span>
+              {field.defaultValue && (
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{field.defaultValue}</p>
+              )}
+            </div>
+            {!isReadonly && (
+              <button type="button" onClick={onDelete} className="shrink-0 text-muted-foreground hover:text-destructive" aria-label="Remover">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
 
-function SheetEditorPanel({ sheet, isReadonly }: { sheet: MeasurementSheet; isReadonly: boolean }) {
+function SheetEditorPanel({
+  sheet,
+  isReadonly,
+  onDeleted,
+}: {
+  sheet: MeasurementSheet
+  isReadonly: boolean
+  onDeleted: () => void
+}) {
+  const [isEditingMeta, setIsEditingMeta] = useState(false)
+  const [editName, setEditName] = useState(sheet.name)
+  const [editCategory, setEditCategory] = useState<MeasurementCategory>(sheet.category)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+
+  const updateSheet = useUpdateMeasurementSheet()
+  const deleteSheet = useDeleteMeasurementSheet()
+
+  // Sync quando a sheet muda (ex: outra ficha selecionada)
+  useEffect(() => {
+    setEditName(sheet.name)
+    setEditCategory(sheet.category)
+    setIsEditingMeta(false)
+  }, [sheet.id, sheet.name, sheet.category])
+
+  async function handleSaveMeta() {
+    if (!editName.trim()) return
+    const isDirty = editName.trim() !== sheet.name || editCategory !== sheet.category
+    if (!isDirty) { setIsEditingMeta(false); return }
+    try {
+      await updateSheet.mutateAsync({ id: sheet.id, name: editName.trim(), category: editCategory })
+      toast.success('Ficha atualizada')
+      setIsEditingMeta(false)
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { error?: string } } })?.response?.data
+      if (d?.error === 'CONFLICT') toast.error('Já existe uma ficha com este nome')
+      else toast.error('Erro ao atualizar ficha')
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      await deleteSheet.mutateAsync(sheet.id)
+      toast.success('Ficha excluída')
+      setIsDeleteConfirmOpen(false)
+      onDeleted()
+    } catch (err: unknown) {
+      const d = (err as { response?: { data?: { message?: string } } })?.response?.data
+      if (d?.message === 'HAS_HISTORY') {
+        toast.error('Esta ficha possui avaliações registradas. Para ocultá-la, desative-a.')
+      } else {
+        toast.error('Erro ao excluir ficha')
+      }
+      setIsDeleteConfirmOpen(false)
+    }
+  }
+
   return (
     <div className="rounded-lg border bg-card">
-      <div className="flex items-center gap-2 px-4 py-3 border-b">
-        {sheet.type === 'TABULAR' ? <Table2 className="h-4 w-4 text-muted-foreground" /> : <List className="h-4 w-4 text-muted-foreground" />}
-        <span className="text-sm font-medium truncate flex-1">{sheet.name}</span>
-        <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shrink-0', SHEET_TYPE_BADGE_COLOR[sheet.type])}>
-          {SHEET_TYPE_LABELS[sheet.type]}
-        </span>
+      {/* Header editável */}
+      <div className="px-4 py-3 border-b">
+        {isEditingMeta ? (
+          <div className="space-y-2">
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="h-8 text-sm font-medium"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); void handleSaveMeta() }
+                if (e.key === 'Escape') { setIsEditingMeta(false); setEditName(sheet.name); setEditCategory(sheet.category) }
+              }}
+            />
+            {!isReadonly && (
+              <Select value={editCategory} onValueChange={(v) => setEditCategory(v as MeasurementCategory)}>
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MEASUREMENT_CATEGORIES_ORDER.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{CATEGORY_LABELS[cat]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex gap-2">
+              <Button type="button" size="sm" className="h-6 px-2 text-xs" onClick={handleSaveMeta} disabled={updateSheet.isPending || !editName.trim()}>
+                {updateSheet.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 mr-0.5" />}
+                Salvar
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setIsEditingMeta(false); setEditName(sheet.name); setEditCategory(sheet.category) }}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            {sheet.type === 'TABULAR' ? <Table2 className="h-4 w-4 text-muted-foreground shrink-0" /> : <List className="h-4 w-4 text-muted-foreground shrink-0" />}
+            <span className="text-sm font-medium truncate flex-1">{sheet.name}</span>
+            <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shrink-0', SHEET_TYPE_BADGE_COLOR[sheet.type])}>
+              {SHEET_TYPE_LABELS[sheet.type]}
+            </span>
+            {!isReadonly && (
+              <>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground" onClick={() => setIsEditingMeta(true)} aria-label="Editar ficha">
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => setIsDeleteConfirmOpen(true)} aria-label="Excluir ficha">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
+
       <div className="p-4">
         {sheet.type === 'SIMPLE' ? <SimpleSheetEditor sheet={sheet} isReadonly={isReadonly} /> : <TabularSheetEditor sheet={sheet} isReadonly={isReadonly} />}
       </div>
+
+      {/* Dialog de confirmação de exclusão */}
+      {isDeleteConfirmOpen && (
+        <Dialog open onClose={() => setIsDeleteConfirmOpen(false)} className="max-w-sm">
+          <DialogTitle>Excluir ficha?</DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Esta ação não pode ser desfeita. Se a ficha tiver avaliações registradas, não será possível excluí-la — desative-a em vez disso.
+          </p>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" size="sm" onClick={() => setIsDeleteConfirmOpen(false)} disabled={deleteSheet.isPending}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleteSheet.isPending}>
+              {deleteSheet.isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+              Excluir
+            </Button>
+          </DialogFooter>
+        </Dialog>
+      )}
     </div>
   )
 }
@@ -1099,7 +1252,7 @@ export function MeasurementSheetsSettings() {
           </nav>
         </aside>
 
-        <div className="flex-1 min-w-0">
+        <div className="w-64 shrink-0">
           <div className="rounded-lg border bg-card h-full flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
               <h3 className="text-sm font-medium">Fichas — {CATEGORY_LABELS[selectedCategory]}</h3>
@@ -1147,9 +1300,9 @@ export function MeasurementSheetsSettings() {
           </div>
         </div>
 
-        <div className="hidden xl:block w-72 shrink-0">
+        <div className="hidden xl:flex xl:flex-1 xl:min-w-0">
           {selectedSheet ? (
-            <SheetEditorPanel sheet={selectedSheet} isReadonly={isPersonalizada} />
+            <SheetEditorPanel sheet={selectedSheet} isReadonly={isPersonalizada} onDeleted={() => setSelectedSheetId(null)} />
           ) : (
             <EmptyEditorPlaceholder />
           )}
@@ -1163,7 +1316,7 @@ export function MeasurementSheetsSettings() {
             {isEditorCollapsibleOpen ? <ChevronUp className="h-4 w-4 shrink-0 ml-2" /> : <ChevronDown className="h-4 w-4 shrink-0 ml-2" />}
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-2">
-            <SheetEditorPanel sheet={selectedSheet} isReadonly={isPersonalizada} />
+            <SheetEditorPanel sheet={selectedSheet} isReadonly={isPersonalizada} onDeleted={() => setSelectedSheetId(null)} />
           </CollapsibleContent>
         </Collapsible>
       )}

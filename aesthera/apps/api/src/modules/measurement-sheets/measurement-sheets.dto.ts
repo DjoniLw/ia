@@ -9,6 +9,7 @@ export const CreateSheetDto = z.object({
   category: z.enum(['CORPORAL', 'FACIAL', 'DERMATO_FUNCIONAL', 'NUTRICIONAL', 'POSTURAL', 'PERSONALIZADA']).default('CORPORAL'),
   scope: z.enum(['SYSTEM', 'CUSTOMER']).default('SYSTEM'),
   customerId: z.string().uuid().optional(),
+  sourceSheetId: z.string().uuid().optional(),
 }).refine(
   (data) => data.scope !== 'CUSTOMER' || !!data.customerId,
   { message: 'customerId é obrigatório quando scope=CUSTOMER', path: ['customerId'] },
