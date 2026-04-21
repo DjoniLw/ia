@@ -1141,7 +1141,7 @@ function EmptyEditorPlaceholder() {
   return (
     <div className="rounded-lg border bg-card h-full flex items-center justify-center py-16">
       <div className="text-center">
-        <Eye className="mx-auto mb-2 h-8 w-8 opacity-20" />
+        <ClipboardList className="mx-auto mb-2 h-8 w-8 opacity-20" />
         <p className="text-xs text-muted-foreground">Selecione uma ficha para visualizar</p>
       </div>
     </div>
