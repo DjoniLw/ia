@@ -69,12 +69,60 @@ import {
   MEASUREMENT_CATEGORIES_ORDER,
   CATEGORY_ICON,
   SHEET_TYPE_BADGE_COLOR,
-  FIELD_INPUT_TYPE_BADGE_COLOR,
+  FIELD_DISPLAY_TYPE_LABEL,
+  FIELD_DISPLAY_TYPE_BADGE_COLOR,
+  type FieldDisplayType,
 } from '@/lib/measurement-categories'
 import { MeasurementTemplatesDrawer } from './measurement-templates-drawer'
 import { cn } from '@/lib/utils'
 
 const MAX_ACTIVE_SHEETS = 20
+
+// ---------------------------------------------------------------------------
+// Helpers de tipo de campo (FieldDisplayType — apenas UI, não persiste no banco)
+// ---------------------------------------------------------------------------
+
+function toDisplayType(inputType: MeasurementInputType, isTextual: boolean): FieldDisplayType {
+  if (inputType === 'CHECK') return 'CHECK'
+  if (isTextual) return 'TEXT'
+  return 'NUMBER'
+}
+
+function fromDisplayType(dt: FieldDisplayType): { inputType: MeasurementInputType; isTextual: boolean } {
+  if (dt === 'CHECK') return { inputType: 'CHECK', isTextual: false }
+  if (dt === 'TEXT')  return { inputType: 'INPUT', isTextual: true }
+  return { inputType: 'INPUT', isTextual: false }
+}
+
+function FieldTypeSelector({
+  value,
+  onChange,
+}: {
+  value: FieldDisplayType
+  onChange: (v: FieldDisplayType) => void
+}) {
+  return (
+    <div className="flex gap-1.5">
+      {(['NUMBER', 'TEXT', 'CHECK'] as FieldDisplayType[]).map((dt) => (
+        <button
+          key={dt}
+          type="button"
+          onClick={() => onChange(dt)}
+          className={cn(
+            'flex-1 rounded border px-2 py-1.5 text-center text-xs transition-colors',
+            value === dt
+              ? 'border-primary bg-primary/5 font-medium text-primary'
+              : 'border-border text-muted-foreground hover:border-primary/40',
+          )}
+        >
+          {FIELD_DISPLAY_TYPE_LABEL[dt]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 
 function SortableSheetItem({
   sheet,
@@ -271,9 +319,14 @@ export function SimpleSheetEditor({
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editUnit, setEditUnit] = useState('')
+  const [editInputType, setEditInputType] = useState<MeasurementInputType>('INPUT')
+  const [editIsTextual, setEditIsTextual] = useState(false)
   const [isAdding, setIsAdding] = useState(false)
   const [newName, setNewName] = useState('')
   const [newInputType, setNewInputType] = useState<MeasurementInputType>('INPUT')
+  const [newIsTextual, setNewIsTextual] = useState(false)
+  const [newUnit, setNewUnit] = useState('')
+  const [newDirEsq, setNewDirEsq] = useState(false)
   const editInputRef = useRef<HTMLInputElement>(null)
   const addInputRef = useRef<HTMLInputElement>(null)
 
@@ -300,18 +353,23 @@ export function SimpleSheetEditor({
     setEditingFieldId(field.id)
     setEditName(field.name)
     setEditUnit(field.unit ?? '')
+    setEditInputType(field.inputType)
+    setEditIsTextual(field.isTextual)
   }
 
   async function confirmEdit(fieldId: string) {
     const field = sheet.fields.find((f) => f.id === fieldId)
     if (!field || !editName.trim()) return
+    const isNumeric = editInputType === 'INPUT' && !editIsTextual
     try {
       await updateField.mutateAsync({
         sheetId: sheet.id,
         fieldId,
         name: editName.trim(),
-        unit:
-          field.inputType === 'INPUT' && !field.isTextual ? editUnit.trim() || undefined : undefined,
+        inputType: editInputType,
+        isTextual: editIsTextual,
+        unit: isNumeric ? editUnit.trim() || undefined : undefined,
+        subColumns: !isNumeric && field.subColumns?.length ? [] : undefined,
       })
       setEditingFieldId(null)
     } catch {
@@ -349,13 +407,21 @@ export function SimpleSheetEditor({
   async function handleAddField(e: React.FormEvent) {
     e.preventDefault()
     if (!newName.trim()) return
+    const isNumeric = newInputType === 'INPUT' && !newIsTextual
     try {
       await createField.mutateAsync({
         name: newName.trim(),
         inputType: newInputType,
+        isTextual: newIsTextual,
+        unit: isNumeric && newUnit.trim() ? newUnit.trim() : undefined,
+        subColumns: isNumeric && newDirEsq ? ['Direito', 'Esquerdo'] : [],
         order: activeFields.length + 1,
       })
       setNewName('')
+      setNewInputType('INPUT')
+      setNewIsTextual(false)
+      setNewUnit('')
+      setNewDirEsq(false)
       setIsAdding(false)
     } catch {
       toast.error('Erro ao criar campo')
@@ -388,6 +454,8 @@ export function SimpleSheetEditor({
               isEditing={editingFieldId === field.id}
               editName={editName}
               editUnit={editUnit}
+              editInputType={editInputType}
+              editIsTextual={editIsTextual}
               editInputRef={editingFieldId === field.id ? editInputRef : undefined}
               isReadonly={isReadonly}
               onStartEdit={() => startEdit(field)}
@@ -395,6 +463,8 @@ export function SimpleSheetEditor({
               onCancelEdit={cancelEdit}
               onEditNameChange={setEditName}
               onEditUnitChange={setEditUnit}
+              onEditInputTypeChange={(v) => setEditInputType(v)}
+              onEditIsTextualChange={(v) => setEditIsTextual(v)}
               onToggleDirEsq={() => toggleDirEsq(field)}
               onDelete={() => handleDelete(field.id)}
               onMoveUp={
@@ -447,28 +517,34 @@ export function SimpleSheetEditor({
                   }}
                 />
               </div>
-              <div className="flex gap-2">
-                {(['INPUT', 'CHECK'] as MeasurementInputType[]).map((t) => (
-                  <label
-                    key={t}
-                    className={cn(
-                      'flex-1 cursor-pointer rounded border px-2 py-1.5 text-center text-xs transition-colors',
-                      newInputType === t
-                        ? 'border-primary bg-primary/5 font-medium text-primary'
-                        : 'border-border text-muted-foreground hover:border-primary/40',
-                    )}
-                  >
-                    <input
-                      type="radio"
-                      value={t}
-                      checked={newInputType === t}
-                      onChange={() => setNewInputType(t)}
-                      className="sr-only"
-                    />
-                    {t === 'INPUT' ? 'Digitação' : 'Marcação'}
-                  </label>
-                ))}
-              </div>
+              <FieldTypeSelector
+                value={toDisplayType(newInputType, newIsTextual)}
+                onChange={(dt) => {
+                  const { inputType, isTextual } = fromDisplayType(dt)
+                  setNewInputType(inputType)
+                  setNewIsTextual(isTextual)
+                  if (dt !== 'NUMBER') { setNewUnit(''); setNewDirEsq(false) }
+                }}
+              />
+              {newInputType === 'INPUT' && !newIsTextual && (
+                <Input
+                  value={newUnit}
+                  onChange={(e) => setNewUnit(e.target.value)}
+                  placeholder="Unidade (opcional) — ex: cm, kg, %"
+                  className="h-7 text-xs"
+                />
+              )}
+              {newInputType === 'INPUT' && !newIsTextual && (
+                <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newDirEsq}
+                    onChange={(e) => setNewDirEsq(e.target.checked)}
+                    className="rounded"
+                  />
+                  Dividir em Direito / Esquerdo
+                </label>
+              )}
               <div className="flex gap-2">
                 <Button type="submit" size="sm" className="h-7 text-xs" disabled={!newName.trim() || createField.isPending}>
                   {createField.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
@@ -479,7 +555,7 @@ export function SimpleSheetEditor({
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => { setIsAdding(false); setNewName('') }}
+                  onClick={() => { setIsAdding(false); setNewName(''); setNewInputType('INPUT'); setNewIsTextual(false); setNewUnit(''); setNewDirEsq(false) }}
                 >
                   Cancelar
                 </Button>
@@ -511,6 +587,8 @@ function SortableFieldRow({
   isEditing,
   editName,
   editUnit,
+  editInputType,
+  editIsTextual,
   editInputRef,
   isReadonly,
   onStartEdit,
@@ -518,6 +596,8 @@ function SortableFieldRow({
   onCancelEdit,
   onEditNameChange,
   onEditUnitChange,
+  onEditInputTypeChange,
+  onEditIsTextualChange,
   onToggleDirEsq,
   onDelete,
   onMoveUp,
@@ -527,6 +607,8 @@ function SortableFieldRow({
   isEditing: boolean
   editName: string
   editUnit: string
+  editInputType: MeasurementInputType
+  editIsTextual: boolean
   editInputRef?: React.RefObject<HTMLInputElement | null>
   isReadonly: boolean
   onStartEdit: () => void
@@ -534,6 +616,8 @@ function SortableFieldRow({
   onCancelEdit: () => void
   onEditNameChange: (v: string) => void
   onEditUnitChange: (v: string) => void
+  onEditInputTypeChange: (v: MeasurementInputType) => void
+  onEditIsTextualChange: (v: boolean) => void
   onToggleDirEsq: () => void
   onDelete: () => void
   onMoveUp?: () => void
@@ -567,7 +651,16 @@ function SortableFieldRow({
               if (e.key === 'Tab') { e.preventDefault(); onConfirmEdit() }
             }}
           />
-          {isNumericInput && (
+          <FieldTypeSelector
+            value={toDisplayType(editInputType, editIsTextual)}
+            onChange={(dt) => {
+              const { inputType, isTextual } = fromDisplayType(dt)
+              onEditInputTypeChange(inputType)
+              onEditIsTextualChange(isTextual)
+              if (dt !== 'NUMBER') onEditUnitChange('')
+            }}
+          />
+          {editInputType === 'INPUT' && !editIsTextual && (
             <Input
               value={editUnit}
               onChange={(e) => onEditUnitChange(e.target.value)}
@@ -632,10 +725,10 @@ function SortableFieldRow({
             <span
               className={cn(
                 'inline-flex rounded-full px-1.5 py-0.5 text-xs font-medium shrink-0',
-                FIELD_INPUT_TYPE_BADGE_COLOR[field.inputType],
+                FIELD_DISPLAY_TYPE_BADGE_COLOR[toDisplayType(field.inputType, field.isTextual)],
               )}
             >
-              {field.inputType === 'INPUT' ? 'Digitação' : 'Marcação'}
+              {FIELD_DISPLAY_TYPE_LABEL[toDisplayType(field.inputType, field.isTextual)]}
             </span>
             {field.unit && (
               <span className="text-xs text-muted-foreground shrink-0">{field.unit}</span>
@@ -683,11 +776,17 @@ export function TabularSheetEditor({
 }) {
   const [editingColId, setEditingColId] = useState<string | null>(null)
   const [editColName, setEditColName] = useState('')
+  const [editColInputType, setEditColInputType] = useState<MeasurementInputType>('INPUT')
+  const [editColIsTextual, setEditColIsTextual] = useState(false)
+  const [editColDefaultValue, setEditColDefaultValue] = useState('')
   const [editingRowId, setEditingRowId] = useState<string | null>(null)
   const [editRowName, setEditRowName] = useState('')
   const [editRowDefaultValue, setEditRowDefaultValue] = useState('')
   const [isAddingCol, setIsAddingCol] = useState(false)
   const [newColName, setNewColName] = useState('')
+  const [newColInputType, setNewColInputType] = useState<MeasurementInputType>('INPUT')
+  const [newColIsTextual, setNewColIsTextual] = useState(false)
+  const [newColDefaultValue, setNewColDefaultValue] = useState('')
   const [isAddingRow, setIsAddingRow] = useState(false)
   const [newRowName, setNewRowName] = useState('')
   const colEditRef = useRef<HTMLInputElement>(null)
@@ -721,7 +820,14 @@ export function TabularSheetEditor({
   async function confirmColEdit(colId: string) {
     if (!editColName.trim()) return
     try {
-      await updateColumn.mutateAsync({ sheetId: sheet.id, colId, name: editColName.trim() })
+      await updateColumn.mutateAsync({
+        sheetId: sheet.id,
+        colId,
+        name: editColName.trim(),
+        inputType: editColInputType,
+        isTextual: editColIsTextual,
+        defaultValue: editColIsTextual && editColDefaultValue.trim() ? editColDefaultValue.trim() : null,
+      })
       setEditingColId(null)
     } catch { toast.error('Erro ao atualizar coluna') }
   }
@@ -739,10 +845,15 @@ export function TabularSheetEditor({
       await createColumn.mutateAsync({
         sheetId: sheet.id,
         name: newColName.trim(),
-        inputType: 'INPUT',
+        inputType: newColInputType,
+        isTextual: newColIsTextual,
+        defaultValue: newColIsTextual && newColDefaultValue.trim() ? newColDefaultValue.trim() : undefined,
         order: columns.length + 1,
       })
       setNewColName('')
+      setNewColInputType('INPUT')
+      setNewColIsTextual(false)
+      setNewColDefaultValue('')
       setIsAddingCol(false)
     } catch { toast.error('Erro ao criar coluna') }
   }
@@ -798,46 +909,96 @@ export function TabularSheetEditor({
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Colunas</p>
         <div className="flex flex-wrap gap-1.5">
           {columns.map((col) => (
-            <div key={col.id} className="group inline-flex items-center gap-1 rounded-lg border bg-background px-2.5 py-1.5">
+            <div key={col.id} className="group inline-flex items-start gap-1 rounded-lg border bg-background px-2.5 py-1.5">
               {!isReadonly && editingColId === col.id ? (
-                <input
-                  ref={colEditRef}
-                  value={editColName}
-                  onChange={(e) => setEditColName(e.target.value)}
-                  className="w-24 text-xs border-none bg-transparent focus:outline-none"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); void confirmColEdit(col.id) }
-                    if (e.key === 'Escape') setEditingColId(null)
-                  }}
-                  onBlur={() => void confirmColEdit(col.id)}
-                />
+                <div className="flex flex-col gap-1.5 min-w-[180px]">
+                  <input
+                    ref={colEditRef}
+                    value={editColName}
+                    onChange={(e) => setEditColName(e.target.value)}
+                    className="text-xs border-none bg-transparent focus:outline-none font-medium"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); void confirmColEdit(col.id) }
+                      if (e.key === 'Escape') setEditingColId(null)
+                    }}
+                  />
+                  <FieldTypeSelector
+                    value={toDisplayType(editColInputType, editColIsTextual)}
+                    onChange={(dt) => {
+                      const { inputType, isTextual } = fromDisplayType(dt)
+                      setEditColInputType(inputType)
+                      setEditColIsTextual(isTextual)
+                      if (!isTextual) setEditColDefaultValue('')
+                    }}
+                  />
+                  {editColIsTextual && (
+                    <input
+                      value={editColDefaultValue}
+                      onChange={(e) => setEditColDefaultValue(e.target.value)}
+                      placeholder="Placeholder padrão (ex: 00 cm acima do umbigo)"
+                      className="text-xs border rounded px-1.5 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  )}
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => void confirmColEdit(col.id)} className="rounded px-1.5 py-0.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90">
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <button type="button" onClick={() => setEditingColId(null)} className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <span
-                  className={cn('text-xs font-medium', !isReadonly && 'cursor-pointer hover:text-primary')}
-                  onClick={!isReadonly ? () => { setEditingColId(col.id); setEditColName(col.name) } : undefined}
-                >
-                  {col.name}
-                </span>
-              )}
-              {!isReadonly && editingColId !== col.id && (
-                <button
-                  type="button"
-                  onClick={() => handleDeleteCol(col.id)}
-                  className="ml-0.5 hidden group-hover:flex items-center text-muted-foreground hover:text-destructive"
-                  aria-label="Remover coluna"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <>
+                  <span
+                    className={cn('text-xs font-medium', !isReadonly && 'cursor-pointer hover:text-primary')}
+                    onClick={!isReadonly ? () => { setEditingColId(col.id); setEditColName(col.name); setEditColInputType(col.inputType); setEditColIsTextual(col.isTextual); setEditColDefaultValue(col.defaultValue ?? '') } : undefined}
+                  >
+                    {col.name}
+                  </span>
+                  <span className={cn('text-xs rounded-full px-1.5 py-0.5 font-medium shrink-0', FIELD_DISPLAY_TYPE_BADGE_COLOR[toDisplayType(col.inputType, col.isTextual)])}>
+                    {FIELD_DISPLAY_TYPE_LABEL[toDisplayType(col.inputType, col.isTextual)]}
+                  </span>
+                  {!isReadonly && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCol(col.id)}
+                      className="ml-0.5 hidden group-hover:flex items-center text-muted-foreground hover:text-destructive"
+                      aria-label="Remover coluna"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </>
               )}
             </div>
           ))}
           {!isReadonly && (
             <>
               {isAddingCol ? (
-                <form onSubmit={handleAddCol} className="inline-flex items-center gap-1">
-                  <Input value={newColName} onChange={(e) => setNewColName(e.target.value)} placeholder="Nome da coluna" className="h-7 w-32 text-xs" autoFocus onKeyDown={(e) => { if (e.key === 'Escape') { setIsAddingCol(false); setNewColName('') } }} />
-                  <Button type="submit" size="sm" className="h-7 px-2 text-xs" disabled={!newColName.trim()}><Check className="h-3 w-3" /></Button>
-                  <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => { setIsAddingCol(false); setNewColName('') }}><X className="h-3 w-3" /></Button>
+                <form onSubmit={handleAddCol} className="inline-flex flex-col gap-1.5 rounded-lg border bg-background px-2.5 py-2 min-w-[200px]">
+                  <Input value={newColName} onChange={(e) => setNewColName(e.target.value)} placeholder="Nome da coluna" className="h-7 text-xs" autoFocus onKeyDown={(e) => { if (e.key === 'Escape') { setIsAddingCol(false); setNewColName('') } }} />
+                  <FieldTypeSelector
+                    value={toDisplayType(newColInputType, newColIsTextual)}
+                    onChange={(dt) => {
+                      const { inputType, isTextual } = fromDisplayType(dt)
+                      setNewColInputType(inputType)
+                      setNewColIsTextual(isTextual)
+                      if (!isTextual) setNewColDefaultValue('')
+                    }}
+                  />
+                  {newColIsTextual && (
+                    <Input
+                      value={newColDefaultValue}
+                      onChange={(e) => setNewColDefaultValue(e.target.value)}
+                      placeholder="Placeholder padrão (opcional)"
+                      className="h-7 text-xs"
+                    />
+                  )}
+                  <div className="flex gap-1">
+                    <Button type="submit" size="sm" className="h-7 px-2 text-xs" disabled={!newColName.trim()}><Check className="h-3 w-3" /></Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => { setIsAddingCol(false); setNewColName(''); setNewColInputType('INPUT'); setNewColIsTextual(false); setNewColDefaultValue('') }}><X className="h-3 w-3" /></Button>
+                  </div>
                 </form>
               ) : (
                 <button type="button" onClick={() => setIsAddingCol(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-solid transition-colors">
@@ -854,25 +1015,34 @@ export function TabularSheetEditor({
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">Campos (linhas)</p>
         <DndContext sensors={rowSensors} collisionDetection={closestCenter} onDragEnd={handleRowDragEnd}>
           <SortableContext items={activeFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-1">
-              {activeFields.map((field) => (
-                <SortableTabularRow
-                  key={field.id}
-                  field={field}
-                  isEditing={editingRowId === field.id}
-                  editName={editRowName}
-                  editDefaultValue={editRowDefaultValue}
-                  editRef={editingRowId === field.id ? rowEditRef : undefined}
-                  isReadonly={isReadonly}
-                  onStartEdit={() => { setEditingRowId(field.id); setEditRowName(field.name); setEditRowDefaultValue(field.defaultValue ?? '') }}
-                  onConfirm={() => confirmRowEdit(field.id)}
-                  onCancel={() => setEditingRowId(null)}
-                  onNameChange={setEditRowName}
-                  onDefaultValueChange={setEditRowDefaultValue}
-                  onDelete={() => handleDeleteRow(field.id)}
-                />
-              ))}
-            </div>
+            {(() => {
+              const textCols = columns.filter((c) => c.isTextual)
+              const hasTextColumn = textCols.length > 0
+              const textColumnNames = textCols.map((c) => c.name)
+              return (
+                <div className="space-y-1">
+                  {activeFields.map((field) => (
+                    <SortableTabularRow
+                      key={field.id}
+                      field={field}
+                      isEditing={editingRowId === field.id}
+                      editName={editRowName}
+                      editDefaultValue={editRowDefaultValue}
+                      editRef={editingRowId === field.id ? rowEditRef : undefined}
+                      isReadonly={isReadonly}
+                      hasTextColumn={hasTextColumn}
+                      textColumnNames={textColumnNames}
+                      onStartEdit={() => { setEditingRowId(field.id); setEditRowName(field.name); setEditRowDefaultValue(field.defaultValue ?? '') }}
+                      onConfirm={() => confirmRowEdit(field.id)}
+                      onCancel={() => setEditingRowId(null)}
+                      onNameChange={setEditRowName}
+                      onDefaultValueChange={setEditRowDefaultValue}
+                      onDelete={() => handleDeleteRow(field.id)}
+                    />
+                  ))}
+                </div>
+              )
+            })()}
           </SortableContext>
         </DndContext>
 
@@ -908,6 +1078,8 @@ function SortableTabularRow({
   editDefaultValue,
   editRef,
   isReadonly,
+  hasTextColumn,
+  textColumnNames,
   onStartEdit,
   onConfirm,
   onCancel,
@@ -921,6 +1093,8 @@ function SortableTabularRow({
   editDefaultValue: string
   editRef?: React.RefObject<HTMLInputElement | null>
   isReadonly: boolean
+  hasTextColumn: boolean
+  textColumnNames: string[]
   onStartEdit: () => void
   onConfirm: () => void
   onCancel: () => void
@@ -957,13 +1131,22 @@ function SortableTabularRow({
                   if (e.key === 'Tab') { e.preventDefault(); onConfirm() }
                 }}
               />
-              <Input
-                value={editDefaultValue}
-                onChange={(e) => onDefaultValueChange(e.target.value)}
-                placeholder="Valor padrão nesta linha (opcional)"
-                className="h-6 text-xs"
-                maxLength={500}
-              />
+              {hasTextColumn && (
+                <div className="space-y-0.5">
+                  <Input
+                    value={editDefaultValue}
+                    onChange={(e) => onDefaultValueChange(e.target.value)}
+                    placeholder={`Localização nesta linha (opcional)`}
+                    className="h-6 text-xs"
+                    maxLength={500}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Substitui o placeholder d{textColumnNames.length === 1
+                      ? `a coluna “${textColumnNames[0]}”`
+                      : `as colunas: ${textColumnNames.join(', ')}`}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex gap-1 shrink-0">
               <Button type="button" size="sm" className="h-6 px-2 text-xs" onClick={onConfirm}>
@@ -980,7 +1163,7 @@ function SortableTabularRow({
               <span className={cn('text-sm font-medium', !isReadonly && 'cursor-pointer hover:text-primary')} onClick={!isReadonly ? onStartEdit : undefined}>
                 {field.name}
               </span>
-              {field.defaultValue && (
+              {field.defaultValue && hasTextColumn && (
                 <p className="text-xs text-muted-foreground truncate mt-0.5">{field.defaultValue}</p>
               )}
             </div>
