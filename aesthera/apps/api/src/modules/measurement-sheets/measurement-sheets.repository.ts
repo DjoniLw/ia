@@ -42,7 +42,13 @@ export class MeasurementSheetsRepository {
   }
 
   async findSheetById(id: string, clinicId: string) {
-    return prisma.measurementSheet.findFirst({ where: { id, clinicId } })
+    return prisma.measurementSheet.findFirst({
+      where: { id, clinicId },
+      include: {
+        columns: { orderBy: { order: 'asc' } },
+        fields: { orderBy: { order: 'asc' } },
+      },
+    })
   }
 
   async findSheetByName(clinicId: string, name: string) {
