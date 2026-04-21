@@ -1252,7 +1252,7 @@ export function MeasurementSheetsSettings() {
           </nav>
         </aside>
 
-        <div className="w-64 shrink-0">
+        <div className="flex-1 min-w-0">
           <div className="rounded-lg border bg-card h-full flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
               <h3 className="text-sm font-medium">Fichas — {CATEGORY_LABELS[selectedCategory]}</h3>
@@ -1300,7 +1300,7 @@ export function MeasurementSheetsSettings() {
           </div>
         </div>
 
-        <div className="hidden xl:flex xl:flex-1 xl:min-w-0">
+        <div className="hidden xl:block w-[400px] shrink-0">
           {selectedSheet ? (
             <SheetEditorPanel sheet={selectedSheet} isReadonly={isPersonalizada} onDeleted={() => setSelectedSheetId(null)} />
           ) : (
