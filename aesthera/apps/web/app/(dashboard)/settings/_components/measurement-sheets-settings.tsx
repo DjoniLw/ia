@@ -1300,7 +1300,7 @@ export function MeasurementSheetsSettings() {
           </div>
         </div>
 
-        <div className="hidden xl:block w-[400px] shrink-0">
+        <div className="hidden xl:block w-[500px] shrink-0">
           {selectedSheet ? (
             <SheetEditorPanel sheet={selectedSheet} isReadonly={isPersonalizada} onDeleted={() => setSelectedSheetId(null)} />
           ) : (
