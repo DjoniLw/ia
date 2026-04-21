@@ -242,6 +242,10 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 
 ---
 
+### [21/04/2026] — Consolidação: Galeria de Fotos e Comparação de Evolução
+- **Módulo:** CustomerFile (extensão) + nova aba "Fotos" no perfil do cliente
+- **O que foi feito:** Spec consolidada (artefato descartável — issue será criada pelo pipeline)
+
 ### [07/04/2026] — Consolidação: Melhorias no Modal de Agendamento
 - **Módulo:** Appointments (modal de criação + tela de calendário)
 - **O que foi feito:** Spec consolidada (artefato descartável — issue será criada pelo pipeline)
@@ -591,9 +595,12 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
   - **Testes:** 31/31 passando (todos novos e existentes)
 - **Closes:** #152
 
-### [2026-04-08] — PO: Redesign do Módulo de Anamnese
+### [2026-04-21] — PO: Galeria de Fotos e Comparação de Evolução do Cliente
 
-- **Módulo:** Anamnesis (redesenho arquitetural)
+- **Módulo:** CustomerPhoto (novo) + Customers (nova aba "Fotos") + Settings (regiões corporais)
+- **O que foi feito:** Especificação gerada para centralizar fotos do cliente em um espaço dedicado. Problema: fotos hoje ficam presas em sessões de avaliação — sem galeria navegável e sem comparação visual. Novo módulo: entidade `CustomerPhoto` com suporte a upload direto (sem sessão) e upload vinculado a sessões de avaliação. Fluxos: upload direto, lightbox com navegação prev/next, comparação side-by-side de 2 fotos, integração com fotos de sessões existentes. Tags fixas (Antes/Depois/Progresso), regiões corporais configuráveis pela clínica (máx. 30). Permissões por role, soft delete com justificativa, URLs temporárias (pre-signed TTL 1h, LGPD). Entrega em 3 fases: galeria básica → comparação + filtros → recursos avançados (slider, WhatsApp, marca d'água).
+
+### [2026-04-08] — PO: Redesign do Módulo de Anamnese
 - **O que foi feito:** Especificação gerada para separar a anamnese do prontuário genérico (`ClinicalRecord`) e tratá-la como entidade com ciclo de vida próprio. Problema identificado: anamnese como "tipo" do prontuário força usuário a criar duplicatas ao querer enviar ao cliente. Novo design: entidade `Anamnesis` com 7 estados (`draft → clinic_filled → sent_to_client → client_submitted → signed | expired | cancelled`), suporte a 3 fluxos (clínica preenche e envia / envia em branco / clínica preenche e arquiva), diff campo-a-campo quando clínica pré-preencheu e cliente alterou, resolução de divergências por campo antes de assinar, página pública `/anamnese/[token]` reutilizando padrão de contratos. Nova aba "Anamnese" na ficha do cliente substitui o tipo anamnese no prontuário.
 - **Spec:** `outputs/po/anamnese-redesign-doc.md`
 - **Status:** ✅ Spec final consolidada — pronta para issue-writer

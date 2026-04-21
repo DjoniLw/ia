@@ -88,7 +88,9 @@ Todo agente que atuar em criação, alteração ou remoção de telas **deve**:
 | Carteira | Sub-abas: **Carteira** (vouchers/créditos ativos, saldo, extrato de transações) e **Pacotes** (pacotes comprados e sessões restantes) |
 | Prontuário | Lançamentos clínicos classificados por tipo: Anamnese, Exame, Observação, Procedimento, Prescrição |
 | Contratos | Contratos do cliente com status de assinatura e ações de assinar/enviar |
+| Evolução | Registros de medidas corporais nas fichas configuradas no sistema |
 | Avaliações | Histórico clínico completo com filtro por categoria (Corporal, Facial, Dermato-funcional, Nutricional, Postural, Personalizada), badges de categoria por sessão e fichas personalizadas por cliente |
+| Fotos | Galeria de fotos do cliente com upload direto (sem sessão obrigatória), lightbox navegável (prev/next + swipe), modo de seleção para comparação side-by-side de 2 fotos, badges de tag (Antes/Depois/Progresso) e indicador de vínculo com sessão de avaliação |
 
 ---
 
