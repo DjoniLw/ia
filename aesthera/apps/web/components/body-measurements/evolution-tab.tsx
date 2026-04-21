@@ -4,7 +4,6 @@ import { useRef, useState, useEffect } from 'react'
 import {
   AlertCircle,
   ArrowLeftRight,
-  BarChart2,
   ChevronDown,
   ChevronUp,
   ClipboardList,
@@ -44,7 +43,13 @@ import {
   useMeasurementSheets,
   type MeasurementSheet,
   type MeasurementSheetColumn,
+  type MeasurementCategory,
 } from '@/lib/hooks/use-measurement-sheets'
+import {
+  CATEGORY_LABELS,
+  CATEGORY_BADGE_COLOR,
+  MEASUREMENT_CATEGORIES_ORDER,
+} from '@/lib/measurement-categories'
 import {
   useMeasurementSessions,
   useCreateMeasurementSession,
@@ -53,6 +58,9 @@ import {
   type MeasurementSession,
   type MeasurementSessionFile,
 } from '@/lib/hooks/use-measurement-sessions'
+import { useAppointments } from '@/lib/hooks/use-appointments'
+import { NewCustomerSheetModal } from '@/components/measurement-sheets/NewCustomerSheetModal'
+import { CustomerSheetEditorDrawer } from '@/components/measurement-sheets/CustomerSheetEditorDrawer'
 
 // ──── Types ────────────────────────────────────────────────────────────────────
 
@@ -107,18 +115,6 @@ function getCurrentUserId(): string | null {
   if (!token) return null
   const payload = decodeJwtPayload<{ sub?: string }>(token)
   return payload?.sub ?? null
-}
-
-function hasAnyValue(state: FormState): boolean {
-  for (const sheet of Object.values(state)) {
-    if (Object.values(sheet.simpleValues).some((v) => v !== '')) return true
-    if (Object.values(sheet.textualValues ?? {}).some((v) => v !== '')) return true
-    for (const cols of Object.values(sheet.tabularValues)) {
-      if (Object.values(cols).some((v) => v !== '')) return true
-    }
-    if (Object.values(sheet.checkValues ?? {}).some((v) => v)) return true
-  }
-  return false
 }
 
 // ──── Upload area ──────────────────────────────────────────────────────────────
@@ -255,11 +251,17 @@ function SheetFormSection({
   state,
   onStateChange,
   defaultOpen = false,
+  selectable = false,
+  selected = false,
+  onSelectionChange,
 }: {
   sheet: MeasurementSheet
   state: SheetFormState
   onStateChange: (updater: SheetFormState | ((prev: SheetFormState) => SheetFormState)) => void
   defaultOpen?: boolean
+  selectable?: boolean
+  selected?: boolean
+  onSelectionChange?: (selected: boolean) => void
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const activeFields = sheet.fields.filter((f) => f.active).sort((a, b) => a.order - b.order)
@@ -315,17 +317,32 @@ function SheetFormSection({
 
   return (
     <div className="rounded-xl border shadow-sm overflow-hidden">
-      <button
-        type="button"
-        className="w-full flex items-center justify-between px-4 py-3 bg-primary/5 border-b hover:bg-primary/10 transition-colors text-left"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <div className="flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="text-sm font-semibold">{sheet.name}</span>
-        </div>
-        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-      </button>
+      <div className="w-full flex items-center justify-between px-4 py-3 bg-primary/5 border-b hover:bg-primary/10 transition-colors">
+        {selectable && (
+          <input
+            type="checkbox"
+            aria-label={`Selecionar ficha ${sheet.name}`}
+            checked={selected}
+            onChange={(e) => {
+              onSelectionChange?.(e.target.checked)
+              if (e.target.checked) setOpen(true)
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="mr-2 h-4 w-4 shrink-0 rounded border-input cursor-pointer"
+          />
+        )}
+        <button
+          type="button"
+          className="flex-1 flex items-center justify-between text-left"
+          onClick={() => setOpen((v) => !v)}
+        >
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-sm font-semibold">{sheet.name}</span>
+          </div>
+          {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+      </div>
 
       {open && (
         <div className="px-4 py-4 space-y-4">
@@ -504,7 +521,7 @@ function SheetFormSection({
   )
 }
 
-// ──── Modal de nova/editar evolução ───────────────────────────────────────────
+// ──── Modal de nova/editar avaliação ─────────────────────────────────────────
 
 const sessionMetaSchema = z.object({
   recordedAt: z.string().min(1, 'Data obrigatória'),
@@ -512,14 +529,23 @@ const sessionMetaSchema = z.object({
 })
 type SessionMetaForm = z.infer<typeof sessionMetaSchema>
 
+/** Skeleton de carregamento para grupo de fichas */
+function SheetGroupSkeleton() {
+  return (
+    <div className="space-y-2">
+      {[...Array(2)].map((_, i) => (
+        <div key={i} className="h-12 rounded-xl border animate-pulse bg-muted/40" />
+      ))}
+    </div>
+  )
+}
+
 function SessionFormModal({
   customer,
-  sheets,
   sessionToEdit,
   onClose,
 }: {
   customer: Customer
-  sheets: MeasurementSheet[]
   sessionToEdit?: MeasurementSession
   onClose: () => void
 }) {
@@ -527,55 +553,81 @@ function SessionFormModal({
   const updateSession = useUpdateMeasurementSession()
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [uploading, setUploading] = useState(false)
-  // Fotos já salvas na sessão em edição — preservadas e exibidas no formulário
   const [existingFiles, setExistingFiles] = useState<MeasurementSessionFile[]>(
     sessionToEdit?.files ?? [],
   )
   const [existingFileUrls, setExistingFileUrls] = useState<Record<string, string>>({})
 
-  // Pre-populate state for editing
+  // ── Buscar fichas ─────────────────────────────────────────────────────────
+  const { data: systemSheets = [], isLoading: loadingSystem } = useMeasurementSheets({ scope: 'SYSTEM' })
+  const { data: customerSheetsRaw = [], isLoading: loadingCustomer } = useMeasurementSheets({
+    scope: 'CUSTOMER',
+    customerId: customer.id,
+  })
+
+  const activeSystemSheets = systemSheets.filter((s) => s.active).sort((a, b) => a.order - b.order)
+  const activeCustomerSheets = customerSheetsRaw.filter((s) => s.active).sort((a, b) => a.order - b.order)
+  const allSheets = [...activeSystemSheets, ...activeCustomerSheets]
+  const hasAnySheet = activeSystemSheets.length > 0 || activeCustomerSheets.length > 0
+  const loadingSheets = loadingSystem || loadingCustomer
+
+  // ── Seleção de fichas ─────────────────────────────────────────────────────
+  const initialSelectedIdsRef = useRef(
+    sessionToEdit ? new Set(sessionToEdit.sheetRecords.map((sr) => sr.sheetId)) : new Set<string>(),
+  )
+  const [selectedSheetIds, setSelectedSheetIds] = useState<Set<string>>(() => {
+    if (sessionToEdit) return new Set(sessionToEdit.sheetRecords.map((sr) => sr.sheetId))
+    return new Set()
+  })
+
+  const toggleSheetSelection = (sheetId: string, checked: boolean) => {
+    setSelectedSheetIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(sheetId)
+      else next.delete(sheetId)
+      return next
+    })
+  }
+
+  // ── Estado dos formulários — inicializado a partir da sessão em edição ────
   const buildInitialState = (): FormState => {
+    if (!sessionToEdit) return {}
     const result: FormState = {}
-    for (const sheet of sheets) {
+    for (const sr of sessionToEdit.sheetRecords) {
       const simpleValues: Record<string, string> = {}
       const textualValues: Record<string, string> = {}
       const tabularValues: Record<string, Record<string, string>> = {}
       const checkValues: Record<string, boolean> = {}
-      if (sessionToEdit) {
-        const sheetRecord = sessionToEdit.sheetRecords.find((sr) => sr.sheetId === sheet.id)
-        if (sheetRecord) {
-          for (const v of sheetRecord.values) {
-            if (v.field.inputType === 'CHECK') {
-              if (Number(v.value) === 1) checkValues[v.fieldId] = true
-            } else if (v.field.isTextual) {
-              textualValues[v.fieldId] = v.textValue ?? ''
-            } else {
-              simpleValues[v.fieldId] = String(Number(v.value ?? 0))
-            }
-          }
-          for (const v of sheetRecord.tabularValues) {
-            if (!tabularValues[v.fieldId]) tabularValues[v.fieldId] = {}
-            const colKey = v.subColumn ? `${v.sheetColumnId}::${v.subColumn}` : v.sheetColumnId
-            tabularValues[v.fieldId][colKey] = v.sheetColumn.isTextual
-              ? (v.textValue ?? '')
-              : String(Number(v.value ?? 0))
-          }
+      for (const v of sr.values) {
+        if (v.field.inputType === 'CHECK') {
+          if (Number(v.value) === 1) checkValues[v.fieldId] = true
+        } else if (v.field.isTextual) {
+          textualValues[v.fieldId] = v.textValue ?? ''
+        } else {
+          simpleValues[v.fieldId] = String(Number(v.value ?? 0))
         }
       }
-      result[sheet.id] = { simpleValues, textualValues, tabularValues, checkValues }
+      for (const v of sr.tabularValues) {
+        if (!tabularValues[v.fieldId]) tabularValues[v.fieldId] = {}
+        const colKey = v.subColumn ? `${v.sheetColumnId}::${v.subColumn}` : v.sheetColumnId
+        tabularValues[v.fieldId][colKey] = v.sheetColumn.isTextual
+          ? (v.textValue ?? '')
+          : String(Number(v.value ?? 0))
+      }
+      result[sr.sheetId] = { simpleValues, textualValues, tabularValues, checkValues }
     }
     return result
   }
 
   const [formState, setFormState] = useState<FormState>(buildInitialState)
 
-  // Cleanup object URLs when modal closes
+  // Cleanup object URLs
   useEffect(() => {
     return () => { pendingFiles.forEach((f) => URL.revokeObjectURL(f.preview)) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Carrega URLs das fotos já salvas para exibição no formulário de edição
+  // Carrega URLs das fotos já salvas
   useEffect(() => {
     if (existingFiles.length === 0) return
     let cancelled = false
@@ -599,7 +651,12 @@ function SessionFormModal({
     },
   })
 
-  const hasUnsaved = metaDirty || hasAnyValue(formState) || pendingFiles.length > 0
+  const hasUnsaved = metaDirty || (() => {
+    const init = initialSelectedIdsRef.current
+    if (init.size !== selectedSheetIds.size) return true
+    for (const id of init) if (!selectedSheetIds.has(id)) return true
+    return false
+  })() || pendingFiles.length > 0
 
   const doUploadFiles = async (): Promise<string[]> => {
     const confirmedIds: string[] = []
@@ -650,6 +707,11 @@ function SessionFormModal({
   }
 
   const onSubmit = handleSubmit(async (meta) => {
+    if (selectedSheetIds.size === 0) {
+      toast.error('Selecione ao menos uma ficha.')
+      return
+    }
+
     const withoutCategory = pendingFiles.filter((f) => !f.category)
     if (withoutCategory.length > 0) {
       toast.error('Selecione a categoria de todos os arquivos antes de salvar.')
@@ -659,27 +721,24 @@ function SessionFormModal({
     setUploading(true)
     try {
       const newFileIds = await doUploadFiles()
-      // Combina IDs das fotos existentes (preservadas) + novas uploadadas
       const fileIds = [...existingFiles.map((f) => f.id), ...newFileIds]
 
-      const sheetRecords = Object.entries(formState)
-        .map(([sheetId, state]) => {
-          const sheetDef = (sheets ?? []).find((s: MeasurementSheet) => s.id === sheetId)
-          // Valores SIMPLES (numéricos e textuais)
+      const sheetRecords = [...selectedSheetIds]
+        .map((sheetId) => {
+          const state = formState[sheetId]
+          if (!state) return null
+          const sheetDef = allSheets.find((s: MeasurementSheet) => s.id === sheetId)
           const values = [
             ...Object.entries(state.simpleValues)
               .filter(([, v]) => v !== '' && !isNaN(Number(v)))
               .map(([fieldId, value]) => ({ fieldId, value: Number(value) })),
-            // Campos textuais SIMPLES
             ...Object.entries(state.textualValues ?? {})
               .filter(([, v]) => v !== '')
               .map(([fieldId, textValue]) => ({ fieldId, textValue })),
-            // M-04: CHECK fields
             ...Object.entries(state.checkValues ?? {})
               .filter(([, checked]) => checked)
               .map(([fieldId]) => ({ fieldId, value: 1 })),
           ]
-          // Valores TABULARES: colKey pode ser "colId" ou "colId::subCol"
           const tabularValues = Object.entries(state.tabularValues).flatMap(([fieldId, cols]) =>
             Object.entries(cols)
               .filter(([, v]) => v !== '' && v !== '0')
@@ -705,9 +764,8 @@ function SessionFormModal({
           tabularValues: Array<{ fieldId: string; columnId: string; subColumn: string; value?: number; textValue?: string }>
         }>
 
-      // Validar aqui (após montar sheetRecords) para garantir que ao menos 1 valor real foi preenchido
       if (sheetRecords.length === 0) {
-        toast.error('Preencha ao menos um valor antes de salvar.')
+        toast.error('Preencha ao menos um valor nas fichas selecionadas.')
         setUploading(false)
         return
       }
@@ -721,7 +779,7 @@ function SessionFormModal({
           sheetRecords,
           fileIds,
         })
-        toast.success('Registros de evolução atualizados')
+        toast.success('Avaliação atualizada com sucesso')
       } else {
         await createSession.mutateAsync({
           customerId: customer.id,
@@ -730,7 +788,7 @@ function SessionFormModal({
           sheetRecords,
           fileIds,
         })
-        toast.success('Registro de evolução salvo com sucesso')
+        toast.success('Avaliação registrada com sucesso')
       }
       onClose()
     } catch (err: unknown) {
@@ -738,7 +796,7 @@ function SessionFormModal({
       if (code === 'EMPTY_SESSION') {
         toast.error('Preencha ao menos um valor antes de salvar.')
       } else {
-        toast.error('Erro ao salvar registro')
+        toast.error('Erro ao salvar avaliação')
       }
     } finally {
       setUploading(false)
@@ -746,7 +804,7 @@ function SessionFormModal({
   })
 
   const isPending = uploading || createSession.isPending || updateSession.isPending
-  const title = sessionToEdit ? 'Editar registro de evolução' : 'Novo registro de evolução'
+  const title = sessionToEdit ? 'Editar avaliação' : 'Nova avaliação'
 
   return (
     <Dialog open onClose={onClose} isDirty={hasUnsaved} className="p-0 max-w-2xl">
@@ -766,23 +824,78 @@ function SessionFormModal({
             {errors.recordedAt && <p className="text-xs text-destructive">{errors.recordedAt.message}</p>}
           </div>
 
-          {/* Fitas por ficha */}
-          {sheets
-            .filter((s) => s.active)
-            .sort((a, b) => a.order - b.order)
-            .map((sheet, index) => (
-              <SheetFormSection
-                key={sheet.id}
-                sheet={sheet}
-                state={formState[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {}, textualValues: {} }}
-                onStateChange={(updater) => setFormState((prev) => {
-                  const current = prev[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {}, textualValues: {} }
-                  const next = typeof updater === 'function' ? updater(current) : updater
-                  return { ...prev, [sheet.id]: next }
-                })}
-                defaultOpen={index === 0}
-              />
-            ))}
+          {/* Empty state — sem fichas ativas */}
+          {!loadingSheets && !hasAnySheet && (
+            <div className="rounded-lg border bg-card py-8 text-center text-muted-foreground">
+              <ClipboardList className="mx-auto mb-2 h-8 w-8 opacity-30" />
+              <p className="text-sm">
+                Nenhuma ficha ativa. Configure fichas em{' '}
+                <span className="font-medium">Configurações &gt; Fichas de Avaliação</span>.
+              </p>
+            </div>
+          )}
+
+          {/* Fichas da Clínica */}
+          {(loadingSystem || activeSystemSheets.length > 0) && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Fichas da Clínica
+              </p>
+              {loadingSystem ? (
+                <SheetGroupSkeleton />
+              ) : (
+                activeSystemSheets.map((sheet, index) => (
+                  <SheetFormSection
+                    key={sheet.id}
+                    sheet={sheet}
+                    state={formState[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {}, textualValues: {} }}
+                    onStateChange={(updater) =>
+                      setFormState((prev) => {
+                        const current = prev[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {}, textualValues: {} }
+                        const next = typeof updater === 'function' ? updater(current) : updater
+                        return { ...prev, [sheet.id]: next }
+                      })
+                    }
+                    defaultOpen={index === 0 && selectedSheetIds.size === 0}
+                    selectable
+                    selected={selectedSheetIds.has(sheet.id)}
+                    onSelectionChange={(checked) => toggleSheetSelection(sheet.id, checked)}
+                  />
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Fichas deste Cliente */}
+          {(loadingCustomer || activeCustomerSheets.length > 0) && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Fichas deste Cliente
+              </p>
+              {loadingCustomer ? (
+                <SheetGroupSkeleton />
+              ) : (
+                activeCustomerSheets.map((sheet) => (
+                  <SheetFormSection
+                    key={sheet.id}
+                    sheet={sheet}
+                    state={formState[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {}, textualValues: {} }}
+                    onStateChange={(updater) =>
+                      setFormState((prev) => {
+                        const current = prev[sheet.id] ?? { simpleValues: {}, tabularValues: {}, checkValues: {}, textualValues: {} }
+                        const next = typeof updater === 'function' ? updater(current) : updater
+                        return { ...prev, [sheet.id]: next }
+                      })
+                    }
+                    defaultOpen={false}
+                    selectable
+                    selected={selectedSheetIds.has(sheet.id)}
+                    onSelectionChange={(checked) => toggleSheetSelection(sheet.id, checked)}
+                  />
+                ))
+              )}
+            </div>
+          )}
 
           {/* Observações */}
           <div className="space-y-1.5">
@@ -799,7 +912,6 @@ function SessionFormModal({
           {/* Upload de fotos */}
           <div>
             <p className="text-sm font-medium mb-3">Fotos</p>
-            {/* Fotos já salvas (edição) */}
             {existingFiles.length > 0 && (
               <div className="space-y-2 mb-3">
                 <p className="text-xs text-muted-foreground">Fotos salvas</p>
@@ -837,15 +949,16 @@ function SessionFormModal({
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isPending}>
             Cancelar
           </Button>
-          <Button type="submit" size="sm" disabled={isPending}>
+          <Button type="submit" size="sm" disabled={isPending || selectedSheetIds.size === 0}>
             {isPending && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-            {sessionToEdit ? 'Salvar alterações' : 'Salvar registro'}
+            {sessionToEdit ? 'Salvar alterações' : 'Salvar avaliação'}
           </Button>
         </div>
       </form>
     </Dialog>
   )
 }
+
 
 // ──── Modal de comparação ──────────────────────────────────────────────────────
 
@@ -1264,10 +1377,13 @@ function SessionCard({
     (sum, sr) => sum + sr.tabularValues.length,
     0,
   )
-  const sheetBadges = session.sheetRecords.map((sr) => ({
-    name: sr.sheet.name,
-    isTabular: sr.tabularValues.length > 0,
-  }))
+
+  // Categorias únicas presentes nesta sessão (derivadas das fichas dos registros)
+  const sessionCategories = [
+    ...new Set(
+      session.sheetRecords.map((sr) => sr.sheet.category as MeasurementCategory),
+    ),
+  ]
 
   const handleExpand = () => {
     setExpanded((v) => !v)
@@ -1284,12 +1400,13 @@ function SessionCard({
         <div className="text-left">
           <p className="text-sm font-medium">{formatDate(session.recordedAt)}</p>
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-            {sheetBadges.map((badge) => (
+            {/* Badges de categoria */}
+            {sessionCategories.map((cat) => (
               <span
-                key={badge.name}
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] ${badge.isTabular ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-muted text-muted-foreground'}`}
+                key={cat}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${CATEGORY_BADGE_COLOR[cat] ?? 'bg-muted text-muted-foreground'}`}
               >
-                {badge.name}
+                {CATEGORY_LABELS[cat] ?? cat}
               </span>
             ))}
             {totalSimpleValues > 0 && (
@@ -1573,29 +1690,49 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
   const role = useRole()
   const isAdmin = role === 'admin'
   const isStaff = role === 'staff'
+  const isProfessional = role === 'professional'
   const currentUserId = getCurrentUserId()
-
-  const { data: sheetsData = [], isLoading: loadingSheets } = useMeasurementSheets()
-  const { data: sessionsPage, isLoading: loadingSessions, error, refetch } = useMeasurementSessions(
-    customer.id,
-    { limit: 50 },
-  )
-  const deleteSession = useDeleteMeasurementSession()
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingSession, setEditingSession] = useState<MeasurementSession | undefined>()
+  const [customSheetOpen, setCustomSheetOpen] = useState(false)
+  const [editingCustomerSheetId, setEditingCustomerSheetId] = useState<string | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState<MeasurementCategory | 'all'>('all')
 
-  const activeSheets = sheetsData.filter((s) => s.active).sort((a, b) => a.order - b.order)
+  const { data: sessionsPage, isLoading: loadingSessions, error, refetch } = useMeasurementSessions(
+    customer.id,
+    { limit: 50, category: categoryFilter !== 'all' ? categoryFilter : undefined },
+  )
+  const deleteSession = useDeleteMeasurementSession()
+
+  // Fichas CUSTOMER deste cliente — para checar o limite de 10
+  const { data: customerSheets = [] } = useMeasurementSheets({
+    scope: 'CUSTOMER',
+    customerId: customer.id,
+  })
+  const isAtCustomLimit = customerSheets.filter((s) => s.active).length >= 10
+
+  // Agendamentos confirmados com este cliente — para autorizar profissional criar ficha personalizada
+  const { data: confirmedAppts } = useAppointments({
+    customerId: customer.id,
+    status: 'confirmed,in_progress,completed',
+    limit: '1',
+  })
+  const hasConfirmedAppointment = (confirmedAppts?.total ?? 0) > 0 || (confirmedAppts?.items.length ?? 0) > 0
+  const isProfessionalWithoutAppointment = isProfessional && !hasConfirmedAppointment
+
   const sessions = sessionsPage?.items ?? []
-  const isLoading = loadingSheets || loadingSessions
+  const isLoading = loadingSessions
   const canCreate = isAdmin || isStaff
+
+  // Filtro é server-side — sessions já chegam filtrados por categoria
 
   const handleDelete = async (session: MeasurementSession) => {
     try {
       await deleteSession.mutateAsync({ id: session.id, customerId: customer.id })
-      toast.success('Registro excluído com sucesso')
+      toast.success('Avaliação excluída com sucesso')
     } catch {
-      toast.error('Erro ao excluir registro')
+      toast.error('Erro ao excluir avaliação')
     }
   }
 
@@ -1606,14 +1743,14 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
         <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
           <AlertCircle className="h-8 w-8 text-muted-foreground/40" />
           <p className="text-sm text-muted-foreground">
-            Você não tem permissão para visualizar os dados de evolução deste cliente.
+            Você não tem permissão para visualizar as avaliações deste cliente.
           </p>
         </div>
       )
     }
     return (
       <div className="py-6 text-center text-sm text-muted-foreground space-y-3">
-        <p>Erro ao carregar registros de evolução.</p>
+        <p>Erro ao carregar avaliações.</p>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
           Tentar novamente
@@ -1624,58 +1761,114 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">Evolução corporal</p>
-        {canCreate && (
-          <Button size="sm" onClick={() => { setEditingSession(undefined); setModalOpen(true) }} disabled={isLoading}>
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Novo registro
+      {/* Header com botões */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
+          {/* Botão nova avaliação — apenas admin e staff */}
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => { setEditingSession(undefined); setModalOpen(true) }}
+              disabled={isLoading}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Nova avaliação
+            </Button>
+          )}
+
+          {/* Botão nova ficha deste cliente */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isProfessionalWithoutAppointment || isAtCustomLimit}
+            title={
+              isProfessionalWithoutAppointment
+                ? 'Você não tem agendamento confirmado com este cliente'
+                : isAtCustomLimit
+                ? 'Limite de 10 fichas personalizadas atingido'
+                : undefined
+            }
+            onClick={() => setCustomSheetOpen(true)}
+          >
+            Nova ficha deste cliente
           </Button>
-        )}
+        </div>
       </div>
 
-      {/* Estados */}
+      {/* Loading */}
       {isLoading ? (
         <div className="flex justify-center py-8">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-      ) : activeSheets.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
-          <BarChart2 className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">
-            Configure as fichas de avaliação em{' '}
-            <span className="font-medium">Configurações → Medidas Corporais</span> para começar a registrar.
-          </p>
-        </div>
-      ) : sessions.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
-          <BarChart2 className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground mb-2">Nenhum registro de evolução.</p>
+      ) : sessions.length === 0 && categoryFilter === 'all' ? (
+        /* Empty state principal — sem registros */
+        <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+          <ClipboardList className="mx-auto mb-2 h-8 w-8 opacity-30" />
+          <p className="text-sm">Nenhuma avaliação registrada.</p>
           {canCreate && (
-            <Button size="sm" onClick={() => { setEditingSession(undefined); setModalOpen(true) }}>
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              Novo registro
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => { setEditingSession(undefined); setModalOpen(true) }}
+            >
+              Nova avaliação
             </Button>
           )}
         </div>
       ) : (
         <div className="space-y-3">
-          {sessions.map((session, _i) => {
-            const canEdit = isAdmin || isStaff || session.createdById === currentUserId
-            return (
-              <SessionCard
-                key={session.id}
-                session={session}
-                allSessions={sessions}
-                canEdit={canEdit}
-                isAdmin={isAdmin}
-                onEdit={() => { setEditingSession(session); setModalOpen(true) }}
-                onDelete={() => void handleDelete(session)}
-                sheets={activeSheets}
-              />
-            )
-          })}
+          {/* Pills de filtro por categoria */}
+          <div className="flex flex-wrap gap-1.5">
+            {(['all', ...MEASUREMENT_CATEGORIES_ORDER] as const).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoryFilter(cat)}
+                className={[
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  categoryFilter === cat
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-input bg-background hover:bg-accent',
+                ].join(' ')}
+              >
+                {cat === 'all' ? 'Todas' : CATEGORY_LABELS[cat]}
+              </button>
+            ))}
+          </div>
+
+          {/* Lista de sessões (já filtradas server-side pela categoria) */}
+          {sessions.length === 0 ? (
+            /* Empty state de categoria — sem registros para o filtro atual */
+            <div className="rounded-lg border bg-card py-10 text-center text-muted-foreground">
+              <p className="text-sm">Nenhuma avaliação nesta categoria.</p>
+              <Button
+                variant="link"
+                size="sm"
+                className="mt-2 h-auto p-0 text-xs"
+                onClick={() => setCategoryFilter('all')}
+              >
+                Ver todas
+              </Button>
+            </div>
+          ) : (
+            sessions.map((session) => {
+              const canEdit = isAdmin || isStaff || session.createdById === currentUserId
+              return (
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  allSessions={sessions}
+                  canEdit={canEdit}
+                  isAdmin={isAdmin}
+                  onEdit={() => { setEditingSession(session); setModalOpen(true) }}
+                  onDelete={() => void handleDelete(session)}
+                  sheets={[]}
+                />
+              )
+            })
+          )}
+
           {sessions.length >= 50 && (
             <p className="text-center text-xs text-muted-foreground pt-1">
               Exibindo os 50 registros mais recentes.
@@ -1684,13 +1877,30 @@ export function EvolutionTab({ customer }: { customer: Customer }) {
         </div>
       )}
 
-      {/* Modal de formulário */}
+      {/* Modal de nova/editar avaliação */}
       {modalOpen && (
         <SessionFormModal
           customer={customer}
-          sheets={activeSheets}
           sessionToEdit={editingSession}
           onClose={() => { setModalOpen(false); setEditingSession(undefined) }}
+        />
+      )}
+
+      {/* Modal de nova ficha personalizada */}
+      {customSheetOpen && (
+        <NewCustomerSheetModal
+          customerId={customer.id}
+          onClose={() => setCustomSheetOpen(false)}
+          onCreated={(sheetId) => { setCustomSheetOpen(false); setEditingCustomerSheetId(sheetId) }}
+        />
+      )}
+
+      {/* Editor de ficha personalizada após criação */}
+      {editingCustomerSheetId && (
+        <CustomerSheetEditorDrawer
+          customerId={customer.id}
+          sheetId={editingCustomerSheetId}
+          onClose={() => setEditingCustomerSheetId(null)}
         />
       )}
     </div>

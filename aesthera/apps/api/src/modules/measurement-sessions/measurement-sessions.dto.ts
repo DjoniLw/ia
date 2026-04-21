@@ -54,5 +54,6 @@ export const ListSessionsQuery = z.object({
   customerId: z.string().uuid(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
+  category: z.enum(['CORPORAL', 'FACIAL', 'DERMATO_FUNCIONAL', 'NUTRICIONAL', 'POSTURAL', 'PERSONALIZADA']).optional(),
 })
 export type ListSessionsQuery = z.infer<typeof ListSessionsQuery>

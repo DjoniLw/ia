@@ -463,6 +463,26 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
   - Todos os labels em PT-BR; nenhum enum exposto na UI
 - **Closes:** #158
 
+### [2026-04-15] — feat(#159): Fichas de Avaliação Expandidas — Frontend Cliente 3/3
+- **Módulo:** MeasurementSheets — Frontend Perfil do Cliente
+- **Issue:** [#159](https://github.com/DjoniLw/ia/issues/159) — Aba Avaliações no perfil do cliente
+- **Branch:** `feat/issue-159-fichas-avaliacao-customer-frontend`
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/web/app/(dashboard)/customers/page.tsx` *(renomeada aba "Avaliação" → "Avaliações")*
+  - `aesthera/apps/web/components/body-measurements/evolution-tab.tsx` *(refatoração completa: filtro por categoria server-side, SessionFormModal com busca interna de fichas, badges de categoria, canCreate guard restaurado, hasUnsaved baseado em selectionDirty)*
+  - `aesthera/apps/web/components/measurement-sheets/NewCustomerSheetModal.tsx` *(NOVO — modal de criação de ficha scope=CUSTOMER, category=PERSONALIZADA, isValid guard)*
+  - `aesthera/apps/web/lib/hooks/use-measurement-sheets.ts` *(EXPANDIDO — suporte a customerId em UseMeasurementSheetsOptions, CreateSheetInput e query)*
+  - `aesthera/apps/web/lib/hooks/use-measurement-sessions.ts` *(EXPANDIDO — suporte a category no filtro)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.dto.ts` *(EXPANDIDO — category opcional em ListSessionsQuery)*
+  - `aesthera/apps/api/src/modules/measurement-sessions/measurement-sessions.repository.ts` *(EXPANDIDO — filtro por category via sheetRecords.some)*
+  - `aesthera/docs/screen-mapping.md` *(aba Avaliações atualizada, duplicata removida)*
+- **Closes:** #159
+
+### [2026-04-15] — Code Review PR #162
+- **Arquivo gerado:** `outputs/code-review/pr/revisao_pr162_2026-04-15.md`
+- **O que foi feito:** Revisão do PR #162 (feat(#159): aba Avaliações no perfil do cliente e fichas personalizadas) — 5 bloqueantes, 6 sugestões
+- **Impacto:** Qualidade e integridade do código revisado; PR reprovado pendente correções
+
 ### [2026-04-09] — fix(#155): Code Review PR #155 — 6 bloqueantes e 3 sugestões corrigidos
 - **Módulo:** Anamnesis (correções pós-code-review PR #155)
 - **Arquivo(s) afetado(s):**

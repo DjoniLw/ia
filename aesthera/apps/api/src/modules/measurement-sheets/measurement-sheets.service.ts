@@ -16,7 +16,7 @@ import {
 } from './measurement-sheets.dto'
 import { MeasurementSheetsRepository } from './measurement-sheets.repository'
 import { AppointmentsRepository } from '../appointments/appointments.repository'
-import { MEASUREMENT_TEMPLATES } from './measurement-templates'
+import { MEASUREMENT_TEMPLATES, resolveSimpleField, resolveTabularColumn, resolveTabularRow } from './measurement-templates'
 import { prisma as defaultPrisma } from '../../database/prisma/client'
 import type { PrismaClient } from '@prisma/client'
 import { MeasurementCategory, MeasurementScope, MeasurementSheetType } from '@prisma/client'
@@ -75,6 +75,69 @@ export class MeasurementSheetsService {
     const nameExists = await this.repo.existsSheetNameInClinic(clinicId, dto.name, scope)
     if (nameExists) {
       throw new ConflictError('Nome de ficha já existe nesta clínica')
+    }
+
+    // Se sourceSheetId fornecido: clonar campos e colunas da ficha de origem
+    if (dto.sourceSheetId) {
+      const sourceSheet = await this.repo.findSheetById(dto.sourceSheetId, clinicId)
+      if (!sourceSheet) throw new NotFoundError('MeasurementSheet')
+
+      return this.db.$transaction(async (tx) => {
+        const newSheet = await tx.measurementSheet.create({
+          data: {
+            clinicId,
+            name: dto.name,
+            type: sourceSheet.type,
+            category: dto.category ?? sourceSheet.category,
+            scope: scope as 'SYSTEM' | 'CUSTOMER',
+            customerId: dto.customerId ?? null,
+            createdByUserId: userId ?? null,
+            order: 0,
+          },
+        })
+
+        // Clonar colunas (fichas TABULAR)
+        if (sourceSheet.columns && sourceSheet.columns.length > 0) {
+          await tx.measurementSheetColumn.createMany({
+            data: sourceSheet.columns.map((col) => ({
+              sheetId: newSheet.id,
+              name: col.name,
+              inputType: col.inputType,
+              unit: col.unit ?? null,
+              isTextual: col.isTextual,
+              defaultValue: col.defaultValue ?? null,
+              order: col.order,
+            })),
+          })
+        }
+
+        // Clonar campos/linhas
+        const activeFields = sourceSheet.fields.filter((f) => f.active)
+        if (activeFields.length > 0) {
+          await tx.measurementField.createMany({
+            data: activeFields.map((field) => ({
+              sheetId: newSheet.id,
+              clinicId,
+              name: field.name,
+              inputType: field.inputType,
+              unit: field.unit ?? null,
+              isTextual: field.isTextual,
+              defaultValue: field.defaultValue ?? null,
+              subColumns: field.subColumns ?? [],
+              order: field.order,
+              active: true,
+            })),
+          })
+        }
+
+        return tx.measurementSheet.findFirst({
+          where: { id: newSheet.id },
+          include: {
+            columns: { orderBy: { order: 'asc' } },
+            fields: { orderBy: { order: 'asc' } },
+          },
+        })
+      })
     }
 
     return this.repo.createSheet(clinicId, dto, userId)
@@ -190,16 +253,22 @@ export class MeasurementSheetsService {
             order: 0,
           },
         })
-        const fields = (template as { fields: string[] }).fields
+        const fields = (template as { fields: unknown[] }).fields
         await tx.measurementField.createMany({
-          data: fields.map((fieldName, idx) => ({
-            sheetId: sheet.id,
-            clinicId,
-            name: fieldName,
-            inputType: 'INPUT',
-            order: idx,
-            active: true,
-          })),
+          data: fields.map((f, idx) => {
+            const r = resolveSimpleField(f as Parameters<typeof resolveSimpleField>[0])
+            return {
+              sheetId: sheet.id,
+              clinicId,
+              name: r.name,
+              inputType: r.inputType,
+              isTextual: r.isTextual,
+              unit: r.unit ?? undefined,
+              subColumns: r.subColumns,
+              order: idx,
+              active: true,
+            }
+          }),
         })
         return tx.measurementSheet.findFirst({
           where: { id: sheet.id },
@@ -219,24 +288,33 @@ export class MeasurementSheetsService {
             order: 0,
           },
         })
-        const tpl = template as { rows: string[]; columns: string[] }
+        const tpl = template as { rows: unknown[]; columns: unknown[] }
         await tx.measurementField.createMany({
-          data: tpl.rows.map((rowName, idx) => ({
-            sheetId: sheet.id,
-            clinicId,
-            name: rowName,
-            inputType: 'INPUT',
-            order: idx,
-            active: true,
-          })),
+          data: tpl.rows.map((r, idx) => {
+            const row = resolveTabularRow(r as Parameters<typeof resolveTabularRow>[0])
+            return {
+              sheetId: sheet.id,
+              clinicId,
+              name: row.name,
+              inputType: 'INPUT' as const,
+              defaultValue: row.defaultValue ?? undefined,
+              order: idx,
+              active: true,
+            }
+          }),
         })
         await tx.measurementSheetColumn.createMany({
-          data: tpl.columns.map((colName, idx) => ({
-            sheetId: sheet.id,
-            name: colName,
-            inputType: 'INPUT',
-            order: idx,
-          })),
+          data: tpl.columns.map((c, idx) => {
+            const col = resolveTabularColumn(c as Parameters<typeof resolveTabularColumn>[0])
+            return {
+              sheetId: sheet.id,
+              name: col.name,
+              inputType: col.inputType,
+              isTextual: col.isTextual,
+              defaultValue: col.defaultValue ?? undefined,
+              order: idx,
+            }
+          }),
         })
         return tx.measurementSheet.findFirst({
           where: { id: sheet.id },

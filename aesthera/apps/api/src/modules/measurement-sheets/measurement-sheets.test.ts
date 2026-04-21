@@ -513,4 +513,110 @@ describe('MeasurementSheetsService', () => {
       expect(result.data.customerId).toBeUndefined()
     }
   })
+
+  // ─── createSheet: sourceSheetId (deep clone) ──────────────────────────────
+
+  it('[#159] POST com sourceSheetId válido → clona campos e colunas da ficha de origem', async () => {
+    const SOURCE_SHEET_ID = 'source-sheet-1'
+    const sourceSheet = makeSheet({
+      id: SOURCE_SHEET_ID,
+      type: 'TABULAR',
+      columns: [makeColumn()],
+      fields: [makeField({ active: true, isTextual: false, subColumns: [], defaultValue: null })],
+    })
+
+    vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
+
+    const txMock = {
+      measurementSheet: {
+        create: vi.fn().mockResolvedValue({ id: 'new-sheet', clinicId: CLINIC_ID, type: 'TABULAR' }),
+        findFirst: vi.fn().mockResolvedValue({ id: 'new-sheet', clinicId: CLINIC_ID, columns: [makeColumn()], fields: [makeField()] }),
+      },
+      measurementSheetColumn: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      measurementField: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    }
+
+    const dbMock = {
+      customer: { findFirst: vi.fn().mockResolvedValue({ id: 'customer-1', clinicId: CLINIC_ID }) },
+      $transaction: vi.fn().mockImplementation(async (fn: (tx: any) => Promise<any>) => fn(txMock)),
+    }
+
+    ;(svc as any).db = dbMock
+    vi.mocked(repo.findSheetById).mockResolvedValue(sourceSheet as any)
+
+    await svc.createSheet(
+      CLINIC_ID,
+      {
+        name: 'Perimetria (João)',
+        type: 'TABULAR',
+        category: 'PERSONALIZADA',
+        scope: 'CUSTOMER',
+        customerId: 'customer-1',
+        sourceSheetId: SOURCE_SHEET_ID,
+      },
+      'staff-1',
+      'staff',
+    )
+
+    expect(dbMock.$transaction).toHaveBeenCalledOnce()
+    expect(txMock.measurementSheetColumn.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([expect.objectContaining({ name: makeColumn().name })]),
+      }),
+    )
+    expect(txMock.measurementField.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([expect.objectContaining({ name: makeField().name })]),
+      }),
+    )
+  })
+
+  it('[#159] POST com sourceSheetId de ficha inexistente → 404', async () => {
+    vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
+    vi.mocked(repo.findSheetById).mockResolvedValue(null)
+
+    const { NotFoundError } = await import('../../shared/errors/app-error')
+
+    ;(svc as any).db = {
+      customer: { findFirst: vi.fn().mockResolvedValue({ id: 'customer-1', clinicId: CLINIC_ID }) },
+    }
+
+    await expect(
+      svc.createSheet(
+        CLINIC_ID,
+        {
+          name: 'Cópia',
+          type: 'SIMPLE',
+          category: 'PERSONALIZADA',
+          scope: 'CUSTOMER',
+          customerId: 'customer-1',
+          sourceSheetId: 'nao-existe',
+        },
+        'staff-1',
+        'staff',
+      ),
+    ).rejects.toThrow(NotFoundError)
+  })
+
+  it('[#159] POST sem sourceSheetId → chama repo.createSheet (sem clone)', async () => {
+    vi.mocked(repo.countActiveSheets).mockResolvedValue(0)
+    vi.mocked(repo.existsSheetNameInClinic).mockResolvedValue(false)
+    vi.mocked(repo.createSheet).mockResolvedValue(makeSheet({ scope: 'CUSTOMER' }) as any)
+
+    ;(svc as any).db = {
+      customer: { findFirst: vi.fn().mockResolvedValue({ id: 'customer-1', clinicId: CLINIC_ID }) },
+    }
+
+    await svc.createSheet(
+      CLINIC_ID,
+      { name: 'Em Branco', type: 'SIMPLE', category: 'PERSONALIZADA', scope: 'CUSTOMER', customerId: 'customer-1' },
+      'staff-1',
+      'staff',
+    )
+
+    expect(repo.createSheet).toHaveBeenCalledOnce()
+  })
 })
+

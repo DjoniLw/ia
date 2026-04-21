@@ -59,3 +59,17 @@ export const FIELD_INPUT_TYPE_BADGE_COLOR: Record<MeasurementInputType, string> 
   INPUT: 'bg-sky-600 text-white dark:bg-sky-700',
   CHECK: 'bg-emerald-600 text-white dark:bg-emerald-700',
 }
+
+export type FieldDisplayType = 'NUMBER' | 'TEXT' | 'CHECK'
+
+export const FIELD_DISPLAY_TYPE_LABEL: Record<FieldDisplayType, string> = {
+  NUMBER: 'Número',
+  TEXT:   'Texto',
+  CHECK:  'Marcação',
+}
+
+export const FIELD_DISPLAY_TYPE_BADGE_COLOR: Record<FieldDisplayType, string> = {
+  NUMBER: 'bg-blue-600 text-white dark:bg-blue-700',
+  TEXT:   'bg-slate-500 text-white dark:bg-slate-600',
+  CHECK:  'bg-emerald-600 text-white dark:bg-emerald-700',
+}
