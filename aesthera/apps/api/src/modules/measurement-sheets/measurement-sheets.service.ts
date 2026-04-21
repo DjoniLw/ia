@@ -16,7 +16,7 @@ import {
 } from './measurement-sheets.dto'
 import { MeasurementSheetsRepository } from './measurement-sheets.repository'
 import { AppointmentsRepository } from '../appointments/appointments.repository'
-import { MEASUREMENT_TEMPLATES } from './measurement-templates'
+import { MEASUREMENT_TEMPLATES, resolveSimpleField, resolveTabularColumn, resolveTabularRow } from './measurement-templates'
 import { prisma as defaultPrisma } from '../../database/prisma/client'
 import type { PrismaClient } from '@prisma/client'
 import { MeasurementCategory, MeasurementScope, MeasurementSheetType } from '@prisma/client'
@@ -253,16 +253,22 @@ export class MeasurementSheetsService {
             order: 0,
           },
         })
-        const fields = (template as { fields: string[] }).fields
+        const fields = (template as { fields: unknown[] }).fields
         await tx.measurementField.createMany({
-          data: fields.map((fieldName, idx) => ({
-            sheetId: sheet.id,
-            clinicId,
-            name: fieldName,
-            inputType: 'INPUT',
-            order: idx,
-            active: true,
-          })),
+          data: fields.map((f, idx) => {
+            const r = resolveSimpleField(f as Parameters<typeof resolveSimpleField>[0])
+            return {
+              sheetId: sheet.id,
+              clinicId,
+              name: r.name,
+              inputType: r.inputType,
+              isTextual: r.isTextual,
+              unit: r.unit ?? undefined,
+              subColumns: r.subColumns,
+              order: idx,
+              active: true,
+            }
+          }),
         })
         return tx.measurementSheet.findFirst({
           where: { id: sheet.id },
@@ -282,24 +288,33 @@ export class MeasurementSheetsService {
             order: 0,
           },
         })
-        const tpl = template as { rows: string[]; columns: string[] }
+        const tpl = template as { rows: unknown[]; columns: unknown[] }
         await tx.measurementField.createMany({
-          data: tpl.rows.map((rowName, idx) => ({
-            sheetId: sheet.id,
-            clinicId,
-            name: rowName,
-            inputType: 'INPUT',
-            order: idx,
-            active: true,
-          })),
+          data: tpl.rows.map((r, idx) => {
+            const row = resolveTabularRow(r as Parameters<typeof resolveTabularRow>[0])
+            return {
+              sheetId: sheet.id,
+              clinicId,
+              name: row.name,
+              inputType: 'INPUT' as const,
+              defaultValue: row.defaultValue ?? undefined,
+              order: idx,
+              active: true,
+            }
+          }),
         })
         await tx.measurementSheetColumn.createMany({
-          data: tpl.columns.map((colName, idx) => ({
-            sheetId: sheet.id,
-            name: colName,
-            inputType: 'INPUT',
-            order: idx,
-          })),
+          data: tpl.columns.map((c, idx) => {
+            const col = resolveTabularColumn(c as Parameters<typeof resolveTabularColumn>[0])
+            return {
+              sheetId: sheet.id,
+              name: col.name,
+              inputType: col.inputType,
+              isTextual: col.isTextual,
+              defaultValue: col.defaultValue ?? undefined,
+              order: idx,
+            }
+          }),
         })
         return tx.measurementSheet.findFirst({
           where: { id: sheet.id },
