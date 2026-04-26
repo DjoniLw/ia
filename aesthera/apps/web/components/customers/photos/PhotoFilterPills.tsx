@@ -1,9 +1,12 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { PHOTO_TAG_COLOR } from '@/lib/status-colors'
 
-type PhotoCategory = keyof typeof PHOTO_TAG_COLOR
+type PhotoCategory =
+  | 'BEFORE_PHOTO'
+  | 'AFTER_PHOTO'
+  | 'PROGRESS_PHOTO'
+  | 'GALLERY_PHOTO'
 
 const FILTER_OPTIONS: Array<{ value: PhotoCategory | 'all'; label: string }> = [
   { value: 'all',           label: 'Todas' },

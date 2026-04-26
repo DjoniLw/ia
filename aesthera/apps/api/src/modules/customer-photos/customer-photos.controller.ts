@@ -170,7 +170,7 @@ export async function customerPhotosRoutes(app: FastifyInstance) {
    */
   app.get(
     '/settings/photo-body-regions',
-    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff', 'professional'])] },
     async (req, reply) => {
       const regions = await svc.getBodyRegions(req.clinicId)
       return reply.send({ regions })

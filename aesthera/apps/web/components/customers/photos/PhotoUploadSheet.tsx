@@ -88,7 +88,13 @@ export function PhotoUploadSheet({ customerId, open, onClose }: PhotoUploadSheet
         category: 'GALLERY_PHOTO',
         bodyRegion: '',
         notes: '',
-        takenAt: new Date().toISOString().slice(0, 10),
+        takenAt: (() => {
+          const d = new Date()
+          const y = d.getFullYear()
+          const m = String(d.getMonth() + 1).padStart(2, '0')
+          const day = String(d.getDate()).padStart(2, '0')
+          return `${y}-${m}-${day}`
+        })(),
         progress: 0,
         status: 'idle',
       })
@@ -117,18 +123,21 @@ export function PhotoUploadSheet({ customerId, open, onClose }: PhotoUploadSheet
 
     try {
       // 1. Solicitar URLs pré-assinadas
+      const snapshotFiles = [...selectedFiles]
       const response = await requestUploadUrls(
-        selectedFiles.map((f) => ({ mimeType: f.file.type, size: f.file.size })),
+        snapshotFiles.map((f) => ({
+          filename: f.file.name,
+          mimeType: f.file.type,
+          sizeBytes: f.file.size,
+        })),
       )
-
-      const urlMap = new Map(response.urls.map((u) => [u.storageKey, u.uploadUrl]))
 
       // 2. Fazer upload direto para R2
       const uploadResults: Array<{ fileEntry: SelectedFile; storageKey: string; success: boolean }> = []
 
       await Promise.all(
-        response.urls.map(async ({ storageKey, uploadUrl }, idx) => {
-          const fileEntry = selectedFiles[idx]
+        response.uploads.map(async ({ storageKey, uploadUrl }, idx) => {
+          const fileEntry = snapshotFiles[idx]
           updateFile(fileEntry.id, { status: 'uploading', progress: 0 })
           try {
             await axios.put(uploadUrl, fileEntry.file, {
@@ -164,7 +173,7 @@ export function PhotoUploadSheet({ customerId, open, onClose }: PhotoUploadSheet
         successfulUploads.map(({ fileEntry, storageKey }) => ({
           storageKey,
           category: fileEntry.category,
-          takenAt: fileEntry.takenAt ? new Date(fileEntry.takenAt).toISOString() : undefined,
+          takenAt: fileEntry.takenAt || undefined,
           bodyRegion: fileEntry.bodyRegion || undefined,
           notes: fileEntry.notes || undefined,
         })),
@@ -244,15 +253,16 @@ export function PhotoUploadSheet({ customerId, open, onClose }: PhotoUploadSheet
                   <span className="max-w-[200px] truncate text-sm font-medium">
                     {sf.file.name}
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     aria-label="Remover"
                     onClick={() => removeFile(sf.id)}
                     disabled={isSubmitting}
-                    className="ml-2 text-muted-foreground hover:text-destructive"
+                    className="ml-2 h-8 w-8 text-muted-foreground hover:text-destructive"
                   >
                     <X className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
 
                 {sf.status === 'uploading' && (

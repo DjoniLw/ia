@@ -98,8 +98,16 @@ export class CustomerPhotosService {
       if (!cached) {
         throw new ForbiddenError(`storageKey inválido ou expirado: ${photo.storageKey}`)
       }
-      const cachedData = JSON.parse(cached) as { clinicId: string; customerId: string }
-      if (cachedData.clinicId !== clinicId || cachedData.customerId !== customerId) {
+      const cachedData = JSON.parse(cached) as {
+        clinicId: string
+        customerId: string
+        userId: string
+      }
+      if (
+        cachedData.clinicId !== clinicId ||
+        cachedData.customerId !== customerId ||
+        cachedData.userId !== userId
+      ) {
         throw new ForbiddenError('CROSS_TENANT_VIOLATION')
       }
 
@@ -196,7 +204,7 @@ export class CustomerPhotosService {
     const { clinicId, customerId, photoId, userId, ip } = params
 
     const photo = await this.repo.findById(photoId, clinicId, customerId)
-    if (!photo) throw new NotFoundError('Foto')
+    if (!photo) throw new NotFoundError('CustomerPhoto')
 
     const url = await generatePresignedGetUrl(photo.storageKey, PRESIGNED_GET_TTL)
 
@@ -227,10 +235,10 @@ export class CustomerPhotosService {
     const { clinicId, customerId, photoId, userId, dto, ip } = params
 
     const photo = await this.repo.findById(photoId, clinicId, customerId)
-    if (!photo) throw new NotFoundError('Foto')
+    if (!photo) throw new NotFoundError('CustomerPhoto')
 
     const deleted = await this.repo.softDelete(photoId, clinicId, customerId, userId, dto.reason)
-    if (!deleted) throw new NotFoundError('Foto')
+    if (!deleted) throw new NotFoundError('CustomerPhoto')
 
     await createAuditLog({
       clinicId,

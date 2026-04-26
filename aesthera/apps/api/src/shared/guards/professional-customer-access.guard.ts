@@ -9,7 +9,11 @@ import { ForbiddenError } from '../errors/app-error'
  * elegível (confirmed, in_progress ou completed) com o cliente especificado
  * em params.customerId.
  *
- * Deve ser usado após jwtProfessionalGuard.
+ * Deve ser usado após um guard de autenticação que preencha `request.user`
+ * e `request.clinicId` — nas rotas deste contexto, `jwtClinicGuard`.
+ * Quando a rota permitir múltiplos papéis (ex.: professional, admin e staff),
+ * combine com `roleGuard`; este guard aplica a restrição apenas quando
+ * `request.user.role === 'professional'`.
  * Ignorado quando role !== 'professional'.
  *
  * @example

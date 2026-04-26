@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { useRole } from '@/lib/hooks/use-role'
 import { useCustomerPhotos } from '@/lib/hooks/use-customer-photos'
 import type { PhotoCategory, CustomerPhoto } from '@/lib/hooks/use-customer-photos'
-import type { PHOTO_TAG_COLOR } from '@/lib/status-colors'
 import { PhotoCard } from './PhotoCard'
 import type { PhotoItem } from './PhotoCard'
 import { PhotoFilterPills } from './PhotoFilterPills'
@@ -62,7 +61,7 @@ export function PhotoGallery({ customerId, onViewSession }: PhotoGalleryProps) {
 
   // Agrega todas as páginas em array flat
   const photos: PhotoItem[] = (data?.pages ?? []).flatMap((page) =>
-    page.photos.map(toPhotoItem),
+    page.items.map(toPhotoItem),
   )
 
   // IntersectionObserver para scroll infinito

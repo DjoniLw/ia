@@ -1,10 +1,13 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import type { PHOTO_TAG_COLOR } from '@/lib/status-colors'
 
 // ──── Types ────────────────────────────────────────────────────────────────────
 
-export type PhotoCategory = keyof typeof PHOTO_TAG_COLOR
+export type PhotoCategory =
+  | 'BEFORE_PHOTO'
+  | 'AFTER_PHOTO'
+  | 'PROGRESS_PHOTO'
+  | 'GALLERY_PHOTO'
 
 export interface CustomerPhoto {
   id: string
@@ -24,7 +27,7 @@ export interface PhotoUploadUrlItem {
 }
 
 export interface RequestUploadUrlsResponse {
-  urls: PhotoUploadUrlItem[]
+  uploads: PhotoUploadUrlItem[]
 }
 
 export interface CreatePhotoItem {
@@ -33,7 +36,7 @@ export interface CreatePhotoItem {
   takenAt?: string
   bodyRegion?: string
   notes?: string
-  measurementSessionId?: string
+  sessionId?: string
 }
 
 interface ListPhotosQuery {
@@ -55,23 +58,23 @@ export function useCustomerPhotos(customerId: string, query: ListPhotosQuery = {
       if (query.bodyRegion) params.set('bodyRegion', query.bodyRegion)
       if (query.takenAtFrom) params.set('takenAtFrom', query.takenAtFrom)
       if (query.takenAtTo) params.set('takenAtTo', query.takenAtTo)
-      const { data } = await api.get<{ photos: CustomerPhoto[]; total: number; page: number; totalPages: number }>(
-        `/api/v1/customers/${customerId}/photos?${params}`,
+      const { data } = await api.get<{ items: CustomerPhoto[]; total: number; page: number; limit: number }>(
+        `/customers/${customerId}/photos?${params}`,
       )
       return data
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
-      lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
+      lastPage.page * lastPage.limit < lastPage.total ? lastPage.page + 1 : undefined,
     enabled: Boolean(customerId),
   })
 }
 
 export function useRequestPhotoUploadUrls(customerId: string) {
   return useMutation({
-    mutationFn: async (items: Array<{ mimeType: string; size: number; quantity?: number }>) => {
+    mutationFn: async (items: Array<{ filename: string; mimeType: string; sizeBytes: number }>) => {
       const { data } = await api.post<RequestUploadUrlsResponse>(
-        `/api/v1/customers/${customerId}/photos/upload-url`,
+        `/customers/${customerId}/photos/upload-url`,
         { files: items },
       )
       return data
@@ -83,8 +86,8 @@ export function useCreatePhotos(customerId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (photos: CreatePhotoItem[]) => {
-      const { data } = await api.post<{ photos: CustomerPhoto[] }>(
-        `/api/v1/customers/${customerId}/photos`,
+      const { data } = await api.post<CustomerPhoto[]>(
+        `/customers/${customerId}/photos`,
         { photos },
       )
       return data
@@ -99,7 +102,7 @@ export function useDeletePhoto(customerId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ photoId, reason }: { photoId: string; reason: string }) => {
-      await api.delete(`/api/v1/customers/${customerId}/photos/${photoId}`, {
+      await api.delete(`/customers/${customerId}/photos/${photoId}`, {
         data: { reason },
       })
     },
@@ -114,7 +117,7 @@ export function useGetPhotoUrl(customerId: string, photoId: string, enabled = fa
     queryKey: ['photo-url', customerId, photoId],
     queryFn: async () => {
       const { data } = await api.get<{ url: string }>(
-        `/api/v1/customers/${customerId}/photos/${photoId}/url`,
+        `/customers/${customerId}/photos/${photoId}/url`,
       )
       return data.url
     },
@@ -129,7 +132,7 @@ export function usePhotoBodyRegions() {
   return useQuery({
     queryKey: ['photo-body-regions'],
     queryFn: async () => {
-      const { data } = await api.get<{ regions: string[] }>('/api/v1/settings/photo-body-regions')
+      const { data } = await api.get<{ regions: string[] }>('/settings/photo-body-regions')
       return data.regions
     },
     staleTime: 1000 * 60 * 5,
@@ -140,7 +143,7 @@ export function useUpdatePhotoBodyRegions() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (regions: string[]) => {
-      await api.patch('/api/v1/settings/photo-body-regions', { regions })
+      await api.patch('/settings/photo-body-regions', { regions })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['photo-body-regions'] })

@@ -11,10 +11,10 @@ ALTER TABLE "customer_files"
   ADD COLUMN IF NOT EXISTS "taken_at"                     TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS "body_region"                  VARCHAR(100),
   ADD COLUMN IF NOT EXISTS "notes"                        TEXT,
-  ADD COLUMN IF NOT EXISTS "deleted_by_user_id"           UUID,
+  ADD COLUMN IF NOT EXISTS "deleted_by_user_id"           TEXT,
   ADD COLUMN IF NOT EXISTS "deletion_reason"              TEXT,
   ADD COLUMN IF NOT EXISTS "storage_deleted_at"           TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS "uploaded_by_professional_id"  UUID;
+  ADD COLUMN IF NOT EXISTS "uploaded_by_professional_id"  TEXT;
 
 -- FK para professionals
 ALTER TABLE "customer_files"

@@ -1,6 +1,7 @@
 'use client'
 
 import { Calendar, Link2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { PhotoTagBadge } from './PhotoTagBadge'
 import { PHOTO_TAG_COLOR } from '@/lib/status-colors'
 import { cn } from '@/lib/utils'
@@ -29,12 +30,12 @@ export function PhotoCard({ photo, onClick }: PhotoCardProps) {
     : null
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       onClick={() => onClick(photo)}
       className={cn(
-        'group relative aspect-square w-full overflow-hidden rounded-lg border border-border bg-muted',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+        'group relative aspect-square h-auto w-full overflow-hidden rounded-lg border border-border bg-muted p-0',
+        'focus-visible:ring-2 focus-visible:ring-primary',
       )}
       aria-label={`Foto — ${PHOTO_TAG_COLOR[photo.category].label}${date ? ` — ${date}` : ''}`}
     >
@@ -51,7 +52,7 @@ export function PhotoCard({ photo, onClick }: PhotoCardProps) {
         <PhotoTagBadge category={photo.category} />
 
         {photo.measurementSessionId && (
-          <Link2 className="h-3.5 w-3.5 shrink-0 text-white" aria-label="Vinculada a sessão" />
+          <Link2 className="h-3.5 w-3.5 shrink-0 text-white" aria-label="Vinculada à sessão" />
         )}
       </div>
 
@@ -61,6 +62,6 @@ export function PhotoCard({ photo, onClick }: PhotoCardProps) {
           <span className="text-[10px] text-white">{date}</span>
         </div>
       )}
-    </button>
+    </Button>
   )
 }

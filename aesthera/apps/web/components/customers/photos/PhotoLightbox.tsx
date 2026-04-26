@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight, ExternalLink, Loader2, RefreshCw, X } from '
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { PhotoTagBadge } from './PhotoTagBadge'
-import { PHOTO_TAG_COLOR } from '@/lib/status-colors'
 import { cn } from '@/lib/utils'
 import type { PhotoItem } from './PhotoCard'
 
@@ -129,10 +128,12 @@ export function PhotoLightbox({
           {imgError ? (
             <div className="flex flex-col items-center gap-3 text-white/60">
               <span className="text-sm">Não foi possível carregar a foto.</span>
-              <Button variant="outline" size="sm" onClick={handleRefresh}>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Recarregar
-              </Button>
+              {onRefreshUrl && (
+                <Button variant="outline" size="sm" onClick={handleRefresh}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Recarregar
+                </Button>
+              )}
             </div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
