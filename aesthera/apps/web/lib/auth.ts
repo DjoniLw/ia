@@ -3,22 +3,36 @@ const REFRESH_TOKEN_KEY = 'aesthera_refresh_token'
 
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? sessionStorage.getItem(ACCESS_TOKEN_KEY)
+  return sessionStorage.getItem(ACCESS_TOKEN_KEY) ?? localStorage.getItem(ACCESS_TOKEN_KEY)
 }
 
 export function getRefreshToken(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(REFRESH_TOKEN_KEY) ?? sessionStorage.getItem(REFRESH_TOKEN_KEY)
+  return sessionStorage.getItem(REFRESH_TOKEN_KEY) ?? localStorage.getItem(REFRESH_TOKEN_KEY)
 }
 
 export function setTokens(accessToken: string, refreshToken: string): void {
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY)
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
 }
 
 export function setTokensSession(accessToken: string, refreshToken: string): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
   sessionStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
   sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+}
+
+/** Persiste os novos tokens no mesmo storage onde o refresh token atual está armazenado. */
+export function setTokensAuto(accessToken: string, refreshToken: string): void {
+  if (typeof window === 'undefined') return
+  if (localStorage.getItem(REFRESH_TOKEN_KEY)) {
+    setTokens(accessToken, refreshToken)
+  } else {
+    setTokensSession(accessToken, refreshToken)
+  }
 }
 
 export function clearTokens(): void {

@@ -13,9 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
-import { clearTokens, getRefreshToken, setTokens, setTokensSession } from '@/lib/auth'
+import { clearTokens, getRefreshToken, setTokens, setTokensAuto, setTokensSession } from '@/lib/auth'
 
-const REMEMBER_KEY = 'aesthera-remember-login'
+const REMEMBER_KEY = 'aesthera-keep-signed-in'
 
 const loginSchema = z.object({
   email: z.string().email('E-mail inválido'),
@@ -92,7 +92,7 @@ export default function LoginPage() {
     api
       .post<{ accessToken: string; refreshToken: string }>('/auth/refresh', { refreshToken })
       .then(({ data }) => {
-        setTokens(data.accessToken, data.refreshToken)
+        setTokensAuto(data.accessToken, data.refreshToken)
         const redirect = new URLSearchParams(window.location.search).get('redirect')
         router.push(redirect ?? '/dashboard')
       })
@@ -122,6 +122,7 @@ export default function LoginPage() {
       if (remember) {
         setTokens(response.data.accessToken, response.data.refreshToken)
       } else {
+        clearTokens()
         setTokensSession(response.data.accessToken, response.data.refreshToken)
       }
 
