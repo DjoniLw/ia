@@ -41,6 +41,11 @@ export const ReceivePaymentDto = z.object({
 export type ReceivePaymentDto = z.infer<typeof ReceivePaymentDto>
 
 // SEC08 — sourceType restrito no POST /billing: não aceitar PACKAGE_SALE nem PRODUCT_SALE
+export const PayWithPackageDto = z.object({
+  packageSessionId: z.string().uuid(),
+})
+export type PayWithPackageDto = z.infer<typeof PayWithPackageDto>
+
 export const CreateBillingDto = z.object({
   customerId: z.string().uuid(),
   sourceType: z.enum(['PRESALE', 'MANUAL', 'APPOINTMENT']),

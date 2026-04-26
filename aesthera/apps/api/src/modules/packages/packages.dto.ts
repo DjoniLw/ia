@@ -66,3 +66,8 @@ export const RedeemSessionDto = z.object({
   appointmentId: z.string().uuid().optional(),
 })
 export type RedeemSessionDto = z.infer<typeof RedeemSessionDto>
+
+export const ReserveSessionDto = z.object({
+  appointmentId: z.string().uuid(),
+})
+export type ReserveSessionDto = z.infer<typeof ReserveSessionDto>

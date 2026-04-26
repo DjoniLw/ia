@@ -382,6 +382,25 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - [x] `receive-manual-modal.tsx` — redesenho da UX de promoções: melhor desconto é auto-aplicado (específica > universal); removidos múltiplos banners confusos; adicionado botão "Selecionar outro desconto" que expande picker com todos os descontos disponíveis (mostra código, tipo e valor); corrigido bug onde trocar promoção deixava a anterior aparecendo como sugestão em loop
 - [x] `customers/page.tsx::CustomerWalletTab` — seção "Aguardando pagamento" com pré-vendas pendentes (`sourceType: PRESALE, status: pending`) visível na aba Carteira da Ficha do Cliente; mesmo padrão visual amber já presente em `carteira/page.tsx`
 
+## Fase 15 — Redesign do Uso de Sessão de Pacote via Cobrança
+
+> Status: ✅ Implementada
+
+**Objetivo**: corrigir dois problemas estruturais do fluxo de pacotes: (1) `complete()` retornava `billing: null` para pacotes — sem cobrança gerada; (2) falta de reserva de sessão entre agendamento e confirmação de pagamento.
+
+- [x] `schema.prisma` — adicionado `packageSessionId` (FK → `CustomerPackageSession`, `@unique`) em `Billing`; back-relation `billing` em `CustomerPackageSession`
+- [x] `migrations/20260426_add_package_session_id_to_billing/migration.sql` — migration manual (Docker indisponível)
+- [x] `packages.dto.ts` — `ReserveSessionDto`; `packages.service.ts` — `reserveSession()` / `releaseSession()`; `packages.routes.ts` — `POST /packages/sessions/:id/reserve` e `POST /packages/sessions/:id/release`
+- [x] `appointments.service.ts::complete()` — billing SEMPRE criado ao concluir; se havia sessão AGENDADO, `packageSessionId` é pré-preenchido no billing
+- [x] `billing.service.ts` — `payWithPackage()`: valida billing pending, sessão ABERTO/AGENDADO, serviceId match, expiry; atomicamente: sessão → FINALIZADO, billing → paid com `packageSessionId`, ledger entry
+- [x] `billing.dto.ts` — `PayWithPackageDto`; `billing.routes.ts` — `POST /billing/:id/pay-with-package`
+- [x] `billing.repository.ts` — `billingInclude` agora inclui `packageSession` com `customerPackage.package`
+- [x] `manual-receipts.service.ts::receive()` — RN04: se billing possui sessão AGENDADO e é pago por outro meio, libera sessão de volta para ABERTO dentro da transação
+- [x] `billing.service.ts::reopen()` — Caso E: se billing pago via pacote for reaberto, sessão reverte de FINALIZADO para AGENDADO
+- [x] `use-packages.ts` — adicionados hooks `useReserveSession`, `useReleaseSession`, `usePayWithPackage`
+- [x] `use-appointments.ts` — `Billing` interface inclui `packageSessionId` e `packageSession`; `complete` mutation invalida `customer-packages` e `customer-package-sessions`
+- [x] `billing/page.tsx` — componente `PayWithPackageSection` exibido para cobranças APPOINTMENT pending/overdue com sessões disponíveis
+
 ---
 
 ## Resumo das Fases

@@ -157,6 +157,16 @@ export class ManualReceiptsService {
         },
       })
 
+      // RN04 — Se havia sessão de pacote RESERVADA vinculada, liberar de volta para ABERTO
+      // (o operador optou por pagar por outro método, não via pacote)
+      const billingWithSession = billing as unknown as { packageSessionId?: string | null }
+      if (billingWithSession.packageSessionId) {
+        await tx.customerPackageSession.update({
+          where: { id: billingWithSession.packageSessionId },
+          data: { appointmentId: null, status: 'ABERTO' },
+        })
+      }
+
       // 4. Debit wallet entries used as payment — pass tx to run atomically
       for (const line of dto.lines) {
         if (

@@ -398,12 +398,9 @@ export class AppointmentsService {
     })
     if (!completed) throw new NotFoundError('Appointment')
 
-    // RN-PA02 — PackageSession: resgata sessão, sem billing, nenhum modal
+    // RN14 — Billing SEMPRE criado ao completar agendamento (inclusive com pacote)
+    // RN15 — Se havia sessão reservada (AGENDADO), o billing recebe packageSessionId pré-preenchido
     const linkedSession = await this.pkgRepo.findLinkedSession(clinicId, id)
-    if (linkedSession) {
-      await this.pkgRepo.redeemSession(linkedSession.id, id)
-      return { appointment: completed, billing: null, serviceVouchers: [] }
-    }
 
     // Helper: busca vouchers SERVICE_PRESALE ativos para os serviços do agendamento
     const serviceItems = (completed as { serviceItems?: Array<{ serviceId: string }> }).serviceItems
@@ -445,7 +442,8 @@ export class AppointmentsService {
       return { appointment: completed, billing: fullExisting, serviceVouchers }
     }
 
-    // RN-PA01 — Caso geral: criar billing automaticamente
+    // RN-PA01 — Criar billing automaticamente
+    // RN15/RN16 — Se há sessão reservada, pré-preenche packageSessionId no billing
     const newBilling = await this.billingSvc.createManual(
       {
         customerId: completed.customerId,
@@ -455,6 +453,8 @@ export class AppointmentsService {
         serviceId: completed.serviceId ?? undefined,
       },
       clinicId,
+      undefined,
+      linkedSession ? { packageSessionId: linkedSession.id } : undefined,
     )
     // Buscar com includes completos (appointment.service para o ReceiveManualModal)
     const fullBilling = await this.billingRepo.findById(clinicId, newBilling.id)

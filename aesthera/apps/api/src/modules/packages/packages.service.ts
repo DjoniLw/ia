@@ -241,4 +241,53 @@ export class PackagesService {
 
     return this.repo.redeemSession(sessionId, appointmentId)
   }
+
+  /**
+   * Reserve a session for an appointment (RN01) — sessão passa para AGENDADO.
+   */
+  async reserveSession(clinicId: string, sessionId: string, appointmentId: string) {
+    const session = await this.repo.findSessionById(clinicId, sessionId)
+    if (!session || session.clinicId !== clinicId) {
+      throw new NotFoundError('CustomerPackageSession')
+    }
+
+    if (session.status === 'AGENDADO') {
+      throw new AppError('Sessão já está reservada para outro agendamento', 409, 'SESSION_ALREADY_RESERVED')
+    }
+
+    if (session.status === 'FINALIZADO') {
+      throw new AppError('Sessão já foi utilizada', 400, 'SESSION_ALREADY_USED')
+    }
+
+    if (session.status === 'EXPIRADO') {
+      throw new AppError('Sessão expirada', 400, 'PACKAGE_EXPIRED')
+    }
+
+    if (session.status !== 'ABERTO') {
+      throw new AppError('Sessão não está disponível', 400, 'PACKAGE_NO_SESSIONS_AVAILABLE')
+    }
+
+    const cp = await this.repo.findCustomerPackageById(clinicId, session.customerPackageId)
+    if (cp?.expiresAt && cp.expiresAt < new Date()) {
+      throw new AppError('Pacote expirado', 400, 'PACKAGE_EXPIRED')
+    }
+
+    return this.repo.linkSession(sessionId, appointmentId)
+  }
+
+  /**
+   * Release a reserved session back to AVAILABLE (RN03/RN04) — sessão volta para ABERTO.
+   */
+  async releaseSession(clinicId: string, sessionId: string) {
+    const session = await this.repo.findSessionById(clinicId, sessionId)
+    if (!session || session.clinicId !== clinicId) {
+      throw new NotFoundError('CustomerPackageSession')
+    }
+
+    if (session.status !== 'AGENDADO') {
+      throw new AppError('Somente sessões reservadas podem ser liberadas', 400, 'SESSION_NOT_RESERVED')
+    }
+
+    return this.repo.unlinkSession(sessionId)
+  }
 }

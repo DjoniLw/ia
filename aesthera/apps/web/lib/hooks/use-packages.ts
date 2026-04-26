@@ -246,3 +246,40 @@ export function useAvailableSessionsForService(customerId: string, serviceId: st
     enabled: !!customerId && !!serviceId,
   })
 }
+
+export function useReserveSession(sessionId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (appointmentId: string) =>
+      api.post(`/packages/sessions/${sessionId}/reserve`, { appointmentId }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer-packages'] })
+      qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+    },
+  })
+}
+
+export function useReleaseSession(sessionId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      api.post(`/packages/sessions/${sessionId}/release`).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer-packages'] })
+      qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+    },
+  })
+}
+
+export function usePayWithPackage(billingId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (packageSessionId: string) =>
+      api.post(`/billing/${billingId}/pay-with-package`, { packageSessionId }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing'] })
+      qc.invalidateQueries({ queryKey: ['customer-packages'] })
+      qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+    },
+  })
+}

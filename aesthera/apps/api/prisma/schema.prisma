@@ -670,18 +670,20 @@ model Billing {
   createdAt           DateTime          @default(now()) @map("created_at")
   updatedAt           DateTime          @updatedAt @map("updated_at")
 
-  serviceId String? @map("service_id")
+  serviceId        String? @map("service_id")
+  packageSessionId String? @unique @map("package_session_id") // FK → CustomerPackageSession (set quando billing é de agendamento com pacote)
 
-  clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
-  service          Service?          @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  payments         Payment[]
-  ledgerEntries    LedgerEntry[] // credit on paid, debit on refund
+  clinic          Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  customer        Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  appointment     Appointment?            @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  service         Service?                @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  packageSession  CustomerPackageSession? @relation(fields: [packageSessionId], references: [id], onDelete: SetNull)
+  payments        Payment[]
+  ledgerEntries   LedgerEntry[] // credit on paid, debit on refund
   notificationLogs NotificationLog[]
-  customerPackage  CustomerPackage?
-  manualReceipt    ManualReceipt?
-  billingEvents    BillingEvent[]
+  customerPackage CustomerPackage?
+  manualReceipt   ManualReceipt?
+  billingEvents   BillingEvent[]
 
   @@index([clinicId])
   @@index([clinicId, customerId])
@@ -1233,6 +1235,7 @@ model CustomerPackageSession {
   usedAt            DateTime?            @map("used_at")
 
   customerPackage CustomerPackage @relation(fields: [customerPackageId], references: [id], onDelete: Cascade)
+  billing         Billing?
 
   @@index([clinicId])
   @@index([clinicId, appointmentId])

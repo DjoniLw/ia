@@ -136,6 +136,18 @@ export interface Billing {
       walletEntry?: { id: string; code: string; originType: string } | null
     }>
   } | null
+  packageSessionId?: string | null
+  packageSession?: {
+    id: string
+    serviceId: string
+    status: string
+    appointmentId: string | null
+    customerPackage: {
+      id: string
+      expiresAt: string | null
+      package: { id: string; name: string }
+    }
+  } | null
 }
 
 export interface CompleteResult {
@@ -265,7 +277,7 @@ export function useCreateAppointment() {
       packageSessionId?: string
       roomId?: string
     }) => api.post('/appointments', data).then((r) => r.data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['appointments'] })
       qc.invalidateQueries({ queryKey: ['appointments-calendar'] })
       qc.invalidateQueries({ queryKey: ['appointments-availability'] })
@@ -273,6 +285,11 @@ export function useCreateAppointment() {
       qc.invalidateQueries({ queryKey: ['appointments-available-professionals'] })
       qc.invalidateQueries({ queryKey: ['appointments-available-rooms'] })
       qc.invalidateQueries({ queryKey: ['available-equipment'] })
+      // RN13 — invalidar cache de sessões de pacote para refletir reserva imediatamente
+      if (variables.packageSessionId) {
+        qc.invalidateQueries({ queryKey: ['customer-packages', variables.customerId] })
+        qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+      }
     },
   })
 }
@@ -302,6 +319,8 @@ export function useAppointmentTransition(id: string) {
         invalidate()
         qc.invalidateQueries({ queryKey: ['billing'] })
         qc.invalidateQueries({ queryKey: ['wallet'] })
+        qc.invalidateQueries({ queryKey: ['customer-packages'] })
+        qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
       },
     }),
     cancel: useMutation({

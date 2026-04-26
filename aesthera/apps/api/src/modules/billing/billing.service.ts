@@ -26,7 +26,7 @@ export class BillingService {
    * - MANUAL: avulso (sem vínculo obrigatório)
    * SEC01-SEC06 aplicados obrigatoriamente.
    */
-  async createManual(dto: CreateBillingDto, clinicId: string, executorUserId?: string) {
+  async createManual(dto: CreateBillingDto, clinicId: string, executorUserId?: string, opts?: { packageSessionId?: string }) {
     // SEC02: Validar serviceId se fornecido
     if (dto.serviceId) {
       const service = await prisma.service.findUnique({ where: { id: dto.serviceId } })
@@ -111,6 +111,7 @@ export class BillingService {
         originalAmount: dto.originalAmount,
         ...(dto.serviceId && { serviceId: dto.serviceId }),
         ...(dto.appointmentId && { appointmentId: dto.appointmentId }),
+        ...(opts?.packageSessionId && { packageSessionId: opts.packageSessionId }),
       },
       include: {
         customer: { select: { id: true, name: true } },
@@ -376,6 +377,24 @@ export class BillingService {
         },
       })
 
+      // ── Caso E: billing pago via pacote → reverter sessão de FINALIZADO para AGENDADO ──
+      const billingWithSession = billing as unknown as { packageSessionId?: string | null }
+      if (billingWithSession.packageSessionId) {
+        // Verifica se a sessão existe e está FINALIZADO (pode já ter sido liberada)
+        const session = await tx.customerPackageSession.findUnique({
+          where: { id: billingWithSession.packageSessionId },
+        })
+        if (session && session.status === 'FINALIZADO') {
+          await tx.customerPackageSession.update({
+            where: { id: billingWithSession.packageSessionId },
+            data: {
+              status: 'AGENDADO',
+              usedAt: null,
+            },
+          })
+        }
+      }
+
       // ── Registrar evento ────────────────────────────────────────────────────
       const statusLabel: Record<string, string> = { paid: 'Pago', cancelled: 'Cancelado', overdue: 'Em atraso' }
       const reason = notes?.trim() ?? `Reaberta a partir do status: ${statusLabel[previousStatus] ?? previousStatus}`
@@ -392,6 +411,124 @@ export class BillingService {
     })
 
     return this.repo.findById(clinicId, id)
+  }
+
+  /**
+   * RN02 — Confirma pagamento da cobrança utilizando sessão de pacote do cliente.
+   * A sessão passa de AGENDADO (RESERVED) ou ABERTO (AVAILABLE) para FINALIZADO (USED).
+   * O billing passa de pending para paid.
+   * RN07 — Valida que a sessão é do mesmo serviço do agendamento da cobrança.
+   * RN08 — Aceita sessão ABERTO ou AGENDADO vinculada a este agendamento.
+   */
+  async payWithPackage(clinicId: string, billingId: string, packageSessionId: string) {
+    const billing = await this.get(clinicId, billingId)
+
+    if (!['pending', 'overdue'].includes(billing.status)) {
+      throw new AppError(
+        'Somente cobranças pendentes ou vencidas podem ser pagas via pacote',
+        400,
+        'INVALID_STATUS',
+      )
+    }
+
+    // Buscar sessão com segurança (clinicId garante isolamento multi-tenant)
+    const session = await prisma.customerPackageSession.findFirst({
+      where: { id: packageSessionId, clinicId },
+      include: { customerPackage: { include: { package: true } } },
+    })
+
+    if (!session) {
+      throw new NotFoundError('CustomerPackageSession')
+    }
+
+    if (session.status === 'FINALIZADO') {
+      throw new AppError('Sessão já foi utilizada', 400, 'SESSION_ALREADY_USED')
+    }
+
+    if (session.status === 'EXPIRADO') {
+      throw new AppError('Sessão expirada — não pode ser utilizada', 400, 'PACKAGE_EXPIRED')
+    }
+
+    // RN08 — Sessão deve estar ABERTO (disponível) ou AGENDADO (reservada para este agendamento)
+    if (session.status === 'AGENDADO' && session.appointmentId !== billing.appointmentId) {
+      throw new AppError(
+        'Esta sessão está reservada para outro agendamento',
+        409,
+        'SESSION_RESERVED_FOR_OTHER_APPOINTMENT',
+      )
+    }
+
+    if (session.status !== 'ABERTO' && session.status !== 'AGENDADO') {
+      throw new AppError('Sessão não está disponível para uso', 400, 'SESSION_NOT_AVAILABLE')
+    }
+
+    // RN07 — Validar que serviceId da sessão corresponde ao serviço do agendamento
+    if (billing.appointmentId && session.serviceId) {
+      const apptServiceId = (billing as { serviceId?: string }).serviceId ?? billing.appointment?.service?.id
+      if (apptServiceId && apptServiceId !== session.serviceId) {
+        throw new AppError(
+          'A sessão selecionada é para um serviço diferente do agendamento',
+          400,
+          'SERVICE_MISMATCH',
+        )
+      }
+    }
+
+    // Verificar validade do pacote
+    if (session.customerPackage.expiresAt && session.customerPackage.expiresAt < new Date()) {
+      throw new AppError(
+        'O pacote deste cliente está expirado',
+        400,
+        'PACKAGE_EXPIRED',
+      )
+    }
+
+    // Executar transação atômica
+    await prisma.$transaction(async (tx) => {
+      // 1. Marcar sessão como FINALIZADO (USED)
+      await tx.customerPackageSession.update({
+        where: { id: packageSessionId },
+        data: { status: 'FINALIZADO', usedAt: new Date() },
+      })
+
+      // 2. Marcar billing como pago, vinculando packageSessionId
+      await tx.billing.update({
+        where: { id: billingId, clinicId },
+        data: {
+          status: 'paid',
+          paidAt: new Date(),
+          packageSessionId,
+        },
+      })
+
+      // 3. Registrar evento no audit trail
+      await tx.billingEvent.create({
+        data: {
+          clinicId,
+          billingId,
+          event: 'paid',
+          fromStatus: billing.status,
+          toStatus: 'paid',
+          notes: JSON.stringify({ source: 'package', packageSessionId }),
+        },
+      })
+
+      // 4. Criar entrada no ledger (RN11)
+      await ledger.createCreditEntry(
+        {
+          clinicId,
+          amount: billing.amount,
+          billingId,
+          appointmentId: billing.appointmentId ?? undefined,
+          customerId: billing.customerId ?? undefined,
+          description: `Pago com pacote — ${session.customerPackage.package.name}`,
+          metadata: { source: 'PACKAGE_SESSION', packageSessionId },
+        },
+        tx as Parameters<typeof ledger.createCreditEntry>[1],
+      )
+    })
+
+    return this.repo.findById(clinicId, billingId)
   }
 
   /**
