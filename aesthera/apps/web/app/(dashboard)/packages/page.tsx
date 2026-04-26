@@ -584,7 +584,7 @@ function PurchaseModal({
 
 // ──── Customer Packages Panel ──────────────────────────────────────────────────
 
-function CustomerPackagesPanel({ customerId }: { customerId: string }) {
+function CustomerPackagesPanel({ customerId, packageId }: { customerId: string; packageId?: string }) {
   const { data, isLoading } = useCustomerPackages(customerId)
 
   if (isLoading) {
@@ -596,13 +596,15 @@ function CustomerPackagesPanel({ customerId }: { customerId: string }) {
     )
   }
 
-  if (!data?.length) {
+  const filtered = packageId ? (data ?? []).filter((cp) => cp.packageId === packageId) : (data ?? [])
+
+  if (!filtered.length) {
     return <p className="py-4 text-sm text-muted-foreground">Nenhum pacote adquirido.</p>
   }
 
   return (
     <div className="space-y-3">
-      {data.map((cp) => (
+      {filtered.map((cp) => (
         <CustomerPackageCard key={cp.id} cp={cp} />
       ))}
     </div>
@@ -762,7 +764,7 @@ function PackageCard({
               placeholder="Buscar cliente por nome ou telefone…"
             />
             {lookupCustomer && (
-              <CustomerPackagesPanel customerId={lookupCustomer.id} />
+              <CustomerPackagesPanel customerId={lookupCustomer.id} packageId={pkg.id} />
             )}
           </div>
         )}
