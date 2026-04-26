@@ -429,6 +429,7 @@ describe('MeasurementSheetsService', () => {
         }),
       },
       measurementField: { createMany: vi.fn().mockResolvedValue({}) },
+      measurementSheetColumn: { createMany: vi.fn().mockResolvedValue({}) },
     }
 
     const dbMock = {
@@ -483,6 +484,7 @@ describe('MeasurementSheetsService', () => {
         }),
       },
       measurementField: { createMany: vi.fn().mockResolvedValue({}) },
+      measurementSheetColumn: { createMany: vi.fn().mockResolvedValue({}) },
     }
 
     const dbMock = {
@@ -619,4 +621,3 @@ describe('MeasurementSheetsService', () => {
     expect(repo.createSheet).toHaveBeenCalledOnce()
   })
 })
-
