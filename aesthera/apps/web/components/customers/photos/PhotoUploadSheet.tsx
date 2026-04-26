@@ -289,7 +289,6 @@ export function PhotoUploadSheet({ customerId, open, onClose }: PhotoUploadSheet
                     <Label className="text-xs">Classificação</Label>
                     <Select
                       value={sf.category}
-                      disabled={isSubmitting}
                       onValueChange={(v) => updateFile(sf.id, { category: v as PhotoCategory })}
                     >
                       <SelectTrigger className="h-8 text-xs">
@@ -324,7 +323,6 @@ export function PhotoUploadSheet({ customerId, open, onClose }: PhotoUploadSheet
                     {bodyRegions && bodyRegions.length > 0 ? (
                       <Select
                         value={sf.bodyRegion}
-                        disabled={isSubmitting}
                         onValueChange={(v) => updateFile(sf.id, { bodyRegion: v })}
                       >
                         <SelectTrigger className="h-8 text-xs">
