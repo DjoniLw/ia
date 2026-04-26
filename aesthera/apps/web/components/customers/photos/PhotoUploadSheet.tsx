@@ -149,10 +149,12 @@ export function PhotoUploadSheet({ customerId, open, onClose }: PhotoUploadSheet
             })
             updateFile(fileEntry.id, { status: 'done', progress: 100 })
             uploadResults.push({ fileEntry, storageKey, success: true })
-          } catch {
+          } catch (uploadErr: unknown) {
+            const status = axios.isAxiosError(uploadErr) ? uploadErr.response?.status : undefined
+            console.error('[photo-upload] R2 PUT error:', status, axios.isAxiosError(uploadErr) ? uploadErr.response?.data : uploadErr)
             updateFile(fileEntry.id, {
               status: 'error',
-              errorMessage: `Falha ao enviar ${fileEntry.file.name}`,
+              errorMessage: status ? `Falha ao enviar ${fileEntry.file.name} (HTTP ${status})` : `Falha ao enviar ${fileEntry.file.name}`,
             })
             uploadResults.push({ fileEntry, storageKey, success: false })
           }
@@ -292,7 +294,9 @@ export function PhotoUploadSheet({ customerId, open, onClose }: PhotoUploadSheet
                       onValueChange={(v) => updateFile(sf.id, { category: v as PhotoCategory })}
                     >
                       <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
+                        <span className="truncate text-left">
+                          {PHOTO_TAG_COLOR[sf.category as keyof typeof PHOTO_TAG_COLOR]?.label ?? sf.category}
+                        </span>
                       </SelectTrigger>
                       <SelectContent>
                         {Object.entries(PHOTO_TAG_COLOR).map(([key, cfg]) => (
