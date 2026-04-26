@@ -29,6 +29,7 @@ const mockRedis = vi.hoisted(() => ({
   set: vi.fn(),
   setex: vi.fn(),
   del: vi.fn(),
+  getdel: vi.fn(),
   incr: vi.fn(),
   expire: vi.fn(),
   ping: vi.fn(),
@@ -195,6 +196,7 @@ beforeEach(() => {
   mockRedis.set.mockResolvedValue('OK')
   mockRedis.del.mockResolvedValue(1)
   mockRedis.get.mockResolvedValue(null)
+  mockRedis.getdel.mockResolvedValue(null)
   mockRedis.incr.mockResolvedValue(1)
   mockRedis.expire.mockResolvedValue(1)
   mockRedis.ttl.mockResolvedValue(30)
@@ -1069,15 +1071,15 @@ describe('AuthService.rejectTransfer()', () => {
 
 describe('AuthService.refresh()', () => {
   it('deve rotacionar o refresh token e retornar novos tokens', async () => {
-    mockRedis.get.mockResolvedValue(
+    mockRedis.getdel.mockResolvedValue(
       JSON.stringify({ userId: 'user-1', clinicId: 'clinic-1', role: 'admin' }),
     )
 
     const service = new AuthService(mockApp)
     const result = await service.refresh('valid-refresh-token')
 
-    // Token antigo deve ser revogado
-    expect(mockRedis.del).toHaveBeenCalledOnce()
+    // Token antigo deve ser revogado atomicamente via getdel
+    expect(mockRedis.getdel).toHaveBeenCalledWith(expect.stringContaining('user-refresh:'))
     // Novo token deve ser emitido
     expect(mockRedis.setex).toHaveBeenCalledWith(
       expect.stringContaining('user-refresh:'),
@@ -1089,7 +1091,7 @@ describe('AuthService.refresh()', () => {
   })
 
   it('deve lançar UnauthorizedError quando refresh token não existe no Redis', async () => {
-    mockRedis.get.mockResolvedValue(null)
+    mockRedis.getdel.mockResolvedValue(null)
 
     const service = new AuthService(mockApp)
     await expect(service.refresh('token-inexistente')).rejects.toMatchObject({
@@ -1101,7 +1103,7 @@ describe('AuthService.refresh()', () => {
   })
 
   it('deve buscar screenPermissions do banco para usuários staff', async () => {
-    mockRedis.get.mockResolvedValue(
+    mockRedis.getdel.mockResolvedValue(
       JSON.stringify({ userId: 'user-staff', clinicId: 'clinic-1', role: 'staff' }),
     )
     mockPrisma.user.findUnique.mockResolvedValue({
