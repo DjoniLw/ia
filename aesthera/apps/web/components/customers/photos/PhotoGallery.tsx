@@ -34,7 +34,7 @@ function toPhotoItem(p: CustomerPhoto): PhotoItem {
 }
 
 export function PhotoGallery({ customerId, onViewSession }: PhotoGalleryProps) {
-  const { role } = useRole()
+  const role = useRole()
   const canUpload = role === 'admin' || role === 'staff' || role === 'professional'
 
   const [filterCategory, setFilterCategory] = useState<FilterCategory>('all')
