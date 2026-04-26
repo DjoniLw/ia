@@ -48,6 +48,7 @@ function makePromotion(overrides: Record<string, unknown> = {}) {
     usesCount: 0,
     minAmount: null,
     applicableServiceIds: [],
+    applicableProductIds: [],
     validFrom: new Date(NOW.getTime() - 86400000), // ontem
     validUntil: new Date(NOW.getTime() + 86400000), // amanhã
     ...overrides,
@@ -172,7 +173,7 @@ describe('PromotionsService', () => {
 
       await svc.toggleStatus(CLINIC_ID, 'promo-1', { active: false })
 
-      expect(mockRepo.toggleStatus).toHaveBeenCalledWith('promo-1', false)
+      expect(mockRepo.toggleStatus).toHaveBeenCalledWith(CLINIC_ID, 'promo-1', false)
     })
   })
 })
