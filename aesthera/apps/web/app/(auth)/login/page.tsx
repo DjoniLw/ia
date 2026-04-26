@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
-import { setTokens } from '@/lib/auth'
+import { clearTokens, getRefreshToken, setTokens, setTokensSession } from '@/lib/auth'
 
 const REMEMBER_KEY = 'aesthera-remember-login'
 
@@ -24,34 +24,27 @@ const loginSchema = z.object({
 
 type LoginData = z.infer<typeof loginSchema>
 type SlugStatus = 'idle' | 'loading' | 'resolved' | 'unresolved'
+type LoginPageState = 'checking' | 'idle'
 
 export default function LoginPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [pageState, setPageState] = useState<LoginPageState>('checking')
   const [resolvedSlug, setResolvedSlug] = useState<string | null>(null)
   const [slugStatus, setSlugStatus] = useState<SlugStatus>('idle')
   const resolveAbortRef = useRef<AbortController | null>(null)
 
-  const [defaults] = useState<Partial<LoginData>>(() => {
-    if (typeof window === 'undefined') return {}
-    try {
-      const saved = localStorage.getItem(REMEMBER_KEY)
-      if (saved) return JSON.parse(saved) as Partial<LoginData>
-    } catch {
-      return {}
-    }
-    return {}
+  const [remember, setRemember] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const stored = localStorage.getItem(REMEMBER_KEY)
+    return stored === null ? true : stored !== 'false'
   })
-
-  const [remember, setRemember] = useState(
-    () => typeof window !== 'undefined' && !!localStorage.getItem(REMEMBER_KEY),
-  )
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginData>({ resolver: zodResolver(loginSchema), defaultValues: defaults })
+  } = useForm<LoginData>({ resolver: zodResolver(loginSchema) })
 
   const emailField = register('email')
 
@@ -90,11 +83,25 @@ export default function LoginPage() {
   }
 
   useEffect(() => {
-    const rememberedEmail = defaults.email
-    if (rememberedEmail) {
-      void resolveSlug(rememberedEmail)
+    const refreshToken = getRefreshToken()
+    if (!refreshToken) {
+      setPageState('idle')
+      return
     }
-  }, [defaults.email])
+
+    api
+      .post<{ accessToken: string; refreshToken: string }>('/auth/refresh', { refreshToken })
+      .then(({ data }) => {
+        setTokens(data.accessToken, data.refreshToken)
+        const redirect = new URLSearchParams(window.location.search).get('redirect')
+        router.push(redirect ?? '/dashboard')
+      })
+      .catch(() => {
+        clearTokens()
+        setPageState('idle')
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function onSubmit(data: LoginData) {
     if (!resolvedSlug) {
@@ -104,12 +111,7 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      if (remember) {
-        localStorage.setItem(REMEMBER_KEY, JSON.stringify({ email: data.email }))
-      } else {
-        localStorage.removeItem(REMEMBER_KEY)
-      }
-
+      localStorage.setItem(REMEMBER_KEY, remember ? 'true' : 'false')
       localStorage.setItem('clinic-slug', resolvedSlug)
       const response = await api.post<{ accessToken: string; refreshToken: string }>(
         '/auth/login',
@@ -117,9 +119,15 @@ export default function LoginPage() {
         { headers: { 'X-Clinic-Slug': resolvedSlug } },
       )
 
-      setTokens(response.data.accessToken, response.data.refreshToken)
+      if (remember) {
+        setTokens(response.data.accessToken, response.data.refreshToken)
+      } else {
+        setTokensSession(response.data.accessToken, response.data.refreshToken)
+      }
+
       toast.success('Login realizado com sucesso!')
-      router.push('/dashboard')
+      const redirect = new URLSearchParams(window.location.search).get('redirect')
+      router.push(redirect ?? '/dashboard')
     } catch (error: unknown) {
       const message =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -128,6 +136,10 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (pageState === 'checking') {
+    return <p className="text-center text-sm text-muted-foreground">Verificando sua sessão...</p>
   }
 
   return (
@@ -185,7 +197,7 @@ export default function LoginPage() {
               className="h-4 w-4 rounded border-input accent-primary"
             />
             <label htmlFor="remember" className="cursor-pointer text-sm text-muted-foreground">
-              Lembrar e-mail
+              Manter conectado
             </label>
           </div>
 
