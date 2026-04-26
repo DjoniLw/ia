@@ -619,6 +619,8 @@ describe('AppointmentsService.complete()', () => {
 
     mockPrisma.billing.findUnique.mockResolvedValue(null)
     mockPrisma.walletEntry.findMany.mockResolvedValue([])
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-1' })
+    mockBillingRepoInstance.findById.mockResolvedValue({ id: 'billing-1', sourceType: 'APPOINTMENT', status: 'pending', amount: 0 })
 
     await service.complete('clinic-1', 'appt-1')
 
@@ -638,6 +640,8 @@ describe('AppointmentsService.complete()', () => {
     mockPrisma.walletEntry.findMany.mockResolvedValue([
       { id: 'voucher-1', serviceId: 'service-1', balance: 20000, expirationDate: null, code: 'VCHR-ABC1' },
     ])
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-1' })
+    mockBillingRepoInstance.findById.mockResolvedValue({ id: 'billing-1', sourceType: 'APPOINTMENT', status: 'pending', amount: 0 })
 
     const result = await service.complete('clinic-1', 'appt-1')
 
@@ -654,6 +658,8 @@ describe('AppointmentsService.complete()', () => {
 
     mockPrisma.billing.findUnique.mockResolvedValue(null)
     mockPrisma.walletEntry.findMany.mockResolvedValue([])
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-1' })
+    mockBillingRepoInstance.findById.mockResolvedValue({ id: 'billing-1', sourceType: 'APPOINTMENT', status: 'pending', amount: 0 })
 
     const result = await service.complete('clinic-1', 'appt-1')
 
