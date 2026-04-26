@@ -15,6 +15,10 @@ vi.mock('../../shared/guards/jwt-clinic.guard', () => ({
   jwtClinicGuard: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('../../shared/guards/role.guard', () => ({
+  roleGuard: vi.fn().mockReturnValue(vi.fn().mockResolvedValue(undefined)),
+}))
+
 vi.mock('./payments.dto', () => ({
   ListPaymentsQuery: { parse: vi.fn((q) => q) },
 }))
