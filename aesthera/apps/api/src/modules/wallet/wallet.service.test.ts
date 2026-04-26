@@ -7,7 +7,7 @@ const mockTx = vi.hoisted(() => ({
   $queryRaw: vi.fn().mockResolvedValue([]),
   walletEntry: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
   walletTransaction: { create: vi.fn() },
-  billing: { findFirst: vi.fn() },
+  billing: { findFirst: vi.fn(), create: vi.fn() },
 }))
 
 const mockRepo = vi.hoisted(() => ({
@@ -262,6 +262,7 @@ describe('WalletService.create()', () => {
   it('wraps entry creation and transaction record in a single database transaction', async () => {
     const { prisma } = await import('../../database/prisma/client')
     const entry = makeEntry()
+    mockTx.billing.create.mockResolvedValue({ id: 'billing-1', amount: 10000, status: 'pending', dueDate: new Date(), sourceType: 'WALLET_PURCHASE' })
     mockRepo.create.mockResolvedValue(entry)
     mockRepo.createTransaction.mockResolvedValue({})
 
@@ -486,4 +487,3 @@ describe('WalletService.findActiveServiceVouchers()', () => {
     ).rejects.toMatchObject({ statusCode: 403 })
   })
 })
-
