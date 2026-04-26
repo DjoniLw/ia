@@ -12,7 +12,7 @@ import { useRole } from '@/lib/hooks/use-role'
 const MAX_REGIONS = 30
 
 export default function PhotoSettingsPage() {
-  const { role } = useRole()
+  const role = useRole()
   const { data: regions, isLoading, isError } = usePhotoBodyRegions()
   const { mutateAsync: updateRegions, isPending } = useUpdatePhotoBodyRegions()
 
