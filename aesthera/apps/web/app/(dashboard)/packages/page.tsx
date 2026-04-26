@@ -16,6 +16,7 @@ import {
   Info,
   Minus,
   ShoppingBag,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -357,18 +358,25 @@ function PackageModal({
                     type="number"
                     min="1"
                     value={item.quantity}
-                    onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                    title="Sessões"
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      const parsed = raw === '' ? 1 : Number(raw)
+                      updateItem(index, 'quantity', Number.isNaN(parsed) || parsed < 1 ? 1 : parsed)
+                    }}
+                    aria-label="Sessões"
                     className="w-20 rounded-lg border bg-background px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                   {items.length > 1 && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => removeItem(index)}
-                      className="flex-shrink-0 rounded p-1 text-destructive hover:bg-destructive/10"
+                      className="flex-shrink-0 h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
-                      ✕
-                    </button>
+                      <X className="h-4 w-4" />
+                      <span className="sr-only">Remover serviço</span>
+                    </Button>
                   )}
                 </div>
               ))}
