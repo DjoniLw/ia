@@ -27,6 +27,7 @@ const mockPrisma = vi.hoisted(() => ({
   },
   walletEntry: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
   clinic: {
     findUnique: vi.fn(),
@@ -330,6 +331,7 @@ describe('BillingService.receivePayment()', () => {
     mockWalletInstance.use.mockResolvedValue(undefined)
     mockTxBilling.clinic.findUnique.mockResolvedValue({ id: 'clinic-1', chargeVoucherDifference: true })
     mockTxBilling.service.findUnique.mockResolvedValue({ id: 'service-1', price: 10000 })
+    mockPrisma.walletEntry.findFirst.mockResolvedValue({ id: 'voucher-1', originalValue: 8000 })
     mockTxBilling.walletEntry.findFirst.mockResolvedValue({ id: 'voucher-1', originalValue: 8000 })
     mockTxBilling.paymentMethodConfig.findUnique.mockResolvedValue(null)
     mockTxBilling.billing.create.mockResolvedValue({ id: 'billing-compl', amount: 2000, appointmentId: null })
@@ -367,6 +369,7 @@ describe('BillingService.receivePayment()', () => {
     mockTxBilling.billing.findFirst.mockResolvedValue(billingMock)
     mockWalletInstance.use.mockResolvedValue(undefined)
     mockTxBilling.clinic.findUnique.mockResolvedValue({ id: 'clinic-1', chargeVoucherDifference: false })
+    mockPrisma.walletEntry.findFirst.mockResolvedValue({ id: 'voucher-1', originalValue: 8000 })
 
     await service.receivePayment('clinic-1', 'billing-1', {
       method: 'voucher',
