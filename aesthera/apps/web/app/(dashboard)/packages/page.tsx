@@ -499,7 +499,9 @@ function PurchaseModal({
                 <div className="flex-1">
                   <Select value={line.method} onValueChange={(v) => updateLine(line.id, 'method', v)}>
                     <SelectTrigger className="h-9">
-                      <SelectValue />
+                      <span className="truncate">
+                        {SIMPLE_PAYMENT_METHODS.find((m) => m.value === line.method)?.label ?? line.method}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
                       {SIMPLE_PAYMENT_METHODS.map((m) => (
