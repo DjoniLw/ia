@@ -28,6 +28,7 @@ function makeSession(overrides = {}) {
     createdById: USER_ID,
     createdAt: new Date(),
     updatedAt: new Date(),
+    sheetRecords: [],
     ...overrides,
   }
 }
