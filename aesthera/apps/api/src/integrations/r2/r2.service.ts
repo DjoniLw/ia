@@ -2,6 +2,7 @@ import {
   S3Client,
   HeadObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
@@ -33,6 +34,9 @@ function getR2Client(): S3Client {
       region: 'auto',
       endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
       credentials: { accessKeyId, secretAccessKey },
+      // Desabilita checksum automático CRC32 do SDK v3 — simplifica CORS em uploads diretos (browser → R2)
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     })
   }
   return _r2Client
@@ -148,4 +152,12 @@ export async function getObjectBuffer(storageKey: string): Promise<Buffer> {
     chunks.push(chunk)
   }
   return Buffer.concat(chunks)
+}
+
+/**
+ * Remove um objeto do R2 (job de limpeza de storage após soft-delete).
+ */
+export async function deleteObject(storageKey: string): Promise<void> {
+  const cmd = new DeleteObjectCommand({ Bucket: bucketName, Key: storageKey })
+  await getR2Client().send(cmd)
 }

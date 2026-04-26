@@ -96,3 +96,13 @@ export const PAYMENT_METHOD_BADGE_COLORS: Record<string, string> = {
   wallet_credit:  'bg-amber-700 text-white dark:bg-amber-800',
   wallet_voucher: 'bg-orange-700 text-white dark:bg-orange-800',
 }
+
+// ── Galeria de Fotos — Issue #163 ──────────────────────────────────────────────
+// amber-900 sobre amber-100 garante contraste WCAG AA (~7:1)
+
+export const PHOTO_TAG_COLOR = {
+  BEFORE_PHOTO:   { bg: 'bg-green-100',  text: 'text-green-800',        label: 'Antes'             },
+  AFTER_PHOTO:    { bg: 'bg-amber-100',  text: 'text-amber-900',        label: 'Depois'            },
+  PROGRESS_PHOTO: { bg: 'bg-blue-100',   text: 'text-blue-800',         label: 'Progresso'         },
+  GALLERY_PHOTO:  { bg: 'bg-muted',      text: 'text-muted-foreground', label: 'Sem classificação' },
+} as const satisfies Record<string, { bg: string; text: string; label: string }>

@@ -65,6 +65,7 @@ import { BILLING_STATUS_LABEL, BILLING_STATUS_COLOR, ANAMNESIS_STATUS_LABEL, ANA
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { WalletOriginBadge } from '@/components/wallet/WalletOriginBadge'
 import { EvolutionTab } from '@/components/body-measurements/evolution-tab'
+import { PhotoGallery } from '@/components/customers/photos/PhotoGallery'
 import { SendRemoteSignDialog } from './_components/send-remote-sign-dialog'
 import { SendAnamnesisDialog } from '@/components/anamnesis/SendAnamnesisDialog'
 import { ResendAnamnesisDialog } from '@/components/anamnesis/ResendAnamnesisDialog'
@@ -1964,7 +1965,7 @@ function ContractsTab({ customer }: { customer: Customer }) {
 
 // ──── Customer Detail Panel ────────────────────────────────────────────────────
 
-type DetailTab = 'profile' | 'history' | 'wallet' | 'prontuario' | 'anamnese' | 'contracts' | 'evolucao'
+type DetailTab = 'profile' | 'history' | 'wallet' | 'prontuario' | 'anamnese' | 'contracts' | 'evolucao' | 'fotos'
 
 // Types for the new-entry form
 type EntryType = ClinicalRecord['type']
@@ -2267,7 +2268,7 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
 
       {/* Detail tabs */}
       <div className="flex rounded-lg border overflow-hidden">
-        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['anamnese', 'Anamnese'], ['contracts', 'Contratos'], ['evolucao', 'Avaliações']] as const).map(([id, label]) => (
+        {([['profile', 'Dados'], ['history', 'Histórico'], ['wallet', 'Carteira'], ['prontuario', 'Prontuário'], ['anamnese', 'Anamnese'], ['contracts', 'Contratos'], ['evolucao', 'Avaliações'], ['fotos', 'Fotos']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -3080,6 +3081,14 @@ function CustomerDetail({ customer, onEdit, onClose }: { customer: Customer; onE
           name: customer.name,
           bodyDataConsentAt: customer.bodyDataConsentAt,
         }} />
+      )}
+
+      {/* ── Galeria de fotos ──────────────────────────────────────────── */}
+      {detailTab === 'fotos' && (
+        <PhotoGallery
+          customerId={customer.id}
+          onViewSession={() => setDetailTab('evolucao')}
+        />
       )}
 
       {deletingRecord && (
