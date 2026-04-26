@@ -35,6 +35,7 @@ export class PromotionsService {
   }
 
   async toggleStatus(clinicId: string, id: string, dto: TogglePromotionStatusDto) {
+    await this.get(clinicId, id)
     return this.repo.toggleStatus(clinicId, id, dto.active)
   }
 
