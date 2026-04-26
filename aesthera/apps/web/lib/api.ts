@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { toast } from 'sonner'
-import { clearTokens, getAccessToken, getRefreshToken, setTokens } from './auth'
+import { clearTokens, getAccessToken, getRefreshToken, setTokensAuto } from './auth'
 
 export function getClinicSlug(): string {
   if (typeof window === 'undefined') return ''
@@ -113,7 +113,7 @@ api.interceptors.response.use(
         { refreshToken },
       )
 
-      setTokens(data.accessToken, data.refreshToken)
+      setTokensAuto(data.accessToken, data.refreshToken)
       processQueue(null, data.accessToken)
       original.headers.Authorization = `Bearer ${data.accessToken}`
       return api(original)

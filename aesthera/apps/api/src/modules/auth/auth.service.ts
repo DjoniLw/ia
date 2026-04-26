@@ -704,7 +704,7 @@ export class AuthService {
     const hash = hashRefreshToken(rawRefreshToken)
     const key = refreshKey(hash)
 
-    const stored = await redis.get(key)
+    const stored = await redis.getdel(key)
     if (!stored) {
       throw new UnauthorizedError('Invalid or expired refresh token')
     }
@@ -715,8 +715,7 @@ export class AuthService {
       role: 'admin' | 'staff' | 'professional'
     }
 
-    // Rotate: revoke old token
-    await redis.del(key)
+    // Rotate: old token already revoked atomically via GETDEL above
 
     // Fetch current screenPermissions from DB to include in the new token.
     // Note: for professional tokens, screenPermissions is not applicable.

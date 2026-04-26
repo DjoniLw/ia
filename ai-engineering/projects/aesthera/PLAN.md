@@ -229,6 +229,7 @@ abrir o navegador e usar o que foi construído. Nenhuma fase entrega só código
 - [x] #47 — Auto-preenchimento de endereço por CEP (ViaCEP)
 - [x] #48 — Máscaras de entrada para CPF, CNPJ, telefone e CEP
 - [x] #49 — Cadastro e configuração de formas de pagamento da clínica
+- [x] #166 — Login persistente — auto-login via refresh token ("Manter conectado"): `useEffect` de auto-refresh na tela de login, `sessionStorage` para sessão temporária, `localStorage` para sessão persistente, suporte a `?redirect=`, atualização de `lib/auth.ts` (`setTokensSession`, `setTokensAuto`, prioridade `sessionStorage`) e `lib/api.ts` (interceptor de refresh usa `setTokensAuto`)
 
 ---
 
