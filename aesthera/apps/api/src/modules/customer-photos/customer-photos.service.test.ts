@@ -98,7 +98,7 @@ describe('CustomerPhotosService', () => {
 
   describe('requestUploadUrls', () => {
     const baseDto = {
-      files: [{ filename: 'foto.jpg', mimeType: 'image/jpeg', sizeBytes: 500_000 }],
+      files: [{ filename: 'foto.jpg', mimeType: 'image/jpeg' as const, sizeBytes: 500_000 }],
     }
 
     it('deve retornar upload URLs quando cliente tem consentimento LGPD', async () => {
