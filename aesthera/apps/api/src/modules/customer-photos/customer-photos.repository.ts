@@ -207,7 +207,7 @@ export class CustomerPhotosRepository {
     const current = (clinic?.settings as Record<string, unknown> | null) ?? {}
     await prisma.clinic.updateMany({
       where: { id: clinicId },
-      data: { settings: { ...current, ...patch } },
+      data: { settings: { ...current, ...patch } as object },
     })
   }
 }

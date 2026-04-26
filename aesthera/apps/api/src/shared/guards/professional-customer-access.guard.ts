@@ -24,13 +24,14 @@ import { ForbiddenError } from '../errors/app-error'
  * )
  */
 export async function professionalCustomerAccessGuard(
-  request: FastifyRequest<{ Params: { customerId?: string } }>,
+  request: FastifyRequest,
   _reply: FastifyReply,
 ): Promise<void> {
   // Apenas aplicar restrição para role professional
   if (request.user.role !== 'professional') return
 
-  const customerId = request.params.customerId
+  const params = request.params as { customerId?: string }
+  const customerId = params.customerId
   if (!customerId) throw new ForbiddenError('customerId ausente')
 
   const clinicId = request.clinicId
