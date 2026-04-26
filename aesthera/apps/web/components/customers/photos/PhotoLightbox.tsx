@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, ExternalLink, Loader2, RefreshCw, X } from 'lucide-react'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { PhotoTagBadge } from './PhotoTagBadge'
 import { cn } from '@/lib/utils'
@@ -88,16 +87,17 @@ export function PhotoLightbox({
     }
   }
 
-  if (!photo) return null
+  if (!open || !photo) return null
 
   const date = photo.takenAt
     ? new Date(photo.takenAt).toLocaleDateString('pt-BR')
     : null
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        className="flex h-[calc(100dvh-2rem)] max-w-5xl flex-col gap-0 overflow-hidden bg-black/95 p-0"
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <div
+        className="relative z-10 flex h-[calc(100dvh-2rem)] w-full max-w-5xl flex-col gap-0 overflow-hidden rounded-lg bg-black/95"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -221,7 +221,7 @@ export function PhotoLightbox({
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 type PhotoCategory =
@@ -38,19 +39,19 @@ export function PhotoFilterPills({
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)}>
       {FILTER_OPTIONS.map((opt) => (
-        <button
+        <Button
           key={opt.value}
-          type="button"
+          variant="ghost"
           onClick={() => onChange(opt.value)}
           className={cn(
-            'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+            'rounded-full border px-3 py-1 text-xs font-medium transition-colors h-auto',
             value === opt.value
-              ? 'border-primary bg-primary text-primary-foreground'
+              ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
               : 'border-border bg-background text-muted-foreground hover:border-primary/60',
           )}
         >
           {opt.label}
-        </button>
+        </Button>
       ))}
 
       {onDateFromChange && (
