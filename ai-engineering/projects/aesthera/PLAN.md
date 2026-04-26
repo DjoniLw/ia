@@ -488,6 +488,17 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - **O que foi feito:** Revisão do PR #162 (feat(#159): aba Avaliações no perfil do cliente e fichas personalizadas) — 5 bloqueantes, 6 sugestões
 - **Impacto:** Qualidade e integridade do código revisado; PR reprovado pendente correções
 
+### [2026-04-26] — fix: Correções de Bugs — Módulo de Pacotes
+- **Módulo:** Packages (backend + frontend)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/packages/packages.dto.ts` *(CreatePackageDto.validityDays → `.optional().nullable()` — campo genuinamente opcional aceita null)*
+  - `aesthera/apps/web/app/(dashboard)/packages/page.tsx` *(layout linha de serviços corrigido + `<select>` nativo substituído por `<Select>` shadcn; filtragem de linhas de pagamento com valor zero antes do submit; nome do serviço exibido em cada sessão do cliente)*
+- **O que foi feito:**
+  - **[Bug 1b]** `CreatePackageDto.validityDays` de `.optional()` para `.optional().nullable()` — frontend enviava `null` para campo vazio, backend rejeitava com erro 400
+  - **[Bug 1a]** Linha de item de serviço no formulário de criação de pacote reestruturada com `flex items-center gap-2`; `<select>` nativo substituído por `<Select>`/`<SelectTrigger>`/`<SelectContent>`/`<SelectItem>` do shadcn/ui (anti-padrão bloqueante); wrapper `flex-col` removido do campo de sessões
+  - **[Bug 2]** `handleSubmit` do `PurchaseModal` filtra linhas com `amount <= 0` antes de enviar ao backend (linhas vazias causavam erro 422 `PAYMENT_AMOUNT_INSUFFICIENT`); `<select>` nativo de forma de pagamento substituído por `<Select>` shadcn
+  - **[Bug 3]** `CustomerPackageCard` constrói mapa `serviceId → nome` a partir de `cp.package.items` e exibe `{serviceName} — {status}` em vez de `Sessão — {status}` em cada linha de sessão
+
 ### [2026-04-09] — fix(#155): Code Review PR #155 — 6 bloqueantes e 3 sugestões corrigidos
 - **Módulo:** Anamnesis (correções pós-code-review PR #155)
 - **Arquivo(s) afetado(s):**

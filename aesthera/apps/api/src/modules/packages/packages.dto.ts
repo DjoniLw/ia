@@ -10,7 +10,7 @@ export const CreatePackageDto = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   price: z.number().int().min(0),
-  validityDays: z.number().int().positive().optional(),
+  validityDays: z.number().int().positive().optional().nullable(),
   items: z.array(PackageItemDto).min(1),
 })
 export type CreatePackageDto = z.infer<typeof CreatePackageDto>
