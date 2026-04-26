@@ -97,7 +97,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // ── POST /auth/refresh ───────────────────────────────────────────────────────────────
   // Rotates access + refresh tokens. PUBLIC — no tenant, no auth.
-  app.post('/auth/refresh', async (request, reply) => {
+  app.post('/auth/refresh', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = RefreshTokenDto.parse(request.body)
     const tokens = await authService.refresh(body.refreshToken)
     reply.status(200).send(tokens)

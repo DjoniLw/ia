@@ -3,12 +3,12 @@ const REFRESH_TOKEN_KEY = 'aesthera_refresh_token'
 
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null
-  return sessionStorage.getItem(ACCESS_TOKEN_KEY) ?? localStorage.getItem(ACCESS_TOKEN_KEY)
+  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? sessionStorage.getItem(ACCESS_TOKEN_KEY)
 }
 
 export function getRefreshToken(): string | null {
   if (typeof window === 'undefined') return null
-  return sessionStorage.getItem(REFRESH_TOKEN_KEY) ?? localStorage.getItem(REFRESH_TOKEN_KEY)
+  return localStorage.getItem(REFRESH_TOKEN_KEY) ?? sessionStorage.getItem(REFRESH_TOKEN_KEY)
 }
 
 export function setTokens(accessToken: string, refreshToken: string): void {

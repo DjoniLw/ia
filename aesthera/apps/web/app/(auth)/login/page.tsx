@@ -17,6 +17,19 @@ import { clearTokens, getRefreshToken, setTokens, setTokensAuto, setTokensSessio
 
 const REMEMBER_KEY = 'aesthera-keep-signed-in'
 
+function sanitizeRedirect(raw: string | null): string {
+  if (!raw) return '/dashboard'
+  if (raw.startsWith('/') && !raw.startsWith('//')) {
+    try {
+      const url = new URL(raw, window.location.origin)
+      if (url.origin === window.location.origin) return raw
+    } catch {
+      // URL inválida — cai no fallback
+    }
+  }
+  return '/dashboard'
+}
+
 const loginSchema = z.object({
   email: z.string().email('E-mail inválido'),
   password: z.string().min(1, 'Senha é obrigatória'),
@@ -94,7 +107,7 @@ export default function LoginPage() {
       .then(({ data }) => {
         setTokensAuto(data.accessToken, data.refreshToken)
         const redirect = new URLSearchParams(window.location.search).get('redirect')
-        router.push(redirect ?? '/dashboard')
+        router.push(sanitizeRedirect(redirect))
       })
       .catch(() => {
         clearTokens()
@@ -128,7 +141,7 @@ export default function LoginPage() {
 
       toast.success('Login realizado com sucesso!')
       const redirect = new URLSearchParams(window.location.search).get('redirect')
-      router.push(redirect ?? '/dashboard')
+      router.push(sanitizeRedirect(redirect))
     } catch (error: unknown) {
       const message =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
