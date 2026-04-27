@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { ExternalLink, Info, Plus, Search, Tag, Wallet, CreditCard, AlertTriangle, Package } from 'lucide-react'
+import { ExternalLink, Info, Plus, Search, Tag, Wallet, CreditCard, AlertTriangle } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,6 @@ import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, useReopenBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { useServiceVouchers } from '@/lib/hooks/use-wallet'
-import { useAvailableSessionsForService, usePayWithPackage } from '@/lib/hooks/use-packages'
 import { useServices, useProfessionals } from '@/lib/hooks/use-resources'
 import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_BADGE_COLORS } from '@/lib/status-colors'
 import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
@@ -440,58 +439,8 @@ function PaymentMethodPills({ billing }: { billing: Billing }) {
 }
 
 // ──── Pay With Package Section ────────────────────────────────────────────────
-
-function PayWithPackageSection({ billing }: { billing: Billing }) {
-  const serviceId = billing.appointment?.service?.id ?? billing.service?.id ?? ''
-  const customerId = billing.customer?.id ?? ''
-  const { data: available } = useAvailableSessionsForService(customerId, serviceId)
-  const payMutation = usePayWithPackage(billing.id)
-
-  // Show if there's a pre-linked session (AGENDADO) or any available (ABERTO) session
-  const linkedSession = billing.packageSession
-  const isLinkedAvailable =
-    linkedSession &&
-    (linkedSession.status === 'AGENDADO' || linkedSession.status === 'ABERTO')
-
-  const hasAvailableSessions = !!available && available.length > 0
-
-  if (!isLinkedAvailable && !hasAvailableSessions) return null
-
-  // Prefer linked session; fallback to first available
-  const sessionToUse = linkedSession ?? available?.[0]?.session
-  const packageName =
-    linkedSession?.customerPackage.package.name ?? available?.[0]?.packageName ?? ''
-
-  if (!sessionToUse) return null
-
-  function handlePay() {
-    payMutation.mutate(sessionToUse!.id, {
-      onSuccess: () => toast.success('Pago com sucesso via pacote'),
-      onError: () => toast.error('Erro ao pagar com pacote'),
-    })
-  }
-
-  return (
-    <div className="mt-2 rounded-md border border-purple-200 bg-purple-50 p-3 dark:border-purple-900 dark:bg-purple-950/30">
-      <div className="flex items-start gap-2">
-        <Package className="mt-0.5 h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
-        <div className="flex-1 text-sm">
-          <p className="font-medium text-purple-800 dark:text-purple-200">Pagar com Pacote</p>
-          <p className="text-purple-700 dark:text-purple-300">{packageName}</p>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="border-purple-400 text-purple-700 hover:bg-purple-100 dark:border-purple-700 dark:text-purple-300"
-          onClick={handlePay}
-          disabled={payMutation.isPending}
-        >
-          {payMutation.isPending ? 'Aguarde...' : 'Confirmar pagamento via pacote'}
-        </Button>
-      </div>
-    </div>
-  )
-}
+// Removido: pagamento via sessão de pacote agora é feito pelo modal de recebimento
+// (ver `receive-manual-modal.tsx`).
 
 // ──── Billing Row Actions ──────────────────────────────────────────────────────
 
@@ -557,9 +506,6 @@ function BillingActions({ billing }: { billing: Billing }) {
         preSelectedVoucherId={bestVoucher?.id ?? undefined}
         previousLines={previousLines ?? undefined}
       />
-      {billing.sourceType === 'APPOINTMENT' && (
-        <PayWithPackageSection billing={billing} />
-      )}
     </>
   )
 }

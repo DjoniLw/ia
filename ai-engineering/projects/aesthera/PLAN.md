@@ -401,6 +401,20 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - [x] `use-appointments.ts` — `Billing` interface inclui `packageSessionId` e `packageSession`; `complete` mutation invalida `customer-packages` e `customer-package-sessions`
 - [x] `billing/page.tsx` — componente `PayWithPackageSection` exibido para cobranças APPOINTMENT pending/overdue com sessões disponíveis
 
+## Fase 16 — Integração de Sessão de Pacote no Modal de Recebimento
+
+> Status: ✅ Implementada
+
+**Objetivo**: substituir o botão isolado "Pagar com Pacote" (Fase 15) pela integração da sessão de pacote como mais uma opção dentro do `receive-manual-modal.tsx`, unificando o fluxo de recebimento.
+
+- [x] Backend B2 — `packages.repository.ts::linkSession` atualiza `status='AGENDADO'` ao reservar sessão (verificado)
+- [x] Backend S2 — `billing.service.ts::reopen()` Caso E: ao reabrir cobrança paga via pacote, libera sessão para `ABERTO`, limpa `appointmentId` e zera `billing.packageSessionId`
+- [x] Backend B1 — testes `appointments.service.test.ts` ajustados (T-CP01, T-CP02, T16–T19); 39/39 passando
+- [x] Backend S1 — chaves de cache `customer-packages` alinhadas entre hooks (`useReserveSession`, `useReleaseSession`, `usePayWithPackage`, `useAvailableSessionsForService`)
+- [x] `receive-manual-modal.tsx` — novo método `'package_session'` em `PAYMENT_METHODS`, sub-seletor de sessões disponíveis (`useAvailableSessionsForService`), filtro de vales tipo `PACKAGE` (RN01), prioridade automática de auto-seleção (1: cobrança reaberta, 2: voucher pré-selecionado, 3: sessão já vinculada ao billing, 4: sessão disponível, 5: dinheiro), banner verde "Sessão de pacote selecionada", branch dedicado em `handleSubmit` chamando `usePayWithPackage`, supressão de cupom/totais quando paga via pacote
+- [x] `billing/page.tsx` — `PayWithPackageSection` removido (substituído pelo modal); imports `Package`, `useAvailableSessionsForService`, `usePayWithPackage` removidos
+- [x] Type-check `tsc --noEmit` no `apps/web` passa sem erros
+
 ---
 
 ## Resumo das Fases

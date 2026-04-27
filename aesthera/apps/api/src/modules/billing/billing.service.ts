@@ -377,7 +377,7 @@ export class BillingService {
         },
       })
 
-      // ── Caso E: billing pago via pacote → reverter sessão de FINALIZADO para AGENDADO ──
+      // ── Caso E: billing pago via pacote → reverter sessão e limpar referência ──
       const billingWithSession = billing as unknown as { packageSessionId?: string | null }
       if (billingWithSession.packageSessionId) {
         // Verifica se a sessão existe e está FINALIZADO (pode já ter sido liberada)
@@ -388,11 +388,17 @@ export class BillingService {
           await tx.customerPackageSession.update({
             where: { id: billingWithSession.packageSessionId },
             data: {
-              status: 'AGENDADO',
+              status: 'ABERTO',
               usedAt: null,
+              appointmentId: null,
             },
           })
         }
+        // Sempre limpar packageSessionId do billing reaberto (evita conflito de unique constraint)
+        await tx.billing.update({
+          where: { id },
+          data: { packageSessionId: null } as any,
+        })
       }
 
       // ── Registrar evento ────────────────────────────────────────────────────
@@ -498,7 +504,7 @@ export class BillingService {
           status: 'paid',
           paidAt: new Date(),
           packageSessionId,
-        },
+        } as any,
       })
 
       // 3. Registrar evento no audit trail

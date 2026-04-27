@@ -41,6 +41,7 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 | **Clinical Records** | 🔲 Parcial | DTO e repository criados, `clinical.service.ts` ausente, tela não implementada |
 | **Fichas de Avaliação (Expandidas)** | 📋 Especificado | Categorias de avaliação + fichas por cliente + redesign da config. Spec: `outputs/po/fichas-avaliacao-expandidas-doc.md` |
 | **Pacotes — Redesign Fluxo de Sessão** | 📋 Especificado | Sessão reservada no agendamento, consumida na cobrança (modelo igual ao vale). Fix de cache incluído. Spec: `outputs/po/pacotes-sessao-cobranca-redesign-doc.md` |
+| **Pacotes — Integração no Modal de Recebimento** | 📋 Especificado | Sessão de pacote dentro do `ReceiveManualModal` como sub-opção separada de vales; remoção do `PayWithPackageSection` avulso; priorização automática SERVICE_PRESALE > Pacote. Spec: `outputs/po/pacotes-recebimento-modal-integracao-doc.md` |
 | **Sales** | 🔲 Parcial | Pasta `/sales` existe no frontend, página não implementada |
 
 ---
@@ -176,6 +177,7 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 | **Redesign Módulo de Anamnese** | **2026-04-08** | **`outputs/po/anamnese-redesign-doc.md`** |
 | **Fichas de Avaliação Expandidas** | **2026-04-13** | **`outputs/po/fichas-avaliacao-expandidas-doc.md`** |
 | **Pacotes — Redesign Sessão via Cobrança** | **2026-04-26** | **`outputs/po/pacotes-sessao-cobranca-redesign-doc.md`** |
+| **Pacotes — Integração no Modal de Recebimento** | **2026-04-27** | **`outputs/po/pacotes-recebimento-modal-integracao-doc.md`** |
 
 ---
 
@@ -194,6 +196,11 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 - Endpoint `release` libera reserva (cancela agendamento ou troca de método)
 - **Fix urgente (independente do redesign):** invalidar query `['packages', 'customer', customerId]` no `onSuccess` da mutation de criação de agendamento
 - Spec completa: `outputs/po/pacotes-sessao-cobranca-redesign-doc.md`
+- **Frontend redesenhado em spec separada:** integração no `ReceiveManualModal` — `outputs/po/pacotes-recebimento-modal-integracao-doc.md`
+- **Regra de carteira:** entradas `WalletEntry.type = PACKAGE` **não aparecem** no seletor de vales/créditos do modal de recebimento
+- **Prioridade de auto-seleção no modal:** SERVICE_PRESALE > sessão reservada no billing > sessão ABERTO mais antiga > dinheiro
+- **Sessão de pacote** não combina com promoção/cupom (mesmo comportamento do SERVICE_PRESALE)
+- **Botão `PayWithPackageSection`** (criado no PR #168 em `billing/page.tsx`) deve ser **removido** — substituído pela integração no modal
 
 ---
 
