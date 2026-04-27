@@ -18,7 +18,6 @@ import { useValidatePromotion, useActivePromotionsForService } from '@/lib/hooks
 import {
   useAvailableSessionsForService,
   usePayWithPackage,
-  useReleaseSession,
   type AvailableSessionEntry,
 } from '@/lib/hooks/use-packages'
 import type { Billing } from '@/lib/hooks/use-appointments'
@@ -332,7 +331,6 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
   const availableSessions = availableSessionsRaw ?? []
 
   const payWithPackage = usePayWithPackage(billing.id)
-  const releaseSession = useReleaseSession(billing.packageSessionId ?? '')
 
   const [lines, setLines] = useState<PaymentLineState[]>(() => {
     // Prioridade 1: pré-preenchimento por pagamento anterior (cobrança reaberta)
