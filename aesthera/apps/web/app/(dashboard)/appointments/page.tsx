@@ -1241,89 +1241,103 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         )}
       </div>
       <div className="flex flex-wrap gap-2 pt-1 border-t">
-        {status === 'draft' && (
-          <Button size="sm" onClick={() => handleAction('confirm')}>Confirmar</Button>
-        )}
-        {status === 'confirmed' && (
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600" onClick={() => handleAction('start')}>Iniciar</Button>
-        )}
-        {status === 'in_progress' && (
-          <>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAction('complete')}>Concluir</Button>
-            <Button size="sm" variant="outline" onClick={() => handleAction('noShow')}>Não compareceu</Button>
-          </>
-        )}
-        {canCancel && (
-          <Button size="sm" variant="destructive" onClick={() => setShowCancelConfirm(true)}>Cancelar</Button>
-        )}
+        {/* Botão principal de ação + seta de status ao lado */}
+        {status !== 'completed' && status !== 'cancelled' && status !== 'no_show' && (() => {
+          const primaryLabel =
+            status === 'draft' ? 'Confirmar' :
+            status === 'confirmed' ? 'Iniciar' :
+            'Concluir'
+          const primaryClass =
+            status === 'draft' ? '' :
+            status === 'confirmed' ? 'bg-amber-500 hover:bg-amber-600' :
+            'bg-green-600 hover:bg-green-700'
+          const primaryAction: 'confirm' | 'start' | 'complete' =
+            status === 'draft' ? 'confirm' :
+            status === 'confirmed' ? 'start' :
+            'complete'
 
-        {/* Dropdown: alterar status diretamente */}
-        {status !== 'completed' && status !== 'cancelled' && status !== 'no_show' && (
-          <div className="relative">
-            <Button
-              size="sm"
-              variant="outline"
-              type="button"
-              onClick={() => setShowStatusMenu((v) => !v)}
-              className="gap-1"
-            >
-              Alterar status
-              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-              </svg>
-            </Button>
-            {showStatusMenu && (
-              <>
-                {/* Overlay para fechar ao clicar fora */}
-                <div className="fixed inset-0 z-10" onClick={() => setShowStatusMenu(false)} />
-                <div className="absolute left-0 top-full mt-1 z-20 min-w-[170px] rounded-lg border bg-popover shadow-lg overflow-hidden">
-                  {status !== 'draft' && (
-                    <button
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
-                      onClick={() => { setShowStatusMenu(false); handleAction('confirm') }}
-                    >
-                      <span className="h-2 w-2 rounded-full bg-blue-500" />
-                      Confirmado
-                    </button>
-                  )}
-                  {status !== 'in_progress' && status !== 'confirmed' && (
-                    <button
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
-                      onClick={() => { setShowStatusMenu(false); handleAction('start') }}
-                    >
-                      <span className="h-2 w-2 rounded-full bg-amber-500" />
-                      Em andamento
-                    </button>
-                  )}
-                  {status !== 'in_progress' && (
-                    <button
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
-                      onClick={() => { setShowStatusMenu(false); handleAction('complete') }}
-                    >
-                      <span className="h-2 w-2 rounded-full bg-green-500" />
-                      Concluído
-                    </button>
-                  )}
-                  <button
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
-                    onClick={() => { setShowStatusMenu(false); handleAction('noShow') }}
-                  >
-                    <span className="h-2 w-2 rounded-full bg-orange-500" />
-                    Não compareceu
-                  </button>
-                  {canCancel && (
-                    <button
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left text-destructive"
-                      onClick={() => { setShowStatusMenu(false); setShowCancelConfirm(true) }}
-                    >
-                      <span className="h-2 w-2 rounded-full bg-red-500" />
-                      Cancelar
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+          return (
+            <div className="flex">
+              <Button
+                size="sm"
+                className={`rounded-r-none border-r-0 ${primaryClass}`}
+                onClick={() => handleAction(primaryAction)}
+              >
+                {primaryLabel}
+              </Button>
+              <div className="relative">
+                <Button
+                  size="sm"
+                  variant={primaryAction === 'confirm' ? 'default' : 'default'}
+                  className={`rounded-l-none px-2 ${primaryClass}`}
+                  type="button"
+                  onClick={() => setShowStatusMenu((v) => !v)}
+                  aria-label="Mais opções de status"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </Button>
+                {showStatusMenu && (
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setShowStatusMenu(false)} />
+                    <div className="absolute left-0 bottom-full mb-1 z-[9999] min-w-[180px] rounded-lg border bg-popover shadow-xl overflow-hidden">
+                      {status !== 'draft' && (
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                          onClick={() => { setShowStatusMenu(false); handleAction('confirm') }}
+                        >
+                          <span className="h-2 w-2 rounded-full bg-blue-500" />
+                          Confirmado
+                        </button>
+                      )}
+                      {status !== 'confirmed' && (
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                          onClick={() => { setShowStatusMenu(false); handleAction('start') }}
+                        >
+                          <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          Em andamento
+                        </button>
+                      )}
+                      {status !== 'in_progress' && (
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                          onClick={() => { setShowStatusMenu(false); handleAction('complete') }}
+                        >
+                          <span className="h-2 w-2 rounded-full bg-green-500" />
+                          Concluído
+                        </button>
+                      )}
+                      <button
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                        onClick={() => { setShowStatusMenu(false); handleAction('noShow') }}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-orange-500" />
+                        Não compareceu
+                      </button>
+                      {canCancel && (
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left text-destructive"
+                          onClick={() => { setShowStatusMenu(false); setShowCancelConfirm(true) }}
+                        >
+                          <span className="h-2 w-2 rounded-full bg-red-500" />
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
+        {status === 'in_progress' && (
+          <Button size="sm" variant="outline" onClick={() => handleAction('noShow')}>Não compareceu</Button>
+        )}
+        {canCancel && status !== 'completed' && status !== 'cancelled' && status !== 'no_show' && (
+          <Button size="sm" variant="destructive" onClick={() => setShowCancelConfirm(true)}>Cancelar</Button>
         )}
 
         <Button size="sm" variant="outline" type="button" onClick={() => setViewingCustomerId(slot.customerId ?? null)}>
