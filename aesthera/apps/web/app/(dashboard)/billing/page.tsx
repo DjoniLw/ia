@@ -279,6 +279,17 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
           </div>
         )}
 
+        {/* Cobrança paga via link de pagamento (sem recebimento manual) */}
+        {!billing.manualReceipt && !billing.packageSessionId && billing.status === 'paid' && billing.paymentLink && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+            <p className="text-xs font-semibold text-foreground">Forma de pagamento</p>
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-blue-600 text-white dark:bg-blue-700">
+              <CreditCard className="h-2.5 w-2.5" />
+              Link de pagamento
+            </span>
+          </div>
+        )}
+
         {/* Histórico de eventos */}
         {billing.billingEvents && billing.billingEvents.length > 0 && (
           <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
@@ -480,21 +491,36 @@ function PaymentMethodPills({ billing }: { billing: Billing }) {
     )
   }
 
-  if (lines.length === 0) return null
-  // Deduplica métodos (ex: 2 linhas cash → exibe "Dinheiro" uma vez)
-  const unique = [...new Map(lines.map(l => [l.paymentMethod, l])).values()]
-  return (
-    <div className="flex flex-wrap gap-0.5 mt-1">
-      {unique.map((line) => (
-        <span
-          key={line.paymentMethod}
-          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
-        >
-          {PAYMENT_METHOD_LABELS[line.paymentMethod] ?? line.paymentMethod}
+  // Cobrança com métodos registrados via recebimento manual
+  if (lines.length > 0) {
+    // Deduplica métodos (ex: 2 linhas cash → exibe "Dinheiro" uma vez)
+    const unique = [...new Map(lines.map(l => [l.paymentMethod, l])).values()]
+    return (
+      <div className="flex flex-wrap gap-0.5 mt-1">
+        {unique.map((line) => (
+          <span
+            key={line.paymentMethod}
+            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
+          >
+            {PAYMENT_METHOD_LABELS[line.paymentMethod] ?? line.paymentMethod}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  // Cobrança paga via link de pagamento (sem recebimento manual registrado)
+  if (billing.status === 'paid' && billing.paymentLink) {
+    return (
+      <div className="flex flex-wrap gap-0.5 mt-1">
+        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-blue-600 text-white dark:bg-blue-700">
+          Link de pagamento
         </span>
-      ))}
-    </div>
-  )
+      </div>
+    )
+  }
+
+  return null
 }
 
 // ──── Pay With Package Section ────────────────────────────────────────────────
