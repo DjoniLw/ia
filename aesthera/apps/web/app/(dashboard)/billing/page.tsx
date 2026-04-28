@@ -155,9 +155,11 @@ function PackageSessionDetail({ billing }: { billing: Billing }) {
     const sameSvcSessions = serviceId
       ? customerPkg.sessions.filter((s) => s.serviceId === serviceId)
       : customerPkg.sessions
-    const idx = sameSvcSessions.findIndex((s) => s.id === billing.packageSessionId)
+    // Sort by id para garantir numeração estável antes/depois do pagamento
+    const stableSessions = [...sameSvcSessions].sort((a, b) => a.id.localeCompare(b.id))
+    const idx = stableSessions.findIndex((s) => s.id === billing.packageSessionId)
     if (idx !== -1) {
-      sessionLabel = `Sessão ${idx + 1}/${sameSvcSessions.length}`
+      sessionLabel = `Sessão ${idx + 1}/${stableSessions.length}`
     }
   }
 

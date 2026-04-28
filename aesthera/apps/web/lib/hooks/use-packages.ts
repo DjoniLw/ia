@@ -225,8 +225,13 @@ export function useAvailableSessionsForService(customerId: string, serviceId: st
         const serviceItem = cp.package.items.find((i) => i.serviceId === serviceId)
         const serviceName = serviceItem?.service.name ?? ''
 
-        // Number all sessions 1..N in the order they appear (stable API order)
-        allForService.forEach((session, idx) => {
+        // Sort by id (UUID) para garantir ordem estável antes/depois do pagamento
+        // usedAt muda ao pagar — usar id como chave de ordenação consistente
+        const stableForService = [...allForService].sort((a, b) => a.id.localeCompare(b.id))
+        const totalByIdOrder = stableForService.length
+
+        // Number all sessions 1..N in stable order
+        stableForService.forEach((session, idx) => {
           const isAberto = session.status === 'ABERTO'
           // Incluir também sessões AGENDADO vinculadas ao agendamento desta cobrança
           const isAgendadoForThisAppt =
@@ -240,7 +245,7 @@ export function useAvailableSessionsForService(customerId: string, serviceId: st
               customerPackageId: cp.id,
               expiresAt: cp.expiresAt,
               sessionNumber: idx + 1,
-              totalSessions,
+              totalSessions: totalByIdOrder,
               serviceName,
             })
           }

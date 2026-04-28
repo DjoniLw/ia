@@ -1336,7 +1336,7 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         {status === 'in_progress' && (
           <Button size="sm" variant="outline" onClick={() => handleAction('noShow')}>Não compareceu</Button>
         )}
-        {canCancel && status !== 'completed' && status !== 'cancelled' && status !== 'no_show' && (
+        {canCancel && (
           <Button size="sm" variant="destructive" onClick={() => setShowCancelConfirm(true)}>Cancelar</Button>
         )}
 
