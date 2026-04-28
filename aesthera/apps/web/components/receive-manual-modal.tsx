@@ -325,9 +325,11 @@ let lineIdCounter = 1
 export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherId, previousLines }: ReceiveManualModalProps) {
   const customerId = billing.customer.id
   const billingServiceId = billing.appointment?.service?.id ?? billing.service?.id ?? ''
+  const billingAppointmentId = billing.appointmentId ?? billing.appointment?.id ?? null
 
   // Sessões de pacote disponíveis para o serviço desta cobrança
-  const { data: availableSessionsRaw } = useAvailableSessionsForService(customerId, billingServiceId)
+  // Inclui sessões AGENDADO vinculadas ao mesmo agendamento para evitar seleção da sessão errada
+  const { data: availableSessionsRaw } = useAvailableSessionsForService(customerId, billingServiceId, billingAppointmentId)
   const availableSessions = availableSessionsRaw ?? []
 
   const payWithPackage = usePayWithPackage(billing.id)

@@ -202,9 +202,9 @@ export function useRedeemSession(sessionId: string) {
  * for a specific customer + service combination.
  * Derived from /packages/customer/:customerId — no extra API call needed.
  */
-export function useAvailableSessionsForService(customerId: string, serviceId: string) {
+export function useAvailableSessionsForService(customerId: string, serviceId: string, appointmentId?: string | null) {
   return useQuery<AvailableSessionEntry[]>({
-    queryKey: ['customer-package-sessions', customerId, serviceId],
+    queryKey: ['customer-package-sessions', customerId, serviceId, appointmentId ?? null],
     queryFn: async () => {
       const packages: CustomerPackage[] = await api
         .get(`/packages/customer/${customerId}`)
@@ -227,8 +227,13 @@ export function useAvailableSessionsForService(customerId: string, serviceId: st
 
         // Number all sessions 1..N in the order they appear (stable API order)
         allForService.forEach((session, idx) => {
-          // Only include sessions that are ABERTO (not yet scheduled or redeemed)
-          if (session.status === 'ABERTO') {
+          const isAberto = session.status === 'ABERTO'
+          // Incluir também sessões AGENDADO vinculadas ao agendamento desta cobrança
+          const isAgendadoForThisAppt =
+            session.status === 'AGENDADO' &&
+            appointmentId &&
+            (session as { appointmentId?: string | null }).appointmentId === appointmentId
+          if (isAberto || isAgendadoForThisAppt) {
             result.push({
               session,
               packageName: cp.package.name,
@@ -241,6 +246,12 @@ export function useAvailableSessionsForService(customerId: string, serviceId: st
           }
         })
       }
+      // Sessões AGENDADO para este agendamento têm prioridade — aparecem antes das ABERTO
+      result.sort((a, b) => {
+        const aReserved = a.session.status === 'AGENDADO' ? 0 : 1
+        const bReserved = b.session.status === 'AGENDADO' ? 0 : 1
+        return aReserved - bReserved
+      })
       return result
     },
     enabled: !!customerId && !!serviceId,

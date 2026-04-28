@@ -2,7 +2,9 @@
 
 import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays, Package, Tag } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -1137,6 +1139,7 @@ function CustomerQuickView({ customerId, onClose }: { customerId: string; onClos
 // ──── Slot Actions Popover ────────────────────────────────────────────────────
 
 function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => void }) {
+  const qc = useQueryClient()
   const transitions = useAppointmentTransition(slot.id)
   const status = slot.status!
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -1162,6 +1165,23 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         // Billing já pago via sessão de pacote — não abrir modal de recebimento
         if (result.billing.status === 'paid' && result.billing.packageSessionId) {
           toast.success('Atendimento concluído. Sessão do pacote utilizada.')
+          onClose()
+          return
+        }
+        // Billing pending com sessão de pacote reservada — pagar automaticamente sem abrir modal
+        if (result.billing.packageSessionId) {
+          try {
+            await api.post(`/billing/${result.billing.id}/pay-with-package`, {
+              packageSessionId: result.billing.packageSessionId,
+            })
+            qc.invalidateQueries({ queryKey: ['billing'] })
+            qc.invalidateQueries({ queryKey: ['customer-packages'] })
+            qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+            qc.invalidateQueries({ queryKey: ['appointments'] })
+            toast.success('Atendimento concluído. Sessão do pacote utilizada.')
+          } catch {
+            toast.error('Atendimento concluído, mas falha ao registrar sessão do pacote.')
+          }
           onClose()
           return
         }
