@@ -290,6 +290,21 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
           </div>
         )}
 
+        {/* Formas de pagamento via paymentMethods direto (ex: PACKAGE_SALE) */}
+        {!billing.manualReceipt && !billing.packageSessionId && billing.status === 'paid' && !billing.paymentLink && billing.paymentMethods?.length && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+            <p className="text-xs font-semibold text-foreground">Formas de pagamento</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[...new Set(billing.paymentMethods)].map((method) => (
+                <span key={method} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[method] ?? 'bg-muted text-muted-foreground'}`}>
+                  <CreditCard className="h-2.5 w-2.5" />
+                  {PAYMENT_METHOD_LABELS[method] ?? method}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Histórico de eventos */}
         {billing.billingEvents && billing.billingEvents.length > 0 && (
           <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
@@ -503,6 +518,23 @@ function PaymentMethodPills({ billing }: { billing: Billing }) {
             className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
           >
             {PAYMENT_METHOD_LABELS[line.paymentMethod] ?? line.paymentMethod}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  // Cobrança paga via paymentMethods direto (ex: PACKAGE_SALE) — sem manual receipt
+  if (billing.status === 'paid' && billing.paymentMethods?.length) {
+    const unique = [...new Set(billing.paymentMethods)]
+    return (
+      <div className="flex flex-wrap gap-0.5 mt-1">
+        {unique.map((method) => (
+          <span
+            key={method}
+            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[method] ?? 'bg-muted text-muted-foreground'}`}
+          >
+            {PAYMENT_METHOD_LABELS[method] ?? method}
           </span>
         ))}
       </div>

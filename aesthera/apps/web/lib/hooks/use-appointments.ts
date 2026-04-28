@@ -136,6 +136,7 @@ export interface Billing {
       walletEntry?: { id: string; code: string; originType: string } | null
     }>
   } | null
+  paymentMethods?: string[] | null
   packageSessionId?: string | null
   packageSession?: {
     id: string
