@@ -1147,6 +1147,7 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
   const [showReceiveModal, setShowReceiveModal] = useState(false)
   const [pendingReceiptBilling, setPendingReceiptBilling] = useState<Billing | null>(null)
   const [preSelectedVoucher, setPreSelectedVoucher] = useState<ServiceVoucher | null>(null)
+  const [showStatusMenu, setShowStatusMenu] = useState(false)
 
   const profName = (slot as CalendarSlot & { _profName?: string })._profName ?? slot.professional?.name
 
@@ -1255,6 +1256,76 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         {canCancel && (
           <Button size="sm" variant="destructive" onClick={() => setShowCancelConfirm(true)}>Cancelar</Button>
         )}
+
+        {/* Dropdown: alterar status diretamente */}
+        {status !== 'completed' && status !== 'cancelled' && status !== 'no_show' && (
+          <div className="relative">
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={() => setShowStatusMenu((v) => !v)}
+              className="gap-1"
+            >
+              Alterar status
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </Button>
+            {showStatusMenu && (
+              <>
+                {/* Overlay para fechar ao clicar fora */}
+                <div className="fixed inset-0 z-10" onClick={() => setShowStatusMenu(false)} />
+                <div className="absolute left-0 top-full mt-1 z-20 min-w-[170px] rounded-lg border bg-popover shadow-lg overflow-hidden">
+                  {status !== 'draft' && (
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                      onClick={() => { setShowStatusMenu(false); handleAction('confirm') }}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-blue-500" />
+                      Confirmado
+                    </button>
+                  )}
+                  {status !== 'in_progress' && status !== 'confirmed' && (
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                      onClick={() => { setShowStatusMenu(false); handleAction('start') }}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-amber-500" />
+                      Em andamento
+                    </button>
+                  )}
+                  {status !== 'in_progress' && (
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                      onClick={() => { setShowStatusMenu(false); handleAction('complete') }}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-green-500" />
+                      Concluído
+                    </button>
+                  )}
+                  <button
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                    onClick={() => { setShowStatusMenu(false); handleAction('noShow') }}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-orange-500" />
+                    Não compareceu
+                  </button>
+                  {canCancel && (
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left text-destructive"
+                      onClick={() => { setShowStatusMenu(false); setShowCancelConfirm(true) }}
+                    >
+                      <span className="h-2 w-2 rounded-full bg-red-500" />
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         <Button size="sm" variant="outline" type="button" onClick={() => setViewingCustomerId(slot.customerId ?? null)}>
           Ver ficha do cliente
         </Button>
