@@ -28,6 +28,7 @@ import { useBilling, useOneBilling, type Billing } from '@/lib/hooks/use-appoint
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { useCustomers } from '@/lib/hooks/use-resources'
 import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
+import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
@@ -694,6 +695,7 @@ function CarteiraPageContent() {
   const [customerSearch, setCustomerSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [presaleOpen, setPresaleOpen] = useState(false)
   const [adjustEntry, setAdjustEntry] = useState<WalletEntry | null>(null)
   const [payNowBillingId, setPayNowBillingId] = useState<string | null>(null)
   const [createdAtFrom, setCreatedAtFrom] = useState(searchParams.get('createdAtFrom') ?? defaultCreatedAtFrom())
@@ -824,10 +826,16 @@ function CarteiraPageContent() {
             Gerencie vouchers, créditos, cashback e pacotes dos clientes
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Voucher
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setCreateOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Voucher
+          </Button>
+          <Button onClick={() => setPresaleOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nova Pré-venda
+          </Button>
+        </div>
       </div>
 
       {/* Modo de visualização */}
@@ -1161,6 +1169,17 @@ function CarteiraPageContent() {
         onClose={() => setCreateOpen(false)}
         onPayNow={(billingId) => setPayNowBillingId(billingId)}
       />
+      {presaleOpen && (
+        <Dialog open onClose={() => setPresaleOpen(false)}>
+          <DialogTitle>Nova Pré-venda de Serviço</DialogTitle>
+          <div className="mt-4">
+            <SellServiceForm
+              onSuccess={() => setPresaleOpen(false)}
+              onCancel={() => setPresaleOpen(false)}
+            />
+          </div>
+        </Dialog>
+      )}
       {adjustEntry && (
         <AdjustModal
           entry={adjustEntry}

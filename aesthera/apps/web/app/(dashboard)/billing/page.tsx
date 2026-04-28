@@ -53,8 +53,11 @@ const BILLING_EVENT_LABEL: Record<string, string> = {
 function parseEventNotes(notes: string | null): string | null {
   if (!notes) return null
   try {
-    const parsed = JSON.parse(notes)
-    return (parsed as { reason?: string }).reason ?? notes
+    const parsed = JSON.parse(notes) as Record<string, unknown>
+    if (parsed.source === 'package') {
+      return 'Pago via sessão de pacote'
+    }
+    return (parsed as { reason?: string }).reason ?? null
   } catch {
     return notes
   }
@@ -198,6 +201,18 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
           )}
 
         </div>
+
+        {/* Detalhe de pagamento via pacote */}
+        {billing.packageSessionId && (
+          <div className="rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/30 p-3 space-y-1">
+            <p className="text-xs font-semibold text-purple-800 dark:text-purple-200">Pago via Sessão de Pacote</p>
+            {billing.packageSession?.customerPackage?.package?.name && (
+              <p className="text-xs text-purple-700 dark:text-purple-300">
+                {billing.packageSession.customerPackage.package.name}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Detalhe do recebimento */}
         {billing.manualReceipt && (
@@ -421,6 +436,19 @@ function CancelBillingButton({ id, status }: { id: string; status: BillingStatus
 
 function PaymentMethodPills({ billing }: { billing: Billing }) {
   const lines = billing.manualReceipt?.lines ?? []
+
+  // Cobrança paga via sessão de pacote (sem manual receipt)
+  if (lines.length === 0 && billing.packageSessionId) {
+    const pkgName = billing.packageSession?.customerPackage?.package?.name
+    return (
+      <div className="flex flex-wrap gap-0.5 mt-1">
+        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+          {pkgName ? `Pacote · ${pkgName}` : 'Pacote'}
+        </span>
+      </div>
+    )
+  }
+
   if (lines.length === 0) return null
   // Deduplica métodos (ex: 2 linhas cash → exibe "Dinheiro" uma vez)
   const unique = [...new Map(lines.map(l => [l.paymentMethod, l])).values()]
@@ -665,7 +693,7 @@ function BillingPageContent() {
     ...(dateTo && { createdAtTo: dateTo }),
     ...paginationParams,
   }
-  const { data, isLoading } = useBilling(Object.keys(params).length ? params : undefined)
+  const { data, isLoading, refetch: refetchBilling } = useBilling(Object.keys(params).length ? params : undefined)
 
   const statuses: Array<{ value: BillingStatus; label: string }> = [
     { value: 'pending', label: 'Pendente' },
@@ -1042,7 +1070,7 @@ function BillingPageContent() {
           <DialogTitle>Nova Pré-venda de Serviço</DialogTitle>
           <div className="mt-4">
             <SellServiceForm
-              onSuccess={() => setShowNewBillingModal(false)}
+              onSuccess={() => { setShowNewBillingModal(false); refetchBilling() }}
               onCancel={() => setShowNewBillingModal(false)}
             />
           </div>
@@ -1056,7 +1084,7 @@ function BillingPageContent() {
           <div className="mt-4">
             <SellServiceForm
               mode="MANUAL"
-              onSuccess={() => setShowManualBillingModal(false)}
+              onSuccess={() => { setShowManualBillingModal(false); refetchBilling() }}
               onCancel={() => setShowManualBillingModal(false)}
             />
           </div>

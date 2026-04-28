@@ -451,9 +451,9 @@ export function useCreateBilling() {
   const qc = useQueryClient()
   return useMutation<Billing, Error, CreateBillingPayload>({
     mutationFn: (data) => api.post('/billing', data).then((r) => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['billing'] })
-      qc.invalidateQueries({ queryKey: ['appointments'] })
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['billing'] })
+      await qc.invalidateQueries({ queryKey: ['appointments'] })
     },
   })
 }
