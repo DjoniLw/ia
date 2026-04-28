@@ -608,7 +608,8 @@ describe('AppointmentsService.complete()', () => {
     service = new AppointmentsService()
   })
 
-  // T19 — Regressão: complete() NÃO auto-cria billing (assertiva determinística via vi.hoisted)
+  // T19 — Regressão: complete() NÃO chama o método legado createForAppointment
+  // (mas chama createManual, que é o caminho atual)
   it('T19 (regressão): complete() NÃO chama BillingService.createForAppointment automaticamente', async () => {
     const appt = makeCompletedAppointment()
     mockRepo.findById.mockResolvedValue(appt)
@@ -618,6 +619,8 @@ describe('AppointmentsService.complete()', () => {
     mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
 
     mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-t19' })
+    mockBillingRepoInstance.findById.mockResolvedValue({ id: 'billing-t19', status: 'pending' })
     mockPrisma.walletEntry.findMany.mockResolvedValue([])
     mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-1' })
     mockBillingRepoInstance.findById.mockResolvedValue({ id: 'billing-1', sourceType: 'APPOINTMENT', status: 'pending', amount: 0 })
@@ -637,6 +640,8 @@ describe('AppointmentsService.complete()', () => {
     mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
 
     mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-t16' })
+    mockBillingRepoInstance.findById.mockResolvedValue({ id: 'billing-t16', status: 'pending' })
     mockPrisma.walletEntry.findMany.mockResolvedValue([
       { id: 'voucher-1', serviceId: 'service-1', balance: 20000, expirationDate: null, code: 'VCHR-ABC1' },
     ])
@@ -657,6 +662,8 @@ describe('AppointmentsService.complete()', () => {
     mockPackagesInstance.findLinkedSession.mockResolvedValue(null)
 
     mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-t17' })
+    mockBillingRepoInstance.findById.mockResolvedValue({ id: 'billing-t17', status: 'pending' })
     mockPrisma.walletEntry.findMany.mockResolvedValue([])
     mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-1' })
     mockBillingRepoInstance.findById.mockResolvedValue({ id: 'billing-1', sourceType: 'APPOINTMENT', status: 'pending', amount: 0 })
@@ -673,7 +680,14 @@ describe('AppointmentsService.complete()', () => {
     mockRepo.transition.mockResolvedValue({ ...appt, status: 'completed' })
 
     mockPackagesInstance.findLinkedSession.mockResolvedValue({ id: 'pkg-session-1' })
-    mockPackagesInstance.redeemSession.mockResolvedValue({})
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-t18', packageSessionId: 'pkg-session-1' })
+    mockBillingRepoInstance.findById.mockResolvedValue({
+      id: 'billing-t18',
+      status: 'pending',
+      packageSessionId: 'pkg-session-1',
+    })
+    mockPrisma.walletEntry.findMany.mockResolvedValue([])
 
     const result = await service.complete('clinic-1', 'appt-1')
 
@@ -830,22 +844,36 @@ describe('AppointmentsService.complete() — Novo fluxo pós-atendimento (RN-PA)
         appointmentId: 'appt-cp',
       }),
       'clinic-1',
+      undefined,
+      undefined, // sem sessão reservada
     )
     expect(result.billing).toMatchObject({ id: 'billing-cp', sourceType: 'APPOINTMENT', status: 'pending' })
   })
 
-  // T-CP02: packageSession vinculada → sem billing, retorna billing: null
-  it('T-CP02: complete() retorna billing: null quando appointment usa sessão de pacote', async () => {
+  // T-CP02: linkedSession (sessão de pacote reservada) → billing criado COM packageSessionId
+  it('T-CP02: complete() cria billing com packageSessionId quando appointment tem sessão reservada', async () => {
     mockRepo.findById.mockResolvedValue(apptInProgress)
     mockRepo.transition.mockResolvedValue(apptCompleted)
     mockPackagesInstance.findLinkedSession.mockResolvedValue({ id: 'pkg-session-1' })
-    mockPackagesInstance.redeemSession.mockResolvedValue({})
+    mockPrisma.billing.findUnique.mockResolvedValue(null)
+    mockBillingInstance.createManual.mockResolvedValue({ id: 'billing-cp', packageSessionId: 'pkg-session-1' })
+    mockBillingRepoInstance.findById.mockResolvedValue({
+      ...fullBilling,
+      id: 'billing-cp',
+      packageSessionId: 'pkg-session-1',
+    })
+    mockPrisma.walletEntry.findMany.mockResolvedValue([])
 
     const result = await service.complete('clinic-1', 'appt-cp')
 
-    expect(result.billing).toBeNull()
+    expect(result.billing).not.toBeNull()
+    expect(mockBillingInstance.createManual).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: 'customer-1', sourceType: 'APPOINTMENT' }),
+      'clinic-1',
+      undefined,
+      expect.objectContaining({ packageSessionId: 'pkg-session-1' }),
+    )
     expect(result.serviceVouchers).toEqual([])
-    expect(mockBillingInstance.createManual).not.toHaveBeenCalled()
   })
 
   // T-CP03: billing já existe com status 'paid' → retorna billing existente, sem criar novo

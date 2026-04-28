@@ -202,9 +202,9 @@ export function useRedeemSession(sessionId: string) {
  * for a specific customer + service combination.
  * Derived from /packages/customer/:customerId — no extra API call needed.
  */
-export function useAvailableSessionsForService(customerId: string, serviceId: string) {
+export function useAvailableSessionsForService(customerId: string, serviceId: string, appointmentId?: string | null) {
   return useQuery<AvailableSessionEntry[]>({
-    queryKey: ['customer-package-sessions', customerId, serviceId],
+    queryKey: ['customer-package-sessions', customerId, serviceId, appointmentId ?? null],
     queryFn: async () => {
       const packages: CustomerPackage[] = await api
         .get(`/packages/customer/${customerId}`)
@@ -225,24 +225,77 @@ export function useAvailableSessionsForService(customerId: string, serviceId: st
         const serviceItem = cp.package.items.find((i) => i.serviceId === serviceId)
         const serviceName = serviceItem?.service.name ?? ''
 
-        // Number all sessions 1..N in the order they appear (stable API order)
-        allForService.forEach((session, idx) => {
-          // Only include sessions that are ABERTO (not yet scheduled or redeemed)
-          if (session.status === 'ABERTO') {
+        // Sort by id (UUID) para garantir ordem estável antes/depois do pagamento
+        // usedAt muda ao pagar — usar id como chave de ordenação consistente
+        const stableForService = [...allForService].sort((a, b) => a.id.localeCompare(b.id))
+        const totalByIdOrder = stableForService.length
+
+        // Number all sessions 1..N in stable order
+        stableForService.forEach((session, idx) => {
+          const isAberto = session.status === 'ABERTO'
+          // Incluir também sessões AGENDADO vinculadas ao agendamento desta cobrança
+          const isAgendadoForThisAppt =
+            session.status === 'AGENDADO' &&
+            appointmentId &&
+            (session as { appointmentId?: string | null }).appointmentId === appointmentId
+          if (isAberto || isAgendadoForThisAppt) {
             result.push({
               session,
               packageName: cp.package.name,
               customerPackageId: cp.id,
               expiresAt: cp.expiresAt,
               sessionNumber: idx + 1,
-              totalSessions,
+              totalSessions: totalByIdOrder,
               serviceName,
             })
           }
         })
       }
+      // Sessões AGENDADO para este agendamento têm prioridade — aparecem antes das ABERTO
+      result.sort((a, b) => {
+        const aReserved = a.session.status === 'AGENDADO' ? 0 : 1
+        const bReserved = b.session.status === 'AGENDADO' ? 0 : 1
+        return aReserved - bReserved
+      })
       return result
     },
     enabled: !!customerId && !!serviceId,
+  })
+}
+
+export function useReserveSession(sessionId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (appointmentId: string) =>
+      api.post(`/packages/sessions/${sessionId}/reserve`, { appointmentId }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer-packages'] })
+      qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+    },
+  })
+}
+
+export function useReleaseSession(sessionId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      api.post(`/packages/sessions/${sessionId}/release`).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer-packages'] })
+      qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+    },
+  })
+}
+
+export function usePayWithPackage(billingId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (packageSessionId: string) =>
+      api.post(`/billing/${billingId}/pay-with-package`, { packageSessionId }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['billing'] })
+      qc.invalidateQueries({ queryKey: ['customer-packages'] })
+      qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+    },
   })
 }

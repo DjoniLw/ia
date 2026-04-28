@@ -34,6 +34,21 @@ const billingInclude = {
     select: { id: true, event: true, fromStatus: true, toStatus: true, notes: true, createdAt: true },
     orderBy: { createdAt: 'asc' as const },
   },
+  packageSession: {
+    select: {
+      id: true,
+      serviceId: true,
+      status: true,
+      appointmentId: true,
+      customerPackage: {
+        select: {
+          id: true,
+          expiresAt: true,
+          package: { select: { id: true, name: true } },
+        },
+      },
+    },
+  },
 } as const
 
 export class BillingRepository {

@@ -382,6 +382,39 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - [x] `receive-manual-modal.tsx` — redesenho da UX de promoções: melhor desconto é auto-aplicado (específica > universal); removidos múltiplos banners confusos; adicionado botão "Selecionar outro desconto" que expande picker com todos os descontos disponíveis (mostra código, tipo e valor); corrigido bug onde trocar promoção deixava a anterior aparecendo como sugestão em loop
 - [x] `customers/page.tsx::CustomerWalletTab` — seção "Aguardando pagamento" com pré-vendas pendentes (`sourceType: PRESALE, status: pending`) visível na aba Carteira da Ficha do Cliente; mesmo padrão visual amber já presente em `carteira/page.tsx`
 
+## Fase 15 — Redesign do Uso de Sessão de Pacote via Cobrança
+
+> Status: ✅ Implementada
+
+**Objetivo**: corrigir dois problemas estruturais do fluxo de pacotes: (1) `complete()` retornava `billing: null` para pacotes — sem cobrança gerada; (2) falta de reserva de sessão entre agendamento e confirmação de pagamento.
+
+- [x] `schema.prisma` — adicionado `packageSessionId` (FK → `CustomerPackageSession`, `@unique`) em `Billing`; back-relation `billing` em `CustomerPackageSession`
+- [x] `migrations/20260426_add_package_session_id_to_billing/migration.sql` — migration manual (Docker indisponível)
+- [x] `packages.dto.ts` — `ReserveSessionDto`; `packages.service.ts` — `reserveSession()` / `releaseSession()`; `packages.routes.ts` — `POST /packages/sessions/:id/reserve` e `POST /packages/sessions/:id/release`
+- [x] `appointments.service.ts::complete()` — billing SEMPRE criado ao concluir; se havia sessão AGENDADO, `packageSessionId` é pré-preenchido no billing
+- [x] `billing.service.ts` — `payWithPackage()`: valida billing pending, sessão ABERTO/AGENDADO, serviceId match, expiry; atomicamente: sessão → FINALIZADO, billing → paid com `packageSessionId`, ledger entry
+- [x] `billing.dto.ts` — `PayWithPackageDto`; `billing.routes.ts` — `POST /billing/:id/pay-with-package`
+- [x] `billing.repository.ts` — `billingInclude` agora inclui `packageSession` com `customerPackage.package`
+- [x] `manual-receipts.service.ts::receive()` — RN04: se billing possui sessão AGENDADO e é pago por outro meio, libera sessão de volta para ABERTO dentro da transação
+- [x] `billing.service.ts::reopen()` — Caso E: se billing pago via pacote for reaberto, sessão reverte de FINALIZADO para AGENDADO
+- [x] `use-packages.ts` — adicionados hooks `useReserveSession`, `useReleaseSession`, `usePayWithPackage`
+- [x] `use-appointments.ts` — `Billing` interface inclui `packageSessionId` e `packageSession`; `complete` mutation invalida `customer-packages` e `customer-package-sessions`
+- [x] `billing/page.tsx` — componente `PayWithPackageSection` exibido para cobranças APPOINTMENT pending/overdue com sessões disponíveis
+
+## Fase 16 — Integração de Sessão de Pacote no Modal de Recebimento
+
+> Status: ✅ Implementada
+
+**Objetivo**: substituir o botão isolado "Pagar com Pacote" (Fase 15) pela integração da sessão de pacote como mais uma opção dentro do `receive-manual-modal.tsx`, unificando o fluxo de recebimento.
+
+- [x] Backend B2 — `packages.repository.ts::linkSession` atualiza `status='AGENDADO'` ao reservar sessão (verificado)
+- [x] Backend S2 — `billing.service.ts::reopen()` Caso E: ao reabrir cobrança paga via pacote, libera sessão para `ABERTO`, limpa `appointmentId` e zera `billing.packageSessionId`
+- [x] Backend B1 — testes `appointments.service.test.ts` ajustados (T-CP01, T-CP02, T16–T19); 39/39 passando
+- [x] Backend S1 — chaves de cache `customer-packages` alinhadas entre hooks (`useReserveSession`, `useReleaseSession`, `usePayWithPackage`, `useAvailableSessionsForService`)
+- [x] `receive-manual-modal.tsx` — novo método `'package_session'` em `PAYMENT_METHODS`, sub-seletor de sessões disponíveis (`useAvailableSessionsForService`), filtro de vales tipo `PACKAGE` (RN01), prioridade automática de auto-seleção (1: cobrança reaberta, 2: voucher pré-selecionado, 3: sessão já vinculada ao billing, 4: sessão disponível, 5: dinheiro), banner verde "Sessão de pacote selecionada", branch dedicado em `handleSubmit` chamando `usePayWithPackage`, supressão de cupom/totais quando paga via pacote
+- [x] `billing/page.tsx` — `PayWithPackageSection` removido (substituído pelo modal); imports `Package`, `useAvailableSessionsForService`, `usePayWithPackage` removidos
+- [x] Type-check `tsc --noEmit` no `apps/web` passa sem erros
+
 ---
 
 ## Resumo das Fases
@@ -487,6 +520,43 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - **Arquivo gerado:** `outputs/code-review/pr/revisao_pr162_2026-04-15.md`
 - **O que foi feito:** Revisão do PR #162 (feat(#159): aba Avaliações no perfil do cliente e fichas personalizadas) — 5 bloqueantes, 6 sugestões
 - **Impacto:** Qualidade e integridade do código revisado; PR reprovado pendente correções
+
+### [2026-04-28] — Code Review PR #168
+- **Arquivo gerado:** `outputs/code-review/pr/revisao_pr168_2026-04-28.md`
+- **O que foi feito:** Revisão do PR #168 (Fase 15 + Fase 16: billing sempre criado ao completar agendamento com pacote; integração de sessão de pacote no ReceiveManualModal) — 8 bloqueantes, 4 sugestões
+- **Impacto:** PR reprovado pendente correções; principais achados: 3 IDOR em updates de `customerPackageSession` sem `clinicId`, Prisma client não regenerado após migration (`as any`/`as unknown as`), ausência de testes para `payWithPackage()` e `reserveSession()`/`releaseSession()`, modal de aviso de pacote fora do padrão (`fixed inset-0`), e `<select>` nativo em 2 arquivos
+
+### [2026-04-28] — fix: Correções dos bloqueantes do PR #168
+- **Módulo:** Billing · ManualReceipts · Packages · Appointments (frontend)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/billing/billing.service.ts` — IDOR corrigido (2 ocorrências: `payWithPackage` + `reopen` Caso E); `as any`/`as unknown as` removidos após `prisma generate`
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.service.ts` — IDOR corrigido (RN04)
+  - `aesthera/apps/api/src/modules/billing/billing.service.test.ts` — 7 novos testes para `payWithPackage()`
+  - `aesthera/apps/api/src/modules/packages/packages.service.test.ts` — 6 + 4 novos testes para `reserveSession()` e `releaseSession()`
+  - `aesthera/apps/web/app/(dashboard)/appointments/page.tsx` — modal `fixed inset-0` → `<Dialog>`; `<select>` nativo → `<Select>` shadcn
+  - `aesthera/apps/web/components/receive-manual-modal.tsx` — `<select>` nativo → `<Select>` shadcn; emoji `⚠️` → `<AlertTriangle>` Lucide
+- **O que foi feito:** Todos os 8 bloqueantes corrigidos; 37 testes passando; zero erros de compilação
+
+### [2026-04-28] — Treinamento do implementador — 2 novos padrões registrados
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/patterns/backend-seguranca.md`
+  - `ai-engineering/prompts/aesthera-implementador/patterns/backend-prisma.md`
+- **O que foi feito:** Registrados padrões derivados do PR #168: (1) IDOR em update cross-module dentro de `$transaction` sem `clinicId`; (2) `as any` em dados Prisma = sinal de `prisma generate` não executado
+
+### [2026-04-28] — PO: Ajustes de Envio via WhatsApp e E-mail
+- **Módulo:** Notifications · Contracts · Anamnesis · Settings
+- **O que foi feito:** Especificação gerada para 4 ajustes no fluxo de envio de fichas de anamnese e contratos via WhatsApp e e-mail
+
+### [2026-04-26] — fix: Correções de Bugs — Módulo de Pacotes
+- **Módulo:** Packages (backend + frontend)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/packages/packages.dto.ts` *(CreatePackageDto.validityDays → `.optional().nullable()` — campo genuinamente opcional aceita null)*
+  - `aesthera/apps/web/app/(dashboard)/packages/page.tsx` *(layout linha de serviços corrigido + `<select>` nativo substituído por `<Select>` shadcn; filtragem de linhas de pagamento com valor zero antes do submit; nome do serviço exibido em cada sessão do cliente)*
+- **O que foi feito:**
+  - **[Bug 1b]** `CreatePackageDto.validityDays` de `.optional()` para `.optional().nullable()` — frontend enviava `null` para campo vazio, backend rejeitava com erro 400
+  - **[Bug 1a]** Linha de item de serviço no formulário de criação de pacote reestruturada com `flex items-center gap-2`; `<select>` nativo substituído por `<Select>`/`<SelectTrigger>`/`<SelectContent>`/`<SelectItem>` do shadcn/ui (anti-padrão bloqueante); wrapper `flex-col` removido do campo de sessões
+  - **[Bug 2]** `handleSubmit` do `PurchaseModal` filtra linhas com `amount <= 0` antes de enviar ao backend (linhas vazias causavam erro 422 `PAYMENT_AMOUNT_INSUFFICIENT`); `<select>` nativo de forma de pagamento substituído por `<Select>` shadcn
+  - **[Bug 3]** `CustomerPackageCard` constrói mapa `serviceId → nome` a partir de `cp.package.items` e exibe `{serviceName} — {status}` em vez de `Sessão — {status}` em cada linha de sessão
 
 ### [2026-04-09] — fix(#155): Code Review PR #155 — 6 bloqueantes e 3 sugestões corrigidos
 - **Módulo:** Anamnesis (correções pós-code-review PR #155)

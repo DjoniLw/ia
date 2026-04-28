@@ -11,6 +11,7 @@ import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, useReopenBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { useServiceVouchers } from '@/lib/hooks/use-wallet'
+import { useCustomerPackages } from '@/lib/hooks/use-packages'
 import { useServices, useProfessionals } from '@/lib/hooks/use-resources'
 import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_BADGE_COLORS } from '@/lib/status-colors'
 import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
@@ -53,8 +54,11 @@ const BILLING_EVENT_LABEL: Record<string, string> = {
 function parseEventNotes(notes: string | null): string | null {
   if (!notes) return null
   try {
-    const parsed = JSON.parse(notes)
-    return (parsed as { reason?: string }).reason ?? notes
+    const parsed = JSON.parse(notes) as Record<string, unknown>
+    if (parsed.source === 'package') {
+      return 'Pago via sessão de pacote'
+    }
+    return (parsed as { reason?: string }).reason ?? null
   } catch {
     return notes
   }
@@ -133,6 +137,45 @@ function billingDescription(b: Billing): React.ReactNode {
   }
 }
 
+// ──── Package Session Detail ──────────────────────────────────────────────────
+
+function PackageSessionDetail({ billing }: { billing: Billing }) {
+  const pkg = billing.packageSession
+  const pkgName = pkg?.customerPackage?.package?.name
+  const customerPackageId = pkg?.customerPackage?.id
+  const customerId = billing.customer.id
+
+  const { data: customerPackages } = useCustomerPackages(customerId)
+  const customerPkg = customerPackages?.find((cp) => cp.id === customerPackageId)
+
+  // Calcula "Sessão X/Y" filtrando apenas sessões do mesmo serviço
+  let sessionLabel: string | null = null
+  if (customerPkg && billing.packageSessionId) {
+    const serviceId = pkg?.serviceId
+    const sameSvcSessions = serviceId
+      ? customerPkg.sessions.filter((s) => s.serviceId === serviceId)
+      : customerPkg.sessions
+    // Sort by id para garantir numeração estável antes/depois do pagamento
+    const stableSessions = [...sameSvcSessions].sort((a, b) => a.id.localeCompare(b.id))
+    const idx = stableSessions.findIndex((s) => s.id === billing.packageSessionId)
+    if (idx !== -1) {
+      sessionLabel = `Sessão ${idx + 1}/${stableSessions.length}`
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-purple-300 bg-purple-600 dark:border-purple-700 dark:bg-purple-700 p-3 space-y-1">
+      <p className="text-xs font-semibold text-white">Pago via Sessão de Pacote</p>
+      {pkgName && (
+        <p className="text-xs text-purple-100">{pkgName}</p>
+      )}
+      {sessionLabel && (
+        <p className="text-xs font-medium text-purple-100">{sessionLabel}</p>
+      )}
+    </div>
+  )
+}
+
 // ──── Billing Detail Modal ─────────────────────────────────────────────────────
 
 function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: () => void }) {
@@ -199,6 +242,11 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
 
         </div>
 
+        {/* Detalhe de pagamento via pacote */}
+        {billing.packageSessionId && (
+          <PackageSessionDetail billing={billing} />
+        )}
+
         {/* Detalhe do recebimento */}
         {billing.manualReceipt && (
           <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
@@ -230,6 +278,32 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
             {billing.manualReceipt.notes && (
               <p className="text-xs text-muted-foreground border-t pt-2">{billing.manualReceipt.notes}</p>
             )}
+          </div>
+        )}
+
+        {/* Cobrança paga via link de pagamento (sem recebimento manual) */}
+        {!billing.manualReceipt && !billing.packageSessionId && billing.status === 'paid' && billing.paymentLink && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+            <p className="text-xs font-semibold text-foreground">Forma de pagamento</p>
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-blue-600 text-white dark:bg-blue-700">
+              <CreditCard className="h-2.5 w-2.5" />
+              Link de pagamento
+            </span>
+          </div>
+        )}
+
+        {/* Formas de pagamento via paymentMethods direto (ex: PACKAGE_SALE) */}
+        {!billing.manualReceipt && !billing.packageSessionId && billing.status === 'paid' && !billing.paymentLink && billing.paymentMethods?.length && (
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+            <p className="text-xs font-semibold text-foreground">Formas de pagamento</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[...new Set(billing.paymentMethods)].map((method) => (
+                <span key={method} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[method] ?? 'bg-muted text-muted-foreground'}`}>
+                  <CreditCard className="h-2.5 w-2.5" />
+                  {PAYMENT_METHOD_LABELS[method] ?? method}
+                </span>
+              ))}
+            </div>
           </div>
         )}
 
@@ -421,22 +495,71 @@ function CancelBillingButton({ id, status }: { id: string; status: BillingStatus
 
 function PaymentMethodPills({ billing }: { billing: Billing }) {
   const lines = billing.manualReceipt?.lines ?? []
-  if (lines.length === 0) return null
-  // Deduplica métodos (ex: 2 linhas cash → exibe "Dinheiro" uma vez)
-  const unique = [...new Map(lines.map(l => [l.paymentMethod, l])).values()]
-  return (
-    <div className="flex flex-wrap gap-0.5 mt-1">
-      {unique.map((line) => (
-        <span
-          key={line.paymentMethod}
-          className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
-        >
-          {PAYMENT_METHOD_LABELS[line.paymentMethod] ?? line.paymentMethod}
+
+  // Cobrança paga via sessão de pacote (sem manual receipt)
+  if (lines.length === 0 && billing.packageSessionId) {
+    const pkgName = billing.packageSession?.customerPackage?.package?.name
+    return (
+      <div className="flex flex-wrap gap-0.5 mt-1">
+        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-purple-600 text-white dark:bg-purple-700">
+          {pkgName ? `Pacote · ${pkgName}` : 'Pacote'}
         </span>
-      ))}
-    </div>
-  )
+      </div>
+    )
+  }
+
+  // Cobrança com métodos registrados via recebimento manual
+  if (lines.length > 0) {
+    // Deduplica métodos (ex: 2 linhas cash → exibe "Dinheiro" uma vez)
+    const unique = [...new Map(lines.map(l => [l.paymentMethod, l])).values()]
+    return (
+      <div className="flex flex-wrap gap-0.5 mt-1">
+        {unique.map((line) => (
+          <span
+            key={line.paymentMethod}
+            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[line.paymentMethod] ?? 'bg-muted text-muted-foreground'}`}
+          >
+            {PAYMENT_METHOD_LABELS[line.paymentMethod] ?? line.paymentMethod}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  // Cobrança paga via paymentMethods direto (ex: PACKAGE_SALE) — sem manual receipt
+  if (billing.status === 'paid' && billing.paymentMethods?.length) {
+    const unique = [...new Set(billing.paymentMethods)]
+    return (
+      <div className="flex flex-wrap gap-0.5 mt-1">
+        {unique.map((method) => (
+          <span
+            key={method}
+            className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_METHOD_BADGE_COLORS[method] ?? 'bg-muted text-muted-foreground'}`}
+          >
+            {PAYMENT_METHOD_LABELS[method] ?? method}
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  // Cobrança paga via link de pagamento (sem recebimento manual registrado)
+  if (billing.status === 'paid' && billing.paymentLink) {
+    return (
+      <div className="flex flex-wrap gap-0.5 mt-1">
+        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-blue-600 text-white dark:bg-blue-700">
+          Link de pagamento
+        </span>
+      </div>
+    )
+  }
+
+  return null
 }
+
+// ──── Pay With Package Section ────────────────────────────────────────────────
+// Removido: pagamento via sessão de pacote agora é feito pelo modal de recebimento
+// (ver `receive-manual-modal.tsx`).
 
 // ──── Billing Row Actions ──────────────────────────────────────────────────────
 
@@ -661,7 +784,7 @@ function BillingPageContent() {
     ...(dateTo && { createdAtTo: dateTo }),
     ...paginationParams,
   }
-  const { data, isLoading } = useBilling(Object.keys(params).length ? params : undefined)
+  const { data, isLoading, refetch: refetchBilling } = useBilling(Object.keys(params).length ? params : undefined)
 
   const statuses: Array<{ value: BillingStatus; label: string }> = [
     { value: 'pending', label: 'Pendente' },
@@ -1038,7 +1161,7 @@ function BillingPageContent() {
           <DialogTitle>Nova Pré-venda de Serviço</DialogTitle>
           <div className="mt-4">
             <SellServiceForm
-              onSuccess={() => setShowNewBillingModal(false)}
+              onSuccess={() => { setShowNewBillingModal(false); refetchBilling() }}
               onCancel={() => setShowNewBillingModal(false)}
             />
           </div>
@@ -1052,7 +1175,7 @@ function BillingPageContent() {
           <div className="mt-4">
             <SellServiceForm
               mode="MANUAL"
-              onSuccess={() => setShowManualBillingModal(false)}
+              onSuccess={() => { setShowManualBillingModal(false); refetchBilling() }}
               onCancel={() => setShowManualBillingModal(false)}
             />
           </div>

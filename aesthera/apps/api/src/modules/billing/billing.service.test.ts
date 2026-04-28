@@ -32,6 +32,9 @@ const mockPrisma = vi.hoisted(() => ({
   clinic: {
     findUnique: vi.fn(),
   },
+  customerPackageSession: {
+    findFirst: vi.fn(),
+  },
 }))
 
 const mockTxBilling = vi.hoisted(() => ({
@@ -46,6 +49,8 @@ const mockTxBilling = vi.hoisted(() => ({
   service: { findUnique: vi.fn() },
   paymentMethodConfig: { findUnique: vi.fn() },
   clinic: { findUnique: vi.fn() },
+  customerPackageSession: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+  billingEvent: { create: vi.fn() },
 }))
 
 vi.mock('../../database/prisma/client', () => ({
@@ -378,5 +383,145 @@ describe('BillingService.receivePayment()', () => {
     })
 
     expect(mockTxBilling.billing.create).not.toHaveBeenCalled()
+  })
+})
+
+// ─── BillingService.payWithPackage() ───────────────────────────────────────────
+describe('BillingService.payWithPackage()', () => {
+  let service: BillingService
+
+  const CLINIC = 'clinic-1'
+  const BILLING_ID = 'billing-1'
+  const SESSION_ID = 'sess-1'
+  const APPOINTMENT_ID = 'appt-1'
+
+  function makeBilling(overrides: Record<string, unknown> = {}) {
+    return {
+      id: BILLING_ID,
+      clinicId: CLINIC,
+      customerId: 'cust-1',
+      sourceType: 'APPOINTMENT',
+      serviceId: 'svc-1',
+      amount: 10000,
+      status: 'pending',
+      appointmentId: APPOINTMENT_ID,
+      appointment: { id: APPOINTMENT_ID, service: { id: 'svc-1', name: 'Facial' } },
+      service: null,
+      packageSessionId: null,
+      ...overrides,
+    }
+  }
+
+  function makeSession(overrides: Record<string, unknown> = {}) {
+    return {
+      id: SESSION_ID,
+      clinicId: CLINIC,
+      serviceId: 'svc-1',
+      status: 'ABERTO',
+      appointmentId: null,
+      usedAt: null,
+      customerPackage: {
+        id: 'cp-1',
+        expiresAt: null,
+        package: { id: 'pkg-1', name: 'Pacote Facial' },
+      },
+      ...overrides,
+    }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    service = new BillingService()
+    mockTxBilling.billing.update.mockResolvedValue({})
+    mockTxBilling.billingEvent.create.mockResolvedValue({})
+    mockTxBilling.customerPackageSession.updateMany.mockResolvedValue({ count: 1 })
+    mockRepo.findById.mockResolvedValue(makeBilling())
+  })
+
+  it('caso feliz: sessão ABERTO + billing pending → marca FINALIZADO e paid', async () => {
+    mockPrisma.customerPackageSession.findFirst.mockResolvedValue(makeSession())
+    mockRepo.findById.mockResolvedValueOnce(makeBilling()).mockResolvedValueOnce(makeBilling({ status: 'paid' }))
+
+    await service.payWithPackage(CLINIC, BILLING_ID, SESSION_ID)
+
+    expect(mockTxBilling.customerPackageSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: SESSION_ID, clinicId: CLINIC }),
+        data: expect.objectContaining({ status: 'FINALIZADO' }),
+      }),
+    )
+    expect(mockTxBilling.billing.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: BILLING_ID, clinicId: CLINIC }),
+        data: expect.objectContaining({ status: 'paid', packageSessionId: SESSION_ID }),
+      }),
+    )
+  })
+
+  it('caso feliz: sessão AGENDADO vinculada ao mesmo appointmentId → aceita', async () => {
+    mockPrisma.customerPackageSession.findFirst.mockResolvedValue(makeSession({ status: 'AGENDADO', appointmentId: APPOINTMENT_ID }))
+
+    await service.payWithPackage(CLINIC, BILLING_ID, SESSION_ID)
+
+    expect(mockTxBilling.customerPackageSession.updateMany).toHaveBeenCalled()
+  })
+
+  it('lança INVALID_STATUS quando billing já está pago', async () => {
+    mockRepo.findById.mockResolvedValue(makeBilling({ status: 'paid' }))
+
+    await expect(
+      service.payWithPackage(CLINIC, BILLING_ID, SESSION_ID),
+    ).rejects.toMatchObject({ code: 'INVALID_STATUS' })
+
+    expect(mockPrisma.customerPackageSession.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('lança SESSION_ALREADY_USED quando sessão está FINALIZADO', async () => {
+    mockPrisma.customerPackageSession.findFirst.mockResolvedValue(makeSession({ status: 'FINALIZADO' }))
+
+    await expect(
+      service.payWithPackage(CLINIC, BILLING_ID, SESSION_ID),
+    ).rejects.toMatchObject({ code: 'SESSION_ALREADY_USED' })
+  })
+
+  it('lança SESSION_RESERVED_FOR_OTHER_APPOINTMENT quando sessão AGENDADO é de outro agendamento', async () => {
+    mockPrisma.customerPackageSession.findFirst.mockResolvedValue(makeSession({ status: 'AGENDADO', appointmentId: 'appt-OUTRO' }))
+
+    await expect(
+      service.payWithPackage(CLINIC, BILLING_ID, SESSION_ID),
+    ).rejects.toMatchObject({ code: 'SESSION_RESERVED_FOR_OTHER_APPOINTMENT' })
+  })
+
+  it('lança SERVICE_MISMATCH quando serviceId da sessão é diferente do agendamento', async () => {
+    // billing sem serviceId próprio; appointment.service.id = svc-OUTRO; session.serviceId = svc-1
+    mockRepo.findById.mockResolvedValue(makeBilling({
+      serviceId: null,
+      appointmentId: APPOINTMENT_ID,
+      appointment: { id: APPOINTMENT_ID, service: { id: 'svc-OUTRO', name: 'Massagem' } },
+    }))
+    mockPrisma.customerPackageSession.findFirst.mockResolvedValue(makeSession({ serviceId: 'svc-1' }))
+
+    await expect(
+      service.payWithPackage(CLINIC, BILLING_ID, SESSION_ID),
+    ).rejects.toMatchObject({ code: 'SERVICE_MISMATCH' })
+  })
+
+  it('lança PACKAGE_EXPIRED quando sessão está EXPIRADO', async () => {
+    mockPrisma.customerPackageSession.findFirst.mockResolvedValue(makeSession({ status: 'EXPIRADO' }))
+
+    await expect(
+      service.payWithPackage(CLINIC, BILLING_ID, SESSION_ID),
+    ).rejects.toMatchObject({ code: 'PACKAGE_EXPIRED' })
+  })
+
+  it('lança PACKAGE_EXPIRED quando pacote tem expiresAt no passado', async () => {
+    const pastDate = new Date(Date.now() - 86400_000) // ontem
+    mockPrisma.customerPackageSession.findFirst.mockResolvedValue(
+      makeSession({ customerPackage: { id: 'cp-1', expiresAt: pastDate, package: { id: 'pkg-1', name: 'Expirado' } } }),
+    )
+
+    await expect(
+      service.payWithPackage(CLINIC, BILLING_ID, SESSION_ID),
+    ).rejects.toMatchObject({ code: 'PACKAGE_EXPIRED' })
   })
 })

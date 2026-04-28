@@ -2,7 +2,9 @@
 
 import { ChevronLeft, ChevronRight, LayoutGrid, CheckCircle2, CalendarDays, Package, Tag } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -24,6 +26,7 @@ import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
 import { useCustomers, useGetCustomer, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
 import { useActivePromotionsForService } from '@/lib/hooks/use-promotions'
 import { formatCpf, formatPhone } from '@/lib/masks'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
@@ -359,7 +362,7 @@ function CreateAppointmentForm({
   // After a time is selected, the finalProfessionalId must come from profList (filtered to available)
   const availableProfIds = new Set(profList.filter((p) => p.available).map((p) => p.id))
 
-  const canSubmit = !!(customerId && serviceId && serviceDuration > 0 && date && selectedTime && finalProfessionalId && roomId)
+  const canSubmit = !!(customerId && serviceId && serviceDuration > 0 && date && selectedTime && finalProfessionalId && roomId && (!usePackageSession || selectedPackageSessionId))
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   function handleCustomerInput(value: string) {
@@ -806,48 +809,51 @@ function CreateAppointmentForm({
             </span>
           </label>
 
-          {/* Session selector — always shown when opted in */}
+          {/* Session selector — required when opted in */}
           {usePackageSession && (
-            <select
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={selectedPackageSessionId}
-              onChange={(e) => setSelectedPackageSessionId(e.target.value)}
-            >
-              <option value="">Selecione qual sessão usar…</option>
-              {availablePackageSessions?.map((entry) => (
-                <option key={entry.session.id} value={entry.session.id}>
-                  Sessão {entry.sessionNumber}/{entry.totalSessions} — {entry.packageName}
-                  {entry.expiresAt ? ` (expira ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})` : ''}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1">
+              <Select
+                value={selectedPackageSessionId}
+                onValueChange={(v) => setSelectedPackageSessionId(v)}
+              >
+                <SelectTrigger className={`w-full${submitted && !selectedPackageSessionId ? ' border-red-500 focus:ring-red-500' : ''}`}>
+                  <SelectValue placeholder="Selecione qual sessão usar…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePackageSessions?.map((entry) => (
+                    <SelectItem key={entry.session.id} value={entry.session.id}>
+                      {`Sessão ${entry.sessionNumber}/${entry.totalSessions} — ${entry.packageName}${entry.expiresAt ? ` (expira ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})` : ''}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {submitted && !selectedPackageSessionId && (
+                <p className="text-xs text-red-500">Selecione qual sessão do pacote será utilizada.</p>
+              )}
+            </div>
           )}
         </div>
       )}
 
       {/* Package warning dialog */}
-      {showPackageWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <Package className="h-6 w-6 text-amber-500 flex-shrink-0" />
-              <h3 className="font-semibold text-foreground">Pacote disponível não utilizado</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              O cliente possui sessões disponíveis em um pacote para este serviço, mas você não marcou para utilizá-las.
-              Deseja continuar <strong>sem usar</strong> o pacote (será gerada uma cobrança separada)?
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowPackageWarning(false)}>
-                Voltar e usar pacote
-              </Button>
-              <Button type="button" variant="destructive" onClick={handleSubmitIgnoringPackage}>
-                Continuar sem pacote
-              </Button>
-            </div>
-          </div>
+      <Dialog open={showPackageWarning} onClose={() => setShowPackageWarning(false)}>
+        <DialogTitle className="flex items-center gap-3">
+          <Package className="h-6 w-6 text-amber-500 flex-shrink-0" />
+          Pacote disponível não utilizado
+        </DialogTitle>
+        <p className="text-sm text-muted-foreground">
+          O cliente possui sessões disponíveis em um pacote para este serviço, mas você não marcou para utilizá-las.
+          Deseja continuar <strong>sem usar</strong> o pacote (será gerada uma cobrança separada)?
+        </p>
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={() => setShowPackageWarning(false)}>
+            Voltar e usar pacote
+          </Button>
+          <Button type="button" variant="destructive" onClick={handleSubmitIgnoringPackage}>
+            Continuar sem pacote
+          </Button>
         </div>
-      )}
+      </Dialog>
 
       {/* 10. Observações */}
       <div className="space-y-2">
@@ -1137,6 +1143,7 @@ function CustomerQuickView({ customerId, onClose }: { customerId: string; onClos
 // ──── Slot Actions Popover ────────────────────────────────────────────────────
 
 function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => void }) {
+  const qc = useQueryClient()
   const transitions = useAppointmentTransition(slot.id)
   const status = slot.status!
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -1144,18 +1151,49 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
   const [showReceiveModal, setShowReceiveModal] = useState(false)
   const [pendingReceiptBilling, setPendingReceiptBilling] = useState<Billing | null>(null)
   const [preSelectedVoucher, setPreSelectedVoucher] = useState<ServiceVoucher | null>(null)
+  const [showStatusMenu, setShowStatusMenu] = useState(false)
 
   const profName = (slot as CalendarSlot & { _profName?: string })._profName ?? slot.professional?.name
 
   async function handleAction(action: 'confirm' | 'start' | 'complete' | 'cancel' | 'noShow') {
     try {
       if (action === 'confirm') await transitions.confirm.mutateAsync()
-      else if (action === 'start') await transitions.start.mutateAsync()
+      else if (action === 'start') {
+        // Encadeia confirm → start se ainda em draft
+        if (status === 'draft') await transitions.confirm.mutateAsync()
+        await transitions.start.mutateAsync()
+      }
       else if (action === 'complete') {
+        // Encadeia transições intermediárias necessárias
+        if (status === 'draft') await transitions.confirm.mutateAsync()
+        if (status === 'draft' || status === 'confirmed') await transitions.start.mutateAsync()
         const result = await transitions.complete.mutateAsync() as CompleteResult
         if (!result.billing) {
-          // Pacote utilizado — sem cobrança a registrar
+          // Pacote utilizado sem billing — sem cobrança a registrar
           toast.success('Atendimento concluído. Sessão do pacote utilizada.')
+          onClose()
+          return
+        }
+        // Billing já pago via sessão de pacote — não abrir modal de recebimento
+        if (result.billing.status === 'paid' && result.billing.packageSessionId) {
+          toast.success('Atendimento concluído. Sessão do pacote utilizada.')
+          onClose()
+          return
+        }
+        // Billing pending com sessão de pacote reservada — pagar automaticamente sem abrir modal
+        if (result.billing.packageSessionId) {
+          try {
+            await api.post(`/billing/${result.billing.id}/pay-with-package`, {
+              packageSessionId: result.billing.packageSessionId,
+            })
+            qc.invalidateQueries({ queryKey: ['billing'] })
+            qc.invalidateQueries({ queryKey: ['customer-packages'] })
+            qc.invalidateQueries({ queryKey: ['customer-package-sessions'] })
+            qc.invalidateQueries({ queryKey: ['appointments'] })
+            toast.success('Atendimento concluído. Sessão do pacote utilizada.')
+          } catch {
+            toast.error('Atendimento concluído, mas falha ao registrar sessão do pacote.')
+          }
           onClose()
           return
         }
@@ -1214,21 +1252,99 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
         )}
       </div>
       <div className="flex flex-wrap gap-2 pt-1 border-t">
-        {status === 'draft' && (
-          <Button size="sm" onClick={() => handleAction('confirm')}>Confirmar</Button>
-        )}
-        {status === 'confirmed' && (
-          <Button size="sm" className="bg-amber-500 hover:bg-amber-600" onClick={() => handleAction('start')}>Iniciar</Button>
-        )}
+        {/* Botão principal de ação + seta de status ao lado */}
+        {status !== 'completed' && status !== 'cancelled' && status !== 'no_show' && (() => {
+          const primaryLabel =
+            status === 'draft' ? 'Confirmar' :
+            status === 'confirmed' ? 'Iniciar' :
+            'Concluir'
+          const primaryClass =
+            status === 'draft' ? '' :
+            status === 'confirmed' ? 'bg-amber-500 hover:bg-amber-600' :
+            'bg-green-600 hover:bg-green-700'
+          const primaryAction: 'confirm' | 'start' | 'complete' =
+            status === 'draft' ? 'confirm' :
+            status === 'confirmed' ? 'start' :
+            'complete'
+
+          return (
+            <div className="flex">
+              <Button
+                size="sm"
+                className={`rounded-r-none border-r-0 ${primaryClass}`}
+                onClick={() => handleAction(primaryAction)}
+              >
+                {primaryLabel}
+              </Button>
+              <div className="relative">
+                <Button
+                  size="sm"
+                  variant={primaryAction === 'confirm' ? 'default' : 'default'}
+                  className={`rounded-l-none px-2 ${primaryClass}`}
+                  type="button"
+                  onClick={() => setShowStatusMenu((v) => !v)}
+                  aria-label="Mais opções de status"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </Button>
+                {showStatusMenu && (
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setShowStatusMenu(false)} />
+                    <div className="absolute left-0 bottom-full mb-1 z-[9999] min-w-[180px] rounded-lg border bg-popover shadow-xl overflow-hidden">
+                      {/* "Confirmar" só faz sentido a partir de draft — e já é o botão primário, então omitimos */}
+                      {/* "Em andamento" via fast-forward confirm→start, só disponível de draft */}
+                      {status === 'draft' && (
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                          onClick={() => { setShowStatusMenu(false); handleAction('start') }}
+                        >
+                          <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          Em andamento
+                        </button>
+                      )}
+                      {/* "Concluído" via fast-forward — encadeia transições intermediárias se necessário */}
+                      {status !== 'in_progress' && (
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                          onClick={() => { setShowStatusMenu(false); handleAction('complete') }}
+                        >
+                          <span className="h-2 w-2 rounded-full bg-green-500" />
+                          Concluído
+                        </button>
+                      )}
+                      <button
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                        onClick={() => { setShowStatusMenu(false); handleAction('noShow') }}
+                      >
+                        <span className="h-2 w-2 rounded-full bg-orange-500" />
+                        Não compareceu
+                      </button>
+                      {canCancel && (
+                        <button
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left text-destructive"
+                          onClick={() => { setShowStatusMenu(false); setShowCancelConfirm(true) }}
+                        >
+                          <span className="h-2 w-2 rounded-full bg-red-500" />
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
         {status === 'in_progress' && (
-          <>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAction('complete')}>Concluir</Button>
-            <Button size="sm" variant="outline" onClick={() => handleAction('noShow')}>Não compareceu</Button>
-          </>
+          <Button size="sm" variant="outline" onClick={() => handleAction('noShow')}>Não compareceu</Button>
         )}
         {canCancel && (
           <Button size="sm" variant="destructive" onClick={() => setShowCancelConfirm(true)}>Cancelar</Button>
         )}
+
         <Button size="sm" variant="outline" type="button" onClick={() => setViewingCustomerId(slot.customerId ?? null)}>
           Ver ficha do cliente
         </Button>

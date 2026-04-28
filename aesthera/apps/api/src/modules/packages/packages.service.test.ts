@@ -190,4 +190,103 @@ describe('PackagesService', () => {
       expect(result).toEqual({ id: SESSION_ID, status: 'FINALIZADO' })
     })
   })
+
+  // ──── reserveSession ──────────────────────────────────────────────────────
+
+  describe('reserveSession()', () => {
+    const APPOINTMENT_ID = 'appt-1'
+
+    it('lança NOT_FOUND se sessão não pertencer à clínica', async () => {
+      mockRepo.findSessionById.mockResolvedValue(null)
+
+      await expect(
+        svc.reserveSession(CLINIC_ID, SESSION_ID, APPOINTMENT_ID),
+      ).rejects.toMatchObject({ message: expect.stringContaining('not found') })
+    })
+
+    it('lança SESSION_ALREADY_RESERVED se status for AGENDADO', async () => {
+      mockRepo.findSessionById.mockResolvedValue(makeSession({ status: 'AGENDADO' }))
+
+      await expect(
+        svc.reserveSession(CLINIC_ID, SESSION_ID, APPOINTMENT_ID),
+      ).rejects.toMatchObject({ code: 'SESSION_ALREADY_RESERVED' })
+    })
+
+    it('lança SESSION_ALREADY_USED se status for FINALIZADO', async () => {
+      mockRepo.findSessionById.mockResolvedValue(makeSession({ status: 'FINALIZADO' }))
+
+      await expect(
+        svc.reserveSession(CLINIC_ID, SESSION_ID, APPOINTMENT_ID),
+      ).rejects.toMatchObject({ code: 'SESSION_ALREADY_USED' })
+    })
+
+    it('lança PACKAGE_EXPIRED se status for EXPIRADO', async () => {
+      mockRepo.findSessionById.mockResolvedValue(makeSession({ status: 'EXPIRADO' }))
+
+      await expect(
+        svc.reserveSession(CLINIC_ID, SESSION_ID, APPOINTMENT_ID),
+      ).rejects.toMatchObject({ code: 'PACKAGE_EXPIRED' })
+    })
+
+    it('lança PACKAGE_EXPIRED se pacote tiver expiresAt no passado', async () => {
+      const pastDate = new Date(Date.now() - 86400_000)
+      mockRepo.findSessionById.mockResolvedValue(makeSession({ status: 'ABERTO' }))
+      mockRepo.findCustomerPackageById.mockResolvedValue({ id: 'cp-1', expiresAt: pastDate })
+
+      await expect(
+        svc.reserveSession(CLINIC_ID, SESSION_ID, APPOINTMENT_ID),
+      ).rejects.toMatchObject({ code: 'PACKAGE_EXPIRED' })
+    })
+
+    it('reserva sessão com sucesso: status ABERTO + pacote válido → linkSession chamado', async () => {
+      const reservedSession = { id: SESSION_ID, clinicId: CLINIC_ID, status: 'AGENDADO', appointmentId: APPOINTMENT_ID }
+      mockRepo.findSessionById.mockResolvedValue(makeSession({ status: 'ABERTO' }))
+      mockRepo.findCustomerPackageById.mockResolvedValue({ id: 'cp-1', expiresAt: null })
+      mockRepo.linkSession.mockResolvedValue(reservedSession)
+
+      const result = await svc.reserveSession(CLINIC_ID, SESSION_ID, APPOINTMENT_ID)
+
+      expect(mockRepo.linkSession).toHaveBeenCalledWith(SESSION_ID, APPOINTMENT_ID)
+      expect(result).toMatchObject({ status: 'AGENDADO', appointmentId: APPOINTMENT_ID })
+    })
+  })
+
+  // ──── releaseSession ──────────────────────────────────────────────────────
+
+  describe('releaseSession()', () => {
+    it('lança NOT_FOUND se sessão não pertencer à clínica', async () => {
+      mockRepo.findSessionById.mockResolvedValue(null)
+
+      await expect(
+        svc.releaseSession(CLINIC_ID, SESSION_ID),
+      ).rejects.toMatchObject({ message: expect.stringContaining('not found') })
+    })
+
+    it('lança SESSION_NOT_RESERVED se status for ABERTO', async () => {
+      mockRepo.findSessionById.mockResolvedValue(makeSession({ status: 'ABERTO' }))
+
+      await expect(
+        svc.releaseSession(CLINIC_ID, SESSION_ID),
+      ).rejects.toMatchObject({ code: 'SESSION_NOT_RESERVED' })
+    })
+
+    it('lança SESSION_NOT_RESERVED se status for FINALIZADO', async () => {
+      mockRepo.findSessionById.mockResolvedValue(makeSession({ status: 'FINALIZADO' }))
+
+      await expect(
+        svc.releaseSession(CLINIC_ID, SESSION_ID),
+      ).rejects.toMatchObject({ code: 'SESSION_NOT_RESERVED' })
+    })
+
+    it('libera sessão com sucesso: status AGENDADO → unlinkSession chamado', async () => {
+      const releasedSession = { id: SESSION_ID, clinicId: CLINIC_ID, status: 'ABERTO', appointmentId: null }
+      mockRepo.findSessionById.mockResolvedValue(makeSession({ status: 'AGENDADO' }))
+      mockRepo.unlinkSession.mockResolvedValue(releasedSession)
+
+      const result = await svc.releaseSession(CLINIC_ID, SESSION_ID)
+
+      expect(mockRepo.unlinkSession).toHaveBeenCalledWith(SESSION_ID)
+      expect(result).toMatchObject({ status: 'ABERTO' })
+    })
+  })
 })

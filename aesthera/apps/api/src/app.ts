@@ -72,7 +72,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: appConfig.cors.origin,
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Clinic-Slug', 'X-Request-Id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Clinic-Slug', 'X-Request-Id', 'Idempotency-Key'],
     exposedHeaders: ['X-Request-Id', 'X-Session-Id'],
     maxAge: 86400,
   })

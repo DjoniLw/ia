@@ -8,6 +8,7 @@ import {
   ListSoldPackagesQuery,
   PurchasePackageDto,
   RedeemSessionDto,
+  ReserveSessionDto,
   UpdatePackageDto,
 } from './packages.dto'
 import { PackagesService } from './packages.service'
@@ -84,6 +85,27 @@ export async function packagesRoutes(app: FastifyInstance) {
       const { sessionId } = req.params as { sessionId: string }
       const dto = RedeemSessionDto.parse(req.body ?? {})
       return reply.send(await svc.redeemSession(req.clinicId, sessionId, dto.appointmentId))
+    },
+  )
+
+  // RN01 — Reservar sessão de pacote (vincula ao agendamento, status: AGENDADO)
+  app.post(
+    '/packages/sessions/:sessionId/reserve',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { sessionId } = req.params as { sessionId: string }
+      const dto = ReserveSessionDto.parse(req.body ?? {})
+      return reply.send(await svc.reserveSession(req.clinicId, sessionId, dto.appointmentId))
+    },
+  )
+
+  // RN03/RN04 — Liberar sessão reservada (volta para ABERTO)
+  app.post(
+    '/packages/sessions/:sessionId/release',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { sessionId } = req.params as { sessionId: string }
+      return reply.send(await svc.releaseSession(req.clinicId, sessionId))
     },
   )
 }

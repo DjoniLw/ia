@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { jwtClinicGuard } from '../../shared/guards/jwt-clinic.guard'
 import { roleGuard } from '../../shared/guards/role.guard'
-import { CancelBillingDto, CreateBillingDto, ListBillingQuery, ReceivePaymentDto } from './billing.dto'
+import { CancelBillingDto, CreateBillingDto, ListBillingQuery, PayWithPackageDto, ReceivePaymentDto } from './billing.dto'
 import { BillingService } from './billing.service'
 
 export async function billingRoutes(app: FastifyInstance) {
@@ -71,6 +71,17 @@ export async function billingRoutes(app: FastifyInstance) {
       const { id } = req.params as { id: string }
       const { notes } = (req.body ?? {}) as { notes?: string }
       return reply.send(await svc.reopen(req.clinicId, id, notes))
+    },
+  )
+
+  // RN02 — Pagar cobrança via sessão de pacote do cliente
+  app.post(
+    '/billing/:id/pay-with-package',
+    { preHandler: [jwtClinicGuard, roleGuard(['admin', 'staff'])] },
+    async (req, reply) => {
+      const { id } = req.params as { id: string }
+      const dto = PayWithPackageDto.parse(req.body)
+      return reply.send(await svc.payWithPackage(req.clinicId, id, dto.packageSessionId))
     },
   )
 

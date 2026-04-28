@@ -16,10 +16,12 @@ import {
   Info,
   Minus,
   ShoppingBag,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { DataPagination } from '@/components/ui/data-pagination'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SESSION_STATUS_STYLE, SESSION_LABEL } from '@/lib/status-colors'
 import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
 import { usePersistedFilter } from '@/lib/hooks/use-persisted-filter'
@@ -334,37 +336,47 @@ function PackageModal({
               </div>
 
               {items.map((item, index) => (
-                <div key={index} className="flex gap-2">
-                  <select
-                    value={item.serviceId}
-                    onChange={(e) => updateItem(index, 'serviceId', e.target.value)}
-                    className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">Selecionar serviço…</option>
-                    {services.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex flex-col items-center justify-center">
-                    <label className="text-[10px] text-muted-foreground">Sessões</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                      className="w-20 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      className="self-end rounded p-1 text-destructive hover:bg-destructive/10"
+                <div key={index} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Select
+                      value={item.serviceId}
+                      onValueChange={(v) => updateItem(index, 'serviceId', v)}
                     >
-                      ✕
-                    </button>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar serviço…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {services.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <input
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      const parsed = raw === '' ? 1 : Number(raw)
+                      updateItem(index, 'quantity', Number.isNaN(parsed) || parsed < 1 ? 1 : parsed)
+                    }}
+                    aria-label="Sessões"
+                    className="w-20 rounded-lg border bg-background px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  {items.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(index)}
+                      className="flex-shrink-0 h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="sr-only">Remover serviço</span>
+                    </Button>
                   )}
                 </div>
               ))}
@@ -431,10 +443,12 @@ function PurchaseModal({
     e.preventDefault()
     if (!customer) { toast.error('Selecione um cliente'); return }
     try {
+      const validLines = lines.filter((l) => parseCurrencyInput(l.amountStr) > 0)
+      if (validLines.length === 0) { toast.error('Informe ao menos uma forma de pagamento com valor'); return }
       await purchase.mutateAsync({
         dto: {
           customerId: customer.id,
-          paymentMethods: lines.map((l) => ({ method: l.method, amount: parseCurrencyInput(l.amountStr) })),
+          paymentMethods: validLines.map((l) => ({ method: l.method, amount: parseCurrencyInput(l.amountStr) })),
           notes: notes.trim() || undefined,
         },
         idempotencyKey,
@@ -482,15 +496,20 @@ function PurchaseModal({
             <label className="text-xs font-medium text-muted-foreground">Formas de Pagamento</label>
             {lines.map((line) => (
               <div key={line.id} className="flex items-center gap-2">
-                <select
-                  value={line.method}
-                  onChange={(e) => updateLine(line.id, 'method', e.target.value)}
-                  className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-                >
-                  {SIMPLE_PAYMENT_METHODS.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
+                <div className="flex-1">
+                  <Select value={line.method} onValueChange={(v) => updateLine(line.id, 'method', v)}>
+                    <SelectTrigger className="h-9">
+                      <span className="truncate">
+                        {SIMPLE_PAYMENT_METHODS.find((m) => m.value === line.method)?.label ?? line.method}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SIMPLE_PAYMENT_METHODS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <input
                   type="text"
                   value={line.amountStr}
@@ -575,7 +594,7 @@ function PurchaseModal({
 
 // ──── Customer Packages Panel ──────────────────────────────────────────────────
 
-function CustomerPackagesPanel({ customerId }: { customerId: string }) {
+function CustomerPackagesPanel({ customerId, packageId }: { customerId: string; packageId?: string }) {
   const { data, isLoading } = useCustomerPackages(customerId)
 
   if (isLoading) {
@@ -587,13 +606,15 @@ function CustomerPackagesPanel({ customerId }: { customerId: string }) {
     )
   }
 
-  if (!data?.length) {
+  const filtered = packageId ? (data ?? []).filter((cp) => cp.packageId === packageId) : (data ?? [])
+
+  if (!filtered.length) {
     return <p className="py-4 text-sm text-muted-foreground">Nenhum pacote adquirido.</p>
   }
 
   return (
     <div className="space-y-3">
-      {data.map((cp) => (
+      {filtered.map((cp) => (
         <CustomerPackageCard key={cp.id} cp={cp} />
       ))}
     </div>
@@ -604,6 +625,9 @@ function CustomerPackageCard({ cp }: { cp: CustomerPackage }) {
   const finalizedSessions = cp.sessions.filter((s) => s.status === 'FINALIZADO').length
   const totalSessions = cp.sessions.length
   const progress = totalSessions > 0 ? (finalizedSessions / totalSessions) * 100 : 0
+  const serviceNameMap = Object.fromEntries(
+    cp.package.items.map((item) => [item.serviceId, item.service.name]),
+  )
 
   return (
     <div className="rounded-lg border bg-card p-4">
@@ -646,7 +670,7 @@ function CustomerPackageCard({ cp }: { cp: CustomerPackage }) {
                 className={`h-3.5 w-3.5 flex-shrink-0 ${SESSION_STATUS_STYLE[session.status] ?? 'text-muted-foreground/40'}`}
               />
               <span className={session.status === 'FINALIZADO' ? 'line-through opacity-60' : ''}>
-                Sessão — {SESSION_LABEL[session.status] ?? session.status}
+                {serviceNameMap[session.serviceId] ?? 'Sessão'} — {SESSION_LABEL[session.status] ?? session.status}
                 {session.status === 'FINALIZADO' && session.usedAt ? ` em ${formatDate(session.usedAt)}` : ''}
               </span>
             </div>
@@ -750,7 +774,7 @@ function PackageCard({
               placeholder="Buscar cliente por nome ou telefone…"
             />
             {lookupCustomer && (
-              <CustomerPackagesPanel customerId={lookupCustomer.id} />
+              <CustomerPackagesPanel customerId={lookupCustomer.id} packageId={pkg.id} />
             )}
           </div>
         )}

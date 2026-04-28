@@ -157,6 +157,16 @@ export class ManualReceiptsService {
         },
       })
 
+      // RN04 — Se havia sessão de pacote RESERVADA vinculada, liberar de volta para ABERTO
+      // (o operador optou por pagar por outro método, não via pacote)
+      if (billing.packageSession?.id) {
+        // clinicId no WHERE garante isolamento multi-tenant (defesa em profundidade)
+        await tx.customerPackageSession.updateMany({
+          where: { id: billing.packageSession.id, clinicId },
+          data: { appointmentId: null, status: 'ABERTO' },
+        })
+      }
+
       // 4. Debit wallet entries used as payment — pass tx to run atomically
       for (const line of dto.lines) {
         if (

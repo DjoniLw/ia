@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
 import { InfoBanner } from '@/components/ui/info-banner'
 import { toast } from 'sonner'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useActiveVouchers, type WalletEntry } from '@/lib/hooks/use-wallet'
 import {
   useCreateManualReceipt,
@@ -15,6 +16,11 @@ import {
   type OverpaymentHandlingType,
 } from '@/lib/hooks/use-appointments'
 import { useValidatePromotion, useActivePromotionsForService } from '@/lib/hooks/use-promotions'
+import {
+  useAvailableSessionsForService,
+  usePayWithPackage,
+  type AvailableSessionEntry,
+} from '@/lib/hooks/use-packages'
 import type { Billing } from '@/lib/hooks/use-appointments'
 
 // ──── Helpers ─────────────────────────────────────────────────────────────────
@@ -30,22 +36,27 @@ function parseCurrencyInput(value: string): number {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0
 }
 
-const PAYMENT_METHODS: Array<{ value: ManualReceiptPaymentMethod; label: string }> = [
+// Frontend-only payment method that maps to a separate endpoint (pay-with-package)
+type PaymentLineMethod = ManualReceiptPaymentMethod | 'package_session'
+
+const PAYMENT_METHODS: Array<{ value: PaymentLineMethod; label: string }> = [
   { value: 'cash', label: 'Dinheiro' },
   { value: 'pix', label: 'PIX' },
   { value: 'card', label: 'Cartão' },
   { value: 'transfer', label: 'Transferência' },
   { value: 'wallet_credit', label: 'Carteira do Cliente' },
+  { value: 'package_session', label: 'Sessão de Pacote' },
 ]
 
 // ──── Payment Line ────────────────────────────────────────────────────────────
 
 interface PaymentLineState {
   id: number
-  method: ManualReceiptPaymentMethod
+  method: PaymentLineMethod
   amountStr: string
   walletEntryId: string
   walletOriginType?: string | null
+  packageSessionId?: string | null
 }
 
 interface PaymentLineRowProps {
@@ -55,6 +66,7 @@ interface PaymentLineRowProps {
   billingServiceId?: string | null
   billingSourceType?: string | null
   canRemove: boolean
+  availableSessions: AvailableSessionEntry[]
   onUpdate: (updated: Partial<PaymentLineState>) => void
   onRemove: () => void
 }
@@ -66,16 +78,20 @@ function PaymentLineRow({
   billingServiceId,
   billingSourceType,
   canRemove,
+  availableSessions,
   onUpdate,
   onRemove,
 }: PaymentLineRowProps) {
   const isWallet = line.method === 'wallet_credit' || line.method === 'wallet_voucher'
+  const isPackageSession = line.method === 'package_session'
   const { data: walletData } = useActiveVouchers(customerId, isWallet)
   const allEntries: WalletEntry[] = walletData?.items ?? []
 
   // SERVICE_PRESALE vouchers: só mostrar quando o serviço bate com o da cobrança
   // E nunca mostrar para cobranças PRESALE (pré-venda não paga pré-venda)
+  // RN01 — entradas tipo PACKAGE não aparecem na lista de vales/créditos
   const activeEntries = allEntries.filter((e) => {
+    if (e.type === 'PACKAGE') return false
     if (e.originType === 'SERVICE_PRESALE') {
       if (billingSourceType === 'PRESALE') return false  // RN-PV01
       if (!billingServiceId) return false
@@ -84,6 +100,13 @@ function PaymentLineRow({
     return true
   })
   const isServicePresale = line.walletOriginType === 'SERVICE_PRESALE'
+  const isAutoFilled = isServicePresale || isPackageSession
+
+  // Filtrar opções do método: package_session só aparece se houver sessões disponíveis
+  const methodOptions = PAYMENT_METHODS.filter((m) => {
+    if (m.value === 'package_session') return availableSessions.length > 0 || isPackageSession
+    return true
+  })
 
   function handleWalletEntryChange(selectedId: string) {
     const selected = activeEntries.find((e) => e.id === selectedId)
@@ -106,27 +129,60 @@ function PaymentLineRow({
     <div className="flex items-start gap-2">
       <div className="flex-1 space-y-2">
         <div className="flex gap-2">
-          <select
-            value={isWallet ? 'wallet_credit' : line.method}
-            onChange={(e) =>
-              onUpdate({ method: e.target.value as ManualReceiptPaymentMethod, walletEntryId: '', walletOriginType: null })
-            }
-            className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-          >
-            {PAYMENT_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex-1">
+            <Select
+              value={isWallet ? 'wallet_credit' : line.method}
+              onValueChange={(next) => {
+                const isPkg = next === 'package_session'
+                const autoStr = isPkg
+                  ? (billingAmount / 100).toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  : ''
+                const update: Partial<PaymentLineState> = {
+                  method: next as PaymentLineMethod,
+                  walletEntryId: '',
+                  walletOriginType: null,
+                  packageSessionId: null,
+                }
+                if (isPkg) {
+                  update.amountStr = autoStr
+                  // Pré-seleciona a sessão mais antiga (primeiro item já vem ordenado)
+                  const first = availableSessions[0]
+                  if (first) update.packageSessionId = first.session.id
+                } else {
+                  update.amountStr = ''
+                }
+                onUpdate(update)
+              }}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {methodOptions.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <Input
             value={line.amountStr}
             onChange={(e) => onUpdate({ amountStr: e.target.value })}
             placeholder="0,00"
             className="h-9 w-32 text-sm"
-            disabled={isServicePresale}
-            title={isServicePresale ? 'Valor definido automaticamente pela pré-venda do serviço' : undefined}
+            disabled={isAutoFilled}
+            title={
+              isServicePresale
+                ? 'Valor definido automaticamente pela pré-venda do serviço'
+                : isPackageSession
+                  ? 'Valor coberto integralmente pela sessão de pacote'
+                  : undefined
+            }
           />
         </div>
 
@@ -151,6 +207,29 @@ function PaymentLineRow({
                     </option>
                   )
                 })}
+              </select>
+            )}
+          </div>
+        )}
+
+        {isPackageSession && (
+          <div>
+            {availableSessions.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma sessão de pacote disponível para este serviço.
+              </p>
+            ) : (
+              <select
+                value={line.packageSessionId ?? ''}
+                onChange={(e) => onUpdate({ packageSessionId: e.target.value })}
+                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
+              >
+                <option value="">Selecione uma sessão…</option>
+                {availableSessions.map((entry) => (
+                  <option key={entry.session.id} value={entry.session.id}>
+                    {entry.packageName} · Sessão {entry.sessionNumber} de {entry.totalSessions} ({entry.serviceName})
+                  </option>
+                ))}
               </select>
             )}
           </div>
@@ -202,8 +281,9 @@ function OverpaymentSection({ excedente, selected, onChange }: OverpaymentSectio
   return (
     <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 p-4 space-y-3">
       <div className="flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
-          ⚠️ Excedente de {formatCurrency(excedente)}
+          Excedente de {formatCurrency(excedente)}
         </span>
       </div>
       <p className="text-xs text-amber-800 dark:text-amber-200">O que fazer com o excedente?</p>
@@ -250,23 +330,51 @@ interface ReceiveManualModalProps {
 let lineIdCounter = 1
 
 export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherId, previousLines }: ReceiveManualModalProps) {
+  const customerId = billing.customer.id
+  const billingServiceId = billing.appointment?.service?.id ?? billing.service?.id ?? ''
+  const billingAppointmentId = billing.appointment?.id ?? null
+
+  // Sessões de pacote disponíveis para o serviço desta cobrança
+  // Inclui sessões AGENDADO vinculadas ao mesmo agendamento para evitar seleção da sessão errada
+  const { data: availableSessionsRaw } = useAvailableSessionsForService(customerId, billingServiceId, billingAppointmentId)
+  const availableSessions = availableSessionsRaw ?? []
+
+  const payWithPackage = usePayWithPackage(billing.id)
+
   const [lines, setLines] = useState<PaymentLineState[]>(() => {
     // Prioridade 1: pré-preenchimento por pagamento anterior (cobrança reaberta)
     if (previousLines?.length) {
       return previousLines.map((pl) => ({
         id: lineIdCounter++,
-        method: pl.method as ManualReceiptPaymentMethod,
+        method: pl.method as PaymentLineMethod,
         amountStr: (pl.amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         walletEntryId: '',
         walletOriginType: null,
       }))
     }
-    // Prioridade 2: voucher pré-selecionado (pré-venda de serviço)
+    // Prioridade 2: voucher SERVICE_PRESALE pré-selecionado
     if (preSelectedVoucherId) {
       const amountStr = billing.amount > 0
         ? (billing.amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         : ''
       return [{ id: lineIdCounter++, method: 'wallet_voucher', amountStr, walletEntryId: preSelectedVoucherId, walletOriginType: 'SERVICE_PRESALE' }]
+    }
+    // Prioridade 3: sessão reservada no agendamento (billing.packageSessionId)
+    if (billing.packageSessionId && billing.packageSession) {
+      const status = billing.packageSession.status
+      if (status === 'AGENDADO' || status === 'ABERTO') {
+        const autoStr = (billing.amount / 100).toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+        return [{
+          id: lineIdCounter++,
+          method: 'package_session',
+          amountStr: autoStr,
+          walletEntryId: '',
+          packageSessionId: billing.packageSessionId,
+        }]
+      }
     }
     return [{ id: lineIdCounter++, method: 'cash', amountStr: '', walletEntryId: '' }]
   })
@@ -278,6 +386,7 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
   const hasServicePresale = lines.some(
     (l) => l.method === 'wallet_voucher' && l.walletOriginType === 'SERVICE_PRESALE',
   )
+  const hasPackageSession = lines.some((l) => l.method === 'package_session')
 
   // Coupon state
   const [couponInput, setCouponInput] = useState('')
@@ -285,22 +394,21 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
   const [autoApplied, setAutoApplied] = useState(false)
   const validatePromotion = useValidatePromotion()
 
-  // Item 7: quando pré-venda de serviço está selecionada, limpar promoções aplicadas
+  // Item 7: quando pré-venda de serviço OU sessão de pacote está selecionada, limpar promoções aplicadas (RN05)
   useEffect(() => {
-    if (hasServicePresale && appliedCoupon) {
+    if ((hasServicePresale || hasPackageSession) && appliedCoupon) {
       setAppliedCoupon(null)
       setCouponInput('')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasServicePresale])
+  }, [hasServicePresale, hasPackageSession])
 
   // Detect if billing already has a promotion locked at booking time
   const hasLockedPromo = !!billing.lockedPromotionCode && !!billing.originalAmount
 
   // Auto-detect active promotions for the service being billed, filtered by customer limit
   // Skip when billing already has a locked promotion (avoid double-discount)
-  const serviceId = billing.appointment?.service?.id ?? ''
-  const customerId = billing.customer.id
+  const serviceId = billingServiceId
   const { data: servicePromotions } = useActivePromotionsForService(
     serviceId,
     customerId,
@@ -315,8 +423,8 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
   const suggestedPromotion = specificPromotion ?? universalPromotion
 
   useEffect(() => {
-    // Nunca auto-aplicar quando a cobrança já tem promoção travada ou pré-venda de serviço selecionada
-    if (!suggestedPromotion || appliedCoupon || autoApplied || !open || hasLockedPromo || hasServicePresale) return
+    // Nunca auto-aplicar quando a cobrança já tem promoção travada, pré-venda de serviço ou sessão de pacote selecionada
+    if (!suggestedPromotion || appliedCoupon || autoApplied || !open || hasLockedPromo || hasServicePresale || hasPackageSession) return
     setAutoApplied(true)
     validatePromotion.mutateAsync({
       code: suggestedPromotion.code,
@@ -379,23 +487,77 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...update } : l)))
   }
 
+  // Prioridade 4: auto-selecionar sessão de pacote quando não há outra prioridade
+  // (sessão disponível ABERTO sem reserva prévia)
+  useEffect(() => {
+    if (!open) return
+    if (previousLines?.length || preSelectedVoucherId) return
+    if (billing.packageSessionId) return // já tratado na prioridade 3
+    // Já tem alguma linha não-cash configurada? não tocar
+    const hasUserChoice = lines.some(
+      (l) => l.method !== 'cash' || l.amountStr.trim() !== '',
+    )
+    if (hasUserChoice) return
+    if (availableSessions.length === 0) return
+    // Pré-seleciona a sessão mais antiga (primeiro item já vem ordenado pela API)
+    const first = availableSessions[0]
+    const autoStr = (billing.amount / 100).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+    setLines([{
+      id: lineIdCounter++,
+      method: 'package_session',
+      amountStr: autoStr,
+      walletEntryId: '',
+      packageSessionId: first.session.id,
+    }])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, availableSessions.length])
+
   const canConfirm =
-    totalPaid >= effectiveAmount &&
+    !receive.isPending &&
+    !payWithPackage.isPending &&
     lines.every((l) => {
+      if (l.method === 'package_session') {
+        return !!l.packageSessionId
+      }
       if (parseCurrencyInput(l.amountStr) <= 0) return false
       if ((l.method === 'wallet_credit' || l.method === 'wallet_voucher') && !l.walletEntryId) return false
       return true
     }) &&
-    !receive.isPending
+    (hasPackageSession || totalPaid >= effectiveAmount)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    // Caminho dedicado: sessão de pacote (RN10)
+    // RN07 — uma única linha, sem combinação com outros métodos
+    if (hasPackageSession) {
+      const pkgLine = lines.find((l) => l.method === 'package_session')
+      if (!pkgLine?.packageSessionId) {
+        toast.error('Selecione uma sessão de pacote')
+        return
+      }
+      try {
+        await payWithPackage.mutateAsync(pkgLine.packageSessionId)
+        toast.success('Pagamento registrado! Sessão do pacote utilizada.')
+        onClose()
+      } catch (err: unknown) {
+        const msg =
+          err && typeof err === 'object' && 'response' in err
+            ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+            : undefined
+        toast.error(msg ?? 'Erro ao registrar pagamento via pacote')
+      }
+      return
+    }
 
     try {
       const result = await receive.mutateAsync({
         notes: notes.trim() || undefined,
         lines: lines.map((l) => ({
-          paymentMethod: l.method,
+          paymentMethod: l.method as ManualReceiptPaymentMethod,
           amount: parseCurrencyInput(l.amountStr),
           ...(l.walletEntryId ? { walletEntryId: l.walletEntryId } : {}),
         })),
@@ -412,6 +574,12 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
       } else {
         toast.success('Pagamento registrado com sucesso!')
       }
+
+      // RN08 — Se havia sessão AGENDADO e o operador pagou por outro método,
+      // o backend (manual-receipts.service) já libera a sessão automaticamente.
+      // Aqui apenas chamamos release no caso edge de o operador ter trocado a UI
+      // sem submeter via package_session, mas a sessão continuar AGENDADO sem ser usada.
+      // Esta lógica fica a cargo do backend (RN04 já implementada).
 
       onClose()
     } catch (err: unknown) {
@@ -455,6 +623,16 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
         />
       )}
 
+      {/* Aviso de sessão de pacote selecionada */}
+      {hasPackageSession && !previousLines?.length && (
+        <InfoBanner
+          variant="success"
+          title="Sessão de pacote selecionada"
+          description="A sessão cobre o valor integral do serviço. Nenhuma promoção se aplica."
+          className="mb-4"
+        />
+      )}
+
       {/* Aviso de cobrança reaberta com pré-preenchimento */}
       {previousLines?.length ? (
         <InfoBanner
@@ -479,6 +657,7 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
                 billingServiceId={billing.appointment?.service?.id ?? billing.service?.id ?? null}
                 billingSourceType={billing.sourceType ?? null}
                 canRemove={lines.length > 1}
+                availableSessions={availableSessions}
                 onUpdate={(upd) => updateLine(line.id, upd)}
                 onRemove={() => removeLine(line.id)}
               />
@@ -520,7 +699,8 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
           </div>
         )}
 
-        {/* Total & diff */}
+        {/* Total & diff — ocultado quando paga via sessão de pacote (não é fluxo monetário) */}
+        {!hasPackageSession && (
         <div className={`rounded-lg border p-3 space-y-1 text-sm transition-colors ${appliedCoupon ? 'border-green-300 bg-green-100 dark:border-green-800/60 dark:bg-green-950/40' : 'bg-muted/20'}`}>
           {appliedCoupon && (
             <div className="flex justify-between text-green-900 dark:text-green-200">
@@ -552,9 +732,10 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
             </div>
           )}
         </div>
+        )}
 
         {/* Overpayment section — shown dynamically */}
-        {excedente > 0 && (
+        {excedente > 0 && !hasPackageSession && (
           <OverpaymentSection
             excedente={excedente}
             selected={overpaymentHandling}
@@ -562,8 +743,8 @@ export function ReceiveManualModal({ billing, open, onClose, preSelectedVoucherI
           />
         )}
 
-        {/* Coupon / Promotion Code — ocultado quando billing já tem promoção travada OU pré-venda selecionada */}
-        {!hasLockedPromo && !hasServicePresale && (
+        {/* Coupon / Promotion Code — ocultado quando billing já tem promoção travada, pré-venda ou sessão de pacote */}
+        {!hasLockedPromo && !hasServicePresale && !hasPackageSession && (
         <div className="space-y-2">
           {/* Banner promoção aplicada */}
           {appliedCoupon && (
