@@ -362,7 +362,7 @@ function CreateAppointmentForm({
   // After a time is selected, the finalProfessionalId must come from profList (filtered to available)
   const availableProfIds = new Set(profList.filter((p) => p.available).map((p) => p.id))
 
-  const canSubmit = !!(customerId && serviceId && serviceDuration > 0 && date && selectedTime && finalProfessionalId && roomId)
+  const canSubmit = !!(customerId && serviceId && serviceDuration > 0 && date && selectedTime && finalProfessionalId && roomId && (!usePackageSession || selectedPackageSessionId))
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   function handleCustomerInput(value: string) {
@@ -809,24 +809,28 @@ function CreateAppointmentForm({
             </span>
           </label>
 
-          {/* Session selector — always shown when opted in */}
+          {/* Session selector — required when opted in */}
           {usePackageSession && (
-            <Select
-              value={selectedPackageSessionId}
-              onValueChange={(v) => setSelectedPackageSessionId(v)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Selecione qual sessão usar…" />
-              </SelectTrigger>
-              <SelectContent>
-                {availablePackageSessions?.map((entry) => (
-                  <SelectItem key={entry.session.id} value={entry.session.id}>
-                    Sessão {entry.sessionNumber}/{entry.totalSessions} — {entry.packageName}
-                    {entry.expiresAt ? ` (expira ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-1">
+              <Select
+                value={selectedPackageSessionId}
+                onValueChange={(v) => setSelectedPackageSessionId(v)}
+              >
+                <SelectTrigger className={`w-full${submitted && !selectedPackageSessionId ? ' border-red-500 focus:ring-red-500' : ''}`}>
+                  <SelectValue placeholder="Selecione qual sessão usar…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePackageSessions?.map((entry) => (
+                    <SelectItem key={entry.session.id} value={entry.session.id}>
+                      {`Sessão ${entry.sessionNumber}/${entry.totalSessions} — ${entry.packageName}${entry.expiresAt ? ` (expira ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})` : ''}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {submitted && !selectedPackageSessionId && (
+                <p className="text-xs text-red-500">Selecione qual sessão do pacote será utilizada.</p>
+              )}
+            </div>
           )}
         </div>
       )}

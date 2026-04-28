@@ -12,6 +12,7 @@ interface SelectContextValue {
   handleSelect: (value: string, label: string) => void
   registerLabel: (value: string, label: string) => void
   labelsMap: React.RefObject<Map<string, string>>
+  labelVersion: number
   contentId: string
 }
 
@@ -36,6 +37,7 @@ export function Select({ value, onValueChange, defaultValue = '', children }: Se
   const isControlled = value !== undefined
   const [internalValue, setInternalValue] = React.useState(defaultValue)
   const [open, setOpen] = React.useState(false)
+  const [labelVersion, setLabelVersion] = React.useState(0)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const labelsMap = React.useRef<Map<string, string>>(new Map())
   const uid = React.useId()
@@ -55,6 +57,7 @@ export function Select({ value, onValueChange, defaultValue = '', children }: Se
 
   const registerLabel = React.useCallback((v: string, label: string) => {
     labelsMap.current.set(v, label)
+    setLabelVersion((n) => n + 1)
   }, [])
 
   // Close on outside click
@@ -81,7 +84,7 @@ export function Select({ value, onValueChange, defaultValue = '', children }: Se
 
   return (
     <SelectContext.Provider
-      value={{ value: resolvedValue, open, setOpen, handleSelect, registerLabel, labelsMap, contentId }}
+      value={{ value: resolvedValue, open, setOpen, handleSelect, registerLabel, labelsMap, labelVersion, contentId }}
     >
       <div ref={containerRef} className="relative">
         {children}
@@ -127,7 +130,7 @@ interface SelectValueProps {
 }
 
 export function SelectValue({ placeholder }: SelectValueProps) {
-  const { value, labelsMap } = useSelectCtx()
+  const { value, labelsMap, labelVersion: _ } = useSelectCtx()
   const label = value ? (labelsMap.current.get(value) ?? value) : undefined
   return (
     <span className={cn('truncate text-left', !value && 'text-muted-foreground')}>
@@ -145,7 +148,10 @@ interface SelectContentProps {
 
 export function SelectContent({ children, className }: SelectContentProps) {
   const { open, contentId } = useSelectCtx()
-  if (!open) return null
+  if (!open) {
+    // Render hidden so SelectItems register their labels even when the dropdown is closed
+    return <div className="hidden" aria-hidden="true">{children}</div>
+  }
   return (
     <div
       id={contentId}
