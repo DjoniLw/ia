@@ -162,13 +162,13 @@ function PackageSessionDetail({ billing }: { billing: Billing }) {
   }
 
   return (
-    <div className="rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/30 p-3 space-y-1">
-      <p className="text-xs font-semibold text-purple-800 dark:text-purple-200">Pago via Sessão de Pacote</p>
+    <div className="rounded-lg border border-purple-300 bg-purple-600 dark:border-purple-700 dark:bg-purple-700 p-3 space-y-1">
+      <p className="text-xs font-semibold text-white">Pago via Sessão de Pacote</p>
       {pkgName && (
-        <p className="text-xs text-purple-700 dark:text-purple-300">{pkgName}</p>
+        <p className="text-xs text-purple-100">{pkgName}</p>
       )}
       {sessionLabel && (
-        <p className="text-xs font-medium text-purple-700 dark:text-purple-300">{sessionLabel}</p>
+        <p className="text-xs font-medium text-purple-100">{sessionLabel}</p>
       )}
     </div>
   )
