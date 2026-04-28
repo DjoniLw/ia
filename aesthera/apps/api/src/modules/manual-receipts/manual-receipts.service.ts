@@ -159,10 +159,10 @@ export class ManualReceiptsService {
 
       // RN04 — Se havia sessão de pacote RESERVADA vinculada, liberar de volta para ABERTO
       // (o operador optou por pagar por outro método, não via pacote)
-      const billingWithSession = billing as unknown as { packageSessionId?: string | null }
-      if (billingWithSession.packageSessionId) {
-        await tx.customerPackageSession.update({
-          where: { id: billingWithSession.packageSessionId },
+      if (billing.packageSession?.id) {
+        // clinicId no WHERE garante isolamento multi-tenant (defesa em profundidade)
+        await tx.customerPackageSession.updateMany({
+          where: { id: billing.packageSession.id, clinicId },
           data: { appointmentId: null, status: 'ABERTO' },
         })
       }

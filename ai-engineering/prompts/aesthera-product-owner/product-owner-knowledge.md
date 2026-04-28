@@ -102,6 +102,13 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 - O lembrete D-1 **não está implementado** apesar de marcado como [x] no PLAN.md Fase 6
 - Issue #131 foi reescrita — spec corrigida: `outputs/tasks/014-messaging-queue-bullmq-evolution.md`
 
+### Notificações — Ajustes de Envio WhatsApp/E-mail (28/04/2026)
+- **smtpEnabled**: novo campo booleano em `Clinic` (DEFAULT TRUE). Quando `false`, envios por e-mail são bloqueados mesmo que SMTP esteja configurado. Não apaga dados de SMTP.
+- **Fallback wa.me**: quando `WhatsappSettings.connected === false`, o frontend abre `https://wa.me/{phone}?text={msg}` em nova aba ao invés de enviar phone ao backend. Backend NÃO cria NotificationLog de WhatsApp no fallback.
+- **SEC2 mantida**: endpoints de anamnese e contratos devem retornar `signUrl` (URL completa), nunca o `signToken` bruto.
+- **Botão "Remover instância"**: aparece em Configurações/WhatsApp quando `configured && !connected` (não apenas quando `connected === true`).
+- **Regra de disponibilidade de canal nos dialogs**: e-mail disponível somente quando `configured && enabled`; WhatsApp conectado = envio direto via backend; WhatsApp desconectado = wa.me fallback.
+
 ---
 
 ## Arquitetura Resumida
@@ -178,6 +185,7 @@ O sistema está operacional. As fases pendentes são contratos digitais, prontu�
 | **Fichas de Avaliação Expandidas** | **2026-04-13** | **`outputs/po/fichas-avaliacao-expandidas-doc.md`** |
 | **Pacotes — Redesign Sessão via Cobrança** | **2026-04-26** | **`outputs/po/pacotes-sessao-cobranca-redesign-doc.md`** |
 | **Pacotes — Integração no Modal de Recebimento** | **2026-04-27** | **`outputs/po/pacotes-recebimento-modal-integracao-doc.md`** |
+| **Ajustes Envio WhatsApp e E-mail** | **2026-04-28** | **`outputs/po/ajustes-envio-whatsapp-email-doc.md`** |
 
 ---
 

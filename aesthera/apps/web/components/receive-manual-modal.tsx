@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Minus, Plus, Tag, X } from 'lucide-react'
 import { InfoBanner } from '@/components/ui/info-banner'
 import { toast } from 'sonner'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useActiveVouchers, type WalletEntry } from '@/lib/hooks/use-wallet'
 import {
   useCreateManualReceipt,
@@ -128,41 +129,46 @@ function PaymentLineRow({
     <div className="flex items-start gap-2">
       <div className="flex-1 space-y-2">
         <div className="flex gap-2">
-          <select
-            value={isWallet ? 'wallet_credit' : line.method}
-            onChange={(e) => {
-              const next = e.target.value as PaymentLineMethod
-              const isPkg = next === 'package_session'
-              const autoStr = isPkg
-                ? (billingAmount / 100).toLocaleString('pt-BR', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })
-                : ''
-              const update: Partial<PaymentLineState> = {
-                method: next,
-                walletEntryId: '',
-                walletOriginType: null,
-                packageSessionId: null,
-              }
-              if (isPkg) {
-                update.amountStr = autoStr
-                // Pré-seleciona a sessão mais antiga (primeiro item já vem ordenado)
-                const first = availableSessions[0]
-                if (first) update.packageSessionId = first.session.id
-              } else {
-                update.amountStr = ''
-              }
-              onUpdate(update)
-            }}
-            className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-          >
-            {methodOptions.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex-1">
+            <Select
+              value={isWallet ? 'wallet_credit' : line.method}
+              onValueChange={(next) => {
+                const isPkg = next === 'package_session'
+                const autoStr = isPkg
+                  ? (billingAmount / 100).toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })
+                  : ''
+                const update: Partial<PaymentLineState> = {
+                  method: next as PaymentLineMethod,
+                  walletEntryId: '',
+                  walletOriginType: null,
+                  packageSessionId: null,
+                }
+                if (isPkg) {
+                  update.amountStr = autoStr
+                  // Pré-seleciona a sessão mais antiga (primeiro item já vem ordenado)
+                  const first = availableSessions[0]
+                  if (first) update.packageSessionId = first.session.id
+                } else {
+                  update.amountStr = ''
+                }
+                onUpdate(update)
+              }}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {methodOptions.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <Input
             value={line.amountStr}
@@ -275,8 +281,9 @@ function OverpaymentSection({ excedente, selected, onChange }: OverpaymentSectio
   return (
     <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 p-4 space-y-3">
       <div className="flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
-          ⚠️ Excedente de {formatCurrency(excedente)}
+          Excedente de {formatCurrency(excedente)}
         </span>
       </div>
       <p className="text-xs text-amber-800 dark:text-amber-200">O que fazer com o excedente?</p>

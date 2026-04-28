@@ -123,3 +123,25 @@
   - 📌 Campos que NUNCA devem aparecer em respostas de API: `signToken`, `signatureUrl` (com base64), `consentText` (verbatim), `ipAddress`, `userAgent`, `passwordHash`, `resetToken`, qualquer campo com `Hash` ou `Secret` no nome.
   - 📌 Detecção: buscar métodos de repositório que usam `include:` sem `select:` correspondente na entidade raiz e verificar se são chamados por um route handler.
   - 📅 08/04/2026 — issue #152 (`create`, `resend`, `finalize` expondo `signToken` + `signatureBase64` em respostas de API)
+
+---
+
+- [ ] **🔁 REINCIDÊNCIA — IDOR em update de tabela de outro módulo dentro de `$transaction` sem `clinicId` (BLOQUEANTE)**
+  - 🔴 Anti-padrão: validar `clinicId` via `findFirst` antes da transação, mas usar `update({ where: { id } })` sem `clinicId` dentro do `$transaction` — defesa em profundidade violada.
+    ```ts
+    // ❌ — findFirst validou clinicId, mas o update não repete a proteção
+    const session = await prisma.customerPackageSession.findFirst({ where: { id, clinicId } })
+    await prisma.$transaction(async (tx) => {
+      await tx.customerPackageSession.update({ where: { id }, data: { status: 'FINALIZADO' } })
+    })
+    ```
+  - ✅ Correto: **toda** operação de escrita dentro de `$transaction` inclui `clinicId` no `where`, mesmo que validação prévia tenha ocorrido — usar `updateMany`:
+    ```ts
+    await prisma.$transaction(async (tx) => {
+      await tx.customerPackageSession.updateMany({ where: { id, clinicId }, data: { status: 'FINALIZADO' } })
+    })
+    ```
+  - 📌 Aplica-se **especialmente** a tabelas de outros módulos acessadas diretamente (ex: `BillingService` acessando `customerPackageSession` do módulo `packages`). Nesses casos o `clinicId` é a única barreira cross-tenant dentro da transação.
+  - 📌 Detecção: buscar por `tx.{model}.update({ where: { id` (sem `clinicId`) em arquivos de service com `$transaction`.
+  - 📌 Se `updateMany` retornar `count === 0`, lançar erro — significa que o `id` não pertence ao tenant.
+  - 📅 28/04/2026 | 🔁 Reincidência: 3 ocorrências simultâneas em billing.service.ts e manual-receipts.service.ts (PR #168)

@@ -26,6 +26,7 @@ import { useAvailableSessionsForService } from '@/lib/hooks/use-packages'
 import { useCustomers, useGetCustomer, useAvailableEquipment, useEquipment, useProfessionals, useRooms, useServices } from '@/lib/hooks/use-resources'
 import { useActivePromotionsForService } from '@/lib/hooks/use-promotions'
 import { formatCpf, formatPhone } from '@/lib/masks'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ReceiveManualModal } from '@/components/receive-manual-modal'
 
 // ──── Types ─────────────────────────────────────────────────────────────────────
@@ -810,46 +811,45 @@ function CreateAppointmentForm({
 
           {/* Session selector — always shown when opted in */}
           {usePackageSession && (
-            <select
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            <Select
               value={selectedPackageSessionId}
-              onChange={(e) => setSelectedPackageSessionId(e.target.value)}
+              onValueChange={(v) => setSelectedPackageSessionId(v)}
             >
-              <option value="">Selecione qual sessão usar…</option>
-              {availablePackageSessions?.map((entry) => (
-                <option key={entry.session.id} value={entry.session.id}>
-                  Sessão {entry.sessionNumber}/{entry.totalSessions} — {entry.packageName}
-                  {entry.expiresAt ? ` (expira ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})` : ''}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Selecione qual sessão usar…" />
+              </SelectTrigger>
+              <SelectContent>
+                {availablePackageSessions?.map((entry) => (
+                  <SelectItem key={entry.session.id} value={entry.session.id}>
+                    Sessão {entry.sessionNumber}/{entry.totalSessions} — {entry.packageName}
+                    {entry.expiresAt ? ` (expira ${new Date(entry.expiresAt).toLocaleDateString('pt-BR')})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
       )}
 
       {/* Package warning dialog */}
-      {showPackageWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-xl border bg-card shadow-xl p-5 space-y-4">
-            <div className="flex items-center gap-3">
-              <Package className="h-6 w-6 text-amber-500 flex-shrink-0" />
-              <h3 className="font-semibold text-foreground">Pacote disponível não utilizado</h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              O cliente possui sessões disponíveis em um pacote para este serviço, mas você não marcou para utilizá-las.
-              Deseja continuar <strong>sem usar</strong> o pacote (será gerada uma cobrança separada)?
-            </p>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowPackageWarning(false)}>
-                Voltar e usar pacote
-              </Button>
-              <Button type="button" variant="destructive" onClick={handleSubmitIgnoringPackage}>
-                Continuar sem pacote
-              </Button>
-            </div>
-          </div>
+      <Dialog open={showPackageWarning} onClose={() => setShowPackageWarning(false)}>
+        <DialogTitle className="flex items-center gap-3">
+          <Package className="h-6 w-6 text-amber-500 flex-shrink-0" />
+          Pacote disponível não utilizado
+        </DialogTitle>
+        <p className="text-sm text-muted-foreground">
+          O cliente possui sessões disponíveis em um pacote para este serviço, mas você não marcou para utilizá-las.
+          Deseja continuar <strong>sem usar</strong> o pacote (será gerada uma cobrança separada)?
+        </p>
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={() => setShowPackageWarning(false)}>
+            Voltar e usar pacote
+          </Button>
+          <Button type="button" variant="destructive" onClick={handleSubmitIgnoringPackage}>
+            Continuar sem pacote
+          </Button>
         </div>
-      )}
+      </Dialog>
 
       {/* 10. Observações */}
       <div className="space-y-2">

@@ -521,6 +521,32 @@ Corrigir dois problemas estruturais do PR #148: (1) `CompleteAppointmentModal` e
 - **O que foi feito:** Revisão do PR #162 (feat(#159): aba Avaliações no perfil do cliente e fichas personalizadas) — 5 bloqueantes, 6 sugestões
 - **Impacto:** Qualidade e integridade do código revisado; PR reprovado pendente correções
 
+### [2026-04-28] — Code Review PR #168
+- **Arquivo gerado:** `outputs/code-review/pr/revisao_pr168_2026-04-28.md`
+- **O que foi feito:** Revisão do PR #168 (Fase 15 + Fase 16: billing sempre criado ao completar agendamento com pacote; integração de sessão de pacote no ReceiveManualModal) — 8 bloqueantes, 4 sugestões
+- **Impacto:** PR reprovado pendente correções; principais achados: 3 IDOR em updates de `customerPackageSession` sem `clinicId`, Prisma client não regenerado após migration (`as any`/`as unknown as`), ausência de testes para `payWithPackage()` e `reserveSession()`/`releaseSession()`, modal de aviso de pacote fora do padrão (`fixed inset-0`), e `<select>` nativo em 2 arquivos
+
+### [2026-04-28] — fix: Correções dos bloqueantes do PR #168
+- **Módulo:** Billing · ManualReceipts · Packages · Appointments (frontend)
+- **Arquivo(s) afetado(s):**
+  - `aesthera/apps/api/src/modules/billing/billing.service.ts` — IDOR corrigido (2 ocorrências: `payWithPackage` + `reopen` Caso E); `as any`/`as unknown as` removidos após `prisma generate`
+  - `aesthera/apps/api/src/modules/manual-receipts/manual-receipts.service.ts` — IDOR corrigido (RN04)
+  - `aesthera/apps/api/src/modules/billing/billing.service.test.ts` — 7 novos testes para `payWithPackage()`
+  - `aesthera/apps/api/src/modules/packages/packages.service.test.ts` — 6 + 4 novos testes para `reserveSession()` e `releaseSession()`
+  - `aesthera/apps/web/app/(dashboard)/appointments/page.tsx` — modal `fixed inset-0` → `<Dialog>`; `<select>` nativo → `<Select>` shadcn
+  - `aesthera/apps/web/components/receive-manual-modal.tsx` — `<select>` nativo → `<Select>` shadcn; emoji `⚠️` → `<AlertTriangle>` Lucide
+- **O que foi feito:** Todos os 8 bloqueantes corrigidos; 37 testes passando; zero erros de compilação
+
+### [2026-04-28] — Treinamento do implementador — 2 novos padrões registrados
+- **Arquivo(s) afetado(s):**
+  - `ai-engineering/prompts/aesthera-implementador/patterns/backend-seguranca.md`
+  - `ai-engineering/prompts/aesthera-implementador/patterns/backend-prisma.md`
+- **O que foi feito:** Registrados padrões derivados do PR #168: (1) IDOR em update cross-module dentro de `$transaction` sem `clinicId`; (2) `as any` em dados Prisma = sinal de `prisma generate` não executado
+
+### [2026-04-28] — PO: Ajustes de Envio via WhatsApp e E-mail
+- **Módulo:** Notifications · Contracts · Anamnesis · Settings
+- **O que foi feito:** Especificação gerada para 4 ajustes no fluxo de envio de fichas de anamnese e contratos via WhatsApp e e-mail
+
 ### [2026-04-26] — fix: Correções de Bugs — Módulo de Pacotes
 - **Módulo:** Packages (backend + frontend)
 - **Arquivo(s) afetado(s):**

@@ -378,15 +378,15 @@ export class BillingService {
       })
 
       // ── Caso E: billing pago via pacote → reverter sessão e limpar referência ──
-      const billingWithSession = billing as unknown as { packageSessionId?: string | null }
-      if (billingWithSession.packageSessionId) {
+      if (billing.packageSession?.id) {
         // Verifica se a sessão existe e está FINALIZADO (pode já ter sido liberada)
         const session = await tx.customerPackageSession.findUnique({
-          where: { id: billingWithSession.packageSessionId },
+          where: { id: billing.packageSession.id },
         })
         if (session && session.status === 'FINALIZADO') {
-          await tx.customerPackageSession.update({
-            where: { id: billingWithSession.packageSessionId },
+          // clinicId no WHERE garante isolamento multi-tenant (defesa em profundidade)
+          await tx.customerPackageSession.updateMany({
+            where: { id: billing.packageSession.id, clinicId },
             data: {
               status: 'ABERTO',
               usedAt: null,
@@ -397,7 +397,7 @@ export class BillingService {
         // Sempre limpar packageSessionId do billing reaberto (evita conflito de unique constraint)
         await tx.billing.update({
           where: { id },
-          data: { packageSessionId: null } as any,
+          data: { packageSession: { disconnect: true } },
         })
       }
 
@@ -491,9 +491,9 @@ export class BillingService {
 
     // Executar transação atômica
     await prisma.$transaction(async (tx) => {
-      // 1. Marcar sessão como FINALIZADO (USED)
-      await tx.customerPackageSession.update({
-        where: { id: packageSessionId },
+      // 1. Marcar sessão como FINALIZADO (USED) — clinicId no WHERE garante isolamento multi-tenant
+      await tx.customerPackageSession.updateMany({
+        where: { id: packageSessionId, clinicId },
         data: { status: 'FINALIZADO', usedAt: new Date() },
       })
 
@@ -504,7 +504,7 @@ export class BillingService {
           status: 'paid',
           paidAt: new Date(),
           packageSessionId,
-        } as any,
+        },
       })
 
       // 3. Registrar evento no audit trail

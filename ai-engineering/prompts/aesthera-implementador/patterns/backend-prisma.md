@@ -117,3 +117,24 @@
     ```
   - 📌 Nunca usar `_excludeId` em métodos de verificação de conflito. Detectar: buscar `_excludeId` ou `_excludeAppointmentId` nos arquivos.
   - 📅 03/04/2026
+
+---
+
+- [ ] **`as any` / `as unknown as` em campos de dados Prisma = sinal de `npx prisma generate` não executado (BLOQUEANTE)**
+  - 🔴 Anti-padrão: adicionar campo ao `schema.prisma` + criar migration, mas commitar sem rodar `npx prisma generate` — o Prisma Client ainda usa os tipos antigos, forçando casts inseguros:
+    ```ts
+    // ❌ — campo packageSessionId existe no schema mas o client não foi regenerado
+    data: { status: 'paid', paidAt: new Date(), packageSessionId } as any
+    billing as unknown as { packageSessionId?: string | null }
+    ```
+  - ✅ Correto: **sempre** executar `npx prisma generate` após qualquer alteração no `schema.prisma`, antes de usar o novo campo no código:
+    ```bash
+    # Checklist obrigatório após alterar schema.prisma:
+    npx prisma generate              # regenera o Client com os novos tipos
+    npx prisma migrate dev --name <descricao>  # cria migration se necessário
+    git add -f aesthera/apps/api/prisma/migrations/<nome>/migration.sql
+    ```
+  - 📌 **Regra de detecção**: `as any` ou `as unknown as` no argumento `data:` de uma query Prisma (`create`, `update`, `updateMany`) = `prisma generate` ausente. Buscar: `data:.*as any` e `as unknown as {` em arquivos `*.service.ts`.
+  - 📌 Após gerar, todos os casts devem ser removidos — o TypeScript reconhecerá os campos sem cast.
+  - 📌 Efeito colateral grave: `data: { campo_valido, campo_novo } as any` desativa verificação de tipo para **todos** os campos do objeto, não apenas o novo — erros em campos existentes ficam silenciosos.
+  - 📅 28/04/2026 — billing.service.ts PR #168 (`packageSessionId` adicionado sem `prisma generate`)
