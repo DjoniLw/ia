@@ -11,6 +11,7 @@ import { ReceiveManualModal } from '@/components/receive-manual-modal'
 import { SellServiceForm } from '@/components/billing/SellServiceForm'
 import { type BillingStatus, type BillingSourceType, useBilling, useCancelBilling, useReopenBilling, type Billing } from '@/lib/hooks/use-appointments'
 import { useServiceVouchers } from '@/lib/hooks/use-wallet'
+import { useCustomerPackages } from '@/lib/hooks/use-packages'
 import { useServices, useProfessionals } from '@/lib/hooks/use-resources'
 import { BILLING_SOURCE_TYPE_LABEL, BILLING_SOURCE_TYPE_COLOR, BILLING_STATUS_LABEL, BILLING_STATUS_COLOR, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_BADGE_COLORS } from '@/lib/status-colors'
 import { ComboboxSearch, type ComboboxItem } from '@/components/ui/combobox-search'
@@ -136,6 +137,79 @@ function billingDescription(b: Billing): React.ReactNode {
   }
 }
 
+// ──── Package Session Detail ──────────────────────────────────────────────────
+
+function PackageSessionDetail({ billing }: { billing: Billing }) {
+  const pkg = billing.packageSession
+  const pkgName = pkg?.customerPackage?.package?.name
+  const customerPackageId = pkg?.customerPackage?.id
+  const customerId = billing.customer.id
+
+  const { data: customerPackages } = useCustomerPackages(customerId)
+  const customerPkg = customerPackages?.find((cp) => cp.id === customerPackageId)
+
+  // Calcula "Sessão X/Y" filtrando apenas sessões do mesmo serviço
+  let sessionLabel: string | null = null
+  if (customerPkg && billing.packageSessionId) {
+    const serviceId = pkg?.serviceId
+    const sameSvcSessions = serviceId
+      ? customerPkg.sessions.filter((s) => s.serviceId === serviceId)
+      : customerPkg.sessions
+    const idx = sameSvcSessions.findIndex((s) => s.id === billing.packageSessionId)
+    if (idx !== -1) {
+      sessionLabel = `Sessão ${idx + 1}/${sameSvcSessions.length}`
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/30 p-3 space-y-1">
+      <p className="text-xs font-semibold text-purple-800 dark:text-purple-200">Pago via Sessão de Pacote</p>
+      {pkgName && (
+        <p className="text-xs text-purple-700 dark:text-purple-300">{pkgName}</p>
+      )}
+      {sessionLabel && (
+        <p className="text-xs font-medium text-purple-700 dark:text-purple-300">{sessionLabel}</p>
+      )}
+    </div>
+  )
+}
+
+// ──── Package Session Detail ────────────────────────────────────────────────────
+
+function PackageSessionDetail({ billing }: { billing: Billing }) {
+  const pkg = billing.packageSession
+  const pkgName = pkg?.customerPackage?.package?.name
+  const customerPackageId = pkg?.customerPackage?.id
+  const customerId = billing.customer.id
+
+  const { data: customerPackages } = useCustomerPackages(customerId)
+  const customerPkg = customerPackages?.find((cp) => cp.id === customerPackageId)
+
+  let sessionLabel: string | null = null
+  if (customerPkg && billing.packageSessionId) {
+    const serviceId = pkg?.serviceId
+    const sameSvcSessions = serviceId
+      ? customerPkg.sessions.filter((s) => s.serviceId === serviceId)
+      : customerPkg.sessions
+    const idx = sameSvcSessions.findIndex((s) => s.id === billing.packageSessionId)
+    if (idx !== -1) {
+      sessionLabel = `Sessão ${idx + 1}/${sameSvcSessions.length}`
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/30 p-3 space-y-1">
+      <p className="text-xs font-semibold text-purple-800 dark:text-purple-200">Pago via Sessão de Pacote</p>
+      {pkgName && (
+        <p className="text-xs text-purple-700 dark:text-purple-300">{pkgName}</p>
+      )}
+      {sessionLabel && (
+        <p className="text-xs font-medium text-purple-700 dark:text-purple-300">{sessionLabel}</p>
+      )}
+    </div>
+  )
+}
+
 // ──── Billing Detail Modal ─────────────────────────────────────────────────────
 
 function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: () => void }) {
@@ -204,14 +278,7 @@ function BillingDetailModal({ billing, onClose }: { billing: Billing; onClose: (
 
         {/* Detalhe de pagamento via pacote */}
         {billing.packageSessionId && (
-          <div className="rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/30 p-3 space-y-1">
-            <p className="text-xs font-semibold text-purple-800 dark:text-purple-200">Pago via Sessão de Pacote</p>
-            {billing.packageSession?.customerPackage?.package?.name && (
-              <p className="text-xs text-purple-700 dark:text-purple-300">
-                {billing.packageSession.customerPackage.package.name}
-              </p>
-            )}
-          </div>
+          <PackageSessionDetail billing={billing} />
         )}
 
         {/* Detalhe do recebimento */}
@@ -442,7 +509,7 @@ function PaymentMethodPills({ billing }: { billing: Billing }) {
     const pkgName = billing.packageSession?.customerPackage?.package?.name
     return (
       <div className="flex flex-wrap gap-0.5 mt-1">
-        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium bg-purple-600 text-white dark:bg-purple-700">
           {pkgName ? `Pacote · ${pkgName}` : 'Pacote'}
         </span>
       </div>
