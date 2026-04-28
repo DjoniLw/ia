@@ -130,8 +130,9 @@ interface SelectValueProps {
 }
 
 export function SelectValue({ placeholder }: SelectValueProps) {
-  const { value, labelsMap, labelVersion: _ } = useSelectCtx()
-  const label = value ? (labelsMap.current.get(value) ?? value) : undefined
+  const { value, labelsMap, labelVersion } = useSelectCtx()
+  // labelVersion is read here so SelectValue re-renders when a new label is registered
+  const label = value && labelVersion >= 0 ? (labelsMap.current.get(value) ?? value) : undefined
   return (
     <span className={cn('truncate text-left', !value && 'text-muted-foreground')}>
       {label ?? placeholder ?? 'Selecione…'}
