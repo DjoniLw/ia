@@ -1154,7 +1154,13 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
       else if (action === 'complete') {
         const result = await transitions.complete.mutateAsync() as CompleteResult
         if (!result.billing) {
-          // Pacote utilizado — sem cobrança a registrar
+          // Pacote utilizado sem billing — sem cobrança a registrar
+          toast.success('Atendimento concluído. Sessão do pacote utilizada.')
+          onClose()
+          return
+        }
+        // Billing já pago via sessão de pacote — não abrir modal de recebimento
+        if (result.billing.status === 'paid' && result.billing.packageSessionId) {
           toast.success('Atendimento concluído. Sessão do pacote utilizada.')
           onClose()
           return
