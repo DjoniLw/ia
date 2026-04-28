@@ -1154,8 +1154,15 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
   async function handleAction(action: 'confirm' | 'start' | 'complete' | 'cancel' | 'noShow') {
     try {
       if (action === 'confirm') await transitions.confirm.mutateAsync()
-      else if (action === 'start') await transitions.start.mutateAsync()
+      else if (action === 'start') {
+        // Encadeia confirm → start se ainda em draft
+        if (status === 'draft') await transitions.confirm.mutateAsync()
+        await transitions.start.mutateAsync()
+      }
       else if (action === 'complete') {
+        // Encadeia transições intermediárias necessárias
+        if (status === 'draft') await transitions.confirm.mutateAsync()
+        if (status === 'draft' || status === 'confirmed') await transitions.start.mutateAsync()
         const result = await transitions.complete.mutateAsync() as CompleteResult
         if (!result.billing) {
           // Pacote utilizado sem billing — sem cobrança a registrar
@@ -1282,16 +1289,9 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
                   <>
                     <div className="fixed inset-0 z-[9998]" onClick={() => setShowStatusMenu(false)} />
                     <div className="absolute left-0 bottom-full mb-1 z-[9999] min-w-[180px] rounded-lg border bg-popover shadow-xl overflow-hidden">
-                      {status !== 'draft' && (
-                        <button
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
-                          onClick={() => { setShowStatusMenu(false); handleAction('confirm') }}
-                        >
-                          <span className="h-2 w-2 rounded-full bg-blue-500" />
-                          Confirmado
-                        </button>
-                      )}
-                      {status !== 'confirmed' && (
+                      {/* "Confirmar" só faz sentido a partir de draft — e já é o botão primário, então omitimos */}
+                      {/* "Em andamento" via fast-forward confirm→start, só disponível de draft */}
+                      {status === 'draft' && (
                         <button
                           className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
                           onClick={() => { setShowStatusMenu(false); handleAction('start') }}
@@ -1300,6 +1300,7 @@ function SlotActions({ slot, onClose }: { slot: CalendarSlot; onClose: () => voi
                           Em andamento
                         </button>
                       )}
+                      {/* "Concluído" via fast-forward — encadeia transições intermediárias se necessário */}
                       {status !== 'in_progress' && (
                         <button
                           className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
