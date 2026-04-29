@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { useAnamnesisGroups, type AnamnesisQuestion } from '@/lib/hooks/use-settings'
-import { useCreateAnamnesisRequest, useFinalizeAnamnesis } from '@/lib/hooks/use-resources'
+import { useCreateAnamnesisRequest, useFinalizeAnamnesis, useSmtpSettings, useWhatsappSettings } from '@/lib/hooks/use-resources'
 
 interface Props {
   customerId: string
@@ -23,6 +23,14 @@ interface Props {
 
 export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, defaultEmail, onClose, onSuccess }: Props) {
   const { data: groups, isLoading: groupsLoading } = useAnamnesisGroups()
+  const { data: smtpSettings } = useSmtpSettings()
+  const { data: whatsappSettings } = useWhatsappSettings()
+  const emailAvailable = Boolean(smtpSettings?.configured && smtpSettings?.enabled)
+  const whatsappConnected = Boolean(whatsappSettings?.connected)
+  const { data: smtpSettings } = useSmtpSettings()
+  const { data: whatsappSettings } = useWhatsappSettings()
+  const emailAvailable = Boolean(smtpSettings?.configured && smtpSettings?.enabled)
+  const whatsappConnected = Boolean(whatsappSettings?.connected)
 
   // â”€â”€ Etapa â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [step, setStep] = useState<'create' | 'dispatch'>('create')
@@ -35,7 +43,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
   // â”€â”€ Etapa 2 â€” destino â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [dispatchMode, setDispatchMode] = useState<'send' | 'save'>('send')
   const [sendViaWhatsapp, setSendViaWhatsapp] = useState(true)
-  const [sendViaEmail, setSendViaEmail] = useState(true)
+  const [sendViaEmail, setSendViaEmail] = useState(emailAvailable)
   const [phone, setPhone] = useState(defaultPhone ?? '')
   const [phoneValid, setPhoneValid] = useState(false)
   const [phoneError, setPhoneError] = useState('')
@@ -89,16 +97,26 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
     if (!selectedGroup || !canSend) return
     setError(null)
     try {
-      await createRequest.mutateAsync({
+      const result = await createRequest.mutateAsync({
         customerId,
         mode,
         groupId: selectedGroup.id,
         groupName: selectedGroup.name,
         questionsSnapshot: selectedGroup.questions.map((q) => ({ ...q })) as Record<string, unknown>[],
         staffAnswers: mode === 'prefilled' ? staffAnswers : undefined,
-        phone: sendViaWhatsapp ? phone : undefined,
+        phone: (sendViaWhatsapp && whatsappConnected) ? phone : undefined,
         email: sendViaEmail ? email.trim() : undefined,
       })
+
+      // Fallback wa.me quando WhatsApp não está conectado
+      if (sendViaWhatsapp && !whatsappConnected && result.signUrl) {
+        const msg = encodeURIComponent(
+          `Olá! A clínica enviou uma ficha de anamnese para você preencher.\n\n📋 ${selectedGroup.name}\n\nAcesse o link:\n${result.signUrl}\n\nO link expira em 7 dias.`
+        )
+        const phoneE164 = phone.replace('+', '')
+        window.open(`https://wa.me/${phoneE164}?text=${msg}`, '_blank', 'noopener,noreferrer')
+      }
+
       onSuccess()
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -299,6 +317,11 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                     )}
                   </div>
                 )}
+                {sendViaWhatsapp && !whatsappConnected && (
+                  <p className="ml-7 text-xs text-amber-600 flex items-center gap-1">
+                    <span>&#9888;</span> WhatsApp não conectado — o link será aberto via WhatsApp Web.
+                  </p>
+                )}
 
                 {/* E-mail */}
                 <div className="flex items-center gap-3">
@@ -306,13 +329,20 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
                     id="anamnesis-send-via-email"
                     checked={sendViaEmail}
                     onCheckedChange={setSendViaEmail}
+                    disabled={!emailAvailable}
                   />
                   <label htmlFor="anamnesis-send-via-email" className="flex items-center gap-2 cursor-pointer select-none">
                     <Mail className="h-4 w-4 text-violet-600 shrink-0" />
                     <span className="text-sm font-medium">E-mail</span>
                   </label>
                 </div>
-                {sendViaEmail && (
+                {!emailAvailable && (
+                  <p className="ml-7 text-xs text-muted-foreground">
+                    E-mail não configurado.{' '}
+                    <a href="/settings?tab=email" className="underline text-violet-600">Configure em Configurações → E-mail</a>
+                  </p>
+                )}
+                {sendViaEmail && emailAvailable && (
                   <div className="ml-7 space-y-1.5">
                     <Label htmlFor="anamnesis-send-email">E-mail do cliente</Label>
                     <Input

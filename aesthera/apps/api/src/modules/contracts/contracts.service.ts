@@ -534,7 +534,11 @@ export class ContractsService {
       })
     }
 
-    return updated
+    // signToken não deve ser retornado na resposta pública — apenas signUrl (SEC2)
+    return {
+      ...updated,
+      signUrl,
+    }
   }
 
   /**

@@ -20,6 +20,7 @@ export function EmailTab() {
   const [pass, setPass] = useState('')
   const [from, setFrom] = useState('')
   const [secure, setSecure] = useState(false)
+  const [enabled, setEnabled] = useState(true)
   const [testResult, setTestResult] = useState<'ok' | 'error' | null>(null)
   const [testError, setTestError] = useState('')
 
@@ -30,6 +31,7 @@ export function EmailTab() {
     setUser(data.smtpUser ?? '')
     setFrom(data.smtpFrom ?? '')
     setSecure(data.smtpSecure)
+    setEnabled(data.smtpEnabled ?? true)
   }, [data])
 
   async function handleSave() {
@@ -40,6 +42,7 @@ export function EmailTab() {
       smtpPass: pass.trim() || null,
       smtpFrom: from.trim() || null,
       smtpSecure: secure,
+      smtpEnabled: enabled,
     })
     setPass('')
     toast.success('Configurações de e-mail salvas.')
@@ -84,6 +87,19 @@ export function EmailTab() {
           <div className="flex items-center gap-2 rounded-lg bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700/50 px-4 py-2.5 text-sm font-medium text-green-800 dark:text-green-300">
             <CheckCircle className="h-4 w-4 shrink-0" />
             E-mail configurado — envios usam o servidor da sua clínica.
+          </div>
+        )}
+
+        {data?.configured && (
+          <div className="flex items-center gap-3">
+            <Switch
+              id="smtp-enabled"
+              checked={enabled}
+              onCheckedChange={setEnabled}
+            />
+            <Label htmlFor="smtp-enabled" className="text-sm cursor-pointer">
+              Habilitar envio por e-mail
+            </Label>
           </div>
         )}
 

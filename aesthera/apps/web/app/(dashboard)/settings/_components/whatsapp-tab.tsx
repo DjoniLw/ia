@@ -180,9 +180,9 @@ function WhatsAppConnectionSection() {
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
           Verificar status
         </Button>
-        {data?.connected && (
+        {(data?.connected || data?.configured) && (
           <Button
-            variant="destructive"
+            variant={data?.connected ? 'destructive' : 'outline'}
             size="sm"
             onClick={() => void handleDisconnect()}
             disabled={disconnect.isPending}
@@ -190,7 +190,7 @@ function WhatsAppConnectionSection() {
             {disconnect.isPending
               ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
               : <Unplug className="h-3.5 w-3.5 mr-1.5" />}
-            Desconectar
+            {data?.connected ? 'Desconectar' : 'Remover instância'}
           </Button>
         )}
       </div>

@@ -739,6 +739,7 @@ export interface CustomerContract {
   signTokenExpiresAt: string | null
   createdAt: string
   template: { name: string; storageKey: string | null } | null
+  signUrl?: string | null
 }
 
 export function useCustomerContracts(customerId: string) {
@@ -854,6 +855,7 @@ export interface SmtpSettings {
   smtpFrom: string | null
   smtpSecure: boolean
   configured: boolean
+  enabled: boolean
 }
 
 export function useSmtpSettings() {
@@ -960,6 +962,7 @@ export interface AnamnesisRequest {
   customer: { id: string; name: string }
   createdBy: { id: string; name: string }
   clinicalRecord: { id: string } | null
+  signUrl?: string | null
 }
 
 export interface AnamnesisRequestsPage {

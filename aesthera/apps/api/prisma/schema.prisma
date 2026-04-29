@@ -258,6 +258,7 @@ model Clinic {
   smtpPass                   String?      @map("smtp_pass") // armazenado criptografado (AES-256-GCM)
   smtpFrom                   String?      @map("smtp_from") // ex: "Clínica Bella <contato@clinicabella.com.br>"
   smtpSecure                 Boolean      @default(true) @map("smtp_secure") // true = TLS/SSL (porta 465), false = STARTTLS (587)
+  smtpEnabled                Boolean      @default(true) @map("smtp_enabled") // false = desativa envio via SMTP da clínica (fallback Resend global)
   // Configuração de cobrança
   chargeVoucherDifference    Boolean      @default(false) @map("charge_voucher_difference")
   // Configuração WhatsApp por clínica (instância da Evolution API)

@@ -106,12 +106,13 @@ export class NotificationsService {
     // Busca configurações da clínica (SMTP + nome para display no fallback)
     const clinic = await prisma.clinic.findUnique({
       where: { id: input.clinicId },
-      select: { name: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, smtpSecure: true },
+      select: { name: true, smtpHost: true, smtpPort: true, smtpUser: true, smtpPass: true, smtpFrom: true, smtpSecure: true, smtpEnabled: true },
     })
 
     const hasClinicSmtp = !!(clinic?.smtpHost && clinic?.smtpUser && clinic?.smtpPass)
+    const smtpEnabled = clinic?.smtpEnabled ?? true // quando false, clínica desativou envio via SMTP
 
-    if (hasClinicSmtp) {
+    if (hasClinicSmtp && smtpEnabled) {
       // Tenta envio via SMTP da clínica (Gmail, Outlook, etc.)
       try {
         const nodemailer = await import('nodemailer')

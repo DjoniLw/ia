@@ -92,5 +92,6 @@ export const UpdateSmtpSettingsDto = z.object({
   smtpPass: z.string().min(1, 'Senha obrigatória').optional().nullable(),
   smtpFrom: z.string().min(1, 'Remetente obrigatório').optional().nullable(),
   smtpSecure: z.boolean().optional(),
+  smtpEnabled: z.boolean().optional(),
 })
 export type UpdateSmtpSettingsDto = z.infer<typeof UpdateSmtpSettingsDto>

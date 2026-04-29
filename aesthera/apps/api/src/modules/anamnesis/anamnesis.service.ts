@@ -109,7 +109,11 @@ export class AnamnesisService {
     // Nunca logar o signToken (CA17)
     logger.info({ clinicId, requestId: request.id }, 'AnamnesisRequest criada')
 
-    return request
+    // SEC2: signUrl construída a partir do signToken local — não do objeto request (que não expõe signToken)
+    return {
+      ...request,
+      signUrl: buildSignLink(signToken),
+    }
   }
 
   async list(clinicId: string, q: ListAnamnesisRequestsQuery) {
