@@ -31,7 +31,7 @@ export function EmailTab() {
     setUser(data.smtpUser ?? '')
     setFrom(data.smtpFrom ?? '')
     setSecure(data.smtpSecure)
-    setEnabled(data.smtpEnabled ?? true)
+    setEnabled(data.enabled ?? true)
   }, [data])
 
   async function handleSave() {
