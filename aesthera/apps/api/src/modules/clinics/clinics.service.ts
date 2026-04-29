@@ -189,7 +189,6 @@ export class ClinicsService {
       smtpUser: clinic.smtpUser ?? null,
       smtpFrom: clinic.smtpFrom ?? null,
       smtpSecure: clinic.smtpSecure,
-      smtpEnabled: clinic.smtpEnabled,
       configured: !!(clinic.smtpHost && clinic.smtpUser && clinic.smtpPass),
       enabled: clinic.smtpEnabled,
     }
@@ -205,7 +204,7 @@ export class ClinicsService {
       smtpPass: dto.smtpPass ?? null,
       smtpFrom: dto.smtpFrom ?? null,
       smtpSecure: dto.smtpSecure ?? true,
-      smtpEnabled: dto.smtpEnabled ?? true,
+      enabled: dto.enabled ?? true,
     })
     return this.getSmtpSettings(clinicId)
   }

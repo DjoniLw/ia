@@ -42,7 +42,7 @@ export function EmailTab() {
       smtpPass: pass.trim() || null,
       smtpFrom: from.trim() || null,
       smtpSecure: secure,
-      smtpEnabled: enabled,
+      enabled: enabled,
     })
     setPass('')
     toast.success('Configurações de e-mail salvas.')

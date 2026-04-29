@@ -100,7 +100,7 @@ export class ClinicsRepository {
     })
   }
 
-  async updateSmtp(clinicId: string, data: Pick<UpdateSmtpSettingsDto, 'smtpHost' | 'smtpPort' | 'smtpUser' | 'smtpPass' | 'smtpFrom' | 'smtpSecure' | 'smtpEnabled'>) {
+  async updateSmtp(clinicId: string, data: Pick<UpdateSmtpSettingsDto, 'smtpHost' | 'smtpPort' | 'smtpUser' | 'smtpPass' | 'smtpFrom' | 'smtpSecure' | 'enabled'>) {
     return prisma.clinic.update({
       where: { id: clinicId },
       data: {
@@ -110,7 +110,7 @@ export class ClinicsRepository {
         smtpPass: data.smtpPass ?? null,
         smtpFrom: data.smtpFrom ?? null,
         smtpSecure: data.smtpSecure ?? true,
-        smtpEnabled: data.smtpEnabled ?? true,
+        smtpEnabled: data.enabled ?? true,
         updatedAt: new Date(),
       },
     })
