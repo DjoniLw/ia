@@ -27,10 +27,6 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
   const { data: whatsappSettings } = useWhatsappSettings()
   const emailAvailable = Boolean(smtpSettings?.configured && smtpSettings?.enabled)
   const whatsappConnected = Boolean(whatsappSettings?.connected)
-  const { data: smtpSettings } = useSmtpSettings()
-  const { data: whatsappSettings } = useWhatsappSettings()
-  const emailAvailable = Boolean(smtpSettings?.configured && smtpSettings?.enabled)
-  const whatsappConnected = Boolean(whatsappSettings?.connected)
 
   // â”€â”€ Etapa â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [step, setStep] = useState<'create' | 'dispatch'>('create')
