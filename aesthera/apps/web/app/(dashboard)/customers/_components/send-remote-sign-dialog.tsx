@@ -63,7 +63,7 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
     if (!canSend) return
     try {
       const result = await sendRemoteSign.mutateAsync({
-        phone: (sendViaWhatsapp && whatsappConnected) ? phone : undefined,
+        phone: sendViaWhatsapp ? phone : undefined,
         email: sendViaEmail ? email.trim() : undefined,
       })
 

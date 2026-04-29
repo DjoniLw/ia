@@ -100,7 +100,7 @@ export function SendAnamnesisDialog({ customerId, customerName, defaultPhone, de
         groupName: selectedGroup.name,
         questionsSnapshot: selectedGroup.questions.map((q) => ({ ...q })) as Record<string, unknown>[],
         staffAnswers: mode === 'prefilled' ? staffAnswers : undefined,
-        phone: (sendViaWhatsapp && whatsappConnected) ? phone : undefined,
+        phone: sendViaWhatsapp ? phone : undefined,
         email: sendViaEmail ? email.trim() : undefined,
       })
 
