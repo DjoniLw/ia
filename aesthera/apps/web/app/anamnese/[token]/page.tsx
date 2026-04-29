@@ -18,6 +18,7 @@ interface QuestionEntry {
   optionImages?: (string | null)[]
   selectOptions?: { label: string; withDescription?: boolean; imageUrl?: string }[]
   required: boolean
+  imageUrl?: string
 }
 
 interface PublicAnamnesisInfo {
@@ -266,6 +267,9 @@ export default function AnamnesePage() {
                 const hasError = triedAdvance && q.required && !answers[q.id]
                 return (
                   <div key={q.id} className="space-y-1.5">
+                    {q.imageUrl && (
+                      <img src={q.imageUrl} alt="" className="rounded-xl object-cover max-h-48 w-full mb-1" />
+                    )}
                     <label className={['block text-sm font-medium', hasError ? 'text-red-600' : 'text-gray-800'].join(' ')}>
                       {q.text}
                       {q.required && <span className="text-red-500 ml-0.5">*</span>}

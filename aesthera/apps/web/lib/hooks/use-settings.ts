@@ -15,6 +15,7 @@ export interface AnamnesisQuestion {
   optionImages?: (string | null)[] // parallel to options[], base64 data URL per option
   selectOptions?: AnamnesisQuestionOption[] // for 'select' type
   required: boolean
+  imageUrl?: string // imagem ilustrativa da pergunta
 }
 
 /** A visual separator / category heading inside a group */
