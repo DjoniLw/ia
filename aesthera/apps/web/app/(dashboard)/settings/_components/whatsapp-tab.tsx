@@ -71,7 +71,7 @@ function WhatsAppConnectionSection() {
           WhatsApp conectado — instância <strong>{data.instance}</strong>
         </div>
       ) : data?.configured ? (
-        <div className="flex items-center gap-2 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/30 px-4 py-2.5 text-sm text-yellow-700 dark:text-yellow-400">
+        <div className="flex items-center gap-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-700/50 px-4 py-2.5 text-sm font-medium text-yellow-900 dark:text-yellow-300">
           <XCircle className="h-4 w-4 shrink-0" />
           Instância <strong>{data.instance}</strong> configurada, mas não conectada.
           Escaneie o QR Code abaixo.

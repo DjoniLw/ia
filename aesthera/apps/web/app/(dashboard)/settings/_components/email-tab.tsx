@@ -84,7 +84,7 @@ export function EmailTab() {
         </div>
 
         {data?.configured && (
-          <div className="flex items-center gap-2 rounded-lg bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700/50 px-4 py-2.5 text-sm font-medium text-green-800 dark:text-green-300">
+          <div className="flex items-center gap-2 rounded-lg bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-700/50 px-4 py-2.5 text-sm font-medium text-green-900 dark:text-green-200">
             <CheckCircle className="h-4 w-4 shrink-0" />
             E-mail configurado — envios usam o servidor da sua clínica.
           </div>
