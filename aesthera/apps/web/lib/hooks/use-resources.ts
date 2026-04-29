@@ -862,6 +862,7 @@ export function useSmtpSettings() {
   return useQuery<SmtpSettings>({
     queryKey: ['clinic-smtp'],
     queryFn: () => api.get('/clinics/me/smtp').then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -897,6 +898,7 @@ export function useWhatsappSettings() {
   return useQuery<WhatsappSettings>({
     queryKey: ['clinic-whatsapp'],
     queryFn: () => api.get('/clinics/me/whatsapp').then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
   })
 }
 
