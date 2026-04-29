@@ -139,6 +139,7 @@ function AnamnesisConfigTab({
     optionImages: (string | null)[]
     selectOptions: AnamnesisQuestionOption[]
   }>({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
+  const [newQuestionImage, setNewQuestionImage] = useState<string | null>(null)
   const [newOptionText, setNewOptionText] = useState('')
   const [newOptionWithDesc, setNewOptionWithDesc] = useState(false)
   const [newOptionImage, setNewOptionImage] = useState<string | null>(null)
@@ -157,6 +158,7 @@ function AnamnesisConfigTab({
     optionImages: (string | null)[]
     selectOptions: AnamnesisQuestionOption[]
   }>({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
+  const [editQuestionImage, setEditQuestionImage] = useState<string | null>(null)
   const [editSepText, setEditSepText] = useState('')
   const [editOptionText, setEditOptionText] = useState('')
   const [editOptionWithDesc, setEditOptionWithDesc] = useState(false)
@@ -332,6 +334,7 @@ function AnamnesisConfigTab({
         optionImages: q.type === 'multiple' ? (q.optionImages ?? []) : [],
         selectOptions: q.type === 'select' ? (q.selectOptions ?? []) : [],
       })
+      setEditQuestionImage(q.imageUrl ?? null)
     }
     setEditOptionText('')
     setEditOptionWithDesc(false)
@@ -341,6 +344,7 @@ function AnamnesisConfigTab({
   function closeEditItem() {
     setEditingItemKey(null)
     setEditSepText('')
+    setEditQuestionImage(null)
     setEditOptionText('')
     setEditOptionWithDesc(false)
     setEditOptionImage(null)
@@ -390,6 +394,7 @@ function AnamnesisConfigTab({
         text: editQ.text.trim() || (item as AnamnesisQuestion).text,
         type: editQ.type,
         required: editQ.required,
+        ...(editQuestionImage ? { imageUrl: editQuestionImage } : {}),
         ...(editQ.type === 'multiple' && { options: editQ.options, optionImages: editQ.optionImages }),
         ...(editQ.type === 'select' && { selectOptions: editQ.selectOptions }),
       }
@@ -405,6 +410,7 @@ function AnamnesisConfigTab({
     setAddingToGroupId(groupId)
     setAddMode('question')
     setNewQ({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
+    setNewQuestionImage(null)
     setNewOptionText('')
     setNewOptionWithDesc(false)
     setNewOptionImage(null)
@@ -413,6 +419,7 @@ function AnamnesisConfigTab({
 
   function closeAddForm() {
     setAddingToGroupId(null)
+    setNewQuestionImage(null)
     setNewOptionText('')
     setNewOptionWithDesc(false)
     setNewOptionImage(null)
@@ -477,11 +484,13 @@ function AnamnesisConfigTab({
         text: newQ.text,
         type: newQ.type,
         required: newQ.required,
+        ...(newQuestionImage ? { imageUrl: newQuestionImage } : {}),
         ...(newQ.type === 'multiple' && { options: newQ.options, optionImages: newQ.optionImages }),
         ...(newQ.type === 'select' && { selectOptions: newQ.selectOptions }),
       }
       updateGroupItems(addingToGroupId, [...group.questions, q])
       setNewQ({ text: '', type: 'text', required: false, options: [], optionImages: [], selectOptions: [] })
+      setNewQuestionImage(null)
       setNewOptionText('')
       setNewOptionWithDesc(false)
       setNewOptionImage(null)
@@ -713,7 +722,20 @@ function AnamnesisConfigTab({
                                 <div className="grid grid-cols-2 gap-2">
                                   <div className="col-span-2 space-y-1">
                                     <Label className="text-xs">Pergunta</Label>
-                                    <Input value={editQ.text} onChange={(e) => setEditQ({ ...editQ, text: e.target.value })} className="text-sm" />
+                                    <div className="flex items-center gap-2">
+                                      <label className="cursor-pointer shrink-0" title="Imagem da pergunta">
+                                        <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setEditQuestionImage(url) } e.currentTarget.value = '' }} />
+                                        {editQuestionImage ? (
+                                          <img src={editQuestionImage} alt="" className="h-9 w-9 rounded object-cover border" />
+                                        ) : (
+                                          <div className="h-9 w-9 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50" title="Adicionar imagem à pergunta">
+                                            <Camera className="h-4 w-4 text-muted-foreground/50" />
+                                          </div>
+                                        )}
+                                      </label>
+                                      {editQuestionImage && <button type="button" onClick={() => setEditQuestionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
+                                      <Input value={editQ.text} onChange={(e) => setEditQ({ ...editQ, text: e.target.value })} className="text-sm flex-1" />
+                                    </div>
                                   </div>
                                   <div className="space-y-1">
                                     <Label className="text-xs">Tipo de resposta</Label>
@@ -810,6 +832,7 @@ function AnamnesisConfigTab({
                               <div className="px-3 py-2">
                                 <div className="flex items-center gap-2">
                                   <GripVertical className="text-muted-foreground/50 h-4 w-4 shrink-0 cursor-grab active:cursor-grabbing" />
+                                  {q.imageUrl && <img src={q.imageUrl} alt="" className="h-7 w-7 rounded object-cover shrink-0 border" />}
                                   <span className="text-foreground flex-1 text-sm">{q.text}</span>
                                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_COLOR[q.type]}`}>
                                     {TYPE_LABEL[q.type]}
@@ -897,12 +920,25 @@ function AnamnesisConfigTab({
                               <div className="grid grid-cols-2 gap-2">
                                 <div className="col-span-2 space-y-1">
                                   <Label className="text-xs">Pergunta</Label>
-                                  <Input
-                                    value={newQ.text}
-                                    onChange={(e) => setNewQ({ ...newQ, text: e.target.value })}
-                                    placeholder="Escreva a pergunta…"
-                                    className="text-sm"
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    <label className="cursor-pointer shrink-0" title="Imagem da pergunta">
+                                      <input type="file" accept="image/*" className="sr-only" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const url = await readFileAsDataUrl(f); if (url) setNewQuestionImage(url) } e.currentTarget.value = '' }} />
+                                      {newQuestionImage ? (
+                                        <img src={newQuestionImage} alt="" className="h-9 w-9 rounded object-cover border" />
+                                      ) : (
+                                        <div className="h-9 w-9 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center hover:border-primary/50" title="Adicionar imagem à pergunta">
+                                          <Camera className="h-4 w-4 text-muted-foreground/50" />
+                                        </div>
+                                      )}
+                                    </label>
+                                    {newQuestionImage && <button type="button" onClick={() => setNewQuestionImage(null)} className="text-muted-foreground hover:text-red-500"><X className="h-3 w-3" /></button>}
+                                    <Input
+                                      value={newQ.text}
+                                      onChange={(e) => setNewQ({ ...newQ, text: e.target.value })}
+                                      placeholder="Escreva a pergunta…"
+                                      className="text-sm flex-1"
+                                    />
+                                  </div>
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-xs">Tipo de resposta</Label>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, Mail, MessageCircle, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
-import { useSendRemoteSignLink, type CustomerContract } from '@/lib/hooks/use-resources'
+import { useSendRemoteSignLink, useSmtpSettings, useWhatsappSettings, type CustomerContract } from '@/lib/hooks/use-resources'
 
 interface Props {
   contract: CustomerContract
@@ -25,6 +25,18 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
   const [phoneValid, setPhoneValid] = useState(false)
   const [email, setEmail] = useState(defaultEmail ?? '')
   const [phoneError, setPhoneError] = useState('')
+
+  const { data: smtpSettings } = useSmtpSettings()
+  const { data: whatsappSettings } = useWhatsappSettings()
+  const emailAvailable = Boolean(smtpSettings?.configured && smtpSettings?.enabled)
+  const whatsappConnected = Boolean(whatsappSettings?.connected)
+
+  // Ajustar sendViaEmail quando smtpSettings carregar
+  useEffect(() => {
+    if (smtpSettings !== undefined) {
+      setSendViaEmail(emailAvailable)
+    }
+  }, [emailAvailable, smtpSettings])
 
   const sendRemoteSign = useSendRemoteSignLink(contract.customerId, contract.id)
 
@@ -50,10 +62,21 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
   async function handleSend() {
     if (!canSend) return
     try {
-      await sendRemoteSign.mutateAsync({
+      const result = await sendRemoteSign.mutateAsync({
         phone: sendViaWhatsapp ? phone : undefined,
         email: sendViaEmail ? email.trim() : undefined,
       })
+
+      // Fallback wa.me quando WhatsApp não está conectado
+      if (sendViaWhatsapp && !whatsappConnected && result?.signUrl) {
+        const contractName = contract.label ?? contract.template?.name ?? 'contrato'
+        const msg = encodeURIComponent(
+          `Você recebeu um contrato para assinar: *${contractName}*.\n\nAcesse:\n${result.signUrl}\n\nO link expira em 48 horas.`
+        )
+        const phoneE164 = phone.replace('+', '')
+        window.open(`https://wa.me/${phoneE164}?text=${msg}`, '_blank', 'noopener,noreferrer')
+      }
+
       onSuccess()
     } catch {
       // erro tratado na página pai via toast
@@ -100,6 +123,11 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
               )}
             </div>
           )}
+          {sendViaWhatsapp && !whatsappConnected && (
+            <p className="ml-7 text-xs text-amber-600 flex items-center gap-1">
+              <span>&#9888;</span> WhatsApp não conectado — o link será aberto via WhatsApp Web.
+            </p>
+          )}
 
           {/* E-mail */}
           <div className="flex items-center gap-3">
@@ -107,6 +135,7 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
               id="send-via-email"
               checked={sendViaEmail}
               onCheckedChange={setSendViaEmail}
+              disabled={!emailAvailable}
             />
             <label htmlFor="send-via-email" className="flex items-center gap-2 cursor-pointer select-none">
               <Mail className="h-4 w-4 text-violet-600 shrink-0" />
@@ -114,7 +143,13 @@ export function SendRemoteSignDialog({ contract, defaultPhone, defaultEmail, onC
             </label>
           </div>
 
-          {sendViaEmail && (
+          {!emailAvailable && (
+            <p className="ml-7 text-xs text-muted-foreground">
+              E-mail não configurado.{' '}
+              <a href="/settings?tab=email" className="underline text-violet-600">Configure em Configurações → E-mail</a>
+            </p>
+          )}
+          {sendViaEmail && emailAvailable && (
             <div className="ml-7 space-y-1.5">
               <Label htmlFor="remote-sign-email">E-mail do cliente</Label>
               <Input

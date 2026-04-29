@@ -65,6 +65,7 @@ export async function buildApp(): Promise<FastifyInstance> {
           },
     },
     genReqId: () => crypto.randomUUID(),
+    bodyLimit: 10 * 1024 * 1024, // 10 MB — suporta imagens base64 em configurações de anamnese
   })
 
   // ── Plugins ──────────────────────────────────────────────────────────────────

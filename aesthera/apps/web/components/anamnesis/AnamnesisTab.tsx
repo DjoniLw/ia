@@ -618,10 +618,13 @@ export function AnamnesisTab({
               </div>
             ) : (
               <div className="space-y-4">
-                {((editingReqFull?.questionsSnapshot ?? []) as Array<{ id: string; text: string; type: string; required?: boolean; options?: string[]; optionImages?: string[]; selectOptions?: Array<{ label: string; imageUrl?: string; withDescription?: boolean }> }>)
+                {((editingReqFull?.questionsSnapshot ?? []) as Array<{ id: string; text: string; type: string; required?: boolean; options?: string[]; optionImages?: string[]; selectOptions?: Array<{ label: string; imageUrl?: string; withDescription?: boolean }>; imageUrl?: string }>)
                   .filter((q) => q.type !== 'separator')
                   .map((q) => (
                     <div key={q.id} className="space-y-1.5">
+                      {q.imageUrl && (
+                        <img src={q.imageUrl} alt="" className="rounded-lg object-cover max-h-32 w-full mb-1" />
+                      )}
                       <label className="text-xs font-medium">
                         {q.text}
                         {q.required && <span className="text-red-500 ml-0.5">*</span>}
